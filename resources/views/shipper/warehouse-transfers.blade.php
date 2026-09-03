@@ -1,6 +1,6 @@
 @extends('layouts.shipper')
 
-@section('title', 'Điều chuyển kho')
+@section('title', 'Điều chuyển')
 @section('subtitle', 'Nhận - giao hàng điều chuyển giữa các kho')
 
 @section('content')
@@ -100,6 +100,15 @@
         max-width: 980px;
         margin: 0 auto;
     }
+    .transfer-card-toggle {
+        width: 100%;
+        border: 0;
+        text-align: left;
+        cursor: pointer;
+    }
+    .transfer-card-toggle:hover { background: #f8fafc !important; }
+    .transfer-card-chevron { transition: transform .2s ease; }
+    .transfer-card-toggle[aria-expanded="true"] .transfer-card-chevron { transform: rotate(180deg); }
     @media (max-width: 767px) {
         .transfer-timeline {
             position: static;
@@ -181,6 +190,16 @@ document.addEventListener('DOMContentLoaded', function () {
             if (reason === null) return;
             form.querySelector('input[name="rollback_note"]').value = reason.trim();
             form.submit();
+        });
+    });
+
+    document.querySelectorAll('.transfer-nav-pill[href^="#transfer-card-"]').forEach(function (link) {
+        link.addEventListener('click', function () {
+            const card = document.querySelector(link.getAttribute('href'));
+            const details = card?.querySelector('.js-transfer-details');
+            if (details && window.bootstrap?.Collapse) {
+                window.bootstrap.Collapse.getOrCreateInstance(details, { toggle: false }).show();
+            }
         });
     });
 });

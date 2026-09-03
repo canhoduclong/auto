@@ -1807,6 +1807,7 @@
             const summary = form.querySelector('.js-packing-size-summary');
             const submit = form.querySelector('.js-packing-size-submit');
             const totalRequired = parseInt(form.dataset.total || '0', 10);
+            const mainSize = parseFloat(form.dataset.mainSize || '0');
             function refreshSizeMix() {
                 let total = 0;
                 let main = 0;
@@ -1816,14 +1817,14 @@
                     const size = parseFloat(input.dataset.size || '0');
                     total += qty;
                     weighted += qty * size;
-                    if (Math.abs(size - 2.5) < 0.001) main += qty;
+                    if (Math.abs(size - mainSize) < 0.001) main += qty;
                 });
                 const ratio = total > 0 ? main * 100 / total : 0;
                 const average = total > 0 ? weighted / total : 0;
                 const valid = total === totalRequired && ratio >= 75;
                 if (summary) {
                     summary.className = 'small js-packing-size-summary mb-1 ' + (valid ? 'text-success' : 'text-danger');
-                    summary.textContent = `Tổng ${total}/${totalRequired} · Size 2.5: ${formatCompactDecimal(ratio)}% · Bình quân: ${formatCompactDecimal(average)} kg`;
+                    summary.textContent = `Tổng ${total}/${totalRequired} · Size ${formatCompactDecimal(mainSize)}: ${formatCompactDecimal(ratio)}% · Bình quân: ${formatCompactDecimal(average)} kg`;
                 }
                 if (submit) submit.disabled = !valid;
             }

@@ -23,9 +23,21 @@
         }
         body { min-height: 100vh; background: #f7fbfb; font-family: 'Inter', system-ui, sans-serif; }
         .sp-sidebar {
-            width: var(--sidebar-width); min-height: 100vh; background: var(--sidebar-bg);
+            width: var(--sidebar-width); height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; background: var(--sidebar-bg);
             position: fixed; top: 0; left: 0; z-index: 200; display: flex; flex-direction: column;
         }
+        .sp-sidebar > nav {
+            min-height: 0;
+            overflow-x: hidden;
+            overflow-y: auto !important;
+            overscroll-behavior: contain;
+            scrollbar-gutter: stable;
+            padding-bottom: .5rem;
+        }
+        .sp-sidebar > nav::-webkit-scrollbar { width: 7px; }
+        .sp-sidebar > nav::-webkit-scrollbar-track { background: transparent; }
+        .sp-sidebar > nav::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .3); border-radius: 999px; }
+        .sp-sidebar > .border-top { flex: 0 0 auto; }
         .sp-brand {
             padding: 1rem 1.25rem; background: var(--sidebar-bg-strong); color: #fff; font-weight: 700;
             font-size: .95rem; display: flex; align-items: center; gap: .5rem; border-bottom: 1px solid rgba(255, 255, 255, .15);
@@ -243,7 +255,7 @@
                 <i class="bi bi-truck"></i> Đơn giao của tôi
             </a>
             <a href="{{ route('shipper.warehouse-transfers') }}" class="sp-nav-link {{ request()->routeIs('shipper.warehouse-transfers') ? 'active' : '' }}">
-                <i class="bi bi-arrow-left-right"></i> Điều chuyển kho
+                <i class="bi bi-arrow-left-right"></i> Điều chuyển
             </a>
 
             <div class="sp-nav-section">Lịch sử</div>

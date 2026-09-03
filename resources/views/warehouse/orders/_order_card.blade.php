@@ -500,9 +500,7 @@
                                                                     min="0" step="0.001" required
                                                                     inputmode="decimal"
                                                                     data-qty="{{ $orderedQty }}"
-                                                                    data-size="{{ is_numeric($variantSize) && (float)$variantSize > 0 ? (float)$variantSize : 0 }}"
-                                                                    data-average-min="{{ abs((float)$variantSize - 2.5) < 0.0001 ? '2.4' : '' }}"
-                                                                    data-average-max="{{ abs((float)$variantSize - 2.5) < 0.0001 ? '2.6' : '' }}">
+                                                                    data-size="{{ is_numeric($variantSize) && (float)$variantSize > 0 ? (float)$variantSize : 0 }}">
                                                                 <button class="btn btn-sm {{ $isItemLogisticsSaved ? 'btn-secondary' : 'btn-success' }} js-logistics-submit-btn" type="submit">{{ $isItemLogisticsSaved ? 'Đã lưu' : 'Lưu' }}</button>
                                                                 <button class="btn btn-sm btn-outline-danger js-clear-item-weight {{ $isItemLogisticsSaved ? '' : 'd-none' }}"
                                                                         type="submit" formnovalidate title="Gỡ kg đã lưu nhầm">
@@ -531,12 +529,12 @@
                                                 <div class="mx-2 mb-2 mt-1 rounded border border-warning-subtle bg-warning-subtle p-2">
                                                     <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
                                                         <div>
-                                                            <strong><i class="bi bi-boxes me-1"></i>Bổ sung size 2.4 / 2.6 cho mốc 2.5</strong>
-                                                            <div class="small text-muted">Tổng phải đủ {{ number_format($orderedQty) }} con; size chính 2.5 tối thiểu 75%, tối đa 25% dùng size liền kề 2.4 / 2.6.</div>
+                                                            <strong><i class="bi bi-boxes me-1"></i>Không đủ tồn size {{ $formattedVariantSize }} — chọn size liền kề</strong>
+                                                            <div class="small text-muted">Tổng phải đủ {{ number_format($orderedQty) }} con; size chính {{ $formattedVariantSize }} tối thiểu 75%, tối đa 25% dùng size liền kề.</div>
                                                         </div>
                                                     </div>
                                                     <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.packing-size-allocation', $order) }}"
-                                                          method="POST" class="js-packing-size-form" data-total="{{ $orderedQty }}">
+                                                          method="POST" class="js-packing-size-form" data-total="{{ $orderedQty }}" data-main-size="{{ (float) $variantSize }}">
                                                         @csrf
                                                         <input type="hidden" name="order_item_id" value="{{ $item->id }}">
                                                         <div class="row g-2 align-items-end">

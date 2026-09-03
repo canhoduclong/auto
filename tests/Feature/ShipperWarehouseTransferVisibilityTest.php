@@ -38,7 +38,7 @@ class ShipperWarehouseTransferVisibilityTest extends TestCase
             'delivery_date' => now()->subDay()->toDateString(),
             'total' => 0,
         ]);
-        WarehouseTransfer::create([
+        $transfer = WarehouseTransfer::create([
             'order_id' => $order->id,
             'source_warehouse_id' => $source->id,
             'target_warehouse_id' => $target->id,
@@ -49,8 +49,13 @@ class ShipperWarehouseTransferVisibilityTest extends TestCase
         $this->actingAs($shipper)
             ->get(route('shipper.warehouse-transfers', ['date' => now()->toDateString()]))
             ->assertOk()
+            ->assertSee('</i> Điều chuyển', false)
+            ->assertDontSee('</i> Điều chuyển kho', false)
             ->assertSee('TRANSFER-DIFFERENT-DATE')
-            ->assertSee('Khách điều chuyển khác ngày');
+            ->assertSee('Khách điều chuyển khác ngày')
+            ->assertSee('ĐC-'.str_pad((string) $transfer->id, 6, '0', STR_PAD_LEFT))
+            ->assertSee('data-bs-target="#transfer-details-'.$transfer->id.'"', false)
+            ->assertSee('id="transfer-details-'.$transfer->id.'"', false);
     }
 
     public function test_target_warehouse_sees_waiting_transfer_even_when_delivery_date_is_tomorrow(): void

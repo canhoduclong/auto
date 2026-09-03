@@ -74,7 +74,7 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $this->assertSame(Order::STATUS_PACKING, $order->fresh()->status);
     }
 
-    public function test_it_rejects_a_mix_when_size_25_is_below_75_percent(): void
+    public function test_it_rejects_a_mix_when_the_main_size_is_below_75_percent(): void
     {
         [$user, $order, $item, $variants] = $this->fixture(100);
 
@@ -94,15 +94,15 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $this->assertDatabaseCount('order_item_packing_size_allocations', 0);
     }
 
-    public function test_size_25_actual_weight_allows_the_adjacent_size_range(): void
+    public function test_actual_weight_uses_the_wider_quarter_kg_range_for_every_size(): void
     {
-        [$user, $order, $item] = $this->fixture(100);
+        [$user, $order, $item] = $this->fixture(100, 2.3);
         $order->update(['status' => Order::STATUS_PACKING]);
 
         $this->actingAs($user)
             ->postJson(route('warehouse.orders.logistics', $order), [
                 'item_id' => $item->id,
-                'item_actual_weight' => 239,
+                'item_actual_weight' => 204,
             ])
             ->assertUnprocessable()
             ->assertJsonPath('ok', false);
@@ -110,21 +110,21 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $this->actingAs($user)
             ->postJson(route('warehouse.orders.logistics', $order), [
                 'item_id' => $item->id,
-                'item_actual_weight' => 240,
+                'item_actual_weight' => 205,
             ])
             ->assertOk();
 
         $this->actingAs($user)
             ->postJson(route('warehouse.orders.logistics', $order), [
                 'item_id' => $item->id,
-                'item_actual_weight' => 260,
+                'item_actual_weight' => 255,
             ])
             ->assertOk();
 
         $this->actingAs($user)
             ->postJson(route('warehouse.orders.logistics', $order), [
                 'item_id' => $item->id,
-                'item_actual_weight' => 261,
+                'item_actual_weight' => 256,
             ])
             ->assertUnprocessable()
             ->assertJsonPath('ok', false);
@@ -146,7 +146,37 @@ class WarehousePackingSizeAllocationTest extends TestCase
         ]);
     }
 
-    private function fixture(int $quantity): array
+    public function test_shortage_for_an_arbitrary_size_shows_and_accepts_adjacent_sizes(): void
+    {
+        [$user, $order, $item, $variants, $inventories] = $this->fixture(100, 2.3);
+        $inventories['2.3']->update(['quantity' => 75]);
+
+        $this->actingAs($user)
+            ->get(route('warehouse.orders', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('Không đủ tồn size 2,3 — chọn size liền kề')
+            ->assertSee('data-main-size="2.3"', false);
+
+        $this->actingAs($user)
+            ->post(route('warehouse.orders.packing-size-allocation', $order), [
+                'order_item_id' => $item->id,
+                'allocations' => [
+                    $variants['2.2']->id => 12,
+                    $variants['2.3']->id => 75,
+                    $variants['2.4']->id => 13,
+                ],
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('order_item_packing_size_allocations', [
+            'order_item_id' => $item->id,
+            'product_variant_id' => $variants['2.3']->id,
+            'quantity' => 75,
+        ]);
+    }
+
+    private function fixture(int $quantity, float $mainSize = 2.5): array
     {
         $warehouse = Warehouse::query()->create(['name' => 'Kho size mix', 'status' => true]);
         $user = User::factory()->create(['warehouse_id' => $warehouse->id]);
@@ -159,7 +189,8 @@ class WarehousePackingSizeAllocationTest extends TestCase
             'status' => true,
         ]);
 
-        $variants = collect([2.4, 2.5, 2.6])->mapWithKeys(function (float $size) use ($product) {
+        $sizes = [$mainSize - 0.1, $mainSize, $mainSize + 0.1];
+        $variants = collect($sizes)->mapWithKeys(function (float $size) use ($product) {
             $key = number_format($size, 1, '.', '');
             $variant = ProductVariant::query()->create([
                 'product_id' => $product->id,
@@ -187,13 +218,13 @@ class WarehousePackingSizeAllocationTest extends TestCase
         ]);
         $item = $order->items()->create([
             'product_id' => $product->id,
-            'product_variant_id' => $variants['2.5']->id,
+            'product_variant_id' => $variants[number_format($mainSize, 1, '.', '')]->id,
             'quantity' => $quantity,
-            'unit_weight' => 2.5,
+            'unit_weight' => $mainSize,
             'is_priced_by_kg' => true,
-            'total_weight' => $quantity * 2.5,
+            'total_weight' => $quantity * $mainSize,
             'price' => 70000,
-            'total' => $quantity * 2.5 * 70000,
+            'total' => $quantity * $mainSize * 70000,
         ]);
 
         return [$user, $order, $item, $variants, $inventories];

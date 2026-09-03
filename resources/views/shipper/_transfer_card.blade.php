@@ -10,6 +10,8 @@
     $dispatchQuantity = (int) ($transfer->dispatch_total_quantity ?? $dispatchItems->sum('quantity'));
     $dispatchWeight = (float) ($transfer->dispatch_total_weight ?? $transfer->packed_total_weight ?? 0);
     $saleName = $order?->user?->name ?: $order?->customer?->currentOwner?->name ?: '—';
+    $dispatchSlip = $transfer->dispatchEntry?->slip ?? $order?->orderTransfer?->dispatchEntry?->slip;
+    $transferCode = $dispatchSlip?->code ?: ('ĐC-' . str_pad((string) $transfer->id, 6, '0', STR_PAD_LEFT));
     $status = $status ?? match($transfer->status) {
         'pending_shipper_pickup' => 'pending',
         'in_transit' => 'transit',
@@ -19,18 +21,35 @@
     };
 @endphp
 <div class="card border border-2 shadow-sm js-transfer-card wh-transfer-{{ $status }}" id="transfer-card-{{ $transfer->id }}">
-    <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2">
+    <button type="button"
+            class="card-header bg-white d-flex justify-content-between align-items-center gap-2 transfer-card-toggle"
+            data-bs-toggle="collapse"
+            data-bs-target="#transfer-details-{{ $transfer->id }}"
+            aria-expanded="false"
+            aria-controls="transfer-details-{{ $transfer->id }}">
         <div class="d-flex align-items-center">
             <div class="transfer-nav-pill wh-transfer-{{ $status }} me-2" style="width:2rem;height:2rem;font-size:1rem;">{{ $sequenceNumber }}</div>
             <div>
-                <div class="fw-semibold">{{ $order?->customer?->name ?? 'Khách hàng' }}</div>
-                <div class="small text-muted">Sale: <strong class="text-dark">{{ $saleName }}</strong></div>
+                <div class="fw-semibold">{{ $transferCode }} · {{ $order?->customer?->name ?? 'Khách hàng' }}</div>
+                <div class="small text-muted">
+                    {{ $transfer->sourceWarehouse?->name ?? '—' }} → {{ $transfer->targetWarehouse?->name ?? '—' }}
+                    · Sale: <strong class="text-dark">{{ $saleName }}</strong>
+                </div>
             </div>
         </div>
-        <div class="fw-bold text-primary text-nowrap">
-            <i class="bi bi-clock me-1"></i>{{ $deliveryTime }}
+        <div class="d-flex align-items-center gap-2 text-nowrap">
+            <span class="wh-transfer-status-badge wh-transfer-{{ $status }}">
+                {{
+                    $status === 'pending' ? 'Cần nhận' :
+                    ($status === 'transit' ? 'Đang vận chuyển' :
+                    ($status === 'waiting' ? 'Giao kho' : 'Kho đã nhận'))
+                }}
+            </span>
+            <span class="fw-bold text-primary"><i class="bi bi-clock me-1"></i>{{ $deliveryTime }}</span>
+            <i class="bi bi-chevron-down transfer-card-chevron text-muted"></i>
         </div>
-    </div>
+    </button>
+    <div class="collapse js-transfer-details" id="transfer-details-{{ $transfer->id }}">
     <div class="card-body">
         <div class="small text-muted mb-1">Kho gửi: <strong class="text-dark">{{ $transfer->sourceWarehouse?->name ?? '—' }}</strong></div>
         <div class="small text-muted mb-1">Kho nhận: <strong class="text-dark">{{ $transfer->targetWarehouse?->name ?? '—' }}</strong></div>
@@ -100,5 +119,6 @@
         @else
             <span class="badge bg-success">Phiếu điều chuyển đã hoàn tất</span>
         @endif
+    </div>
     </div>
 </div>
