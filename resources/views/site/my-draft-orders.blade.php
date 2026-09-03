@@ -67,6 +67,10 @@
     .draft-template-actions { display: grid; gap: 8px; }
     .draft-template-actions .btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border-radius: 6px; font-size: .72rem; font-weight: 800; }
     .draft-template-editor { padding-top: 10px; }
+    .draft-confirm-review { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; padding: 11px 13px; border: 1px solid #86efac; border-radius: 8px; background: #f0fdf4; color: #166534; }
+    .draft-confirm-review[hidden] { display: none; }
+    .draft-confirm-review-title { font-size: .78rem; font-weight: 900; }
+    .draft-confirm-review-help { margin-top: 2px; font-size: .7rem; }
     .draft-template-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .draft-template-editor-grid .is-wide { grid-column: 1 / -1; }
     .draft-template-editor label { margin-bottom: 3px; color: #64748b; font-size: .66rem; font-weight: 800; }
@@ -370,6 +374,14 @@
                                 <input type="hidden" name="phone" value="{{ $draft->phone }}">
                                 <input type="hidden" name="delivery_date" value="{{ $selectedDraftDate }}">
 
+                                <div class="draft-confirm-review js-draft-confirm-review" hidden>
+                                    <div>
+                                        <div class="draft-confirm-review-title"><i class="bi bi-clipboard-check me-1"></i>Kiểm tra đơn trước khi xác nhận</div>
+                                        <div class="draft-confirm-review-help">Điều chỉnh khách hàng, sản phẩm và số lượng cho lần lên đơn ngày {{ \Carbon\Carbon::parse($selectedDraftDate)->format('d/m/Y') }}.</div>
+                                    </div>
+                                    <span class="badge bg-success">Chưa tạo đơn</span>
+                                </div>
+
                                 <div class="draft-picker draft-customer-picker" hidden>
                                         <div class="draft-picker-search">
                                             <input type="search" class="form-control form-control-sm draft-customer-search" placeholder="Tìm theo tên, số điện thoại hoặc email...">
@@ -494,7 +506,11 @@
                                             <button type="button" class="btn btn-sm btn-outline-success js-draft-product-toggle"><i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm</button>
                                             <button type="button" class="btn btn-sm btn-outline-success js-draft-customer-toggle"><i class="bi bi-person-check me-1"></i>Chọn khách hàng</button>
                                         </div>
-                                        <button type="button" class="btn btn-sm btn-success js-save-draft"><i class="bi bi-check2 me-1"></i>Lưu thay đổi</button>
+                                        <div class="draft-edit-footer-actions">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary js-cancel-draft-confirm" hidden><i class="bi bi-x-circle me-1"></i>Hủy</button>
+                                            <button type="button" class="btn btn-sm btn-outline-success js-save-draft"><i class="bi bi-check2 me-1"></i>Lưu thay đổi</button>
+                                            <button type="button" class="btn btn-sm btn-success js-confirm-draft" hidden><i class="bi bi-check2-circle me-1"></i>Xác nhận lên đơn {{ \Carbon\Carbon::parse($selectedDraftDate)->format('d/m') }}</button>
+                                        </div>
                                     </div>
                                 @endif
                             </div>
@@ -564,7 +580,7 @@
                         <button type="button" class="btn btn-sm btn-outline-secondary js-copy-draft"><i class="bi bi-files"></i>Sao chép đơn</button>
                         <button type="button" class="btn btn-sm btn-outline-primary js-show-draft-automation"><i class="bi bi-calendar2-check"></i>Lịch lên đơn</button>
                         @if(!$hasOrderForSelectedDate)
-                            <button type="button" class="btn btn-sm btn-success js-confirm-draft"><i class="bi bi-check2-circle"></i>Lên đơn {{ \Carbon\Carbon::parse($selectedDraftDate)->format('d/m') }}</button>
+                            <button type="button" class="btn btn-sm btn-success js-review-draft-confirm"><i class="bi bi-check2-circle"></i>Lên đơn {{ \Carbon\Carbon::parse($selectedDraftDate)->format('d/m') }}</button>
                         @else
                             <button type="button" class="btn btn-sm btn-outline-success" disabled><i class="bi bi-check-circle"></i>Đã lên đơn</button>
                         @endif
@@ -830,6 +846,28 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!response.ok) throw new Error(payload.message || Object.values(payload.errors || {}).flat()[0] || 'Không thể thực hiện thao tác.');
         return payload;
     };
+    const setDraftConfirmationReview = (card, enabled) => {
+        if (!card) return;
+        const editor = card.querySelector('.draft-template-editor');
+        const review = editor?.querySelector('.js-draft-confirm-review');
+        const confirmButton = editor?.querySelector('.js-confirm-draft');
+        const cancelButton = editor?.querySelector('.js-cancel-draft-confirm');
+        card.dataset.confirming = enabled ? '1' : '0';
+        if (review) review.hidden = !enabled;
+        if (confirmButton) confirmButton.hidden = !enabled;
+        if (cancelButton) cancelButton.hidden = !enabled;
+    };
+    const openDraftConfirmationReview = card => {
+        if (!card) return;
+        card.querySelector('.draft-template-details')?.classList.remove('show');
+        card.querySelector('[data-draft-automation]')?.classList.remove('show');
+        const editor = card.querySelector('.draft-template-editor');
+        editor?.classList.add('show');
+        setDraftConfirmationReview(card, true);
+        updateDraftTotals(editor);
+        editor?.scrollIntoView({behavior: 'smooth', block: 'start'});
+        editor?.querySelector('[name="item_quantity"]')?.focus({preventScroll: true});
+    };
     document.addEventListener('click', async event => {
         const customerPin = event.target.closest('.js-draft-customer-pin');
         if (customerPin) {
@@ -885,9 +923,23 @@ document.addEventListener('DOMContentLoaded', () => {
             activeTruckEditor.querySelector('[name="truck_brand_name"]')?.focus();
             return;
         }
+        const reviewConfirmButton = event.target.closest('.js-review-draft-confirm');
+        if (reviewConfirmButton) {
+            openDraftConfirmationReview(reviewConfirmButton.closest('[data-draft-card]'));
+            return;
+        }
+        const cancelConfirmButton = event.target.closest('.js-cancel-draft-confirm');
+        if (cancelConfirmButton) {
+            const card = cancelConfirmButton.closest('[data-draft-card]');
+            setDraftConfirmationReview(card, false);
+            card?.querySelector('.draft-template-editor')?.classList.remove('show');
+            card?.querySelector('.draft-template-details')?.classList.add('show');
+            return;
+        }
         const showEditorButton = event.target.closest('.js-show-draft-editor');
         if (showEditorButton) {
             const card = showEditorButton.closest('[data-draft-card]');
+            setDraftConfirmationReview(card, false);
             card?.querySelector('.draft-template-details')?.classList.remove('show');
             card?.querySelector('[data-draft-automation]')?.classList.remove('show');
             card?.querySelector('.draft-template-editor')?.classList.add('show');
@@ -896,6 +948,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const showDetailsButton = event.target.closest('.js-show-draft-details');
         if (showDetailsButton) {
             const card = showDetailsButton.closest('[data-draft-card]');
+            setDraftConfirmationReview(card, false);
             card?.querySelector('.draft-template-editor')?.classList.remove('show');
             card?.querySelector('[data-draft-automation]')?.classList.remove('show');
             card?.querySelector('.draft-template-details')?.classList.add('show');
@@ -904,6 +957,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const showAutomationButton = event.target.closest('.js-show-draft-automation');
         if (showAutomationButton) {
             const card = showAutomationButton.closest('[data-draft-card]');
+            setDraftConfirmationReview(card, false);
             card?.querySelector('.draft-template-details')?.classList.remove('show');
             card?.querySelector('.draft-template-editor')?.classList.remove('show');
             card?.querySelector('[data-draft-automation]')?.classList.add('show');
@@ -1100,8 +1154,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 notify('Hãy chọn ngày lên đơn.', 'error');
                 return;
             }
-            const formattedDate = selectedDate.split('-').reverse().join('/');
-            if (!confirm(`Lên đơn vào ngày ${formattedDate}?`)) return;
         }
         button.disabled = true;
         try {

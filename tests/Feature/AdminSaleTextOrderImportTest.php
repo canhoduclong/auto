@@ -153,6 +153,7 @@ class AdminSaleTextOrderImportTest extends TestCase
         $controller->shouldReceive('createOrderFromSchedule')
             ->once()
             ->withArgs(function (array $items, array $orderData): bool {
+                $this->assertSame(3, $items[0]['quantity']);
                 $this->assertSame('2026-08-20', $orderData['delivery_date']);
                 $this->assertSame('2026-08-20', $orderData['created_at']->toDateString());
                 $this->assertTrue(Order::isNonCurrentBusinessDate($orderData['created_at']));
@@ -169,7 +170,7 @@ class AdminSaleTextOrderImportTest extends TestCase
                 'customer_id' => $customer->id,
                 'items' => [[
                     'product_variant_id' => $variant->id,
-                    'quantity' => 1,
+                    'quantity' => 3,
                     'size_kg' => 2.5,
                     'unit_price' => 100000,
                 ]],
@@ -194,7 +195,11 @@ class AdminSaleTextOrderImportTest extends TestCase
         $this->actingAs($sale)
             ->get(route('pages.my_order_drafts', ['draft_date' => '2026-08-21']))
             ->assertOk()
-            ->assertSee('Lên đơn 21/08');
+            ->assertSee('Lên đơn 21/08')
+            ->assertSee('js-review-draft-confirm', false)
+            ->assertSee('Kiểm tra đơn trước khi xác nhận')
+            ->assertSee('Xác nhận lên đơn 21/08')
+            ->assertSee('js-confirm-draft', false);
 
         $this->actingAs($sale)
             ->postJson(route('pages.my_order_drafts.customers.pin', $customer), ['is_pinned' => true])
