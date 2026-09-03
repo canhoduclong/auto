@@ -238,6 +238,19 @@ class WarehouseDashboardController extends Controller
         Order::STATUS_PACKING,
     ];
 
+    /** Statuses that still belong on the warehouse packing timeline. */
+    private const PACKING_PAGE_STATUSES = [
+        'approved',
+        Order::STATUS_READY_TO_PACK,
+        Order::STATUS_PACKING,
+        'packed',
+        Order::STATUS_READY_TO_SHIP,
+        Order::STATUS_DELIVERING,
+        Order::STATUS_IN_DELIVERY,
+        Order::STATUS_DELIVERED,
+        Order::STATUS_COMPLETED,
+    ];
+
     public function __construct()
     {
         $this->middleware(['auth', 'role:warehouse,admin']);
@@ -957,6 +970,8 @@ class WarehouseDashboardController extends Controller
             .'THEN DATE(delivery_date) ELSE DATE(created_at) END';
         $dailyCountsQuery = Order::query()
             ->selectRaw($packingDateSql.' as day_key, COUNT(*) as total')
+            ->whereIn('status', self::PACKING_PAGE_STATUSES)
+            ->whereNull('trash_at')
             ->where(function ($query) {
                 $query->whereNull('is_return_order')
                     ->orWhere('is_return_order', false);
@@ -1008,6 +1023,8 @@ class WarehouseDashboardController extends Controller
                 $query->withAvailableStock()->with('avatar.media');
             },
         ])
+            ->whereIn('status', self::PACKING_PAGE_STATUSES)
+            ->whereNull('trash_at')
             ->where(function ($query) {
                 $query->whereNull('is_return_order')
                     ->orWhere('is_return_order', false);
