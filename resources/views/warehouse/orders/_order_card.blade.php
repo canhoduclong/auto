@@ -732,6 +732,10 @@
                                 <div class="wh-stock-alert mt-2">
                                     <details open>
                                         <summary>Chi tiết thiếu hàng ({{ $stockShortages->count() }} sản phẩm)</summary>
+                                        <div class="small mt-2 text-muted">
+                                            Phạm vi FIFO: đơn chờ/đang đóng ngày {{ \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m/Y') }}
+                                            tại {{ auth()->user()?->warehouse?->name ?? 'kho đang quản lý' }}, gồm cả đơn trong hàng chờ chung chưa gán kho.
+                                        </div>
                                         <ul>
                                             @foreach($stockShortages as $shortage)
                                                 @php
@@ -747,7 +751,22 @@
                                                         <span class="text-danger">(thiếu {{ number_format($shortQty, 0) }})</span>
                                                     @endif
                                                     @if(($shortage['reason'] ?? '') === 'blocked_by_prior_order')
-                                                        <span class="text-warning">- bị chặn bởi đơn ưu tiên trước</span>
+                                                        @php $blockingOrders = collect($shortage['blocking_orders'] ?? []); @endphp
+                                                        <div class="mt-1 text-warning-emphasis">
+                                                            <span class="fw-semibold">Đơn ưu tiên trước đã giữ hàng:</span>
+                                                            @if($blockingOrders->isEmpty())
+                                                                chưa xác định được đơn cụ thể
+                                                            @else
+                                                                @foreach($blockingOrders as $blockingOrder)
+                                                                    <a href="#order-card-{{ $blockingOrder['order_id'] }}"
+                                                                       onclick="event.preventDefault(); document.getElementById('order-card-{{ $blockingOrder['order_id'] }}')?.scrollIntoView({ behavior: 'smooth', block: 'start' });">
+                                                                        #{{ $blockingOrder['order_code'] }}@if(!empty($blockingOrder['daily_sequence'])) (thứ tự {{ $blockingOrder['daily_sequence'] }})@endif
+                                                                    </a>@if(!empty($blockingOrder['customer_name'])) – {{ $blockingOrder['customer_name'] }}@endif:
+                                                                    giữ {{ number_format((float) ($blockingOrder['consumed_qty'] ?? 0), 0) }}
+                                                                    @if(!$loop->last); @endif
+                                                                @endforeach
+                                                            @endif
+                                                        </div>
                                                     @endif
                                                 </li>
                                             @endforeach

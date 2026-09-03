@@ -170,6 +170,19 @@ class WarehousePackingDeliveredReservationTest extends TestCase
 
         $this->assertTrue($result['guards'][$todayOrder->id]['can_start_packing']);
         $this->assertSame(0.0, $result['remaining_by_variant'][$variant->id]);
+
+        $blockerMethod = new ReflectionMethod(WarehouseDashboardController::class, 'reservationBlockingOrders');
+        $blockers = $blockerMethod->invoke(
+            app(WarehouseDashboardController::class),
+            $todayOrder,
+            $warehouse->id,
+            '2026-08-25'
+        );
+
+        $this->assertCount(1, $blockers);
+        $this->assertSame('PREVIOUS-DAY', $blockers[0]['order_code']);
+        $this->assertFalse($blockers[0]['same_packing_date']);
+        $this->assertSame(5.0, $blockers[0]['reserved_qty']);
     }
 
     public function test_orders_on_the_same_day_still_share_one_fifo_stock_pool(): void
@@ -228,6 +241,20 @@ class WarehousePackingDeliveredReservationTest extends TestCase
         $this->assertTrue($result['guards'][$orders[0]->id]['can_start_packing']);
         $this->assertFalse($result['guards'][$orders[1]->id]['can_start_packing']);
         $this->assertSame(2.0, $result['guards'][$orders[1]->id]['shortages'][0]['available_qty']);
+        $this->assertSame('blocked_by_prior_order', $result['guards'][$orders[1]->id]['shortages'][0]['reason']);
+        $this->assertSame(
+            [[
+                'order_id' => $orders[0]->id,
+                'order_code' => 'SAME-DAY-1',
+                'daily_sequence' => null,
+                'customer_name' => 'Khách FIFO cùng ngày',
+                'warehouse_id' => $warehouse->id,
+                'warehouse_name' => 'Kho FIFO cùng ngày',
+                'packing_date' => '2026-08-25',
+                'consumed_qty' => 3.0,
+            ]],
+            $result['guards'][$orders[1]->id]['shortages'][0]['blocking_orders']
+        );
     }
 
     protected function tearDown(): void

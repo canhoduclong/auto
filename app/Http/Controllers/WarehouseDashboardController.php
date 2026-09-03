@@ -2038,7 +2038,7 @@ class WarehouseDashboardController extends Controller
         $stockCheck = $this->evaluateSingleOrderStock($order, $managedWarehouseId, $packingDate);
 
         if (! ($stockCheck['can_start_packing'] ?? false)) {
-            $message = 'Không đủ tồn kho để đóng hàng';
+            $message = $this->packingStockShortageMessage($stockCheck, $packingDate);
 
             if ($request->expectsJson()) {
                 return response()->json([
@@ -2110,6 +2110,153 @@ class WarehouseDashboardController extends Controller
             'message' => null,
             'shortages' => [],
         ];
+    }
+
+    private function packingStockShortageMessage(array $stockCheck, string $packingDate): string
+    {
+        $shortages = collect($stockCheck['shortages'] ?? []);
+        $dateLabel = Carbon::parse($packingDate)->format('d/m/Y');
+        $itemDetails = $shortages
+            ->take(3)
+            ->map(function (array $shortage): string {
+                $name = (string) ($shortage['variant_name'] ?? 'Sản phẩm');
+                $shortQty = rtrim(rtrim(number_format((float) ($shortage['short_qty'] ?? 0), 3, '.', ''), '0'), '.');
+
+                return $name.' thiếu '.$shortQty;
+            })
+            ->filter()
+            ->implode(', ');
+        $blockingOrders = $shortages
+            ->flatMap(fn (array $shortage) => $shortage['blocking_orders'] ?? [])
+            ->unique('order_id')
+            ->take(5)
+            ->map(function (array $blockingOrder): string {
+                $label = '#'.($blockingOrder['order_code'] ?? $blockingOrder['order_id'] ?? '?');
+                if (! empty($blockingOrder['daily_sequence'])) {
+                    $label .= ' (thứ tự '.$blockingOrder['daily_sequence'].')';
+                }
+                if (! empty($blockingOrder['customer_name'])) {
+                    $label .= ' – '.$blockingOrder['customer_name'];
+                }
+
+                return $label;
+            })
+            ->implode(', ');
+
+        $message = 'Không đủ tồn kho ngày '.$dateLabel.' tại kho đang quản lý để đóng hàng.';
+        if ($itemDetails !== '') {
+            $message .= ' Thiếu: '.$itemDetails.'.';
+        }
+        if ($blockingOrders !== '') {
+            $message .= ' Đơn ưu tiên trước đang giữ hàng: '.$blockingOrders.'.';
+        }
+
+        return $message;
+    }
+
+    /**
+     * Explain reservation conflicts using the physical stock ledger. This is
+     * especially useful for restored orders: their historical FIFO check may
+     * pass while stock is still reserved by another operational date.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function reservationBlockingOrders(Order $order, ?int $warehouseId, string $packingDate): array
+    {
+        $order->loadMissing('items');
+        $variantIds = $order->items
+            ->pluck('product_variant_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        if ($variantIds->isEmpty()) {
+            return [];
+        }
+
+        return InventoryReservation::query()
+            ->with([
+                'inventory.productVariant:id,name',
+                'inventory.warehouse:id,name',
+                'orderItem.order.customer:id,name',
+            ])
+            ->whereHas('orderItem', function ($query) use ($order, $variantIds): void {
+                $query->where('order_id', '!=', $order->id)
+                    ->whereIn('product_variant_id', $variantIds->all());
+            })
+            ->when($warehouseId, fn ($query) => $query->whereHas(
+                'inventory',
+                fn ($inventoryQuery) => $inventoryQuery->where('warehouse_id', $warehouseId)
+            ))
+            ->get()
+            ->filter(fn (InventoryReservation $reservation) => $reservation->orderItem?->order !== null)
+            ->groupBy(fn (InventoryReservation $reservation) => (int) $reservation->orderItem->order_id)
+            ->map(function (Collection $reservations) use ($packingDate): array {
+                /** @var InventoryReservation $first */
+                $first = $reservations->first();
+                $blockingOrder = $first->orderItem->order;
+                $blockingDate = $blockingOrder->accounting_sales_import_batch_id && $blockingOrder->delivery_date
+                    ? $blockingOrder->delivery_date->toDateString()
+                    : $blockingOrder->created_at->toDateString();
+
+                return [
+                    'order_id' => (int) $blockingOrder->id,
+                    'order_code' => (string) $blockingOrder->code,
+                    'daily_sequence' => $blockingOrder->daily_sequence ? (int) $blockingOrder->daily_sequence : null,
+                    'customer_name' => (string) ($blockingOrder->customer?->name ?? ''),
+                    'packing_date' => $blockingDate,
+                    'same_packing_date' => $blockingDate === $packingDate,
+                    'warehouse_name' => (string) ($first->inventory?->warehouse?->name ?? 'Kho đang quản lý'),
+                    'reserved_qty' => (float) $reservations->sum('quantity'),
+                    'variants' => $reservations
+                        ->map(fn (InventoryReservation $reservation) => (string) ($reservation->inventory?->productVariant?->name ?? 'Sản phẩm'))
+                        ->unique()
+                        ->values()
+                        ->all(),
+                ];
+            })
+            ->sortBy([
+                ['same_packing_date', 'desc'],
+                ['daily_sequence', 'asc'],
+                ['order_id', 'asc'],
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function restoredReservationShortageMessage(array $blockingOrders, string $packingDate): string
+    {
+        $dateLabel = Carbon::parse($packingDate)->format('d/m/Y');
+        $message = 'Tồn kho thực tế vẫn chưa đủ để hoàn tất đơn phục hồi ngày '.$dateLabel.'.';
+
+        if (empty($blockingOrders)) {
+            return $message.' Chưa xác định được đơn giữ tồn; vui lòng đối soát reservation hoặc bổ sung kho.';
+        }
+
+        $blockerLabels = collect($blockingOrders)
+            ->take(5)
+            ->map(function (array $blocker): string {
+                $label = '#'.$blocker['order_code'];
+                if (! empty($blocker['daily_sequence'])) {
+                    $label .= ' (thứ tự '.$blocker['daily_sequence'].')';
+                }
+                if ($blocker['customer_name'] !== '') {
+                    $label .= ' – '.$blocker['customer_name'];
+                }
+                $label .= ' ngày '.Carbon::parse($blocker['packing_date'])->format('d/m/Y');
+                $label .= ', giữ '.rtrim(rtrim(number_format((float) $blocker['reserved_qty'], 3, '.', ''), '0'), '.');
+
+                return $label;
+            })
+            ->implode('; ');
+
+        $message .= ' Tồn đang được giữ bởi: '.$blockerLabels.'.';
+        if (collect($blockingOrders)->contains(fn (array $blocker) => ! $blocker['same_packing_date'])) {
+            $message .= ' Có reservation ngoài ngày '.$dateLabel.'; đây là xung đột tồn vật lý, không phải thứ tự FIFO của ngày đang đóng.';
+        }
+
+        return $message;
     }
 
     private function buildPackingSizeOptions(Collection $orders, array $stockGuards, ?int $warehouseId): array
@@ -2262,7 +2409,13 @@ class WarehouseDashboardController extends Controller
 
         // Load ALL queued orders from the SAME packing date for FIFO simulation
         // (oldest first). Orders belonging to another date never enter this pool.
-        $allQueueOrders = Order::with(['items.product', 'items.variant.product', 'items.packingSizeAllocations.variant'])
+        $allQueueOrders = Order::with([
+            'customer:id,name',
+            'warehouse:id,name',
+            'items.product',
+            'items.variant.product',
+            'items.packingSizeAllocations.variant',
+        ])
             ->whereIn('status', $queueStatuses)
             ->forPackingDate($forDate)
             ->when($warehouseId, fn ($query) => $query->where(function ($scope) use ($warehouseId) {
@@ -2295,6 +2448,11 @@ class WarehouseDashboardController extends Controller
 
         // Running pool — decremented only when a complete order can be packed (FIFO)
         $remainingByVariant = array_map(fn ($v) => (float) $v, $stockByVariant);
+
+        // Successful earlier orders that consumed each variant. Keeping this
+        // ledger lets the warehouse see exactly which FIFO orders caused a
+        // later order to run short, instead of only seeing a generic warning.
+        $consumersByVariant = [];
 
         $guards = [];
 
@@ -2329,6 +2487,7 @@ class WarehouseDashboardController extends Controller
                         continue;
                     }
                     if ($remaining < $requiredQty) {
+                        $blockingOrders = array_values($consumersByVariant[$variantId] ?? []);
                         $shortages[] = [
                             'order_id' => (int) $order->id,
                             'order_code' => (string) $order->code,
@@ -2338,7 +2497,8 @@ class WarehouseDashboardController extends Controller
                             'required_qty' => $requiredQty,
                             'available_qty' => $remaining,
                             'short_qty' => round($requiredQty - $remaining, 3),
-                            'reason' => $remaining <= 0 ? 'blocked_by_prior_order' : 'insufficient_stock',
+                            'reason' => ! empty($blockingOrders) ? 'blocked_by_prior_order' : 'insufficient_stock',
+                            'blocking_orders' => $blockingOrders,
                         ];
                     } else {
                         $pendingDeductions[$variantId] = ($pendingDeductions[$variantId] ?? 0.0) + $requiredQty;
@@ -2351,6 +2511,16 @@ class WarehouseDashboardController extends Controller
             if (! $hasShortage) {
                 foreach ($pendingDeductions as $vid => $consume) {
                     $remainingByVariant[$vid] = max(0.0, ($remainingByVariant[$vid] ?? 0.0) - $consume);
+                    $consumersByVariant[$vid][] = [
+                        'order_id' => (int) $order->id,
+                        'order_code' => (string) $order->code,
+                        'daily_sequence' => $order->daily_sequence ? (int) $order->daily_sequence : null,
+                        'customer_name' => (string) ($order->customer?->name ?? ''),
+                        'warehouse_id' => $order->warehouse_id ? (int) $order->warehouse_id : null,
+                        'warehouse_name' => (string) ($order->warehouse?->name ?? 'Chưa gán kho'),
+                        'packing_date' => $forDate,
+                        'consumed_qty' => round((float) $consume, 3),
+                    ];
                 }
             }
             // Order with shortage: deduct NOTHING — stock stays for later orders
@@ -3437,7 +3607,7 @@ class WarehouseDashboardController extends Controller
         $stockCheck = $this->evaluateSingleOrderStock($order, $managedWarehouseId, $packingDate);
 
         if (! ($stockCheck['can_start_packing'] ?? false)) {
-            $message = 'Không đủ tồn kho ngày '.Carbon::parse($packingDate)->format('d/m/Y').' để hoàn thành đóng gói.';
+            $message = $this->packingStockShortageMessage($stockCheck, $packingDate);
 
             if ($request->expectsJson()) {
                 return response()->json([
@@ -3456,10 +3626,15 @@ class WarehouseDashboardController extends Controller
                 $managedWarehouseId
             );
         } catch (\RuntimeException $exception) {
-            $message = 'Tồn kho vẫn chưa đủ để hoàn tất đóng gói đơn phục hồi. Vui lòng bổ sung kho trước.';
+            $reservationBlockers = $this->reservationBlockingOrders($order, $managedWarehouseId, $packingDate);
+            $message = $this->restoredReservationShortageMessage($reservationBlockers, $packingDate);
 
             if ($request->expectsJson()) {
-                return response()->json(['ok' => false, 'message' => $message], 422);
+                return response()->json([
+                    'ok' => false,
+                    'message' => $message,
+                    'blocking_orders' => $reservationBlockers,
+                ], 422);
             }
 
             return back()->with('error', $message);
