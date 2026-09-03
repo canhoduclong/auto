@@ -1820,7 +1820,7 @@
                 });
                 const ratio = total > 0 ? main * 100 / total : 0;
                 const average = total > 0 ? weighted / total : 0;
-                const valid = total === totalRequired && ratio > 70 && average >= 2.47 && average <= 2.57;
+                const valid = total === totalRequired && ratio >= 75;
                 if (summary) {
                     summary.className = 'small js-packing-size-summary mb-1 ' + (valid ? 'text-success' : 'text-danger');
                     summary.textContent = `Tổng ${total}/${totalRequired} · Size 2.5: ${formatCompactDecimal(ratio)}% · Bình quân: ${formatCompactDecimal(average)} kg`;

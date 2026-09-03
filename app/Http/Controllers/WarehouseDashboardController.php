@@ -1136,7 +1136,7 @@ class WarehouseDashboardController extends Controller
             ]);
         });
         $cuttingPlansByOrder = $this->buildCuttingPlansForGuards($stockGuardMap, $managedWarehouseId);
-        $packingSizeOptionsByItem = $this->buildPackingSizeOptions($orders, $stockGuardMap, $managedWarehouseId);
+        $packingSizeOptionsByItem = $this->buildPackingSizeOptions($orders, $managedWarehouseId);
 
         $orderIds = $orders->pluck('id')->all();
         $activeCuttingBatchesByOrder = ProductCuttingBatch::query()
@@ -2259,16 +2259,11 @@ class WarehouseDashboardController extends Controller
         return $message;
     }
 
-    private function buildPackingSizeOptions(Collection $orders, array $stockGuards, ?int $warehouseId): array
+    private function buildPackingSizeOptions(Collection $orders, ?int $warehouseId): array
     {
-        $eligibleItems = $orders->flatMap(function (Order $order) use ($stockGuards) {
-            $shortItemIds = collect($stockGuards[$order->id]['shortages'] ?? [])
-                ->pluck('order_item_id')
-                ->map(fn ($id) => (int) $id);
-
-            return $order->items->filter(function ($item) use ($shortItemIds) {
-                return abs((float) ($item->variant?->size ?? 0) - 2.5) < 0.0001
-                    && ($shortItemIds->contains((int) $item->id) || $item->packingSizeAllocations->isNotEmpty());
+        $eligibleItems = $orders->flatMap(function (Order $order) {
+            return $order->items->filter(function ($item) {
+                return abs((float) ($item->variant?->size ?? 0) - 2.5) < 0.0001;
             });
         })->values();
 
@@ -2941,15 +2936,12 @@ class WarehouseDashboardController extends Controller
         $mainSizeQuantity = (int) $allocationInput
             ->map(fn (int $quantity, int $variantId) => abs((float) $variants[$variantId]->size - 2.5) < 0.0001 ? $quantity : 0)
             ->sum();
-        if ($orderedQuantity <= 0 || $mainSizeQuantity * 100 <= $orderedQuantity * 70) {
-            return back()->withErrors(['allocations' => 'Tỷ lệ size 2.5 phải lớn hơn 70% tổng số lượng.']);
+        if ($orderedQuantity <= 0 || $mainSizeQuantity * 100 < $orderedQuantity * 75) {
+            return back()->withErrors(['allocations' => 'Tỷ lệ size 2.5 phải đạt tối thiểu 75% tổng số lượng.']);
         }
         $weightedAverage = (float) $allocationInput
             ->map(fn (int $quantity, int $variantId) => $quantity * (float) $variants[$variantId]->size)
             ->sum() / $orderedQuantity;
-        if ($weightedAverage < 2.47 - 0.000001 || $weightedAverage > 2.57 + 0.000001) {
-            return back()->withErrors(['allocations' => 'Size bình quân phải nằm trong khoảng 2.47–2.57 kg (hiện tại '.number_format($weightedAverage, 3, '.', '').' kg).']);
-        }
 
         $warehouseId = (int) ($request->user()?->warehouse_id ?: $order->warehouse_id ?: 0);
         if ($warehouseId <= 0) {
@@ -3163,8 +3155,8 @@ class WarehouseDashboardController extends Controller
                 $newWeight = round((float) $validated['item_actual_weight'], 3);
                 if (abs((float) ($item->variant?->size ?? 0) - 2.5) < 0.0001 && (int) $item->quantity > 0) {
                     $averageWeight = $newWeight / (int) $item->quantity;
-                    if ($averageWeight < 2.47 - 0.000001 || $averageWeight > 2.57 + 0.000001) {
-                        $message = 'Khối lượng bình quân của size 2.5 phải nằm trong khoảng 2.47–2.57 kg/sản phẩm.';
+                    if ($averageWeight < 2.4 - 0.000001 || $averageWeight > 2.6 + 0.000001) {
+                        $message = 'Khối lượng bình quân của size 2.5 phải nằm trong khoảng 2.4–2.6 kg/sản phẩm.';
                         if ($expectsJson) {
                             return response()->json(['ok' => false, 'message' => $message], 422);
                         }

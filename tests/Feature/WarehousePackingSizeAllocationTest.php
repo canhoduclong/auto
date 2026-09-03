@@ -35,21 +35,21 @@ class WarehousePackingSizeAllocationTest extends TestCase
     {
         [$user, $order, $item, $variants, $inventories] = $this->fixture(100);
 
-        $inventories['2.5']->update(['quantity' => 80]);
+        $inventories['2.5']->update(['quantity' => 75]);
         InventoryReservation::query()->create([
             'order_item_id' => $item->id,
             'inventory_id' => $inventories['2.5']->id,
-            'quantity' => 80,
+            'quantity' => 75,
         ]);
-        $inventories['2.5']->update(['reserved_quantity' => 80]);
+        $inventories['2.5']->update(['reserved_quantity' => 75]);
 
         $this->actingAs($user)
             ->post(route('warehouse.orders.packing-size-allocation', $order), [
                 'order_item_id' => $item->id,
                 'allocations' => [
-                    $variants['2.4']->id => 10,
-                    $variants['2.5']->id => 80,
-                    $variants['2.6']->id => 10,
+                    $variants['2.4']->id => 12,
+                    $variants['2.5']->id => 75,
+                    $variants['2.6']->id => 13,
                 ],
             ])
             ->assertRedirect()
@@ -58,12 +58,12 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $this->assertDatabaseHas('order_item_packing_size_allocations', [
             'order_item_id' => $item->id,
             'product_variant_id' => $variants['2.4']->id,
-            'quantity' => 10,
+            'quantity' => 12,
         ]);
         $this->assertSame(100, (int) InventoryReservation::query()->where('order_item_id', $item->id)->sum('quantity'));
-        $this->assertSame(10, (int) $inventories['2.4']->fresh()->reserved_quantity);
-        $this->assertSame(80, (int) $inventories['2.5']->fresh()->reserved_quantity);
-        $this->assertSame(10, (int) $inventories['2.6']->fresh()->reserved_quantity);
+        $this->assertSame(12, (int) $inventories['2.4']->fresh()->reserved_quantity);
+        $this->assertSame(75, (int) $inventories['2.5']->fresh()->reserved_quantity);
+        $this->assertSame(13, (int) $inventories['2.6']->fresh()->reserved_quantity);
 
         $this->actingAs($user)
             ->post(route('warehouse.orders.start-packing', $order), [
@@ -74,7 +74,7 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $this->assertSame(Order::STATUS_PACKING, $order->fresh()->status);
     }
 
-    public function test_it_rejects_a_mix_when_size_25_is_not_more_than_70_percent(): void
+    public function test_it_rejects_a_mix_when_size_25_is_below_75_percent(): void
     {
         [$user, $order, $item, $variants] = $this->fixture(100);
 
@@ -83,9 +83,9 @@ class WarehousePackingSizeAllocationTest extends TestCase
             ->post(route('warehouse.orders.packing-size-allocation', $order), [
                 'order_item_id' => $item->id,
                 'allocations' => [
-                    $variants['2.4']->id => 15,
-                    $variants['2.5']->id => 70,
-                    $variants['2.6']->id => 15,
+                    $variants['2.4']->id => 13,
+                    $variants['2.5']->id => 74,
+                    $variants['2.6']->id => 13,
                 ],
             ])
             ->assertRedirect(route('warehouse.orders'))
@@ -94,7 +94,7 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $this->assertDatabaseCount('order_item_packing_size_allocations', 0);
     }
 
-    public function test_size_25_actual_weight_must_average_between_247_and_257(): void
+    public function test_size_25_actual_weight_allows_the_adjacent_size_range(): void
     {
         [$user, $order, $item] = $this->fixture(100);
         $order->update(['status' => Order::STATUS_PACKING]);
@@ -102,7 +102,7 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $this->actingAs($user)
             ->postJson(route('warehouse.orders.logistics', $order), [
                 'item_id' => $item->id,
-                'item_actual_weight' => 246,
+                'item_actual_weight' => 239,
             ])
             ->assertUnprocessable()
             ->assertJsonPath('ok', false);
@@ -110,9 +110,24 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $this->actingAs($user)
             ->postJson(route('warehouse.orders.logistics', $order), [
                 'item_id' => $item->id,
-                'item_actual_weight' => 250,
+                'item_actual_weight' => 240,
             ])
             ->assertOk();
+
+        $this->actingAs($user)
+            ->postJson(route('warehouse.orders.logistics', $order), [
+                'item_id' => $item->id,
+                'item_actual_weight' => 260,
+            ])
+            ->assertOk();
+
+        $this->actingAs($user)
+            ->postJson(route('warehouse.orders.logistics', $order), [
+                'item_id' => $item->id,
+                'item_actual_weight' => 261,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('ok', false);
 
         $this->actingAs($user)
             ->postJson(route('warehouse.orders.logistics', $order), [

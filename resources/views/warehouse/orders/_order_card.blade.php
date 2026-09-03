@@ -500,8 +500,8 @@
                                                                     inputmode="decimal"
                                                                     data-qty="{{ $orderedQty }}"
                                                                     data-size="{{ is_numeric($variantSize) && (float)$variantSize > 0 ? (float)$variantSize : 0 }}"
-                                                                    data-average-min="{{ abs((float)$variantSize - 2.5) < 0.0001 ? '2.47' : '' }}"
-                                                                    data-average-max="{{ abs((float)$variantSize - 2.5) < 0.0001 ? '2.57' : '' }}">
+                                                                    data-average-min="{{ abs((float)$variantSize - 2.5) < 0.0001 ? '2.4' : '' }}"
+                                                                    data-average-max="{{ abs((float)$variantSize - 2.5) < 0.0001 ? '2.6' : '' }}">
                                                                 <button class="btn btn-sm {{ $isItemLogisticsSaved ? 'btn-secondary' : 'btn-success' }} js-logistics-submit-btn" type="submit">{{ $isItemLogisticsSaved ? 'Đã lưu' : 'Lưu' }}</button>
                                                                 <button class="btn btn-sm btn-outline-danger js-clear-item-weight {{ $isItemLogisticsSaved ? '' : 'd-none' }}"
                                                                         type="submit" formnovalidate title="Gỡ kg đã lưu nhầm">
@@ -531,7 +531,7 @@
                                                     <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
                                                         <div>
                                                             <strong><i class="bi bi-boxes me-1"></i>Bổ sung size 2.4 / 2.6 cho mốc 2.5</strong>
-                                                            <div class="small text-muted">Tổng phải đủ {{ number_format($orderedQty) }} con, size 2.5 &gt; 70%, bình quân 2.47–2.57 kg.</div>
+                                                            <div class="small text-muted">Tổng phải đủ {{ number_format($orderedQty) }} con; size chính 2.5 tối thiểu 75%, tối đa 25% dùng size liền kề 2.4 / 2.6.</div>
                                                         </div>
                                                     </div>
                                                     <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.packing-size-allocation', $order) }}"
