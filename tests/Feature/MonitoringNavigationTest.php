@@ -26,9 +26,19 @@ class MonitoringNavigationTest extends TestCase
             ->get(route('pages.my_orders.monitoring', ['tab' => 'today']));
 
         $response->assertOk()
+            ->assertViewHas('perPage', 50)
             ->assertSee('Bảng điều khiển')
             ->assertSee(route('pages.my_dashboard'), false)
+            ->assertSee('>50 đơn</option>', false)
+            ->assertDontSee('đơn / trang')
+            ->assertDontSee('<option value="20"', false)
             ->assertDontSee('aria-label="Điều hướng nhanh theo số thứ tự đơn"', false);
+
+        $this->actingAs($sale)
+            ->withSession(['active_role' => 'sale'])
+            ->get(route('pages.my_orders.monitoring', ['tab' => 'today', 'per_page' => 20]))
+            ->assertOk()
+            ->assertViewHas('perPage', 50);
     }
 
     public function test_order_cards_and_sequence_navigation_use_workflow_status_colors(): void

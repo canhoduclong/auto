@@ -1159,10 +1159,10 @@ class PageController extends Controller
                 ->state($user, $selectedDate, $selectedDateField);
         }
 
-        $allowedPerPage = [10, 20, 50, 100];
-        $perPage = (int) $request->input('per_page', 20);
+        $allowedPerPage = [50, 100];
+        $perPage = (int) $request->input('per_page', 50);
         if (!in_array($perPage, $allowedPerPage, true)) {
-            $perPage = 20;
+            $perPage = 50;
         }
 
         $allowedSorts = ['daily_sequence', 'created_at', 'total', 'customer_name', 'status'];

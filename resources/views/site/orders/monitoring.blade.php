@@ -635,7 +635,11 @@
     }
     .monitor-bulk-actions > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .monitor-bulk-actions form { margin: 0; }
-    .monitor-bulk-actions .form-select { width: 158px; min-height: 38px; }
+    .monitor-bulk-actions .form-select {
+        width: 158px;
+        min-height: 38px;
+        padding-top: 9px;
+    }
     .monitor-bulk-actions .btn { min-height: 38px; padding-inline: 14px; }
     .monitor-view-switch { display: inline-flex; gap: 4px; }
     .monitor-view-switch .btn,
@@ -1237,8 +1241,8 @@
                         @if(!is_array($queryValue))<input type="hidden" name="{{ $queryKey }}" value="{{ $queryValue }}">@endif
                     @endforeach
                     <select name="per_page" class="form-select form-select-sm" onchange="this.form.submit()" aria-label="Số đơn trên trang">
-                        @foreach([10, 20, 50, 100] as $size)
-                            <option value="{{ $size }}" @selected((int) $perPage === $size)>{{ $size }} đơn / trang</option>
+                        @foreach([50, 100] as $size)
+                            <option value="{{ $size }}" @selected((int) $perPage === $size)>{{ $size }} đơn</option>
                         @endforeach
                     </select>
                 </form>
