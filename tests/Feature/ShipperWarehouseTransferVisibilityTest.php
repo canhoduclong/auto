@@ -45,20 +45,55 @@ class ShipperWarehouseTransferVisibilityTest extends TestCase
             'shipper_id' => $shipper->id,
             'status' => WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
         ]);
+        $slip = WarehouseDispatchSlip::create([
+            'business_date' => now()->toDateString(),
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseDispatchSlip::STATUS_FINALIZED,
+            'created_by' => $shipper->id,
+            'finalized_by' => $shipper->id,
+            'finalized_at' => now(),
+        ]);
+        WarehouseDispatchSlipEntry::create([
+            'warehouse_dispatch_slip_id' => $slip->id,
+            'warehouse_transfer_id' => $transfer->id,
+            'snapshot' => ['type' => 'warehouse_transfer'],
+        ]);
 
         $this->actingAs($shipper)
             ->get(route('shipper.warehouse-transfers', ['date' => now()->toDateString()]))
             ->assertOk()
             ->assertSee('</i> Điều chuyển', false)
             ->assertDontSee('</i> Điều chuyển kho', false)
+            ->assertSee('Danh sách phiếu điều chuyển')
+            ->assertSee($slip->code)
+            ->assertSee(route('shipper.warehouse-transfers.show', $slip), false)
+            ->assertDontSee('TRANSFER-DIFFERENT-DATE');
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.warehouse-transfers.show', $slip))
+            ->assertOk()
             ->assertSee('TRANSFER-DIFFERENT-DATE')
             ->assertSee('Khách điều chuyển khác ngày')
-            ->assertSee('ĐC-'.str_pad((string) $transfer->id, 6, '0', STR_PAD_LEFT))
+            ->assertSee($slip->code)
             ->assertSee('data-bs-target="#transfer-details-'.$transfer->id.'"', false)
             ->assertSee('id="transfer-details-'.$transfer->id.'"', false)
             ->assertSee('Chấp nhận')
             ->assertSee('Chi tiết')
-            ->assertSee(route('shipper.warehouse-transfers.pickup', $transfer), false);
+            ->assertSee(route('shipper.warehouse-transfers.pickup', $transfer), false)
+            ->assertSee("'Accept': 'application/json'", false);
+
+        $this->actingAs($shipper)
+            ->postJson(route('shipper.warehouse-transfers.pickup', $transfer))
+            ->assertOk()
+            ->assertJsonPath('transfer_id', $transfer->id)
+            ->assertJsonPath('status', WarehouseTransfer::STATUS_IN_TRANSIT);
+
+        $this->assertDatabaseHas('warehouse_transfers', [
+            'id' => $transfer->id,
+            'status' => WarehouseTransfer::STATUS_IN_TRANSIT,
+        ]);
     }
 
     public function test_target_warehouse_sees_waiting_transfer_even_when_delivery_date_is_tomorrow(): void
@@ -161,24 +196,28 @@ class ShipperWarehouseTransferVisibilityTest extends TestCase
         $this->actingAs($shipper)
             ->get(route('shipper.warehouse-transfers', ['date' => '2026-08-25']))
             ->assertOk()
-            ->assertSee('Lịch sử phiếu điều chuyển')
+            ->assertSee('Danh sách phiếu điều chuyển')
             ->assertSee($slip->code)
-            ->assertSee(route('shipper.warehouse-transfers', ['slip_id' => $slip->id]), false)
+            ->assertSee(route('shipper.warehouse-transfers.show', $slip), false)
+            ->assertDontSee('TRANSFER-SNAPSHOT-25');
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.warehouse-transfers.show', $slip))
+            ->assertOk()
+            ->assertSee('Chi tiết phiếu điều chuyển')
+            ->assertSee($slip->code)
             ->assertSee('TRANSFER-SNAPSHOT-25')
             ->assertSee('Ngày chuyển:')
             ->assertSee('25/08/2026')
             ->assertSee('Tổng số lượng chuyển:')
             ->assertSee('Vịt Nguyên Con snapshot')
             ->assertSee('MOC-SNAPSHOT-28')
-            ->assertSee('SL: 12');
+            ->assertSee('SL: 12')
+            ->assertSee('Cần nhận');
 
         $this->actingAs($shipper)
             ->get(route('shipper.warehouse-transfers', ['slip_id' => $slip->id]))
-            ->assertOk()
-            ->assertSee('Phiếu đang xem')
-            ->assertSee($slip->code)
-            ->assertSee('TRANSFER-SNAPSHOT-25')
-            ->assertSee('Cần nhận');
+            ->assertRedirect(route('shipper.warehouse-transfers.show', $slip));
 
         $this->actingAs($shipper)
             ->get(route('shipper.warehouse-transfers', ['date' => '2026-08-26']))

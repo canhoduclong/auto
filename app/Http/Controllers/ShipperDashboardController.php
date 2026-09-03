@@ -710,7 +710,14 @@ class ShipperDashboardController extends Controller
     public function warehouseTransfers(Request $request)
     {
         $user = Auth::user();
-        $dispatchSlips = WarehouseDispatchSlip::query()
+        $validated = $request->validate([
+            'date' => ['nullable', 'date'],
+        ]);
+        $selectedDate = ! empty($validated['date'])
+            ? Carbon::parse($validated['date'])->toDateString()
+            : null;
+
+        $dispatchSlipQuery = WarehouseDispatchSlip::query()
             ->with(['sourceWarehouse:id,name', 'targetWarehouse:id,name', 'shipper:id,name,short_name'])
             ->withCount('entries')
             ->whereHas('entries', fn ($query) => $query
@@ -718,20 +725,49 @@ class ShipperDashboardController extends Controller
                 ->orWhereNotNull('order_transfer_id'))
             ->when(! $user->hasRole('admin') && ! $user->hasRole('manager_shipper'), fn ($query) => $query
                 ->where('shipper_id', $user->id))
+            ->when($selectedDate, fn ($query) => $query->whereDate('business_date', $selectedDate))
             ->orderByDesc('business_date')
-            ->orderByDesc('id')
-            ->get();
+            ->orderByDesc('id');
 
-        $selectedSlipId = max(0, (int) $request->input('slip_id', 0));
-        $selectedSlip = $selectedSlipId > 0 ? $dispatchSlips->firstWhere('id', $selectedSlipId) : null;
-        if (! $selectedSlip && ! $request->filled('date') && $selectedSlipId === 0) {
-            $selectedSlip = $dispatchSlips->first();
-            $selectedSlipId = (int) ($selectedSlip?->id ?? 0);
+        $legacySlipId = max(0, (int) $request->input('slip_id', 0));
+        if ($legacySlipId > 0) {
+            $legacySlip = (clone $dispatchSlipQuery)->findOrFail($legacySlipId);
+
+            return redirect()->route('shipper.warehouse-transfers.show', $legacySlip);
         }
 
-        $today = $selectedSlip
-            ? $selectedSlip->business_date->toDateString()
-            : ($request->filled('date') ? Carbon::parse($request->input('date'))->toDateString() : Carbon::today()->toDateString());
+        $dispatchSlips = $dispatchSlipQuery
+            ->paginate(50)
+            ->withQueryString();
+
+        return view('shipper.warehouse-transfers', compact('dispatchSlips', 'selectedDate'));
+    }
+
+    public function warehouseTransferSlip(Request $request, WarehouseDispatchSlip $dispatchSlip)
+    {
+        $user = Auth::user();
+        if (! $user->hasRole('admin')
+            && ! $user->hasRole('manager_shipper')
+            && (int) $dispatchSlip->shipper_id !== (int) $user->id) {
+            abort(403);
+        }
+
+        $dispatchSlip->load([
+            'sourceWarehouse:id,name',
+            'targetWarehouse:id,name',
+            'shipper:id,name,short_name',
+        ])->loadCount('entries');
+
+        $today = $dispatchSlip->business_date->toDateString();
+        $transfers = $this->warehouseTransfersForDispatchSlip($dispatchSlip, $user);
+
+        return view('shipper.warehouse-transfer-detail', compact('dispatchSlip', 'transfers', 'today'));
+    }
+
+    private function warehouseTransfersForDispatchSlip(WarehouseDispatchSlip $dispatchSlip, User $user)
+    {
+        $selectedSlipId = (int) $dispatchSlip->id;
+        $today = $dispatchSlip->business_date->toDateString();
 
         $transfers = WarehouseTransfer::query()
             ->with([
@@ -755,24 +791,11 @@ class ShipperDashboardController extends Controller
                 WarehouseTransfer::STATUS_CANCELLED,
             ])
             ->whereHas('order')
-            ->when($selectedSlip, function ($query) use ($selectedSlipId): void {
-                $query->where(function ($slipQuery) use ($selectedSlipId): void {
-                    $slipQuery->whereHas('dispatchEntry', fn ($entryQuery) => $entryQuery
-                        ->where('warehouse_dispatch_slip_id', $selectedSlipId))
-                        ->orWhereHas('order.orderTransfer.dispatchEntry', fn ($entryQuery) => $entryQuery
-                            ->where('warehouse_dispatch_slip_id', $selectedSlipId));
-                });
-            }, function ($query) use ($today): void {
-                // Once grouped, the dispatch slip business date is the
-                // authoritative transfer date. Ungrouped transfers fall back
-                // to the date on which the movement was created.
-                $query->whereDate('warehouse_transfers.created_at', $today)
-                    ->orWhereHas('dispatchEntry.slip', fn ($slipQuery) => $slipQuery
-                        ->whereIn('status', [WarehouseDispatchSlip::STATUS_DRAFT, WarehouseDispatchSlip::STATUS_FINALIZED])
-                        ->whereDate('business_date', $today))
-                    ->orWhereHas('order.orderTransfer.dispatchEntry.slip', fn ($slipQuery) => $slipQuery
-                        ->whereIn('status', [WarehouseDispatchSlip::STATUS_DRAFT, WarehouseDispatchSlip::STATUS_FINALIZED])
-                        ->whereDate('business_date', $today));
+            ->where(function ($slipQuery) use ($selectedSlipId): void {
+                $slipQuery->whereHas('dispatchEntry', fn ($entryQuery) => $entryQuery
+                    ->where('warehouse_dispatch_slip_id', $selectedSlipId))
+                    ->orWhereHas('order.orderTransfer.dispatchEntry', fn ($entryQuery) => $entryQuery
+                        ->where('warehouse_dispatch_slip_id', $selectedSlipId));
             })
             ->orderByRaw("CASE WHEN status = 'pending_shipper_pickup' THEN 0 WHEN status = 'in_transit' THEN 1 WHEN status = 'delivered_waiting_receive' THEN 2 ELSE 3 END")
             ->orderByDesc('id')
@@ -835,13 +858,7 @@ class ShipperDashboardController extends Controller
             $transfer->sequence_number = $index + 1;
         });
 
-        return view('shipper.warehouse-transfers', compact(
-            'transfers',
-            'today',
-            'dispatchSlips',
-            'selectedSlip',
-            'selectedSlipId'
-        ));
+        return $transfers;
     }
 
     public function pickupWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
@@ -849,7 +866,11 @@ class ShipperDashboardController extends Controller
         $this->authorizeWarehouseTransferShipper($transfer);
 
         if ($transfer->status !== WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP) {
-            return back()->with('error', 'Phiếu điều chuyển không ở trạng thái chờ shipper nhận hàng.');
+            $message = 'Phiếu điều chuyển không ở trạng thái chờ shipper nhận hàng.';
+
+            return $request->expectsJson()
+                ? response()->json(['message' => $message], 422)
+                : back()->with('error', $message);
         }
 
         $validated = $request->validate([
@@ -859,11 +880,19 @@ class ShipperDashboardController extends Controller
         $transfer->loadMissing(['dispatchEntry.slip', 'order.items', 'order.orderTransfer.dispatchEntry.slip']);
         $order = $transfer->order;
         if (! $order) {
-            return back()->with('error', 'Không tìm thấy đơn hàng của phiếu điều chuyển.');
+            $message = 'Không tìm thấy đơn hàng của phiếu điều chuyển.';
+
+            return $request->expectsJson()
+                ? response()->json(['message' => $message], 422)
+                : back()->with('error', $message);
         }
         $dispatchSlip = $this->currentDispatchSlipForWarehouseTransfer($transfer);
         if ($dispatchSlip && $dispatchSlip->status === \App\Models\WarehouseDispatchSlip::STATUS_DRAFT) {
-            return back()->with('error', 'Phiếu xuất kho tổng '.$dispatchSlip->code.' chưa được kho xuất chốt.');
+            $message = 'Phiếu xuất kho tổng '.$dispatchSlip->code.' chưa được kho xuất chốt.';
+
+            return $request->expectsJson()
+                ? response()->json(['message' => $message], 422)
+                : back()->with('error', $message);
         }
 
         try {
@@ -906,10 +935,20 @@ class ShipperDashboardController extends Controller
                 ]);
             });
         } catch (\RuntimeException $exception) {
-            return back()->with('error', $exception->getMessage());
+            return $request->expectsJson()
+                ? response()->json(['message' => $exception->getMessage()], 422)
+                : back()->with('error', $exception->getMessage());
         }
 
-        return back()->with('success', 'Đã nhận hàng điều chuyển và xuất kho nguồn thành công.');
+        $message = 'Đã nhận hàng điều chuyển và xuất kho nguồn thành công.';
+
+        return $request->expectsJson()
+            ? response()->json([
+                'message' => $message,
+                'transfer_id' => $transfer->id,
+                'status' => WarehouseTransfer::STATUS_IN_TRANSIT,
+            ])
+            : back()->with('success', $message);
     }
 
     /**

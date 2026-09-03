@@ -499,6 +499,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'shipperPrint'])->name('finance-requests.print');
         Route::get('/delivery-statistics', [ShipperDashboardController::class, 'deliveryStatistics'])->name('delivery-statistics');
         Route::get('/warehouse-transfers', [ShipperDashboardController::class, 'warehouseTransfers'])->name('warehouse-transfers');
+        Route::get('/warehouse-transfers/slips/{dispatchSlip}', [ShipperDashboardController::class, 'warehouseTransferSlip'])->name('warehouse-transfers.show');
         Route::post('/warehouse-transfers/{transfer}/pickup', [ShipperDashboardController::class, 'pickupWarehouseTransfer'])->name('warehouse-transfers.pickup');
         Route::post('/warehouse-transfers/{transfer}/deliver', [ShipperDashboardController::class, 'deliverWarehouseTransfer'])->name('warehouse-transfers.deliver');
         Route::post('/warehouse-transfers/bulk-pickup', [ShipperDashboardController::class, 'bulkPickupWarehouseTransfers'])->name('warehouse-transfers.bulk-pickup')->middleware('role:manager_shipper,admin');

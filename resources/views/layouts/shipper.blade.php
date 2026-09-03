@@ -254,7 +254,7 @@
             <a href="{{ route('shipper.my-orders') }}" class="sp-nav-link {{ request()->routeIs('shipper.my-orders') ? 'active' : '' }}">
                 <i class="bi bi-truck"></i> Đơn giao của tôi
             </a>
-            <a href="{{ route('shipper.warehouse-transfers') }}" class="sp-nav-link {{ request()->routeIs('shipper.warehouse-transfers') ? 'active' : '' }}">
+            <a href="{{ route('shipper.warehouse-transfers') }}" class="sp-nav-link {{ request()->routeIs('shipper.warehouse-transfers', 'shipper.warehouse-transfers.show') ? 'active' : '' }}">
                 <i class="bi bi-arrow-left-right"></i> Điều chuyển
             </a>
 
