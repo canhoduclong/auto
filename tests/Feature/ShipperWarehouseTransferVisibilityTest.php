@@ -55,7 +55,10 @@ class ShipperWarehouseTransferVisibilityTest extends TestCase
             ->assertSee('Khách điều chuyển khác ngày')
             ->assertSee('ĐC-'.str_pad((string) $transfer->id, 6, '0', STR_PAD_LEFT))
             ->assertSee('data-bs-target="#transfer-details-'.$transfer->id.'"', false)
-            ->assertSee('id="transfer-details-'.$transfer->id.'"', false);
+            ->assertSee('id="transfer-details-'.$transfer->id.'"', false)
+            ->assertSee('Chấp nhận')
+            ->assertSee('Chi tiết')
+            ->assertSee(route('shipper.warehouse-transfers.pickup', $transfer), false);
     }
 
     public function test_target_warehouse_sees_waiting_transfer_even_when_delivery_date_is_tomorrow(): void

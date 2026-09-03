@@ -21,23 +21,18 @@
     };
 @endphp
 <div class="card border border-2 shadow-sm js-transfer-card wh-transfer-{{ $status }}" id="transfer-card-{{ $transfer->id }}">
-    <button type="button"
-            class="card-header bg-white d-flex justify-content-between align-items-center gap-2 transfer-card-toggle"
-            data-bs-toggle="collapse"
-            data-bs-target="#transfer-details-{{ $transfer->id }}"
-            aria-expanded="false"
-            aria-controls="transfer-details-{{ $transfer->id }}">
-        <div class="d-flex align-items-center">
+    <div class="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div class="d-flex align-items-center transfer-card-summary">
             <div class="transfer-nav-pill wh-transfer-{{ $status }} me-2" style="width:2rem;height:2rem;font-size:1rem;">{{ $sequenceNumber }}</div>
-            <div>
+            <div class="text-truncate">
                 <div class="fw-semibold">{{ $transferCode }} · {{ $order?->customer?->name ?? 'Khách hàng' }}</div>
-                <div class="small text-muted">
+                <div class="small text-muted text-truncate">
                     {{ $transfer->sourceWarehouse?->name ?? '—' }} → {{ $transfer->targetWarehouse?->name ?? '—' }}
                     · Sale: <strong class="text-dark">{{ $saleName }}</strong>
                 </div>
             </div>
         </div>
-        <div class="d-flex align-items-center gap-2 text-nowrap">
+        <div class="d-flex align-items-center gap-2 text-nowrap transfer-card-actions">
             <span class="wh-transfer-status-badge wh-transfer-{{ $status }}">
                 {{
                     $status === 'pending' ? 'Cần nhận' :
@@ -46,9 +41,25 @@
                 }}
             </span>
             <span class="fw-bold text-primary"><i class="bi bi-clock me-1"></i>{{ $deliveryTime }}</span>
-            <i class="bi bi-chevron-down transfer-card-chevron text-muted"></i>
+            @if($status === 'pending')
+                <form method="POST" action="{{ route('shipper.warehouse-transfers.pickup', $transfer) }}" class="m-0 js-pickup-form">
+                    @csrf
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="bi bi-check2-circle me-1"></i>Chấp nhận
+                    </button>
+                </form>
+            @endif
+            <button type="button"
+                    class="btn btn-outline-primary btn-sm transfer-card-toggle"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#transfer-details-{{ $transfer->id }}"
+                    aria-expanded="false"
+                    aria-controls="transfer-details-{{ $transfer->id }}">
+                <i class="bi bi-eye me-1"></i>Chi tiết
+                <i class="bi bi-chevron-down ms-1 transfer-card-chevron"></i>
+            </button>
         </div>
-    </button>
+    </div>
     <div class="collapse js-transfer-details" id="transfer-details-{{ $transfer->id }}">
     <div class="card-body">
         <div class="small text-muted mb-1">Kho gửi: <strong class="text-dark">{{ $transfer->sourceWarehouse?->name ?? '—' }}</strong></div>
@@ -78,6 +89,7 @@
             </div>
         @endif
     </div>
+    @if($status !== 'pending')
     <div class="card-footer bg-white border-top">
         <div class="mb-2">
             <span class="wh-transfer-status-badge wh-transfer-{{ $status }}">
@@ -88,15 +100,7 @@
                 }}
             </span>
         </div>
-        @if($status === 'pending')
-            <form method="POST" action="{{ route('shipper.warehouse-transfers.pickup', $transfer) }}" class="d-grid gap-2 js-pickup-form">
-                @csrf
-                <textarea name="pickup_note" rows="2" class="form-control form-control-sm" placeholder="Ghi chú khi nhận hàng (nếu có)"></textarea>
-                <button type="submit" class="btn btn-primary btn-sm">
-                    <i class="bi bi-box-arrow-in-down me-1"></i>Xác nhận nhận hàng
-                </button>
-            </form>
-        @elseif($status === 'transit')
+        @if($status === 'transit')
             <form method="POST" action="{{ route('shipper.warehouse-transfers.deliver', $transfer) }}" enctype="multipart/form-data" class="d-grid gap-2 js-deliver-form">
                 @csrf
                 <textarea name="delivery_note" rows="2" class="form-control form-control-sm" placeholder="Ghi chú giao hàng cho kho nhận"></textarea>
@@ -120,5 +124,6 @@
             <span class="badge bg-success">Phiếu điều chuyển đã hoàn tất</span>
         @endif
     </div>
+    @endif
     </div>
 </div>

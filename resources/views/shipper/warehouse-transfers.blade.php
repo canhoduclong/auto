@@ -101,14 +101,15 @@
         margin: 0 auto;
     }
     .transfer-card-toggle {
-        width: 100%;
-        border: 0;
-        text-align: left;
-        cursor: pointer;
+        white-space: nowrap;
     }
-    .transfer-card-toggle:hover { background: #f8fafc !important; }
     .transfer-card-chevron { transition: transform .2s ease; }
     .transfer-card-toggle[aria-expanded="true"] .transfer-card-chevron { transform: rotate(180deg); }
+    .transfer-card-summary { min-width: 0; }
+    .transfer-card-actions { flex: 0 0 auto; }
+    @media (max-width: 767px) {
+        .transfer-card-actions { width: 100%; justify-content: flex-end; flex-wrap: wrap; }
+    }
     @media (max-width: 767px) {
         .transfer-timeline {
             position: static;

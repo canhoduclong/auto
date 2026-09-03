@@ -636,7 +636,6 @@
     .monitor-bulk-actions > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .monitor-bulk-actions form { margin: 0; }
     .monitor-bulk-actions .form-select {
-        width: 158px;
         min-height: 38px;
         padding-top: 9px;
     }
