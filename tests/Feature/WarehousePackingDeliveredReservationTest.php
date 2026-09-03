@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\OrderController;
 use App\Http\Controllers\WarehouseDashboardController;
 use App\Models\Customer;
 use App\Models\Inventory;
@@ -255,6 +256,87 @@ class WarehousePackingDeliveredReservationTest extends TestCase
             ]],
             $result['guards'][$orders[1]->id]['shortages'][0]['blocking_orders']
         );
+    }
+
+    public function test_future_day_reservation_does_not_block_rebuilding_a_restored_historical_order(): void
+    {
+        Carbon::setTestNow('2026-09-03 10:00:00');
+
+        $user = User::factory()->create();
+        $customer = Customer::query()->create(['name' => 'Khách kiểm tra đóng ngày cũ', 'status' => 'active']);
+        $warehouse = Warehouse::query()->create(['name' => 'Kho Chiến Lược', 'status' => true]);
+        $product = Product::query()->create([
+            'user_id' => $user->id,
+            'name' => 'Sản phẩm đóng ngày cũ',
+            'unit' => 'cái',
+            'status' => true,
+        ]);
+        $variant = $product->variants()->create([
+            'name' => 'Loại lịch sử',
+            'sku' => 'HISTORICAL-PACKING',
+        ]);
+        $inventory = Inventory::query()->create([
+            'warehouse_id' => $warehouse->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 5,
+            'reserved_quantity' => 5,
+        ]);
+
+        $historicalOrder = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'warehouse_id' => $warehouse->id,
+            'code' => 'ORDER-01-09',
+            'status' => Order::STATUS_PACKING,
+            'skip_auto_cancel' => true,
+        ]);
+        $historicalOrder->forceFill(['created_at' => '2026-09-01 08:00:00'])->saveQuietly();
+        $historicalOrder->items()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 5,
+            'price' => 10000,
+            'total' => 50000,
+            'is_priced_by_kg' => false,
+        ]);
+
+        $futureOrder = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'warehouse_id' => $warehouse->id,
+            'code' => 'ORDER-02-09',
+            'status' => Order::STATUS_READY_TO_PACK,
+        ]);
+        $futureOrder->forceFill(['created_at' => '2026-09-02 08:00:00'])->saveQuietly();
+        $futureItem = $futureOrder->items()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 5,
+            'price' => 10000,
+            'total' => 50000,
+            'is_priced_by_kg' => false,
+        ]);
+        InventoryReservation::query()->create([
+            'order_item_id' => $futureItem->id,
+            'inventory_id' => $inventory->id,
+            'quantity' => 5,
+        ]);
+
+        app(OrderController::class)->rebuildRestoredOrderStockReservation(
+            $historicalOrder,
+            $warehouse->id,
+            '2026-09-01'
+        );
+
+        $this->assertDatabaseMissing('inventory_reservations', [
+            'order_item_id' => $historicalOrder->items()->value('id'),
+        ]);
+        $this->assertDatabaseHas('inventory_reservations', [
+            'order_item_id' => $futureItem->id,
+            'inventory_id' => $inventory->id,
+            'quantity' => 5,
+        ]);
+        $this->assertSame(5, (int) $inventory->fresh()->reserved_quantity);
     }
 
     protected function tearDown(): void

@@ -3604,6 +3604,14 @@ class WarehouseDashboardController extends Controller
         $managedWarehouseId = Auth::user()?->warehouse_id
             ? (int) Auth::user()->warehouse_id
             : ($order->warehouse_id ? (int) $order->warehouse_id : null);
+        $reservationWarehouseIds = InventoryReservation::query()
+            ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
+            ->whereIn('inventory_reservations.order_item_id', $order->items()->pluck('id'))
+            ->distinct()
+            ->pluck('inventories.warehouse_id');
+        $inferredReservationWarehouseId = $reservationWarehouseIds->count() === 1
+            ? (int) $reservationWarehouseIds->first()
+            : 0;
         $stockCheck = $this->evaluateSingleOrderStock($order, $managedWarehouseId, $packingDate);
 
         if (! ($stockCheck['can_start_packing'] ?? false)) {
@@ -3623,7 +3631,8 @@ class WarehouseDashboardController extends Controller
         try {
             app(OrderController::class)->rebuildRestoredOrderStockReservation(
                 $order,
-                $managedWarehouseId
+                $managedWarehouseId,
+                $packingDate
             );
         } catch (\RuntimeException $exception) {
             $reservationBlockers = $this->reservationBlockingOrders($order, $managedWarehouseId, $packingDate);
@@ -3640,18 +3649,9 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', $message);
         }
 
-        $packingWarehouseId = (int) ($order->warehouse_id ?: Auth::user()?->warehouse_id ?: 0);
-        if ($packingWarehouseId <= 0) {
-            $reservationWarehouseIds = InventoryReservation::query()
-                ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
-                ->whereIn('inventory_reservations.order_item_id', $order->items()->pluck('id'))
-                ->distinct()
-                ->pluck('inventories.warehouse_id');
-
-            if ($reservationWarehouseIds->count() === 1) {
-                $packingWarehouseId = (int) $reservationWarehouseIds->first();
-            }
-        }
+        $packingWarehouseId = (int) ($order->warehouse_id
+            ?: Auth::user()?->warehouse_id
+            ?: $inferredReservationWarehouseId);
 
         if ($packingWarehouseId <= 0) {
             $message = 'Không xác định được kho đóng hàng. Vui lòng gán kho cho đơn trước khi hoàn tất đóng gói.';

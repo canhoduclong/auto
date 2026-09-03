@@ -662,7 +662,7 @@ class AdminRestoreCancelledOrderTest extends TestCase
             'note' => 'Bắt đầu đóng gói đơn hàng cho ngày 23/08/2026',
         ]);
 
-        $order->update(['actual_weight' => 10]);
+        $order->items()->update(['actual_weight' => 10]);
 
         $this->actingAs($admin)
             ->post(route('warehouse.orders.complete-packing', $order), [

@@ -2397,15 +2397,32 @@ class OrderController extends Controller
      * A restored order may initially reserve only the available part of its stock.
      * Before completing warehouse work, rebuild a full reservation after stock-in.
      */
-    public function rebuildRestoredOrderStockReservation(Order $order, ?int $warehouseId): void
+    public function rebuildRestoredOrderStockReservation(
+        Order $order,
+        ?int $warehouseId,
+        ?string $packingDate = null
+    ): void
     {
         if (! $order->skip_auto_cancel) {
             return;
         }
 
-        DB::transaction(function () use ($order, $warehouseId): void {
+        DB::transaction(function () use ($order, $warehouseId, $packingDate): void {
             $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
             $this->releaseReservedStockForOrder($lockedOrder);
+
+            $effectivePackingDate = $packingDate
+                ?? ($lockedOrder->accounting_sales_import_batch_id && $lockedOrder->delivery_date
+                    ? $lockedOrder->delivery_date->toDateString()
+                    : $lockedOrder->created_at?->toDateString());
+
+            // Historical orders were already validated against the closing
+            // stock and FIFO queue of their own packing date. A reservation
+            // from a later date must not block them here.
+            if ($effectivePackingDate && Carbon::parse($effectivePackingDate)->startOfDay()->lt(Carbon::today())) {
+                return;
+            }
+
             $this->reserveStockForOrder($lockedOrder, $warehouseId);
         });
     }
