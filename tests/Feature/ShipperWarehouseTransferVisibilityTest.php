@@ -161,6 +161,9 @@ class ShipperWarehouseTransferVisibilityTest extends TestCase
         $this->actingAs($shipper)
             ->get(route('shipper.warehouse-transfers', ['date' => '2026-08-25']))
             ->assertOk()
+            ->assertSee('Lịch sử phiếu điều chuyển')
+            ->assertSee($slip->code)
+            ->assertSee(route('shipper.warehouse-transfers', ['slip_id' => $slip->id]), false)
             ->assertSee('TRANSFER-SNAPSHOT-25')
             ->assertSee('Ngày chuyển:')
             ->assertSee('25/08/2026')
@@ -168,6 +171,14 @@ class ShipperWarehouseTransferVisibilityTest extends TestCase
             ->assertSee('Vịt Nguyên Con snapshot')
             ->assertSee('MOC-SNAPSHOT-28')
             ->assertSee('SL: 12');
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.warehouse-transfers', ['slip_id' => $slip->id]))
+            ->assertOk()
+            ->assertSee('Phiếu đang xem')
+            ->assertSee($slip->code)
+            ->assertSee('TRANSFER-SNAPSHOT-25')
+            ->assertSee('Cần nhận');
 
         $this->actingAs($shipper)
             ->get(route('shipper.warehouse-transfers', ['date' => '2026-08-26']))

@@ -11,7 +11,10 @@
         'in_transit' => ['Đang vận chuyển', 'transit', 'bi-truck'],
         'delivered_waiting_receive' => ['Giao kho', 'waiting', 'bi-building-check'],
         'received_completed' => ['Kho đã nhận', 'completed', 'bi-check2-circle'],
+        'cancelled' => ['Đã hoàn lại', 'cancelled', 'bi-arrow-counterclockwise'],
     ];
+    $dispatchSlips = collect($dispatchSlips ?? []);
+    $slipsByDate = $dispatchSlips->groupBy(fn ($slip) => $slip->business_date->toDateString());
     $extractDeliveryHour = static function ($deliveryTime): ?int {
         if (!preg_match('/^\s*(\d{1,2})(?=\D|$)/u', trim((string) $deliveryTime), $matches)) {
             return null;
@@ -88,6 +91,9 @@
     .transfer-nav-pill.wh-transfer-completed,
     .wh-transfer-status-badge.wh-transfer-completed { background-color: #64748b !important; color: #fff !important; }
     .js-transfer-card.wh-transfer-completed { border-color: #64748b !important; }
+    .transfer-nav-pill.wh-transfer-cancelled,
+    .wh-transfer-status-badge.wh-transfer-cancelled { background-color: #dc3545 !important; color: #fff !important; }
+    .js-transfer-card.wh-transfer-cancelled { border-color: #dc3545 !important; }
     .wh-transfer-status-badge {
         display: inline-flex;
         align-items: center;
@@ -100,6 +106,23 @@
         max-width: 980px;
         margin: 0 auto;
     }
+    .dispatch-history-panel { border: 1px solid #dbe5e3; border-radius: 12px; background: #fff; }
+    .dispatch-history-date { padding: 12px 14px; border-bottom: 1px solid #eef2f7; }
+    .dispatch-history-date:last-child { border-bottom: 0; }
+    .dispatch-history-slips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .dispatch-history-slip {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 7px 10px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        color: #334155;
+        background: #fff;
+        text-decoration: none;
+    }
+    .dispatch-history-slip:hover,
+    .dispatch-history-slip.active { border-color: #0f766e; background: #ecfdf5; color: #0f766e; }
     .transfer-card-toggle {
         white-space: nowrap;
     }
@@ -117,11 +140,45 @@
     }
 </style>
 
+<div class="dispatch-history-panel mb-3">
+    <div class="d-flex justify-content-between align-items-center gap-2 p-3 border-bottom">
+        <div>
+            <div class="fw-bold"><i class="bi bi-journal-text me-1"></i>Lịch sử phiếu điều chuyển</div>
+            <div class="small text-muted">Phiếu mới nhất hiển thị trước. Chọn một phiếu để xem các lần vận chuyển và trạng thái.</div>
+        </div>
+        <span class="badge bg-secondary">{{ $dispatchSlips->count() }} phiếu</span>
+    </div>
+    @forelse($slipsByDate as $slipDate => $dateSlips)
+        <div class="dispatch-history-date">
+            <div class="fw-semibold text-muted"><i class="bi bi-calendar3 me-1"></i>{{ \Carbon\Carbon::parse($slipDate)->format('d/m/Y') }}</div>
+            <div class="dispatch-history-slips">
+                @foreach($dateSlips as $slip)
+                    <a class="dispatch-history-slip {{ (int) $selectedSlipId === (int) $slip->id ? 'active' : '' }}"
+                       href="{{ route('shipper.warehouse-transfers', ['slip_id' => $slip->id]) }}">
+                        <strong>{{ $slip->code }}</strong>
+                        <span class="small">{{ $slip->sourceWarehouse?->name ?? '—' }} → {{ $slip->targetWarehouse?->name ?? '—' }}</span>
+                        <span class="badge {{ $slip->status === 'finalized' ? 'bg-success' : ($slip->status === 'cancelled' ? 'bg-danger' : 'bg-warning text-dark') }}">
+                            {{ $slip->status === 'finalized' ? 'Đã chốt' : ($slip->status === 'cancelled' ? 'Đã hủy' : 'Đang mở') }}
+                        </span>
+                        <span class="badge bg-light text-dark border">{{ $slip->entries_count }} mục</span>
+                    </a>
+                @endforeach
+            </div>
+        </div>
+    @empty
+        <div class="p-3 text-center text-muted">Chưa có phiếu điều chuyển trong lịch sử.</div>
+    @endforelse
+</div>
+
 @if($selectedDate)
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 alert alert-info py-2 mb-3">
         <span>
             <i class="bi bi-calendar-event me-1"></i>
-            Ngày điều chuyển <strong>{{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</strong>
+            @if($selectedSlip)
+                Phiếu đang xem <strong>{{ $selectedSlip->code }}</strong> · {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}
+            @else
+                Ngày điều chuyển <strong>{{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</strong>
+            @endif
         </span>
         <form method="GET" class="d-flex gap-2">
             <input type="date" name="date" value="{{ $selectedDate }}" class="form-control form-control-sm">

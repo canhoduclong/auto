@@ -710,7 +710,28 @@ class ShipperDashboardController extends Controller
     public function warehouseTransfers(Request $request)
     {
         $user = Auth::user();
-        $today = $request->filled('date') ? Carbon::parse($request->input('date'))->toDateString() : Carbon::today()->toDateString();
+        $dispatchSlips = WarehouseDispatchSlip::query()
+            ->with(['sourceWarehouse:id,name', 'targetWarehouse:id,name', 'shipper:id,name,short_name'])
+            ->withCount('entries')
+            ->whereHas('entries', fn ($query) => $query
+                ->whereNotNull('warehouse_transfer_id')
+                ->orWhereNotNull('order_transfer_id'))
+            ->when(! $user->hasRole('admin') && ! $user->hasRole('manager_shipper'), fn ($query) => $query
+                ->where('shipper_id', $user->id))
+            ->orderByDesc('business_date')
+            ->orderByDesc('id')
+            ->get();
+
+        $selectedSlipId = max(0, (int) $request->input('slip_id', 0));
+        $selectedSlip = $selectedSlipId > 0 ? $dispatchSlips->firstWhere('id', $selectedSlipId) : null;
+        if (! $selectedSlip && ! $request->filled('date') && $selectedSlipId === 0) {
+            $selectedSlip = $dispatchSlips->first();
+            $selectedSlipId = (int) ($selectedSlip?->id ?? 0);
+        }
+
+        $today = $selectedSlip
+            ? $selectedSlip->business_date->toDateString()
+            : ($request->filled('date') ? Carbon::parse($request->input('date'))->toDateString() : Carbon::today()->toDateString());
 
         $transfers = WarehouseTransfer::query()
             ->with([
@@ -731,9 +752,17 @@ class ShipperDashboardController extends Controller
                 WarehouseTransfer::STATUS_IN_TRANSIT,
                 WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
                 WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+                WarehouseTransfer::STATUS_CANCELLED,
             ])
             ->whereHas('order')
-            ->where(function ($query) use ($today): void {
+            ->when($selectedSlip, function ($query) use ($selectedSlipId): void {
+                $query->where(function ($slipQuery) use ($selectedSlipId): void {
+                    $slipQuery->whereHas('dispatchEntry', fn ($entryQuery) => $entryQuery
+                        ->where('warehouse_dispatch_slip_id', $selectedSlipId))
+                        ->orWhereHas('order.orderTransfer.dispatchEntry', fn ($entryQuery) => $entryQuery
+                            ->where('warehouse_dispatch_slip_id', $selectedSlipId));
+                });
+            }, function ($query) use ($today): void {
                 // Once grouped, the dispatch slip business date is the
                 // authoritative transfer date. Ungrouped transfers fall back
                 // to the date on which the movement was created.
@@ -748,8 +777,11 @@ class ShipperDashboardController extends Controller
             ->orderByRaw("CASE WHEN status = 'pending_shipper_pickup' THEN 0 WHEN status = 'in_transit' THEN 1 WHEN status = 'delivered_waiting_receive' THEN 2 ELSE 3 END")
             ->orderByDesc('id')
             ->get()
-            ->map(function (WarehouseTransfer $transfer) use ($today): ?WarehouseTransfer {
-                $entry = $this->currentDispatchEntryForWarehouseTransfer($transfer);
+            ->map(function (WarehouseTransfer $transfer) use ($today, $selectedSlipId): ?WarehouseTransfer {
+                $entry = $this->currentDispatchEntryForWarehouseTransfer(
+                    $transfer,
+                    $selectedSlipId > 0 ? $selectedSlipId : null
+                );
                 $transferDate = $entry?->slip?->business_date?->toDateString()
                     ?? $transfer->created_at?->toDateString();
 
@@ -778,6 +810,7 @@ class ShipperDashboardController extends Controller
                 }
 
                 $transfer->setAttribute('dispatch_business_date', $transferDate);
+                $transfer->setAttribute('dispatch_slip_code', $entry?->slip?->code);
                 $transfer->setAttribute('dispatch_items', $items);
                 $transfer->setAttribute('dispatch_total_quantity', (int) $items->sum('quantity'));
                 $transfer->setAttribute(
@@ -788,7 +821,6 @@ class ShipperDashboardController extends Controller
                 return $transfer;
             })
             ->filter()
-            ->unique('order_id')
             ->sortBy(function (WarehouseTransfer $transfer): array {
                 $order = $transfer->order;
 
@@ -803,7 +835,13 @@ class ShipperDashboardController extends Controller
             $transfer->sequence_number = $index + 1;
         });
 
-        return view('shipper.warehouse-transfers', compact('transfers', 'today'));
+        return view('shipper.warehouse-transfers', compact(
+            'transfers',
+            'today',
+            'dispatchSlips',
+            'selectedSlip',
+            'selectedSlipId'
+        ));
     }
 
     public function pickupWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
@@ -1785,7 +1823,10 @@ class ShipperDashboardController extends Controller
         return $this->currentDispatchEntryForWarehouseTransfer($transfer)?->slip;
     }
 
-    private function currentDispatchEntryForWarehouseTransfer(WarehouseTransfer $transfer): ?WarehouseDispatchSlipEntry
+    private function currentDispatchEntryForWarehouseTransfer(
+        WarehouseTransfer $transfer,
+        ?int $dispatchSlipId = null
+    ): ?WarehouseDispatchSlipEntry
     {
         $order = $transfer->order;
         if (! $order) {
@@ -1796,10 +1837,14 @@ class ShipperDashboardController extends Controller
             ->with('slip')
             ->select('warehouse_dispatch_slip_entries.*')
             ->join('warehouse_dispatch_slips', 'warehouse_dispatch_slips.id', '=', 'warehouse_dispatch_slip_entries.warehouse_dispatch_slip_id')
-            ->whereIn('warehouse_dispatch_slips.status', [
-                WarehouseDispatchSlip::STATUS_DRAFT,
-                WarehouseDispatchSlip::STATUS_FINALIZED,
-            ])
+            ->when(
+                $dispatchSlipId,
+                fn ($query) => $query->where('warehouse_dispatch_slips.id', $dispatchSlipId),
+                fn ($query) => $query->whereIn('warehouse_dispatch_slips.status', [
+                    WarehouseDispatchSlip::STATUS_DRAFT,
+                    WarehouseDispatchSlip::STATUS_FINALIZED,
+                ])
+            )
             ->where('warehouse_dispatch_slips.source_warehouse_id', $transfer->source_warehouse_id)
             ->where('warehouse_dispatch_slips.target_warehouse_id', $transfer->target_warehouse_id)
             ->where(function ($entryQuery) use ($transfer, $order): void {

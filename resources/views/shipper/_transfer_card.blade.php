@@ -11,12 +11,13 @@
     $dispatchWeight = (float) ($transfer->dispatch_total_weight ?? $transfer->packed_total_weight ?? 0);
     $saleName = $order?->user?->name ?: $order?->customer?->currentOwner?->name ?: '—';
     $dispatchSlip = $transfer->dispatchEntry?->slip ?? $order?->orderTransfer?->dispatchEntry?->slip;
-    $transferCode = $dispatchSlip?->code ?: ('ĐC-' . str_pad((string) $transfer->id, 6, '0', STR_PAD_LEFT));
+    $transferCode = $transfer->dispatch_slip_code ?: $dispatchSlip?->code ?: ('ĐC-' . str_pad((string) $transfer->id, 6, '0', STR_PAD_LEFT));
     $status = $status ?? match($transfer->status) {
         'pending_shipper_pickup' => 'pending',
         'in_transit' => 'transit',
         'delivered_waiting_receive' => 'waiting',
         'received_completed' => 'completed',
+        'cancelled' => 'cancelled',
         default => 'other',
     };
 @endphp
@@ -37,7 +38,8 @@
                 {{
                     $status === 'pending' ? 'Cần nhận' :
                     ($status === 'transit' ? 'Đang vận chuyển' :
-                    ($status === 'waiting' ? 'Giao kho' : 'Kho đã nhận'))
+                    ($status === 'waiting' ? 'Giao kho' :
+                    ($status === 'cancelled' ? 'Đã hoàn lại' : 'Kho đã nhận')))
                 }}
             </span>
             <span class="fw-bold text-primary"><i class="bi bi-clock me-1"></i>{{ $deliveryTime }}</span>
@@ -96,7 +98,8 @@
                 {{
                     $status === 'pending' ? 'Cần nhận' :
                     ($status === 'transit' ? 'Đang vận chuyển' :
-                    ($status === 'waiting' ? 'Giao kho' : 'Kho đã nhận'))
+                    ($status === 'waiting' ? 'Giao kho' :
+                    ($status === 'cancelled' ? 'Đã hoàn lại' : 'Kho đã nhận')))
                 }}
             </span>
         </div>
@@ -120,8 +123,10 @@
                     </button>
                 </form>
             </div>
-        @else
+        @elseif($status === 'completed')
             <span class="badge bg-success">Phiếu điều chuyển đã hoàn tất</span>
+        @else
+            <span class="badge bg-danger">Phiếu điều chuyển đã hoàn lại</span>
         @endif
     </div>
     @endif
