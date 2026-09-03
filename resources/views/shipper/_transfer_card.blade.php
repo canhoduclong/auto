@@ -34,14 +34,22 @@
             </div>
         </div>
         <div class="d-flex align-items-center gap-2 text-nowrap transfer-card-actions">
-            <span class="wh-transfer-status-badge wh-transfer-{{ $status }}">
-                {{
-                    $status === 'pending' ? 'Cần nhận' :
-                    ($status === 'transit' ? 'Đang vận chuyển' :
-                    ($status === 'waiting' ? 'Giao kho' :
-                    ($status === 'cancelled' ? 'Đã hoàn lại' : 'Kho đã nhận')))
-                }}
-            </span>
+            @if($status === 'transit')
+                <form method="POST" action="{{ route('shipper.warehouse-transfers.deliver', $transfer) }}" class="m-0 js-deliver-form js-quick-deliver-form">
+                    @csrf
+                    <button type="submit" class="btn btn-success btn-sm">
+                        <i class="bi bi-truck me-1"></i>Giao Hàng
+                    </button>
+                </form>
+            @else
+                <span class="wh-transfer-status-badge wh-transfer-{{ $status }}">
+                    {{
+                        $status === 'pending' ? 'Cần nhận' :
+                        ($status === 'waiting' ? 'Giao kho' :
+                        ($status === 'cancelled' ? 'Đã hoàn lại' : 'Kho đã nhận'))
+                    }}
+                </span>
+            @endif
             <span class="fw-bold text-primary"><i class="bi bi-clock me-1"></i>{{ $deliveryTime }}</span>
             @if($status === 'pending')
                 <form method="POST" action="{{ route('shipper.warehouse-transfers.pickup', $transfer) }}" class="m-0 js-pickup-form">

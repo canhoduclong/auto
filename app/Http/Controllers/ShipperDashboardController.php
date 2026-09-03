@@ -1002,7 +1002,11 @@ class ShipperDashboardController extends Controller
         $this->authorizeWarehouseTransferShipper($transfer);
 
         if ($transfer->status !== WarehouseTransfer::STATUS_IN_TRANSIT) {
-            return back()->with('error', 'Phiếu điều chuyển không ở trạng thái đang vận chuyển.');
+            $message = 'Phiếu điều chuyển không ở trạng thái đang vận chuyển.';
+
+            return $request->expectsJson()
+                ? response()->json(['message' => $message], 422)
+                : back()->with('error', $message);
         }
 
         $validated = $request->validate([
@@ -1037,7 +1041,15 @@ class ShipperDashboardController extends Controller
             ]);
         }
 
-        return back()->with('success', 'Đã cập nhật giao hàng thành công. Kho nhận có thể tiếp nhận hàng.');
+        $message = 'Đã cập nhật giao hàng thành công. Kho nhận có thể tiếp nhận hàng.';
+
+        return $request->expectsJson()
+            ? response()->json([
+                'message' => $message,
+                'transfer_id' => $transfer->id,
+                'status' => WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+            ])
+            : back()->with('success', $message);
     }
 
     public function bulkPickupWarehouseTransfers(Request $request)

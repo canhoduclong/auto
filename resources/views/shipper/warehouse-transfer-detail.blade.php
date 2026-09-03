@@ -79,34 +79,40 @@ document.addEventListener('DOMContentLoaded', function () {
         const navBar = document.querySelector('.transfer-timeline');
         if (navBar) navBar.style.top = (document.querySelector('.sp-topbar')?.offsetHeight || 56) + 'px';
 
-        document.querySelectorAll('.js-pickup-form').forEach(function (form) {
-            form.addEventListener('submit', async function (event) {
-                event.preventDefault();
-                const button = form.querySelector('button[type="submit"]');
-                button.disabled = true;
-                try {
-                    const response = await fetch(form.action, {
-                        method: 'POST', body: new FormData(form),
-                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
-                    });
-                    const payload = await response.json();
-                    if (!response.ok) throw new Error(payload.message || 'Không thể xác nhận phiếu điều chuyển.');
+        function bindAjaxForm(selector, fallbackMessage, confirmationMessage) {
+            document.querySelectorAll(selector).forEach(function (form) {
+                form.addEventListener('submit', async function (event) {
+                    event.preventDefault();
+                    if (confirmationMessage && !window.confirm(confirmationMessage)) return;
+                    const button = form.querySelector('button[type="submit"]');
+                    button.disabled = true;
+                    try {
+                        const response = await fetch(form.action, {
+                            method: 'POST', body: new FormData(form),
+                            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                        });
+                        const payload = await response.json();
+                        if (!response.ok) throw new Error(payload.message || fallbackMessage);
 
-                    const dashboard = document.querySelector('.js-transfer-dashboard');
-                    const refreshed = await fetch(dashboard.dataset.detailUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-                    if (!refreshed.ok) throw new Error('Đã xác nhận nhưng chưa thể cập nhật giao diện.');
-                    const documentHtml = new DOMParser().parseFromString(await refreshed.text(), 'text/html');
-                    const newDashboard = documentHtml.querySelector('.js-transfer-dashboard');
-                    if (!newDashboard) throw new Error('Không thể đọc dữ liệu phiếu vừa cập nhật.');
-                    dashboard.innerHTML = newDashboard.innerHTML;
-                    bindDashboard();
-                    showNotice(payload.message, 'success');
-                } catch (error) {
-                    showNotice(error.message, 'danger');
-                    if (button.isConnected) button.disabled = false;
-                }
-            }, { once: true });
-        });
+                        const dashboard = document.querySelector('.js-transfer-dashboard');
+                        const refreshed = await fetch(dashboard.dataset.detailUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                        if (!refreshed.ok) throw new Error('Đã xác nhận nhưng chưa thể cập nhật giao diện.');
+                        const documentHtml = new DOMParser().parseFromString(await refreshed.text(), 'text/html');
+                        const newDashboard = documentHtml.querySelector('.js-transfer-dashboard');
+                        if (!newDashboard) throw new Error('Không thể đọc dữ liệu phiếu vừa cập nhật.');
+                        dashboard.innerHTML = newDashboard.innerHTML;
+                        bindDashboard();
+                        showNotice(payload.message, 'success');
+                    } catch (error) {
+                        showNotice(error.message, 'danger');
+                        if (button.isConnected) button.disabled = false;
+                    }
+                });
+            });
+        }
+
+        bindAjaxForm('.js-pickup-form', 'Không thể xác nhận phiếu điều chuyển.');
+        bindAjaxForm('.js-deliver-form', 'Không thể hoàn thành giao hàng.', 'Xác nhận đã giao hàng cho kho nhận?');
 
         document.querySelectorAll('.js-rollback-transfer-form').forEach(function (form) {
             form.addEventListener('submit', function (event) {

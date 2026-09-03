@@ -94,6 +94,24 @@ class ShipperWarehouseTransferVisibilityTest extends TestCase
             'id' => $transfer->id,
             'status' => WarehouseTransfer::STATUS_IN_TRANSIT,
         ]);
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.warehouse-transfers.show', $slip))
+            ->assertOk()
+            ->assertSee('Giao Hàng')
+            ->assertSee('js-quick-deliver-form', false)
+            ->assertSee(route('shipper.warehouse-transfers.deliver', $transfer), false);
+
+        $this->actingAs($shipper)
+            ->postJson(route('shipper.warehouse-transfers.deliver', $transfer))
+            ->assertOk()
+            ->assertJsonPath('transfer_id', $transfer->id)
+            ->assertJsonPath('status', WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE);
+
+        $this->assertDatabaseHas('warehouse_transfers', [
+            'id' => $transfer->id,
+            'status' => WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+        ]);
     }
 
     public function test_target_warehouse_sees_waiting_transfer_even_when_delivery_date_is_tomorrow(): void
