@@ -234,9 +234,14 @@
                     <div class="fw-bold">Quản trị đối soát</div>
                     <div class="small text-muted" id="reconSelectionText">Chưa chọn đơn nào</div>
                 </div>
-                <button class="btn btn-success" type="button" id="bulkConfirmButton" disabled>
-                    Xác nhận đã chọn
-                </button>
+                <div class="d-flex flex-wrap gap-2">
+                    <button class="btn btn-success" type="button" id="bulkConfirmButton" disabled>
+                        Xác nhận đã chọn
+                    </button>
+                    <button class="btn btn-outline-danger" type="button" id="bulkCancelButton" disabled>
+                        Hủy xác nhận đã chọn
+                    </button>
+                </div>
             </div>
             <div class="alert d-none" id="reconBulkResult" role="alert"></div>
             <div class="table-responsive">
@@ -244,7 +249,7 @@
                     <thead>
                         <tr>
                             <th style="width: 38px">
-                                <input class="form-check-input" type="checkbox" id="selectAllReconciliation" aria-label="Chọn tất cả đơn có thể xác nhận">
+                                <input class="form-check-input" type="checkbox" id="selectAllReconciliation" aria-label="Chọn tất cả đơn có thể xử lý đối soát">
                             </th>
                             <th>Mã đơn</th>
                             <th>Khách hàng</th>
@@ -266,18 +271,22 @@
                             $isConfirmed = $recon?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED;
                             $canCancel = $isConfirmed && ! $order->accounting_sales_import_batch_id;
                             $canConfirm = (bool) $order->reconciliation_can_confirm;
+                            $canSelect = $canConfirm || $canCancel;
+                            $selectionTitle = $canConfirm
+                                ? 'Chọn đơn để xác nhận'
+                                : ($canCancel ? 'Chọn đơn để hủy xác nhận' : ($order->reconciliation_block_reason ?: 'Không thể xử lý đơn này'));
                             $paidAmount = (float) ($order->reconciliation_paid_amount ?? $order->amount_paid ?? 0);
                             $dueAmount = (float) ($order->reconciliation_due_amount ?? $order->amount_due ?? 0);
                         @endphp
-                        <tr class="recon-order-row" data-order-id="{{ $order->id }}" data-detail-url="{{ route('accounting.reconciliation.detail', $order) }}" data-confirm-url="{{ route('accounting.reconciliation.confirm', $order) }}" data-cancel-url="{{ route('accounting.reconciliation.cancel', $order) }}">
+                        <tr class="recon-order-row" data-order-id="{{ $order->id }}" data-can-confirm="{{ $canConfirm ? '1' : '0' }}" data-can-cancel="{{ $canCancel ? '1' : '0' }}" data-cancel-allowed="{{ $order->accounting_sales_import_batch_id ? '0' : '1' }}" data-detail-url="{{ route('accounting.reconciliation.detail', $order) }}" data-confirm-url="{{ route('accounting.reconciliation.confirm', $order) }}" data-cancel-url="{{ route('accounting.reconciliation.cancel', $order) }}">
                             <td>
                                 <input
                                     class="form-check-input js-recon-select"
                                     type="checkbox"
                                     value="{{ $order->id }}"
                                     aria-label="Chọn đơn {{ $order->code }}"
-                                    title="{{ $canConfirm ? 'Chọn đơn để xác nhận' : ($order->reconciliation_block_reason ?: 'Không thể xác nhận đơn này') }}"
-                                    {{ $canConfirm ? '' : 'disabled' }}
+                                    title="{{ $selectionTitle }}"
+                                    {{ $canSelect ? '' : 'disabled' }}
                                 >
                             </td>
                             <td class="fw-bold">{{ $order->code }}</td>
@@ -347,9 +356,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const detailRow = document.getElementById('reconciliationDetailRow');
     const selectAllCheckbox = document.getElementById('selectAllReconciliation');
     const bulkConfirmButton = document.getElementById('bulkConfirmButton');
+    const bulkCancelButton = document.getElementById('bulkCancelButton');
     const selectionText = document.getElementById('reconSelectionText');
     const bulkResult = document.getElementById('reconBulkResult');
     const bulkConfirmUrl = @json(route('accounting.reconciliation.bulk-confirm'));
+    const bulkCancelUrl = @json(route('accounting.reconciliation.bulk-cancel'));
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     const money = (value) => new Intl.NumberFormat('vi-VN').format(Number(value || 0)) + 'đ';
     const esc = (value) => String(value ?? '-').replace(/[&<>"']/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
@@ -371,13 +382,29 @@ document.addEventListener('DOMContentLoaded', function () {
         return Array.from(document.querySelectorAll('.js-recon-select:checked')).map(input => input.value);
     }
 
+    function selectedActionOrderIds(action) {
+        return Array.from(document.querySelectorAll('.js-recon-select:checked'))
+            .filter(input => input.closest('.recon-order-row')?.dataset[action] === '1')
+            .map(input => input.value);
+    }
+
     function updateSelectionState() {
         const available = Array.from(document.querySelectorAll('.js-recon-select:not(:disabled)'));
         const selected = selectedOrderIds();
-        if (selectionText) selectionText.textContent = selected.length ? `Đã chọn ${selected.length} đơn` : 'Chưa chọn đơn nào';
+        const confirmable = selectedActionOrderIds('canConfirm');
+        const cancellable = selectedActionOrderIds('canCancel');
+        if (selectionText) {
+            selectionText.textContent = selected.length
+                ? `Đã chọn ${selected.length} đơn (${confirmable.length} có thể xác nhận, ${cancellable.length} có thể hủy)`
+                : 'Chưa chọn đơn nào';
+        }
         if (bulkConfirmButton) {
-            bulkConfirmButton.disabled = selected.length === 0;
-            bulkConfirmButton.textContent = selected.length ? `Xác nhận ${selected.length} đơn đã chọn` : 'Xác nhận đã chọn';
+            bulkConfirmButton.disabled = confirmable.length === 0;
+            bulkConfirmButton.textContent = confirmable.length ? `Xác nhận ${confirmable.length} đơn đã chọn` : 'Xác nhận đã chọn';
+        }
+        if (bulkCancelButton) {
+            bulkCancelButton.disabled = cancellable.length === 0;
+            bulkCancelButton.textContent = cancellable.length ? `Hủy xác nhận ${cancellable.length} đơn đã chọn` : 'Hủy xác nhận đã chọn';
         }
         if (selectAllCheckbox) {
             selectAllCheckbox.disabled = available.length === 0;
@@ -389,13 +416,15 @@ document.addEventListener('DOMContentLoaded', function () {
     function markRowConfirmed(orderId) {
         const row = document.querySelector(`.recon-order-row[data-order-id="${CSS.escape(String(orderId))}"]`);
         if (!row) return;
+        row.dataset.canConfirm = '0';
+        row.dataset.canCancel = row.dataset.cancelAllowed;
         const statusCell = row.querySelector('.js-accounting-status');
         if (statusCell) statusCell.innerHTML = '<span class="badge text-bg-success">Đã xác nhận</span>';
         const checkbox = row.querySelector('.js-recon-select');
         if (checkbox) {
             checkbox.checked = false;
-            checkbox.disabled = true;
-            checkbox.title = 'Đơn đã được kế toán xác nhận.';
+            checkbox.disabled = row.dataset.canCancel !== '1';
+            checkbox.title = row.dataset.canCancel === '1' ? 'Chọn đơn để hủy xác nhận' : 'Đơn đã được kế toán xác nhận.';
         }
         const confirmButton = row.querySelector('.js-recon-confirm');
         if (confirmButton) {
@@ -403,13 +432,15 @@ document.addEventListener('DOMContentLoaded', function () {
             confirmButton.classList.add('d-none');
             confirmButton.title = 'Đơn đã được kế toán xác nhận.';
         }
-        row.querySelector('.js-recon-cancel')?.classList.remove('d-none');
+        if (row.dataset.canCancel === '1') row.querySelector('.js-recon-cancel')?.classList.remove('d-none');
         updateSelectionState();
     }
 
     function markRowPending(orderId) {
         const row = document.querySelector(`.recon-order-row[data-order-id="${CSS.escape(String(orderId))}"]`);
         if (!row) return;
+        row.dataset.canConfirm = '1';
+        row.dataset.canCancel = '0';
         const statusCell = row.querySelector('.js-accounting-status');
         if (statusCell) statusCell.innerHTML = '<span class="badge text-bg-warning">Chưa xác nhận</span>';
         const checkbox = row.querySelector('.js-recon-select');
@@ -737,7 +768,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     bulkConfirmButton?.addEventListener('click', async function () {
-        const orderIds = selectedOrderIds();
+        const orderIds = selectedActionOrderIds('canConfirm');
         if (!orderIds.length || !confirm(`Xác nhận kế toán hàng loạt cho ${orderIds.length} đơn đã chọn?`)) return;
 
         bulkConfirmButton.disabled = true;
@@ -763,6 +794,46 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         } catch (error) {
             showBulkResult(error.message || 'Xác nhận hàng loạt thất bại.', false);
+        } finally {
+            updateSelectionState();
+        }
+    });
+
+    bulkCancelButton?.addEventListener('click', async function () {
+        const orderIds = selectedActionOrderIds('canCancel');
+        if (!orderIds.length) return;
+
+        const reason = prompt(`Nhập lý do hủy xác nhận đối soát cho ${orderIds.length} đơn đã chọn:`);
+        if (reason === null) return;
+        if (reason.trim().length < 3) {
+            showBulkResult('Vui lòng nhập lý do hủy đối soát (ít nhất 3 ký tự).', false);
+            return;
+        }
+        if (!confirm(`Hủy xác nhận ${orderIds.length} đơn và gỡ doanh thu, hoa hồng liên quan?`)) return;
+
+        bulkCancelButton.disabled = true;
+        bulkCancelButton.textContent = 'Đang hủy xác nhận...';
+        try {
+            const response = await fetch(bulkCancelUrl, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrf,
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({order_ids: orderIds, reason: reason.trim()}),
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(payload.message || 'Hủy xác nhận hàng loạt thất bại.');
+            (payload.cancelled_order_ids || []).forEach(markRowPending);
+            showBulkResult(payload.message || 'Đã hủy xác nhận các đơn được chọn.', (payload.cancelled_order_ids || []).length > 0);
+            if ((payload.cancelled_order_ids || []).map(String).includes(String(activeOrderId))) {
+                const activeRow = document.querySelector(`.recon-order-row[data-order-id="${CSS.escape(String(activeOrderId))}"]`);
+                if (activeRow) await loadDetail(activeRow);
+            }
+        } catch (error) {
+            showBulkResult(error.message || 'Hủy xác nhận hàng loạt thất bại.', false);
         } finally {
             updateSelectionState();
         }

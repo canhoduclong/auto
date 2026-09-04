@@ -2636,15 +2636,110 @@ class AccountingDashboardController extends Controller
             ], 422);
         }
 
-        $result = DB::transaction(function () use ($order, $request, $validated): array {
-            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+        try {
+            $result = $this->cancelReconciliationOrder(
+                $order->id,
+                (int) $request->user()->id,
+                $validated['reason']
+            );
+        } catch (\DomainException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json([
+            'message' => 'Đã hủy đối soát đơn hàng và gỡ doanh thu, hoa hồng liên quan.',
+            'reconciliation' => [
+                'status' => AccountingReconciliation::STATUS_PENDING,
+                'can_confirm' => true,
+            ],
+            'deleted_ledger_entries' => $result['deletedLedgerEntries'],
+            'deleted_commissions' => $result['deletedCommissions'],
+        ]);
+    }
+
+    public function bulkCancelReconciliation(Request $request)
+    {
+        if (! Schema::hasTable('accounting_reconciliations')) {
+            return response()->json(['message' => 'Bảng đối soát kế toán chưa được tạo. Vui lòng chạy migrate.'], 500);
+        }
+
+        $validated = $request->validate([
+            'order_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'order_ids.*' => ['required', 'integer', 'distinct', 'exists:orders,id'],
+            'reason' => ['required', 'string', 'min:3', 'max:1000'],
+        ]);
+
+        $orders = Order::query()
+            ->with('accountingReconciliation')
+            ->whereKey($validated['order_ids'])
+            ->get()
+            ->keyBy('id');
+        $cancelled = [];
+        $skipped = [];
+        $deletedLedgerEntries = 0;
+        $deletedCommissions = 0;
+
+        foreach ($validated['order_ids'] as $orderId) {
+            $order = $orders->get((int) $orderId);
+            if (! $order) {
+                continue;
+            }
+
+            if ($order->accounting_sales_import_batch_id) {
+                $skipped[] = [
+                    'order_id' => $order->id,
+                    'message' => 'Không thể hủy riêng đơn nhập doanh số lịch sử.',
+                ];
+
+                continue;
+            }
+
+            if ($order->accountingReconciliation?->status !== AccountingReconciliation::STATUS_CONFIRMED) {
+                $skipped[] = [
+                    'order_id' => $order->id,
+                    'message' => 'Đơn chưa được xác nhận đối soát hoặc đã được hủy trước đó.',
+                ];
+
+                continue;
+            }
+
+            try {
+                $result = $this->cancelReconciliationOrder(
+                    $order->id,
+                    (int) $request->user()->id,
+                    $validated['reason']
+                );
+                $cancelled[] = $order->id;
+                $deletedLedgerEntries += $result['deletedLedgerEntries'];
+                $deletedCommissions += $result['deletedCommissions'];
+            } catch (\DomainException $exception) {
+                $skipped[] = ['order_id' => $order->id, 'message' => $exception->getMessage()];
+            } catch (\Throwable $exception) {
+                report($exception);
+                $skipped[] = ['order_id' => $order->id, 'message' => 'Không thể hủy đối soát đơn này.'];
+            }
+        }
+
+        return response()->json([
+            'message' => sprintf('Đã hủy đối soát %d đơn, bỏ qua %d đơn.', count($cancelled), count($skipped)),
+            'cancelled_order_ids' => $cancelled,
+            'skipped' => $skipped,
+            'deleted_ledger_entries' => $deletedLedgerEntries,
+            'deleted_commissions' => $deletedCommissions,
+        ]);
+    }
+
+    private function cancelReconciliationOrder(int $orderId, int $cancelledBy, string $reason): array
+    {
+        return DB::transaction(function () use ($orderId, $cancelledBy, $reason): array {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($orderId);
             $reconciliation = AccountingReconciliation::query()
                 ->where('order_id', $lockedOrder->id)
                 ->lockForUpdate()
                 ->first();
 
             if (! $reconciliation || $reconciliation->status !== AccountingReconciliation::STATUS_CONFIRMED) {
-                abort(422, 'Đơn hàng chưa được xác nhận đối soát hoặc đã được hủy trước đó.');
+                throw new \DomainException('Đơn hàng chưa được xác nhận đối soát hoặc đã được hủy trước đó.');
             }
 
             $deletedLedgerEntries = Schema::hasTable('accounting_sales_entries')
@@ -2666,25 +2761,15 @@ class AccountingDashboardController extends Controller
             $lockedOrder->forceFill(['amount_due' => 0])->save();
             $lockedOrder->histories()->create([
                 'action' => 'accounting_reconciliation_cancelled',
-                'user_id' => $request->user()->id,
+                'user_id' => $cancelledBy,
                 'role' => 'accounting',
                 'status_before' => $lockedOrder->status,
                 'status_after' => $lockedOrder->status,
-                'note' => 'Kế toán hủy đối soát. Lý do: '.trim($validated['reason']),
+                'note' => 'Kế toán hủy đối soát. Lý do: '.trim($reason),
             ]);
 
             return compact('deletedLedgerEntries', 'deletedCommissions');
         });
-
-        return response()->json([
-            'message' => 'Đã hủy đối soát đơn hàng và gỡ doanh thu, hoa hồng liên quan.',
-            'reconciliation' => [
-                'status' => AccountingReconciliation::STATUS_PENDING,
-                'can_confirm' => true,
-            ],
-            'deleted_ledger_entries' => $result['deletedLedgerEntries'],
-            'deleted_commissions' => $result['deletedCommissions'],
-        ]);
     }
 
     private function confirmReconciliationOrder(Order $order, int $confirmedBy, ?string $note = null): AccountingReconciliation

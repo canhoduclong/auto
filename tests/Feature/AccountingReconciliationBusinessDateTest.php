@@ -151,4 +151,74 @@ class AccountingReconciliationBusinessDateTest extends TestCase
             'user_id' => $accountant->id,
         ]);
     }
+
+    public function test_accounting_can_cancel_selected_reconciliations_in_bulk(): void
+    {
+        $accountRole = Role::create(['name' => 'accounting']);
+        $accountant = User::factory()->create();
+        $accountant->roles()->attach($accountRole);
+        $sale = User::factory()->create();
+        $customer = Customer::create([
+            'name' => 'Khách hủy đối soát hàng loạt',
+            'status' => 'active',
+            'commission_percent' => 2,
+        ]);
+
+        $orders = collect(['A', 'B', 'P'])->map(fn (string $suffix) => Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $sale->id,
+            'code' => 'ORD-BULK-CANCEL-'.$suffix,
+            'status' => Order::STATUS_DELIVERED,
+            'delivered_at' => now(),
+            'total' => 1000000,
+        ]));
+
+        foreach ($orders->take(2) as $order) {
+            $this->actingAs($accountant)
+                ->postJson(route('accounting.reconciliation.confirm', $order))
+                ->assertOk();
+        }
+
+        $this->actingAs($accountant)
+            ->get(route('accounting.reconciliation', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('Hủy xác nhận đã chọn')
+            ->assertSee('bulk-cancel');
+
+        $response = $this->actingAs($accountant)
+            ->postJson(route('accounting.reconciliation.bulk-cancel'), [
+                'order_ids' => $orders->pluck('id')->all(),
+                'reason' => 'Kế toán chọn nhầm ngày',
+            ])
+            ->assertOk()
+            ->assertJsonCount(2, 'cancelled_order_ids')
+            ->assertJsonCount(1, 'skipped');
+
+        $this->assertEqualsCanonicalizing(
+            $orders->take(2)->pluck('id')->all(),
+            $response->json('cancelled_order_ids')
+        );
+
+        foreach ($orders->take(2) as $order) {
+            $this->assertDatabaseHas('accounting_reconciliations', [
+                'order_id' => $order->id,
+                'status' => 'pending',
+                'confirmed_by' => null,
+                'confirmed_at' => null,
+            ]);
+            $this->assertDatabaseMissing('accounting_sales_entries', [
+                'order_id' => $order->id,
+                'source' => 'order',
+            ]);
+            $this->assertDatabaseMissing('order_commissions', ['order_id' => $order->id]);
+            $this->assertDatabaseHas('order_histories', [
+                'order_id' => $order->id,
+                'action' => 'accounting_reconciliation_cancelled',
+                'user_id' => $accountant->id,
+                'note' => 'Kế toán hủy đối soát. Lý do: Kế toán chọn nhầm ngày',
+            ]);
+        }
+
+        $this->assertDatabaseMissing('accounting_reconciliations', ['order_id' => $orders->last()->id]);
+    }
 }
