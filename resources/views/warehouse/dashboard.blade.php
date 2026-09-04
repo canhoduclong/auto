@@ -254,7 +254,7 @@
                     'route' => route('tasks.my-tasks'),
                 ],
                 [
-                    'label' => 'Kiểm kê tồn đầu',
+                    'label' => 'Kiểm kê kho',
                     'total' => 1,
                     'done' => min(1, (int) ($stats['stocktakes_completed'] ?? 0)),
                     'route' => route('warehouse.stocktakes.index'),
@@ -361,7 +361,7 @@
                 <i class="bi bi-plus-circle me-1"></i> Tạo phiếu nhập kho
             </a>
             <a href="{{ route('warehouse.stocktakes.index') }}" class="btn btn-sm btn-outline-primary">
-                <i class="bi bi-clipboard2-check me-1"></i>Kiểm kê tồn đầu
+                <i class="bi bi-clipboard2-check me-1"></i>Kiểm kê kho
             </a>
             <a href="{{ route('warehouse.google-sheet-inventory.index') }}" class="btn btn-sm btn-outline-success">
                 <i class="bi bi-file-earmark-spreadsheet me-1"></i>Load tồn kho

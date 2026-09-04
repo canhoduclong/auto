@@ -1,7 +1,7 @@
 @extends('layouts.warehouse')
 
-@section('title', 'Kiểm Kê Tồn Đầu')
-@section('subtitle', 'Đối chiếu số thực tế và điều chỉnh tồn kho có lưu lịch sử')
+@section('title', 'Kiểm Kê Kho')
+@section('subtitle', 'Đối chiếu tồn đầu hoặc tồn cuối với số thực tế và lưu lịch sử điều chỉnh')
 
 @push('styles')
 <style>
@@ -38,7 +38,7 @@
 
 <div class="stocktake-help rounded p-3 mb-3 small">
     <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Hướng dẫn kiểm kê</div>
-    Có thể nhập số con/số lượng, số kg hoặc cả hai cho mặt hàng đã cân/đếm. Đại lượng để trống sẽ được giữ nguyên. Khi chốt, hệ thống lưu riêng chênh lệch số lượng và chênh lệch khối lượng rồi cập nhật tồn kho.
+    Chọn ngày và loại tồn cần kiểm kê. Tồn đầu lấy tại đầu ngày; tồn cuối lấy tại cuối ngày đã chọn (riêng hôm nay lấy đến thời điểm hiện tại). Có thể nhập số lượng, số kg hoặc cả hai; đại lượng để trống sẽ được giữ nguyên.
 </div>
 
 <div class="stocktake-card mb-3">
@@ -46,7 +46,7 @@
         <form method="GET" action="{{ route('warehouse.stocktakes.index') }}" class="row g-2 align-items-end">
             @if($warehouses->count() > 1)
                 <div class="col-lg-3 col-md-4">
-                    <label class="form-label small fw-semibold mb-1">Kho kiểm kê tồn đầu</label>
+                    <label class="form-label small fw-semibold mb-1">Kho kiểm kê</label>
                     <select name="warehouse_id" class="form-select form-select-sm">
                         @foreach($warehouses as $warehouseOption)
                             <option value="{{ $warehouseOption->id }}" @selected((int) $warehouse->id === (int) $warehouseOption->id)>{{ $warehouseOption->name }}</option>
@@ -60,10 +60,17 @@
                 <label class="form-label small fw-semibold mb-1">Tìm sản phẩm / biến thể / SKU</label>
                 <input type="search" name="search" class="form-control form-control-sm" value="{{ $search }}" placeholder="Nhập từ khóa...">
             </div>
-            <div class="col-lg-3 col-md-4">
-                <label class="form-label small fw-semibold mb-1">Tồn tại thời điểm</label>
-                <input type="datetime-local" name="counted_at" class="form-control form-control-sm"
-                       value="{{ $countedAt->format('Y-m-d\TH:i:s') }}" max="{{ now()->format('Y-m-d\TH:i:s') }}" step="1" required>
+            <div class="col-lg-2 col-md-3">
+                <label class="form-label small fw-semibold mb-1">Ngày kiểm kê</label>
+                <input type="date" name="inventory_date" class="form-control form-control-sm"
+                       value="{{ $inventoryDate->toDateString() }}" max="{{ today()->toDateString() }}" required>
+            </div>
+            <div class="col-lg-2 col-md-3">
+                <label class="form-label small fw-semibold mb-1">Loại tồn</label>
+                <select name="stocktake_type" class="form-select form-select-sm" required>
+                    <option value="opening" @selected($stocktakeType === 'opening')>Tồn đầu</option>
+                    <option value="closing" @selected($stocktakeType === 'closing')>Tồn cuối</option>
+                </select>
             </div>
             <div class="col-lg-2 col-md-3 d-flex gap-2">
                 <button class="btn btn-primary btn-sm flex-fill"><i class="bi bi-arrow-clockwise me-1"></i>Tải tồn</button>
@@ -76,6 +83,7 @@
         @csrf
         <input type="hidden" name="warehouse_id" value="{{ $warehouse->id }}">
         <input type="hidden" name="counted_at" value="{{ $countedAt->format('Y-m-d H:i:s') }}">
+        <input type="hidden" name="stocktake_type" value="{{ $stocktakeType }}">
         <div class="p-3 border-bottom bg-light">
             <div class="row g-2 align-items-end">
                 <div class="col-lg-3 col-md-4">
@@ -83,9 +91,9 @@
                     <input class="form-control form-control-sm" value="{{ $warehouse->name }}" readonly>
                 </div>
                 <div class="col-lg-3 col-md-4">
-                    <label class="form-label small fw-semibold mb-1">Thời điểm kiểm kê</label>
-                    <input class="form-control form-control-sm" value="{{ $countedAt->format('d/m/Y H:i:s') }}" readonly>
-                    <div class="small text-muted mt-1">Đổi thời điểm ở bộ lọc phía trên rồi bấm “Tải tồn”.</div>
+                    <label class="form-label small fw-semibold mb-1">Mốc kiểm kê</label>
+                    <input class="form-control form-control-sm" value="{{ $stocktakeType === 'closing' ? 'Tồn cuối' : 'Tồn đầu' }} ngày {{ $inventoryDate->format('d/m/Y') }}" readonly>
+                    <div class="small text-muted mt-1">Số hệ thống tại {{ $countedAt->format('d/m/Y H:i:s') }}.</div>
                 </div>
                 <div class="col-lg-6 col-md-4">
                     <label class="form-label small fw-semibold mb-1">Ghi chú</label>
@@ -115,8 +123,8 @@
                         <th>Sản phẩm / Biến thể</th>
                         <th>SKU</th>
                         <th>ĐVT</th>
-                        <th class="text-end" title="Tồn hệ thống tại {{ $countedAt->format('d/m/Y H:i:s') }}">SL tại giờ kiểm</th>
-                        <th class="text-end" title="Khối lượng hệ thống tại {{ $countedAt->format('d/m/Y H:i:s') }}">Kg tại giờ kiểm</th>
+                        <th class="text-end" title="Tồn hệ thống tại {{ $countedAt->format('d/m/Y H:i:s') }}">SL {{ $stocktakeType === 'closing' ? 'tồn cuối' : 'tồn đầu' }}</th>
+                        <th class="text-end" title="Khối lượng hệ thống tại {{ $countedAt->format('d/m/Y H:i:s') }}">Kg {{ $stocktakeType === 'closing' ? 'tồn cuối' : 'tồn đầu' }}</th>
                         <th class="text-end">SL thực tế</th>
                         <th class="text-end">Kg thực tế</th>
                         <th class="text-end">Lệch SL</th>
@@ -213,6 +221,7 @@
             <details class="stocktake-history-item">
                 <summary class="stocktake-history-head d-flex flex-wrap align-items-center gap-3" style="cursor:pointer;">
                     <strong>{{ $stocktake->code }}</strong>
+                    <span class="badge {{ $stocktake->stocktake_type === 'closing' ? 'bg-primary' : 'bg-info text-dark' }}">{{ $stocktake->stocktake_type === 'closing' ? 'Tồn cuối' : 'Tồn đầu' }}</span>
                     <span>{{ optional($stocktake->counted_at)->format('d/m/Y H:i') }}</span>
                     <span class="text-muted">{{ $stocktake->creator?->name ?? '—' }}</span>
                     <span class="badge bg-light text-dark border">{{ $stocktake->items_count }} mặt hàng</span>

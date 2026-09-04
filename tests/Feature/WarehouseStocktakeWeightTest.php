@@ -169,4 +169,79 @@ class WarehouseStocktakeWeightTest extends TestCase
             ->sole();
         $this->assertSame($countedAt->format('Y-m-d H:i:s'), $adjustment->created_at->format('Y-m-d H:i:s'));
     }
+
+    public function test_stocktake_can_choose_opening_or_closing_balance_for_a_day(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $user = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $user->roles()->attach(Role::create(['name' => 'warehouse']));
+        $inventoryDate = now()->subDays(3)->startOfDay();
+        $inventory = Inventory::factory()->create([
+            'warehouse_id' => $warehouse->id,
+            'quantity' => 15,
+            'weight_kg' => 15,
+            'reserved_quantity' => 0,
+        ]);
+
+        $movement = new InventoryMovement;
+        $movement->forceFill([
+            'inventory_id' => $inventory->id,
+            'quantity' => 5,
+            'weight_kg' => 5,
+            'type' => 'import',
+            'reference_id' => $inventory->id,
+            'reference_type' => Inventory::class,
+            'user_id' => $user->id,
+            'created_at' => $inventoryDate->copy()->addHours(10),
+            'updated_at' => $inventoryDate->copy()->addHours(10),
+        ])->save();
+
+        $this->actingAs($user)
+            ->get(route('warehouse.stocktakes.index', [
+                'warehouse_id' => $warehouse->id,
+                'inventory_date' => $inventoryDate->toDateString(),
+                'stocktake_type' => 'opening',
+            ]))
+            ->assertOk()
+            ->assertSee('Tồn đầu')
+            ->assertSee('value="10.000"', false);
+
+        $this->actingAs($user)
+            ->get(route('warehouse.stocktakes.index', [
+                'warehouse_id' => $warehouse->id,
+                'inventory_date' => $inventoryDate->toDateString(),
+                'stocktake_type' => 'closing',
+            ]))
+            ->assertOk()
+            ->assertSee('Tồn cuối')
+            ->assertSee('value="15.000"', false);
+
+        $this->actingAs($user)
+            ->post(route('warehouse.stocktakes.store'), [
+                'warehouse_id' => $warehouse->id,
+                'counted_at' => $inventoryDate->copy()->endOfDay()->format('Y-m-d H:i:s'),
+                'stocktake_type' => 'closing',
+                'items' => [
+                    $inventory->id => [
+                        'expected_quantity' => 15,
+                        'expected_weight_kg' => 15,
+                        'counted_quantity' => 14,
+                    ],
+                ],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('inventory_stocktakes', [
+            'warehouse_id' => $warehouse->id,
+            'stocktake_type' => 'closing',
+        ]);
+        $stocktake = \App\Models\InventoryStocktake::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->sole();
+        $this->assertDatabaseHas('inventory_adjustments', [
+            'inventory_id' => $inventory->id,
+            'quantity' => -1,
+            'reason' => 'Kiểm kê tồn cuối '.$stocktake->code,
+        ]);
+    }
 }

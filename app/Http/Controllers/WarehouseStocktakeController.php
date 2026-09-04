@@ -23,13 +23,20 @@ class WarehouseStocktakeController extends Controller
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
             'search' => ['nullable', 'string', 'max:255'],
             'counted_at' => ['nullable', 'date', 'before_or_equal:now'],
+            'inventory_date' => ['nullable', 'date', 'before_or_equal:today'],
+            'stocktake_type' => ['nullable', 'in:opening,closing'],
         ]);
 
         $warehouse = $this->resolveWarehouse($request);
         $search = trim((string) $request->input('search', ''));
-        $countedAt = $request->filled('counted_at')
+        $stocktakeType = (string) $request->input('stocktake_type', InventoryStocktake::TYPE_OPENING);
+        $usesLegacyCountedAt = $request->filled('counted_at') && ! $request->filled('inventory_date');
+        $inventoryDate = $request->filled('inventory_date')
+            ? Carbon::parse($request->input('inventory_date'))->startOfDay()
+            : ($request->filled('counted_at') ? Carbon::parse($request->input('counted_at'))->startOfDay() : today());
+        $countedAt = $usesLegacyCountedAt
             ? Carbon::parse($request->input('counted_at'))
-            : now();
+            : $this->resolveCountedAt($inventoryDate, $stocktakeType);
 
         $inventories = Inventory::query()
             ->with(['productVariant.product:id,name,unit'])
@@ -71,7 +78,9 @@ class WarehouseStocktakeController extends Controller
             'inventories',
             'recentStocktakes',
             'search',
-            'countedAt'
+            'countedAt',
+            'inventoryDate',
+            'stocktakeType'
         ));
     }
 
@@ -81,6 +90,7 @@ class WarehouseStocktakeController extends Controller
         $validated = $request->validate([
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
             'counted_at' => ['required', 'date', 'before_or_equal:now'],
+            'stocktake_type' => ['nullable', 'in:opening,closing'],
             'note' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array'],
             'items.*.expected_quantity' => ['required', 'numeric', 'min:0'],
@@ -110,8 +120,9 @@ class WarehouseStocktakeController extends Controller
         }
 
         $countedAt = Carbon::parse($validated['counted_at']);
+        $stocktakeType = (string) ($validated['stocktake_type'] ?? InventoryStocktake::TYPE_OPENING);
 
-        $stocktake = DB::transaction(function () use ($countedRows, $validated, $warehouse, $countedAt) {
+        $stocktake = DB::transaction(function () use ($countedRows, $validated, $warehouse, $countedAt, $stocktakeType) {
             $inventories = Inventory::query()
                 ->where('warehouse_id', $warehouse->id)
                 ->whereIn('id', $countedRows->keys()->all())
@@ -131,6 +142,7 @@ class WarehouseStocktakeController extends Controller
             $stocktake = InventoryStocktake::create([
                 'warehouse_id' => $warehouse->id,
                 'counted_at' => $countedAt,
+                'stocktake_type' => $stocktakeType,
                 'status' => InventoryStocktake::STATUS_COMPLETED,
                 'note' => trim((string) ($validated['note'] ?? '')) ?: null,
                 'created_by' => Auth::id(),
@@ -167,7 +179,7 @@ class WarehouseStocktakeController extends Controller
                         'inventory_id' => $inventory->id,
                         'quantity' => $difference,
                         'weight_kg' => $weightDifference,
-                        'reason' => 'Kiểm kê tồn đầu '.$stocktake->code,
+                        'reason' => 'Kiểm kê '.($stocktakeType === InventoryStocktake::TYPE_CLOSING ? 'tồn cuối ' : 'tồn đầu ').$stocktake->code,
                         'user_id' => Auth::id(),
                         'created_at' => $countedAt,
                         'updated_at' => $countedAt,
@@ -202,8 +214,23 @@ class WarehouseStocktakeController extends Controller
             return $stocktake;
         });
 
-        return redirect()->route('warehouse.stocktakes.index', ['warehouse_id' => $warehouse->id])
+        $redirectParameters = ['warehouse_id' => $warehouse->id];
+        if ($request->filled('stocktake_type')) {
+            $redirectParameters['inventory_date'] = $countedAt->toDateString();
+            $redirectParameters['stocktake_type'] = $stocktakeType;
+        }
+
+        return redirect()->route('warehouse.stocktakes.index', $redirectParameters)
             ->with('success', 'Đã hoàn tất phiếu kiểm kê '.$stocktake->code.' và cập nhật tồn kho.');
+    }
+
+    private function resolveCountedAt(Carbon $inventoryDate, string $stocktakeType): Carbon
+    {
+        if ($stocktakeType === InventoryStocktake::TYPE_CLOSING) {
+            return $inventoryDate->isToday() ? now() : $inventoryDate->copy()->endOfDay();
+        }
+
+        return $inventoryDate->copy()->startOfDay();
     }
 
     private function resolveWarehouse(Request $request): Warehouse
