@@ -234,6 +234,8 @@
                     'total' => ($stats['transfers_incoming'] ?? 0) + ($stats['transfers_completed'] ?? 0),
                     'done' => $stats['transfers_completed'] ?? 0,
                     'route' => route('warehouse.transfers.incoming'),
+                    'key' => 'incoming-orders',
+                    'show' => ($stats['transfers_incoming'] ?? 0) > 0,
                 ],
                 [
                     'label' => 'Tiếp nhận hàng',
@@ -260,28 +262,29 @@
                     'route' => route('warehouse.stocktakes.index'),
                 ],
             ];
+            $tasks = array_values(array_filter($tasks, fn ($task) => $task['show'] ?? true));
             $colorMap = [
                 'todo' => 'task-status-todo',
                 'inprogress' => 'task-status-inprogress',
                 'none' => 'task-status-none',
                 'done' => 'task-status-done',
             ];
-            function getTaskStatus($total, $done) {
+            $getTaskStatus = function ($total, $done) {
                 if ($total == 0) return 'none';
                 if ($done == 0 && $total > 0) return 'todo';
                 if ($done > 0 && $done < $total) return 'inprogress';
                 return 'done';
-            }
+            };
             @endphp
             <ul class="list-unstyled mb-0">
                 @foreach($tasks as $i => $task)
                     @php
                         $percent = ($task['total'] > 0) ? round($task['done'] / $task['total'] * 100) : 0;
-                        $status = getTaskStatus($task['total'], $task['done']);
+                        $status = $getTaskStatus($task['total'], $task['done']);
                         $badgeClass = $colorMap[$status];
                         $isDone = $status === 'done';
                     @endphp
-                    <li class="mb-3">
+                    <li class="mb-3" @if(isset($task['key'])) data-task-key="{{ $task['key'] }}" @endif>
                         <div class="d-flex align-items-center mb-1">
                             <span class="task-status-badge {{ $badgeClass }}">{{ $i+1 }}</span>
                             <span class="fw-semibold flex-grow-1">{{ $task['label'] }}</span>
