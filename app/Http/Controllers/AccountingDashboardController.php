@@ -2501,6 +2501,8 @@ class AccountingDashboardController extends Controller
                 'confirmed_at' => optional($order->accountingReconciliation?->confirmed_at)->format('d/m/Y H:i'),
                 'note' => $order->accountingReconciliation?->note,
                 'can_confirm' => $canConfirm,
+                'can_cancel' => $order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED
+                    && ! $order->accounting_sales_import_batch_id,
                 'block_reason' => $blockReason,
             ],
         ]);
@@ -2615,6 +2617,73 @@ class AccountingDashboardController extends Controller
             'message' => sprintf('Đã xác nhận %d đơn, bỏ qua %d đơn.', count($confirmed), count($skipped)),
             'confirmed_order_ids' => $confirmed,
             'skipped' => $skipped,
+        ]);
+    }
+
+    public function cancelReconciliation(Request $request, Order $order)
+    {
+        if (! Schema::hasTable('accounting_reconciliations')) {
+            return response()->json(['message' => 'Bảng đối soát kế toán chưa được tạo. Vui lòng chạy migrate.'], 500);
+        }
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:3', 'max:1000'],
+        ]);
+
+        if ($order->accounting_sales_import_batch_id) {
+            return response()->json([
+                'message' => 'Không thể hủy riêng đối soát của đơn nhập doanh số lịch sử. Hãy xử lý từ phiên nhập tương ứng.',
+            ], 422);
+        }
+
+        $result = DB::transaction(function () use ($order, $request, $validated): array {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+            $reconciliation = AccountingReconciliation::query()
+                ->where('order_id', $lockedOrder->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $reconciliation || $reconciliation->status !== AccountingReconciliation::STATUS_CONFIRMED) {
+                abort(422, 'Đơn hàng chưa được xác nhận đối soát hoặc đã được hủy trước đó.');
+            }
+
+            $deletedLedgerEntries = Schema::hasTable('accounting_sales_entries')
+                ? DB::table('accounting_sales_entries')
+                    ->where('order_id', $lockedOrder->id)
+                    ->where('source', \App\Models\AccountingSalesEntry::SOURCE_ORDER)
+                    ->delete()
+                : 0;
+            $deletedCommissions = Schema::hasTable('order_commissions')
+                ? DB::table('order_commissions')->where('order_id', $lockedOrder->id)->delete()
+                : 0;
+
+            $reconciliation->update([
+                'status' => AccountingReconciliation::STATUS_PENDING,
+                'confirmed_by' => null,
+                'confirmed_at' => null,
+            ]);
+
+            $lockedOrder->forceFill(['amount_due' => 0])->save();
+            $lockedOrder->histories()->create([
+                'action' => 'accounting_reconciliation_cancelled',
+                'user_id' => $request->user()->id,
+                'role' => 'accounting',
+                'status_before' => $lockedOrder->status,
+                'status_after' => $lockedOrder->status,
+                'note' => 'Kế toán hủy đối soát. Lý do: '.trim($validated['reason']),
+            ]);
+
+            return compact('deletedLedgerEntries', 'deletedCommissions');
+        });
+
+        return response()->json([
+            'message' => 'Đã hủy đối soát đơn hàng và gỡ doanh thu, hoa hồng liên quan.',
+            'reconciliation' => [
+                'status' => AccountingReconciliation::STATUS_PENDING,
+                'can_confirm' => true,
+            ],
+            'deleted_ledger_entries' => $result['deletedLedgerEntries'],
+            'deleted_commissions' => $result['deletedCommissions'],
         ]);
     }
 

@@ -264,11 +264,12 @@
                         @php
                             $recon = $order->accountingReconciliation;
                             $isConfirmed = $recon?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED;
+                            $canCancel = $isConfirmed && ! $order->accounting_sales_import_batch_id;
                             $canConfirm = (bool) $order->reconciliation_can_confirm;
                             $paidAmount = (float) ($order->reconciliation_paid_amount ?? $order->amount_paid ?? 0);
                             $dueAmount = (float) ($order->reconciliation_due_amount ?? $order->amount_due ?? 0);
                         @endphp
-                        <tr class="recon-order-row" data-order-id="{{ $order->id }}" data-detail-url="{{ route('accounting.reconciliation.detail', $order) }}">
+                        <tr class="recon-order-row" data-order-id="{{ $order->id }}" data-detail-url="{{ route('accounting.reconciliation.detail', $order) }}" data-confirm-url="{{ route('accounting.reconciliation.confirm', $order) }}" data-cancel-url="{{ route('accounting.reconciliation.cancel', $order) }}">
                             <td>
                                 <input
                                     class="form-check-input js-recon-select"
@@ -307,11 +308,16 @@
                                 <div class="d-flex gap-1">
                                     <button class="btn btn-sm btn-outline-primary js-recon-toggle" type="button">Xem chi tiết</button>
                                     <button
-                                        class="btn btn-sm btn-outline-success js-recon-confirm"
+                                        class="btn btn-sm btn-outline-success js-recon-confirm {{ $isConfirmed ? 'd-none' : '' }}"
                                         type="button"
                                         title="{{ $canConfirm ? 'Xác nhận riêng đơn này' : ($order->reconciliation_block_reason ?: 'Không thể xác nhận đơn này') }}"
                                         {{ $canConfirm ? '' : 'disabled' }}
                                     >Xác nhận</button>
+                                    <button
+                                        class="btn btn-sm btn-outline-danger js-recon-cancel {{ $canCancel ? '' : 'd-none' }}"
+                                        type="button"
+                                        title="Hủy xác nhận đối soát và gỡ doanh thu, hoa hồng của đơn"
+                                    >Hủy đối soát</button>
                                 </div>
                             </td>
                         </tr>
@@ -394,8 +400,31 @@ document.addEventListener('DOMContentLoaded', function () {
         const confirmButton = row.querySelector('.js-recon-confirm');
         if (confirmButton) {
             confirmButton.disabled = true;
+            confirmButton.classList.add('d-none');
             confirmButton.title = 'Đơn đã được kế toán xác nhận.';
         }
+        row.querySelector('.js-recon-cancel')?.classList.remove('d-none');
+        updateSelectionState();
+    }
+
+    function markRowPending(orderId) {
+        const row = document.querySelector(`.recon-order-row[data-order-id="${CSS.escape(String(orderId))}"]`);
+        if (!row) return;
+        const statusCell = row.querySelector('.js-accounting-status');
+        if (statusCell) statusCell.innerHTML = '<span class="badge text-bg-warning">Chưa xác nhận</span>';
+        const checkbox = row.querySelector('.js-recon-select');
+        if (checkbox) {
+            checkbox.checked = false;
+            checkbox.disabled = false;
+            checkbox.title = 'Chọn đơn để xác nhận';
+        }
+        const confirmButton = row.querySelector('.js-recon-confirm');
+        if (confirmButton) {
+            confirmButton.disabled = false;
+            confirmButton.classList.remove('d-none');
+            confirmButton.title = 'Xác nhận riêng đơn này';
+        }
+        row.querySelector('.js-recon-cancel')?.classList.add('d-none');
         updateSelectionState();
     }
 
@@ -430,9 +459,17 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>`).join('')
             : '<div class="text-muted">Không có hàng trả.</div>';
 
-        const confirmUrl = row?.dataset.confirmUrl || row?.dataset.detailUrl?.replace('/detail', '/confirm');
+        const confirmUrl = row?.dataset.confirmUrl;
+        const cancelUrl = row?.dataset.cancelUrl;
         const confirmButton = recon.status === 'confirmed'
-            ? `<span class="badge text-bg-success">Đã xác nhận bởi ${esc(recon.confirmed_by || '-')} lúc ${esc(recon.confirmed_at || '-')}</span>`
+            ? `<div>
+                <span class="badge text-bg-success">Đã xác nhận bởi ${esc(recon.confirmed_by || '-')} lúc ${esc(recon.confirmed_at || '-')}</span>
+                ${recon.can_cancel ? `<form id="reconCancelForm" data-cancel-url="${esc(cancelUrl)}" class="mt-3">
+                    <label class="form-label">Lý do hủy đối soát</label>
+                    <textarea class="form-control mb-2" name="reason" rows="2" minlength="3" maxlength="1000" required></textarea>
+                    <button class="btn btn-outline-danger" type="submit">Hủy đối soát</button>
+                </form>` : ''}
+            </div>`
             : `<form id="reconConfirmForm" data-confirm-url="${esc(confirmUrl)}" class="mt-2">
                 <label class="form-label">Ghi chú xác nhận</label>
                 <textarea class="form-control mb-2" name="note" rows="2" maxlength="1000"></textarea>
@@ -543,6 +580,30 @@ document.addEventListener('DOMContentLoaded', function () {
                 button.disabled = false;
             }
         });
+
+        detailBox.querySelector('#reconCancelForm')?.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const reason = form.querySelector('[name="reason"]')?.value?.trim() || '';
+            if (reason.length < 3 || !confirm('Hủy đối soát và gỡ doanh thu, hoa hồng của đơn này?')) return;
+            const button = form.querySelector('button');
+            button.disabled = true;
+            try {
+                const response = await fetch(form.dataset.cancelUrl, {
+                    method: 'POST',
+                    headers: {'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                    body: new FormData(form),
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(payload.message || 'Hủy đối soát thất bại.');
+                markRowPending(row.dataset.orderId);
+                showBulkResult(payload.message || 'Đã hủy đối soát đơn hàng.');
+                await loadDetail(row);
+            } catch (error) {
+                showBulkResult(error.message || 'Hủy đối soát thất bại.', false);
+                button.disabled = false;
+            }
+        });
     }
 
     function resetToggleButtons() {
@@ -605,7 +666,6 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     document.querySelectorAll('.recon-order-row').forEach(row => {
-        row.dataset.confirmUrl = row.dataset.detailUrl.replace('/detail', '/confirm');
         row.addEventListener('click', (event) => {
             if (event.target.closest('button, input, a, label')) {
                 return;
@@ -635,6 +695,35 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (activeOrderId === row.dataset.orderId) await loadDetail(row);
             } catch (error) {
                 showBulkResult(error.message || 'Xác nhận thất bại.', false);
+                button.disabled = false;
+            }
+        });
+        row.querySelector('.js-recon-cancel')?.addEventListener('click', async (event) => {
+            event.stopPropagation();
+            const reason = prompt('Nhập lý do hủy đối soát đơn hàng:');
+            if (reason === null) return;
+            if (reason.trim().length < 3) {
+                showBulkResult('Vui lòng nhập lý do hủy đối soát (ít nhất 3 ký tự).', false);
+                return;
+            }
+            if (!confirm('Hủy đối soát và gỡ doanh thu, hoa hồng của đơn này?')) return;
+            const button = event.currentTarget;
+            button.disabled = true;
+            try {
+                const body = new FormData();
+                body.append('reason', reason.trim());
+                const response = await fetch(row.dataset.cancelUrl, {
+                    method: 'POST',
+                    headers: {'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                    body,
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(payload.message || 'Hủy đối soát thất bại.');
+                markRowPending(row.dataset.orderId);
+                showBulkResult(payload.message || 'Đã hủy đối soát đơn hàng.');
+                if (activeOrderId === row.dataset.orderId) await loadDetail(row);
+            } catch (error) {
+                showBulkResult(error.message || 'Hủy đối soát thất bại.', false);
                 button.disabled = false;
             }
         });

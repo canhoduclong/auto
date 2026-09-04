@@ -96,4 +96,59 @@ class AccountingReconciliationBusinessDateTest extends TestCase
             ->assertOk()
             ->assertDontSee('ORD-BUSINESS-DATE-RECON');
     }
+
+    public function test_accounting_can_cancel_a_confirmed_order_reconciliation(): void
+    {
+        $accountRole = Role::create(['name' => 'accounting']);
+        $accountant = User::factory()->create();
+        $accountant->roles()->attach($accountRole);
+        $sale = User::factory()->create();
+        $customer = Customer::create([
+            'name' => 'Khách hủy đối soát',
+            'status' => 'active',
+            'commission_percent' => 2,
+        ]);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $sale->id,
+            'code' => 'ORD-CANCEL-RECON',
+            'status' => Order::STATUS_DELIVERED,
+            'delivered_at' => now(),
+            'total' => 1000000,
+        ]);
+
+        $this->actingAs($accountant)
+            ->postJson(route('accounting.reconciliation.confirm', $order))
+            ->assertOk()
+            ->assertJsonPath('reconciliation.status', 'confirmed');
+
+        $this->assertDatabaseHas('accounting_sales_entries', ['order_id' => $order->id]);
+        $this->assertDatabaseHas('order_commissions', ['order_id' => $order->id, 'status' => 'confirmed']);
+
+        $this->actingAs($accountant)
+            ->get(route('accounting.reconciliation', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('Hủy đối soát')
+            ->assertSee(route('accounting.reconciliation.cancel', $order), false);
+
+        $this->actingAs($accountant)
+            ->postJson(route('accounting.reconciliation.cancel', $order), ['reason' => 'Xác nhận nhầm đơn'])
+            ->assertOk()
+            ->assertJsonPath('reconciliation.status', 'pending');
+
+        $this->assertDatabaseHas('accounting_reconciliations', [
+            'order_id' => $order->id,
+            'status' => 'pending',
+            'confirmed_by' => null,
+            'confirmed_at' => null,
+        ]);
+        $this->assertDatabaseMissing('accounting_sales_entries', ['order_id' => $order->id, 'source' => 'order']);
+        $this->assertDatabaseMissing('order_commissions', ['order_id' => $order->id]);
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'amount_due' => 0]);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'action' => 'accounting_reconciliation_cancelled',
+            'user_id' => $accountant->id,
+        ]);
+    }
 }
