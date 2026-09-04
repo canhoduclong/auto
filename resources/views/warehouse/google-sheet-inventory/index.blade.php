@@ -1,6 +1,6 @@
 @extends('layouts.warehouse')
 
-@section('title', 'Load tồn kho Google Sheet')
+@section('title', 'Tồn kho Google Sheet')
 
 @push('styles')
 <style>
@@ -18,8 +18,8 @@
 <div class="container-fluid py-3">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <div>
-            <h3 class="mb-1"><i class="bi bi-file-earmark-spreadsheet text-success me-2"></i>Load tồn kho Google Sheet</h3>
-            <div class="text-muted">So sánh với lần đồng bộ gần nhất, sau đó chọn sản phẩm cần nhập thêm hoặc điều chỉnh giảm.</div>
+            <h3 class="mb-1"><i class="bi bi-file-earmark-spreadsheet text-success me-2"></i>Tồn kho Google Sheet</h3>
+            <div class="text-muted">Lưu nguồn file, load thay đổi vào hệ thống hoặc ghi tồn kho hằng ngày trở lại Google Sheet.</div>
         </div>
         <a href="{{ route('warehouse.dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Về Dashboard kho</a>
     </div>
@@ -29,7 +29,35 @@
     @if(session('warning'))<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-1"></i>{{ session('warning') }}</div>@endif
     @if($errors->any())<div class="alert alert-danger"><ul class="mb-0 ps-3">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
 
+    <div class="card sheet-import-card mb-3 border border-success-subtle"><div class="card-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+            <div>
+                <h5 class="mb-1"><i class="bi bi-link-45deg text-success me-1"></i>File Google Sheet tồn kho</h5>
+                <div class="small text-muted">Cấu hình được lưu riêng cho {{ $warehouse->name }} và được dùng cho cả Load lẫn Ghi tồn kho.</div>
+                @if($serviceAccountEmail)<div class="small text-muted mt-1">Để ghi dữ liệu, hãy chia sẻ file với quyền <strong>Người chỉnh sửa</strong> cho: <code>{{ $serviceAccountEmail }}</code></div>@endif
+            </div>
+            <a href="{{ $sheetConfiguration['spreadsheet_url'] }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-success">Mở file đang lưu <i class="bi bi-box-arrow-up-right ms-1"></i></a>
+        </div>
+        <form method="POST" action="{{ route('warehouse.google-sheet-inventory.configuration') }}" class="row g-3 align-items-end">
+            @csrf
+            <input type="hidden" name="warehouse_id" value="{{ $warehouse->id }}">
+            <input type="hidden" name="date" value="{{ $selectedDate }}">
+            <div class="col-lg-7">
+                <label class="form-label">Link file hoặc Spreadsheet ID</label>
+                <input type="text" name="spreadsheet_source" class="form-control" maxlength="500" required
+                       value="{{ old('spreadsheet_source', $sheetConfiguration['spreadsheet_id']) }}"
+                       placeholder="https://docs.google.com/spreadsheets/d/... hoặc nhập trực tiếp ID">
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <label class="form-label">ID trang tính (gid)</label>
+                <input type="number" name="sheet_id" class="form-control" min="0" required value="{{ old('sheet_id', $sheetConfiguration['sheet_id']) }}" placeholder="Ví dụ: 943551638">
+            </div>
+            <div class="col-lg-2 col-md-6"><button class="btn btn-success w-100"><i class="bi bi-floppy me-1"></i>Lưu file</button></div>
+        </form>
+    </div></div>
+
     <div class="card sheet-import-card mb-3"><div class="card-body">
+        <h5 class="mb-3"><i class="bi bi-cloud-download text-success me-1"></i>Load tồn kho từ file đã lưu</h5>
         <form method="GET" action="{{ route('warehouse.google-sheet-inventory.index') }}" class="row g-3 align-items-end">
             <div class="col-md-4"><label class="form-label">Ngày lấy tồn kho</label><input type="date" name="date" class="form-control" value="{{ $selectedDate }}" required></div>
             @if(auth()->user()?->isAdmin() && !auth()->user()?->warehouse_id)
@@ -37,6 +65,23 @@
             @endif
             <div class="col-md-4"><button class="btn btn-success"><i class="bi bi-cloud-download me-1"></i>Load và so sánh</button></div>
         </form>
+    </div></div>
+
+    <div class="card sheet-import-card mb-3 border border-primary-subtle" id="write-daily-inventory"><div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-lg-7">
+                <h5 class="mb-1"><i class="bi bi-cloud-upload text-primary me-1"></i>Ghi tồn kho hằng ngày lên Google Sheet</h5>
+                <div class="small text-muted">Ghi tồn cuối của {{ $warehouse->name }} vào cột “Tồn” đúng ngày trên file đã lưu. Dữ liệu cũ tại các ô sản phẩm tương ứng sẽ được cập nhật.</div>
+            </div>
+            <div class="col-lg-5">
+                <form method="POST" action="{{ route('warehouse.google-sheet-inventory.write-daily') }}" class="row g-2 align-items-end" onsubmit="return confirm('Ghi tồn kho ngày đã chọn lên Google Sheet? Dữ liệu tại cột Tồn tương ứng sẽ được cập nhật.');">
+                    @csrf
+                    <input type="hidden" name="warehouse_id" value="{{ $warehouse->id }}">
+                    <div class="col-sm-6"><label class="form-label">Ngày ghi tồn</label><input type="date" name="date" class="form-control" value="{{ $selectedDate }}" max="{{ today()->toDateString() }}" required></div>
+                    <div class="col-sm-6"><input type="hidden" name="confirm_write" value="1"><button class="btn btn-primary w-100"><i class="bi bi-cloud-upload me-1"></i>Ghi tồn kho</button></div>
+                </form>
+            </div>
+        </div>
     </div></div>
 
     @if(auth()->user()?->isAdmin())

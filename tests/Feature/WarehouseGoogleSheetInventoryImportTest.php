@@ -8,6 +8,7 @@ use App\Models\InventoryDocument;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Role;
+use App\Models\Setting;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\GoogleSheetsInventoryService;
@@ -88,6 +89,62 @@ class WarehouseGoogleSheetInventoryImportTest extends TestCase
             'quantity' => -4,
             'reference_type' => GoogleSheetInventorySync::class,
         ]);
+    }
+
+    public function test_warehouse_can_save_inventory_spreadsheet_link_and_sheet_id(): void
+    {
+        $warehouse = Warehouse::query()->create(['name' => 'Kho cấu hình Sheet', 'status' => true]);
+        $role = Role::query()->create(['name' => 'warehouse']);
+        $user = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $user->roles()->attach($role);
+
+        $this->actingAs($user)
+            ->post(route('warehouse.google-sheet-inventory.configuration'), [
+                'warehouse_id' => $warehouse->id,
+                'date' => '2026-08-30',
+                'spreadsheet_source' => 'https://docs.google.com/spreadsheets/d/inventorySheet_123456789/edit?gid=987654321',
+                'sheet_id' => 987654321,
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('warehouse.google-sheet-inventory.index', [
+                'date' => '2026-08-30',
+                'warehouse_id' => $warehouse->id,
+            ]));
+
+        $prefix = 'warehouse.google_sheet_inventory.'.$warehouse->id.'.';
+        $this->assertSame('inventorySheet_123456789', Setting::get($prefix.'spreadsheet_id'));
+        $this->assertSame('987654321', Setting::get($prefix.'sheet_id'));
+    }
+
+    public function test_warehouse_can_write_daily_inventory_to_saved_google_sheet(): void
+    {
+        $warehouse = Warehouse::query()->create(['name' => 'Kho ghi Sheet', 'status' => true]);
+        $role = Role::query()->create(['name' => 'warehouse']);
+        $user = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $user->roles()->attach($role);
+        $this->mock(GoogleSheetsInventoryService::class, function (MockInterface $mock) use ($warehouse): void {
+            $mock->shouldReceive('writeDailyInventory')
+                ->once()
+                ->withArgs(fn ($actualWarehouse, $date) => $actualWarehouse->is($warehouse) && $date === '2026-08-30')
+                ->andReturn([
+                    'rows' => 8,
+                    'spreadsheet_url' => 'https://docs.google.com/spreadsheets/d/test/edit',
+                    'sheet_name' => 'TK-NM 08.2026',
+                    'stock_column' => 12,
+                ]);
+        });
+
+        $this->actingAs($user)
+            ->post(route('warehouse.google-sheet-inventory.write-daily'), [
+                'warehouse_id' => $warehouse->id,
+                'date' => '2026-08-30',
+                'confirm_write' => '1',
+            ])
+            ->assertRedirect(route('warehouse.google-sheet-inventory.index', [
+                'date' => '2026-08-30',
+                'warehouse_id' => $warehouse->id,
+            ]))
+            ->assertSessionHas('success', fn (string $message): bool => str_contains($message, 'Đã ghi 8 dòng tồn kho'));
     }
 
     private function variant(Product $product, string $name, string $sku): ProductVariant

@@ -2,11 +2,16 @@
 
 namespace App\Services;
 
+use App\Models\Inventory;
+use App\Models\InventoryMovement;
 use App\Models\ProductVariant;
+use App\Models\Setting;
 use App\Models\Warehouse;
 use Carbon\Carbon;
 use Google\Client as GoogleClient;
 use Google\Service\Sheets;
+use Google\Service\Sheets\BatchUpdateValuesRequest;
+use Google\Service\Sheets\ValueRange;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use RuntimeException;
@@ -16,12 +21,9 @@ class GoogleSheetsInventoryService
     /** @return array<string, mixed> */
     public function preview(Warehouse $warehouse, string $selectedDate): array
     {
-        $spreadsheetId = trim((string) config('services.google_sheets.inventory_spreadsheet_id'));
-        $sheetId = (int) config('services.google_sheets.inventory_sheet_id');
-        if ($spreadsheetId === '' || $sheetId <= 0) {
-            throw new RuntimeException('Chưa cấu hình Google Sheet tồn kho.');
-        }
-
+        $source = $this->configuration($warehouse);
+        $spreadsheetId = $source['spreadsheet_id'];
+        $sheetId = $source['sheet_id'];
         $service = new Sheets($this->client());
         $sheetTitle = $this->sheetTitle($service, $spreadsheetId, $sheetId);
         $rangeTitle = "'".str_replace("'", "''", $sheetTitle)."'";
@@ -44,6 +46,107 @@ class GoogleSheetsInventoryService
                 'spreadsheet_url' => 'https://docs.google.com/spreadsheets/d/'.$spreadsheetId.'/edit?gid='.$sheetId.'#gid='.$sheetId,
             ]
         );
+    }
+
+    /** @return array{spreadsheet_id:string,sheet_id:int,spreadsheet_url:string} */
+    public function configuration(Warehouse $warehouse): array
+    {
+        $prefix = $this->settingPrefix($warehouse);
+        $spreadsheetId = trim((string) Setting::get(
+            $prefix.'spreadsheet_id',
+            config('services.google_sheets.inventory_spreadsheet_id')
+        ));
+        $sheetId = (int) Setting::get(
+            $prefix.'sheet_id',
+            config('services.google_sheets.inventory_sheet_id')
+        );
+
+        if ($spreadsheetId === '' || $sheetId < 0) {
+            throw new RuntimeException('Chưa cấu hình Google Sheet tồn kho.');
+        }
+
+        return [
+            'spreadsheet_id' => $spreadsheetId,
+            'sheet_id' => $sheetId,
+            'spreadsheet_url' => 'https://docs.google.com/spreadsheets/d/'.$spreadsheetId.'/edit?gid='.$sheetId.'#gid='.$sheetId,
+        ];
+    }
+
+    /** @return array{spreadsheet_id:string,sheet_id:int,spreadsheet_url:string} */
+    public function saveConfiguration(Warehouse $warehouse, string $spreadsheetSource, int $sheetId): array
+    {
+        $spreadsheetId = $this->extractSpreadsheetId($spreadsheetSource);
+        $prefix = $this->settingPrefix($warehouse);
+
+        Setting::set($prefix.'spreadsheet_id', $spreadsheetId);
+        Setting::set($prefix.'sheet_id', (string) $sheetId);
+
+        return $this->configuration($warehouse);
+    }
+
+    /** @return array{rows:int,spreadsheet_url:string,sheet_name:string,stock_column:int} */
+    public function writeDailyInventory(Warehouse $warehouse, string $selectedDate): array
+    {
+        $selectedDate = Carbon::parse($selectedDate)->toDateString();
+        $source = $this->configuration($warehouse);
+        $service = new Sheets($this->client());
+        $sheetTitle = $this->sheetTitle($service, $source['spreadsheet_id'], $source['sheet_id']);
+        $rangeTitle = "'".str_replace("'", "''", $sheetTitle)."'";
+        $response = $service->spreadsheets_values->get(
+            $source['spreadsheet_id'],
+            $rangeTitle.'!A1:ZZ100',
+            ['valueRenderOption' => 'FORMATTED_VALUE', 'dateTimeRenderOption' => 'FORMATTED_STRING']
+        );
+        $variants = ProductVariant::query()
+            ->with('product:id,name')
+            ->get(['id', 'product_id', 'name', 'sku', 'inventory_name', 'size']);
+        $parsed = $this->parseValues($response->getValues() ?? [], $warehouse, $selectedDate, $variants);
+        $matchedRows = $parsed['rows']->where('matched', true)->values();
+
+        if ($matchedRows->isEmpty()) {
+            throw new RuntimeException('Không có sản phẩm nào trên Sheet được ánh xạ để ghi tồn kho.');
+        }
+
+        $variantIds = $matchedRows->pluck('variant_id')->map(fn ($id) => (int) $id)->unique();
+        $inventories = Inventory::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->whereIn('product_variant_id', $variantIds)
+            ->get();
+        $futureMovements = InventoryMovement::query()
+            ->whereIn('inventory_id', $inventories->pluck('id'))
+            ->where('created_at', '>', Carbon::parse($selectedDate)->endOfDay())
+            ->selectRaw('inventory_id, SUM(quantity) AS quantity_after')
+            ->groupBy('inventory_id')
+            ->pluck('quantity_after', 'inventory_id');
+        $closingByVariant = $inventories
+            ->groupBy('product_variant_id')
+            ->map(fn (Collection $rows): float => round((float) $rows->sum(
+                fn (Inventory $inventory): float => (float) $inventory->quantity
+                    - (float) ($futureMovements[$inventory->id] ?? 0)
+            ), 3));
+        $stockColumn = (int) $parsed['stock_column'];
+        $columnLetter = $this->columnLetter($stockColumn);
+        $updates = $matchedRows->map(function (array $row) use ($rangeTitle, $columnLetter, $closingByVariant): ValueRange {
+            return new ValueRange([
+                'range' => $rangeTitle.'!'.$columnLetter.$row['sheet_row'],
+                'values' => [[(float) ($closingByVariant[(int) $row['variant_id']] ?? 0)]],
+            ]);
+        })->all();
+
+        $service->spreadsheets_values->batchUpdate(
+            $source['spreadsheet_id'],
+            new BatchUpdateValuesRequest([
+                'valueInputOption' => 'RAW',
+                'data' => $updates,
+            ])
+        );
+
+        return [
+            'rows' => count($updates),
+            'spreadsheet_url' => $source['spreadsheet_url'],
+            'sheet_name' => $sheetTitle,
+            'stock_column' => $stockColumn,
+        ];
     }
 
     /**
@@ -207,7 +310,7 @@ class GoogleSheetsInventoryService
         $client = new GoogleClient;
         $client->setApplicationName((string) config('app.name', 'Hoang Long TNT'));
         $client->setAuthConfig($this->credentialsPath());
-        $client->setScopes([Sheets::SPREADSHEETS_READONLY]);
+        $client->setScopes([Sheets::SPREADSHEETS]);
 
         return $client;
     }
@@ -233,6 +336,36 @@ class GoogleSheetsInventoryService
         }
 
         throw new RuntimeException('Không tìm thấy trang tính gid='.$sheetId.'.');
+    }
+
+    private function settingPrefix(Warehouse $warehouse): string
+    {
+        return 'warehouse.google_sheet_inventory.'.$warehouse->id.'.';
+    }
+
+    private function extractSpreadsheetId(string $source): string
+    {
+        $source = trim($source);
+        if (preg_match('~/spreadsheets/d/([a-zA-Z0-9_-]+)~', $source, $matches)) {
+            return $matches[1];
+        }
+        if (preg_match('/^[a-zA-Z0-9_-]{10,}$/', $source)) {
+            return $source;
+        }
+
+        throw new RuntimeException('Link file hoặc Spreadsheet ID không hợp lệ.');
+    }
+
+    private function columnLetter(int $column): string
+    {
+        $letter = '';
+        while ($column > 0) {
+            $column--;
+            $letter = chr(65 + ($column % 26)).$letter;
+            $column = intdiv($column, 26);
+        }
+
+        return $letter;
     }
 
     private function normalize(string $value): string

@@ -33,6 +33,8 @@ class WarehouseGoogleSheetInventoryController extends Controller
         ]);
         $warehouse = $this->resolveWarehouse($request);
         $selectedDate = Carbon::parse($validated['date'] ?? now())->toDateString();
+        $sheetConfiguration = $sheets->configuration($warehouse);
+        $serviceAccountEmail = $sheets->serviceAccountEmail();
         $preview = null;
         $loadError = null;
         $comparison = null;
@@ -55,10 +57,72 @@ class WarehouseGoogleSheetInventoryController extends Controller
             'warehouse',
             'warehouses',
             'selectedDate',
+            'sheetConfiguration',
+            'serviceAccountEmail',
             'preview',
             'loadError',
             'comparison'
         ));
+    }
+
+    public function updateConfiguration(Request $request, GoogleSheetsInventoryService $sheets)
+    {
+        $validated = $request->validate([
+            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
+            'spreadsheet_source' => ['required', 'string', 'max:500'],
+            'sheet_id' => ['required', 'integer', 'min:0'],
+            'date' => ['nullable', 'date'],
+        ]);
+        $warehouse = $this->resolveWarehouse($request);
+
+        try {
+            $sheets->saveConfiguration(
+                $warehouse,
+                $validated['spreadsheet_source'],
+                (int) $validated['sheet_id']
+            );
+        } catch (\Throwable $exception) {
+            return back()->withInput()->withErrors([
+                'spreadsheet_source' => $exception->getMessage(),
+            ]);
+        }
+
+        return redirect()->route('warehouse.google-sheet-inventory.index', [
+            'date' => Carbon::parse($validated['date'] ?? now())->toDateString(),
+            'warehouse_id' => $warehouse->id,
+        ])->with('success', 'Đã lưu file Google Sheet tồn kho cho '.$warehouse->name.'.');
+    }
+
+    public function writeDaily(Request $request, GoogleSheetsInventoryService $sheets)
+    {
+        $validated = $request->validate([
+            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
+            'date' => ['required', 'date', 'before_or_equal:today'],
+            'confirm_write' => ['accepted'],
+        ]);
+        $warehouse = $this->resolveWarehouse($request);
+        $selectedDate = Carbon::parse($validated['date'])->toDateString();
+
+        try {
+            $result = Cache::lock(
+                'google-sheet-inventory-write:'.$warehouse->id.':'.$selectedDate,
+                120
+            )->block(10, fn () => $sheets->writeDailyInventory($warehouse, $selectedDate));
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return redirect()->route('warehouse.google-sheet-inventory.index', [
+                'date' => $selectedDate,
+                'warehouse_id' => $warehouse->id,
+            ])->with('error', $this->friendlyGoogleWriteError($exception, $sheets));
+        }
+
+        return redirect()->route('warehouse.google-sheet-inventory.index', [
+            'date' => $selectedDate,
+            'warehouse_id' => $warehouse->id,
+        ])->with('success', 'Đã ghi '.number_format($result['rows'], 0, ',', '.')
+            .' dòng tồn kho ngày '.Carbon::parse($selectedDate)->format('d/m/Y')
+            .' lên trang tính '.$result['sheet_name'].'.');
     }
 
     public function store(
@@ -498,5 +562,16 @@ class WarehouseGoogleSheetInventoryController extends Controller
         }
 
         return 'Không thể load tồn kho từ Google Sheet: '.$message;
+    }
+
+    private function friendlyGoogleWriteError(\Throwable $exception, GoogleSheetsInventoryService $sheets): string
+    {
+        $message = $exception->getMessage();
+        if (str_contains($message, 'PERMISSION_DENIED') || str_contains($message, '403') || str_contains($message, '404')) {
+            return 'Không ghi được Google Sheet. Hãy chia sẻ quyền Người chỉnh sửa cho service account: '
+                .($sheets->serviceAccountEmail() ?: 'chưa xác định').'.';
+        }
+
+        return 'Không thể ghi tồn kho lên Google Sheet: '.$message;
     }
 }
