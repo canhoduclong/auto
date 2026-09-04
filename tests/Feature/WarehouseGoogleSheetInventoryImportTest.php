@@ -128,6 +128,8 @@ class WarehouseGoogleSheetInventoryImportTest extends TestCase
                 ->withArgs(fn ($actualWarehouse, $date) => $actualWarehouse->is($warehouse) && $date === '2026-08-30')
                 ->andReturn([
                     'rows' => 8,
+                    'spreadsheet_id' => 'destinationSheet_123456789',
+                    'sheet_id' => 24680,
                     'spreadsheet_url' => 'https://docs.google.com/spreadsheets/d/test/edit',
                     'sheet_name' => 'TK-NM 08.2026',
                     'stock_column' => 12,
@@ -135,16 +137,61 @@ class WarehouseGoogleSheetInventoryImportTest extends TestCase
         });
 
         $this->actingAs($user)
-            ->post(route('warehouse.google-sheet-inventory.write-daily'), [
+            ->post(route('warehouse.google-sheet-inventory.export.write-daily'), [
                 'warehouse_id' => $warehouse->id,
                 'date' => '2026-08-30',
                 'confirm_write' => '1',
             ])
-            ->assertRedirect(route('warehouse.google-sheet-inventory.index', [
+            ->assertRedirect(route('warehouse.google-sheet-inventory.export.index', [
                 'date' => '2026-08-30',
                 'warehouse_id' => $warehouse->id,
             ]))
             ->assertSessionHas('success', fn (string $message): bool => str_contains($message, 'Đã ghi 8 dòng tồn kho'));
+
+        $this->assertDatabaseHas('google_sheet_inventory_exports', [
+            'warehouse_id' => $warehouse->id,
+            'spreadsheet_id' => 'destinationSheet_123456789',
+            'sheet_id' => 24680,
+            'inventory_date' => '2026-08-30',
+            'sheet_name' => 'TK-NM 08.2026',
+            'written_rows_count' => 8,
+            'created_by' => $user->id,
+        ]);
+    }
+
+    public function test_warehouse_saves_export_file_separately_from_import_file(): void
+    {
+        $warehouse = Warehouse::query()->create(['name' => 'Kho hai file Sheet', 'status' => true]);
+        $role = Role::query()->create(['name' => 'warehouse']);
+        $user = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $user->roles()->attach($role);
+
+        $this->actingAs($user)->post(route('warehouse.google-sheet-inventory.configuration'), [
+            'date' => '2026-08-30',
+            'spreadsheet_source' => 'sourceInventory_123456789',
+            'sheet_id' => 111,
+        ])->assertSessionHasNoErrors();
+
+        $this->actingAs($user)->post(route('warehouse.google-sheet-inventory.export.configuration'), [
+            'date' => '2026-08-30',
+            'spreadsheet_source' => 'destinationInventory_987654321',
+            'sheet_id' => 222,
+        ])->assertSessionHasNoErrors()->assertRedirect(route('warehouse.google-sheet-inventory.export.index', [
+            'date' => '2026-08-30',
+            'warehouse_id' => $warehouse->id,
+        ]));
+
+        $prefix = 'warehouse.google_sheet_inventory.'.$warehouse->id.'.';
+        $this->assertSame('sourceInventory_123456789', Setting::get($prefix.'spreadsheet_id'));
+        $this->assertSame('111', Setting::get($prefix.'sheet_id'));
+        $this->assertSame('destinationInventory_987654321', Setting::get($prefix.'export_spreadsheet_id'));
+        $this->assertSame('222', Setting::get($prefix.'export_sheet_id'));
+
+        $this->actingAs($user)
+            ->get(route('warehouse.google-sheet-inventory.export.index', ['date' => '2026-08-30']))
+            ->assertOk()
+            ->assertSee('File đích ghi tồn kho')
+            ->assertSee('Lịch sử ghi tồn kho');
     }
 
     private function variant(Product $product, string $name, string $sku): ProductVariant

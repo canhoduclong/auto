@@ -84,11 +84,44 @@ class GoogleSheetsInventoryService
         return $this->configuration($warehouse);
     }
 
-    /** @return array{rows:int,spreadsheet_url:string,sheet_name:string,stock_column:int} */
+    /** @return array{spreadsheet_id:string,sheet_id:int|null,spreadsheet_url:string|null} */
+    public function exportConfiguration(Warehouse $warehouse): array
+    {
+        $prefix = $this->settingPrefix($warehouse);
+        $spreadsheetId = trim((string) Setting::get($prefix.'export_spreadsheet_id', ''));
+        $storedSheetId = Setting::get($prefix.'export_sheet_id');
+        $sheetId = $storedSheetId === null || $storedSheetId === '' ? null : (int) $storedSheetId;
+
+        return [
+            'spreadsheet_id' => $spreadsheetId,
+            'sheet_id' => $sheetId,
+            'spreadsheet_url' => $spreadsheetId !== '' && $sheetId !== null
+                ? 'https://docs.google.com/spreadsheets/d/'.$spreadsheetId.'/edit?gid='.$sheetId.'#gid='.$sheetId
+                : null,
+        ];
+    }
+
+    /** @return array{spreadsheet_id:string,sheet_id:int,spreadsheet_url:string} */
+    public function saveExportConfiguration(Warehouse $warehouse, string $spreadsheetSource, int $sheetId): array
+    {
+        $spreadsheetId = $this->extractSpreadsheetId($spreadsheetSource);
+        $prefix = $this->settingPrefix($warehouse);
+
+        Setting::set($prefix.'export_spreadsheet_id', $spreadsheetId);
+        Setting::set($prefix.'export_sheet_id', (string) $sheetId);
+
+        /** @var array{spreadsheet_id:string,sheet_id:int,spreadsheet_url:string} */
+        return $this->exportConfiguration($warehouse);
+    }
+
+    /** @return array{rows:int,spreadsheet_id:string,sheet_id:int,spreadsheet_url:string,sheet_name:string,stock_column:int} */
     public function writeDailyInventory(Warehouse $warehouse, string $selectedDate): array
     {
         $selectedDate = Carbon::parse($selectedDate)->toDateString();
-        $source = $this->configuration($warehouse);
+        $source = $this->exportConfiguration($warehouse);
+        if ($source['spreadsheet_id'] === '' || $source['sheet_id'] === null) {
+            throw new RuntimeException('Chưa cấu hình file Google Sheet đích để ghi tồn kho.');
+        }
         $service = new Sheets($this->client());
         $sheetTitle = $this->sheetTitle($service, $source['spreadsheet_id'], $source['sheet_id']);
         $rangeTitle = "'".str_replace("'", "''", $sheetTitle)."'";
@@ -143,6 +176,8 @@ class GoogleSheetsInventoryService
 
         return [
             'rows' => count($updates),
+            'spreadsheet_id' => $source['spreadsheet_id'],
+            'sheet_id' => $source['sheet_id'],
             'spreadsheet_url' => $source['spreadsheet_url'],
             'sheet_name' => $sheetTitle,
             'stock_column' => $stockColumn,

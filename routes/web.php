@@ -424,10 +424,12 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/stock-in', [WarehouseDashboardController::class, 'storeStockIn'])->name('stock-in.store');
         Route::get('/google-sheet-inventory', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'index'])->name('google-sheet-inventory.index');
         Route::post('/google-sheet-inventory/configuration', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'updateConfiguration'])->name('google-sheet-inventory.configuration');
-        Route::post('/google-sheet-inventory/write-daily', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'writeDaily'])->name('google-sheet-inventory.write-daily');
         Route::post('/google-sheet-inventory', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'store'])->name('google-sheet-inventory.store');
         Route::delete('/google-sheet-inventory/clear-day', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'clearDay'])->name('google-sheet-inventory.clear-day');
         Route::delete('/google-sheet-inventory/reset', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'resetRange'])->name('google-sheet-inventory.reset');
+        Route::get('/google-sheet-inventory-export', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'exportIndex'])->name('google-sheet-inventory.export.index');
+        Route::post('/google-sheet-inventory-export/configuration', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'updateExportConfiguration'])->name('google-sheet-inventory.export.configuration');
+        Route::post('/google-sheet-inventory-export/write-daily', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'writeDaily'])->name('google-sheet-inventory.export.write-daily');
         Route::post('/stock-in-templates', [\App\Http\Controllers\InventoryDocumentTemplateController::class, 'store'])->name('stock-in-templates.store');
         Route::delete('/stock-in-templates/{template}', [\App\Http\Controllers\InventoryDocumentTemplateController::class, 'destroy'])->name('stock-in-templates.destroy');
         Route::get('/stock-in/{document}', [WarehouseDashboardController::class, 'showDocument'])->name('stock-in.show');

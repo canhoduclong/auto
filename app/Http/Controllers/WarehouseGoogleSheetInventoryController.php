@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\GoogleSheetInventorySync;
+use App\Models\GoogleSheetInventoryExport;
 use App\Models\Inventory;
 use App\Models\InventoryAdjustment;
 use App\Models\InventoryDocument;
@@ -93,6 +94,64 @@ class WarehouseGoogleSheetInventoryController extends Controller
         ])->with('success', 'Đã lưu file Google Sheet tồn kho cho '.$warehouse->name.'.');
     }
 
+    public function exportIndex(Request $request, GoogleSheetsInventoryService $sheets)
+    {
+        $validated = $request->validate([
+            'date' => ['nullable', 'date', 'before_or_equal:today'],
+            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
+        ]);
+        $warehouse = $this->resolveWarehouse($request);
+        $selectedDate = Carbon::parse($validated['date'] ?? now())->toDateString();
+        $sheetConfiguration = $sheets->exportConfiguration($warehouse);
+        $serviceAccountEmail = $sheets->serviceAccountEmail();
+        $warehouses = Auth::user()?->isAdmin()
+            ? Warehouse::query()->where('status', true)->orderBy('name')->get(['id', 'name'])
+            : collect([$warehouse]);
+        $writeHistory = GoogleSheetInventoryExport::query()
+            ->with('creator:id,name')
+            ->where('warehouse_id', $warehouse->id)
+            ->orderByDesc('created_at')
+            ->limit(30)
+            ->get();
+
+        return view('warehouse.google-sheet-inventory.export', compact(
+            'warehouse',
+            'warehouses',
+            'selectedDate',
+            'sheetConfiguration',
+            'serviceAccountEmail',
+            'writeHistory'
+        ));
+    }
+
+    public function updateExportConfiguration(Request $request, GoogleSheetsInventoryService $sheets)
+    {
+        $validated = $request->validate([
+            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
+            'spreadsheet_source' => ['required', 'string', 'max:500'],
+            'sheet_id' => ['required', 'integer', 'min:0'],
+            'date' => ['nullable', 'date'],
+        ]);
+        $warehouse = $this->resolveWarehouse($request);
+
+        try {
+            $sheets->saveExportConfiguration(
+                $warehouse,
+                $validated['spreadsheet_source'],
+                (int) $validated['sheet_id']
+            );
+        } catch (\Throwable $exception) {
+            return back()->withInput()->withErrors([
+                'spreadsheet_source' => $exception->getMessage(),
+            ]);
+        }
+
+        return redirect()->route('warehouse.google-sheet-inventory.export.index', [
+            'date' => Carbon::parse($validated['date'] ?? now())->toDateString(),
+            'warehouse_id' => $warehouse->id,
+        ])->with('success', 'Đã lưu file Google Sheet đích để ghi tồn kho cho '.$warehouse->name.'.');
+    }
+
     public function writeDaily(Request $request, GoogleSheetsInventoryService $sheets)
     {
         $validated = $request->validate([
@@ -111,13 +170,23 @@ class WarehouseGoogleSheetInventoryController extends Controller
         } catch (\Throwable $exception) {
             report($exception);
 
-            return redirect()->route('warehouse.google-sheet-inventory.index', [
+            return redirect()->route('warehouse.google-sheet-inventory.export.index', [
                 'date' => $selectedDate,
                 'warehouse_id' => $warehouse->id,
             ])->with('error', $this->friendlyGoogleWriteError($exception, $sheets));
         }
 
-        return redirect()->route('warehouse.google-sheet-inventory.index', [
+        GoogleSheetInventoryExport::query()->create([
+            'warehouse_id' => $warehouse->id,
+            'spreadsheet_id' => $result['spreadsheet_id'],
+            'sheet_id' => $result['sheet_id'],
+            'inventory_date' => $selectedDate,
+            'sheet_name' => $result['sheet_name'],
+            'written_rows_count' => $result['rows'],
+            'created_by' => Auth::id(),
+        ]);
+
+        return redirect()->route('warehouse.google-sheet-inventory.export.index', [
             'date' => $selectedDate,
             'warehouse_id' => $warehouse->id,
         ])->with('success', 'Đã ghi '.number_format($result['rows'], 0, ',', '.')
