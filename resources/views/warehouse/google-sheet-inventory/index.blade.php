@@ -92,34 +92,6 @@
             </div>
         </div></div>
 
-        <div class="card sheet-import-card mb-3 border border-danger-subtle"><div class="card-body">
-            <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
-                <div>
-                    <h5 class="text-danger mb-1"><i class="bi bi-arrow-counterclockwise me-1"></i>Admin · Reset dữ liệu theo khoảng ngày</h5>
-                    <div class="text-muted small">Hoàn tác các lần đồng bộ Google Sheet trong khoảng được chọn. Chứng từ và lịch sử vẫn được giữ để kiểm tra; sau đó có thể load và nhập lại theo thứ tự ngày cũ đến ngày mới.</div>
-                </div>
-                <button type="button" class="btn btn-outline-danger" data-bs-toggle="collapse" data-bs-target="#sheet-reset-range" aria-expanded="false" aria-controls="sheet-reset-range">Mở chức năng reset</button>
-            </div>
-            <div class="collapse mt-3" id="sheet-reset-range">
-                <form method="POST" action="{{ route('warehouse.google-sheet-inventory.reset') }}" onsubmit="return confirm('Xác nhận hoàn tác tồn kho Google Sheet trong toàn bộ khoảng ngày đã chọn?');">
-                    @csrf
-                    @method('DELETE')
-                    <input type="hidden" name="warehouse_id" value="{{ $warehouse->id }}">
-                    <div class="row g-3">
-                        <div class="col-md-3"><label class="form-label">Từ ngày</label><input type="date" name="from_date" class="form-control" value="{{ old('from_date', $selectedDate) }}" required></div>
-                        <div class="col-md-3"><label class="form-label">Đến ngày</label><input type="date" name="to_date" class="form-control" value="{{ old('to_date', $selectedDate) }}" required></div>
-                        <div class="col-md-6"><label class="form-label">Lý do reset</label><input type="text" name="reset_reason" class="form-control" maxlength="500" value="{{ old('reset_reason') }}" placeholder="Ví dụ: Nhập sai số liệu ngày chốt"></div>
-                        <div class="col-12">
-                            <label class="form-check p-3 rounded border border-danger-subtle bg-danger-subtle">
-                                <input class="form-check-input" type="checkbox" name="confirm_reset" value="1" required>
-                                <span class="form-check-label text-danger">Tôi hiểu hệ thống sẽ hoàn tác ảnh hưởng tồn kho của tất cả lần đồng bộ trong khoảng ngày này.</span>
-                            </label>
-                        </div>
-                        <div class="col-12"><button class="btn btn-danger"><i class="bi bi-arrow-counterclockwise me-1"></i>Reset dữ liệu trong khoảng ngày</button></div>
-                    </div>
-                </form>
-            </div>
-        </div></div>
     @endif
 
     @if($loadError)

@@ -331,6 +331,14 @@
 								<span>Phiếu xuất kho tổng</span>
 							</a>
 						</li>
+						@if(auth()->user()?->isAdmin())
+						<li class="nav-item">
+							<a href="{{ route('admin.google-sheet-inventory-reset.index') }}" class="nav-link{{ request()->routeIs('admin.google-sheet-inventory-reset.*') ? ' active' : '' }}">
+								<i class="ph-arrow-counter-clockwise"></i>
+								<span>Reset tồn kho Google Sheet</span>
+							</a>
+						</li>
+						@endif
 						<li class="nav-item">
 							<a href="{{ route('inventories.index') }}" class="nav-link{{ request()->routeIs('inventories.*') ? ' active' : '' }}">
 								<i class="ph-chart-bar"></i>

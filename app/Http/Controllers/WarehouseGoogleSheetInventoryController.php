@@ -395,10 +395,12 @@ class WarehouseGoogleSheetInventoryController extends Controller
             'confirm_reset' => ['accepted'],
             'reset_reason' => ['nullable', 'string', 'max:500'],
         ]);
-        $warehouse = $this->resolveWarehouse($request);
         $fromDate = Carbon::parse($validated['from_date'])->toDateString();
         $toDate = Carbon::parse($validated['to_date'])->toDateString();
         $clearDayMode = $request->boolean('_clear_day_mode');
+        $warehouse = $clearDayMode
+            ? $this->resolveWarehouse($request)
+            : $this->resolveAdminWarehouse($request);
 
         try {
             $result = Cache::lock(
@@ -518,21 +520,51 @@ class WarehouseGoogleSheetInventoryController extends Controller
             report($exception);
         }
 
-        $response = redirect()->route('warehouse.google-sheet-inventory.index', [
-            'date' => $fromDate,
-            'warehouse_id' => $warehouse->id,
-        ]);
-
         if ($clearDayMode) {
-            return $response->with('success', 'Đã Clear dữ liệu ngày '.Carbon::parse($fromDate)->format('d/m/Y')
+            return redirect()->route('warehouse.google-sheet-inventory.index', [
+                'date' => $fromDate,
+                'warehouse_id' => $warehouse->id,
+            ])->with('success', 'Đã Clear dữ liệu ngày '.Carbon::parse($fromDate)->format('d/m/Y')
                 .', giải phóng '.$result['reservation_count'].' lượt giữ chỗ ('
                 .number_format((float) $result['reservation_quantity'], 0, ',', '.').' sản phẩm) của đơn chờ kho đóng, và hoàn tác '
                 .$result['sync_count'].' lần đồng bộ Google Sheet. Bạn có thể Load và nhập lại Tồn + Nhập.');
         }
 
-        return $response->with('success', 'Đã reset '.$result['sync_count'].' lần đồng bộ, hoàn tác tồn của '
+        return redirect()->route('admin.google-sheet-inventory-reset.index', [
+            'from_date' => $fromDate,
+            'to_date' => $toDate,
+            'warehouse_id' => $warehouse->id,
+        ])->with('success', 'Đã reset '.$result['sync_count'].' lần đồng bộ, hoàn tác tồn của '
             .$result['variant_count'].' sản phẩm trong khoảng '
             .Carbon::parse($fromDate)->format('d/m/Y').' – '.Carbon::parse($toDate)->format('d/m/Y').'.');
+    }
+
+    public function resetIndex(Request $request)
+    {
+        abort_unless($request->user()?->isAdmin(), 403, 'Chỉ Admin được reset dữ liệu tồn kho Google Sheet.');
+
+        $validated = $request->validate([
+            'from_date' => ['nullable', 'date'],
+            'to_date' => ['nullable', 'date', 'after_or_equal:from_date'],
+            'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
+        ]);
+        $warehouse = $this->resolveAdminWarehouse($request);
+        $fromDate = Carbon::parse($validated['from_date'] ?? now())->toDateString();
+        $toDate = Carbon::parse($validated['to_date'] ?? $fromDate)->toDateString();
+        $warehouses = Warehouse::query()->orderBy('name')->get(['id', 'name']);
+        $completedSyncCount = GoogleSheetInventorySync::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->where('status', 'completed')
+            ->whereBetween('inventory_date', [$fromDate, $toDate])
+            ->count();
+
+        return view('admin.google-sheet-inventory-reset.index', compact(
+            'warehouse',
+            'warehouses',
+            'fromDate',
+            'toDate',
+            'completedSyncCount'
+        ));
     }
 
     public function clearDay(Request $request)
@@ -615,6 +647,22 @@ class WarehouseGoogleSheetInventoryController extends Controller
 
         return $warehouseId > 0
             ? Warehouse::query()->findOrFail($warehouseId)
+            : Warehouse::query()->where('status', true)->orderByRaw("CASE WHEN name LIKE '%Long An%' THEN 0 ELSE 1 END")->firstOrFail();
+    }
+
+    private function resolveAdminWarehouse(Request $request): Warehouse
+    {
+        abort_unless($request->user()?->isAdmin(), 403, 'Chỉ Admin được chọn kho để reset dữ liệu.');
+        $warehouseId = (int) $request->input('warehouse_id', 0);
+
+        if ($warehouseId > 0) {
+            return Warehouse::query()->findOrFail($warehouseId);
+        }
+
+        $assignedWarehouseId = (int) ($request->user()?->warehouse_id ?? 0);
+
+        return $assignedWarehouseId > 0
+            ? Warehouse::query()->findOrFail($assignedWarehouseId)
             : Warehouse::query()->where('status', true)->orderByRaw("CASE WHEN name LIKE '%Long An%' THEN 0 ELSE 1 END")->firstOrFail();
     }
 

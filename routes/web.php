@@ -426,7 +426,6 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/google-sheet-inventory/configuration', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'updateConfiguration'])->name('google-sheet-inventory.configuration');
         Route::post('/google-sheet-inventory', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'store'])->name('google-sheet-inventory.store');
         Route::delete('/google-sheet-inventory/clear-day', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'clearDay'])->name('google-sheet-inventory.clear-day');
-        Route::delete('/google-sheet-inventory/reset', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'resetRange'])->name('google-sheet-inventory.reset');
         Route::get('/google-sheet-inventory-export', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'exportIndex'])->name('google-sheet-inventory.export.index');
         Route::post('/google-sheet-inventory-export/configuration', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'updateExportConfiguration'])->name('google-sheet-inventory.export.configuration');
         Route::post('/google-sheet-inventory-export/write-daily', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'writeDaily'])->name('google-sheet-inventory.export.write-daily');
@@ -746,6 +745,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::delete('admin/text-order-import/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'destroy'])->name('admin.text-order-import.destroy')->middleware('role:admin');
     Route::get('admin/daily-rebuild', [\App\Http\Controllers\AdminDailyRebuildController::class, 'index'])->name('admin.daily-rebuild.index')->middleware('role:admin');
     Route::post('admin/daily-rebuild', [\App\Http\Controllers\AdminDailyRebuildController::class, 'execute'])->name('admin.daily-rebuild.execute')->middleware('role:admin');
+    Route::get('admin/google-sheet-inventory-reset', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'resetIndex'])->name('admin.google-sheet-inventory-reset.index')->middleware('role:admin');
+    Route::delete('admin/google-sheet-inventory-reset', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'resetRange'])->name('admin.google-sheet-inventory-reset.destroy')->middleware('role:admin');
     Route::prefix('admin/warehouse-dispatch-slips')->name('admin.warehouse-dispatch-slips.')->middleware('role:admin')->group(function () {
         Route::get('/', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'index'])->name('index');
         Route::post('/', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'store'])->name('store');

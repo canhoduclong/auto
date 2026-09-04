@@ -39,15 +39,16 @@ class WarehouseGoogleSheetInventoryResetTest extends TestCase
         $sync29 = $this->sync($warehouse, $admin, $variant->id, '2026-08-29', 1, 4);
 
         $this->actingAs($admin)
-            ->delete(route('warehouse.google-sheet-inventory.reset'), [
+            ->delete(route('admin.google-sheet-inventory-reset.destroy'), [
                 'warehouse_id' => $warehouse->id,
                 'from_date' => '2026-08-27',
                 'to_date' => '2026-08-28',
                 'reset_reason' => 'Nhập lại dữ liệu kiểm thử',
                 'confirm_reset' => '1',
             ])
-            ->assertRedirect(route('warehouse.google-sheet-inventory.index', [
-                'date' => '2026-08-27',
+            ->assertRedirect(route('admin.google-sheet-inventory-reset.index', [
+                'from_date' => '2026-08-27',
+                'to_date' => '2026-08-28',
                 'warehouse_id' => $warehouse->id,
             ]))
             ->assertSessionHas('success');
@@ -73,13 +74,32 @@ class WarehouseGoogleSheetInventoryResetTest extends TestCase
         $user->roles()->attach($role);
 
         $this->actingAs($user)
-            ->delete(route('warehouse.google-sheet-inventory.reset'), [
+            ->delete(route('admin.google-sheet-inventory-reset.destroy'), [
                 'from_date' => '2026-08-27',
                 'to_date' => '2026-08-28',
                 'confirm_reset' => '1',
             ])
             ->assertRedirect(route('home'))
-            ->assertSessionHas('error', 'Chỉ Admin được reset dữ liệu tồn kho Google Sheet.');
+            ->assertSessionHas('error', 'Bạn không có quyền truy cập khu vực này.');
+    }
+
+    public function test_reset_range_is_available_on_admin_layout_page(): void
+    {
+        $warehouse = Warehouse::query()->create(['name' => 'Kho Admin', 'status' => true]);
+        $adminRole = Role::query()->create(['name' => 'admin']);
+        $admin = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $admin->roles()->attach($adminRole);
+
+        $this->actingAs($admin)
+            ->get(route('admin.google-sheet-inventory-reset.index', [
+                'warehouse_id' => $warehouse->id,
+                'from_date' => '2026-08-27',
+                'to_date' => '2026-08-28',
+            ]))
+            ->assertOk()
+            ->assertSee('Reset dữ liệu tồn kho Google Sheet')
+            ->assertSee('Chức năng quản trị dành riêng cho Admin')
+            ->assertSee(route('admin.google-sheet-inventory-reset.destroy'), false);
     }
 
     public function test_admin_can_clear_one_day_before_importing_stock_and_import_columns_again(): void
