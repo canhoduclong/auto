@@ -705,6 +705,7 @@ class WarehouseDashboardController extends Controller
         }
 
         $data = $request->validate([
+            'document_date' => ['required', 'date_format:Y-m-d'],
             'actual_finished_weight' => ['required', 'numeric', 'min:0.001'],
             'components' => ['nullable', 'array'],
             'components.*.variant_id' => ['required_with:components', 'exists:product_variants,id'],
@@ -718,7 +719,8 @@ class WarehouseDashboardController extends Controller
                 (float) $data['actual_finished_weight'],
                 $data['components'] ?? [],
                 (int) $user->id,
-                $request->boolean('defer_components')
+                $request->boolean('defer_components'),
+                $data['document_date']
             );
         } catch (\Throwable $e) {
             return back()->withInput()->with('error', $e->getMessage());
@@ -760,7 +762,7 @@ class WarehouseDashboardController extends Controller
             $document = InventoryDocument::create([
                 'type' => 'import',
                 'warehouse_id' => (int) $componentImportRequest->warehouse_id,
-                'document_date' => now()->toDateString(),
+                'document_date' => $componentImportRequest->request_date,
                 'notes' => 'Nhập kho thành phần còn lại từ phiếu yêu cầu pha lóc #'.$componentImportRequest->id,
                 'shipping_fee' => 0,
                 'user_id' => (int) $user->id,

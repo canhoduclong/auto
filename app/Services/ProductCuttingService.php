@@ -449,9 +449,10 @@ class ProductCuttingService
         });
     }
 
-    public function complete(ProductCuttingBatch $batch, float $actualFinishedWeight, array $actualComponents, int $userId, bool $deferComponents = false): ProductCuttingBatch
+    public function complete(ProductCuttingBatch $batch, float $actualFinishedWeight, array $actualComponents, int $userId, bool $deferComponents = false, ?string $documentDate = null): ProductCuttingBatch
     {
-        return DB::transaction(function () use ($batch, $actualFinishedWeight, $actualComponents, $userId, $deferComponents) {
+        return DB::transaction(function () use ($batch, $actualFinishedWeight, $actualComponents, $userId, $deferComponents, $documentDate) {
+            $documentDate = $documentDate ?? now()->toDateString();
             $batch->refresh();
             if ($batch->status !== ProductCuttingBatch::STATUS_IN_PROGRESS) {
                 throw new \RuntimeException('Mẻ pha lóc này không còn ở trạng thái đang thực hiện.');
@@ -462,7 +463,7 @@ class ProductCuttingService
 
             $finishedDocument = $this->importRows($warehouseId, [
                 ['variant_id' => (int) $targetVariant->id, 'quantity' => $actualFinishedWeight],
-            ], 'Nhập kho thành phẩm pha lóc.', $userId);
+            ], 'Nhập kho thành phẩm pha lóc.', $userId, $documentDate);
 
             $componentRows = collect($actualComponents)
                 ->map(fn ($row) => ['variant_id' => (int) ($row['variant_id'] ?? 0), 'quantity' => max(0, (float) ($row['weight'] ?? 0))])
@@ -479,12 +480,12 @@ class ProductCuttingService
             $lossPercent = $inputWeight > 0 ? round($lossWeight / $inputWeight * 100, 3) : 0;
             $componentDocument = $deferComponents
                 ? null
-                : $this->importRows($warehouseId, $componentRows, 'Nhập kho thành phần phát sinh từ pha lóc.', $userId);
+                : $this->importRows($warehouseId, $componentRows, 'Nhập kho thành phần phát sinh từ pha lóc.', $userId, $documentDate);
 
             $batch->update([
                 'status' => ProductCuttingBatch::STATUS_COMPLETED,
                 'completed_by' => $userId,
-                'completed_at' => now(),
+                'completed_at' => now()->setDateFrom($documentDate),
                 'finished_import_document_id' => $finishedDocument->id,
                 'component_import_document_id' => $componentDocument?->id,
                 'input_weight' => $inputWeight,
@@ -496,7 +497,7 @@ class ProductCuttingService
             ]);
 
             if ($deferComponents && !empty($componentRows)) {
-                $this->appendDeferredComponentImportRequest($warehouseId, $componentRows, $batch, $userId, $batch->order_id ? (int) $batch->order_id : null);
+                $this->appendDeferredComponentImportRequest($warehouseId, $componentRows, $batch, $userId, $batch->order_id ? (int) $batch->order_id : null, $documentDate);
             }
 
             return $batch->refresh();
@@ -542,13 +543,13 @@ class ProductCuttingService
         });
     }
 
-    private function appendDeferredComponentImportRequest(int $warehouseId, array $componentRows, ProductCuttingBatch $batch, int $userId, ?int $orderId = null): void
+    private function appendDeferredComponentImportRequest(int $warehouseId, array $componentRows, ProductCuttingBatch $batch, int $userId, ?int $orderId = null, ?string $documentDate = null): void
     {
         $order = $orderId ? Order::query()->find($orderId) : null;
         $request = CuttingComponentImportRequest::query()->firstOrCreate(
             [
                 'warehouse_id' => $warehouseId,
-                'request_date' => now()->toDateString(),
+                'request_date' => $documentDate ?? now()->toDateString(),
                 'status' => CuttingComponentImportRequest::STATUS_OPEN,
             ],
             [
@@ -574,7 +575,7 @@ class ProductCuttingService
         }
     }
 
-    private function importRows(int $warehouseId, array $rows, string $note, int $userId): ?InventoryDocument
+    private function importRows(int $warehouseId, array $rows, string $note, int $userId, ?string $documentDate = null): ?InventoryDocument
     {
         if (empty($rows)) {
             return null;
@@ -583,7 +584,7 @@ class ProductCuttingService
         $document = InventoryDocument::create([
             'type' => 'import',
             'warehouse_id' => $warehouseId,
-            'document_date' => now()->toDateString(),
+            'document_date' => $documentDate ?? now()->toDateString(),
             'notes' => $note,
             'shipping_fee' => 0,
             'user_id' => $userId,

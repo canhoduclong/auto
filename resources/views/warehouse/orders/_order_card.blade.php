@@ -1015,6 +1015,12 @@
                                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
                                         </div>
                                         <div class="modal-body">
+                                            <div class="mb-3">
+                                                <label for="cutting-document-date-{{ $batch->id }}" class="form-label fw-semibold">Ngày nhập kho</label>
+                                                <input type="date" id="cutting-document-date-{{ $batch->id }}" name="document_date" class="form-control"
+                                                       value="{{ old('document_date', \Carbon\Carbon::parse($selectedDate ?? request('date', now()->toDateString()))->toDateString()) }}" required>
+                                                <div class="form-text">Ngày ghi nhận pha lóc và nhập kho, mặc định theo ngày đang làm việc.</div>
+                                            </div>
                                             <div class="alert alert-warning py-2">
                                                 Nguyên liệu đã lấy: <strong>{{ format_kg((float) $batch->input_weight) }}</strong>.
                                                 Nhập kg thực tế để ghi nhận nhập kho và tính hao hụt.

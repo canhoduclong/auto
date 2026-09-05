@@ -31,9 +31,17 @@ class CuttingMaterialOptionsTest extends TestCase
         $batch = $service->start($warehouse->id, $target, array_values($plan['selected_materials']), '', $user->id);
         $this->assertSame(10.625, (float) $batch->planned_finished_weight);
         $this->assertSame(15.0, (float) $inventory->fresh()->quantity);
-        $service->complete($batch, $batch->planned_finished_weight, $batch->planned_components, $user->id);
+        $workingDate = now()->subDays(5)->toDateString();
+        $service->complete($batch, $batch->planned_finished_weight, $batch->planned_components, $user->id, false, $workingDate);
+        $this->assertSame($workingDate, $batch->fresh()->completed_at->toDateString());
+        foreach ([$batch->finished_import_document_id, $batch->component_import_document_id] as $documentId) {
+            $this->assertSame($workingDate, \App\Models\InventoryDocument::findOrFail($documentId)->document_date->toDateString());
+        }
         $this->assertSame(10.625, (float) Inventory::where('warehouse_id', $warehouse->id)->where('product_variant_id', $target->id)->value('quantity'));
         $this->assertSame(1.875, (float) Inventory::where('warehouse_id', $warehouse->id)->where('product_variant_id', $part->id)->value('quantity'));
+        $deferredBatch = $service->start($warehouse->id, $target, array_values($plan['selected_materials']), '', $user->id);
+        $service->complete($deferredBatch, $deferredBatch->planned_finished_weight, $deferredBatch->planned_components, $user->id, true, $workingDate);
+        $this->assertDatabaseHas('cutting_component_import_requests', ['warehouse_id' => $warehouse->id, 'request_date' => $workingDate]);
         $unconfigured = ProductVariant::factory()->create(['product_id' => Product::factory()->create(['product_type' => Product::TYPE_WHOLE])->id, 'kg' => 1]);
         $this->assertSame(0.0, $service->preview($target, [['variant_id' => $unconfigured->id, 'quantity' => 1]])['finished_weight']);
     }
