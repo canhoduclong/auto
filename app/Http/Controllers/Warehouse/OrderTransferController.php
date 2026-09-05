@@ -35,8 +35,7 @@ class OrderTransferController extends Controller
         }
 
         // Lấy danh sách đơn chưa điều chuyển, chỉ thuộc kho user quản lý
-        $orders = Order::whereNull('order_transfer_id')
-            ->whereIn('status', ['ready_to_ship', 'packing', 'packed', 'packed_waiting_pickup'])
+        $orders = $this->transferableOrders($warehouseId ? (int) $warehouseId : null)
             ->where(function ($dateQuery) use ($from, $to): void {
                 $dateQuery->where(function ($normalQuery) use ($from, $to): void {
                     $normalQuery->whereNull('accounting_sales_import_batch_id')
@@ -45,10 +44,6 @@ class OrderTransferController extends Controller
                     $importQuery->whereNotNull('accounting_sales_import_batch_id')
                         ->whereBetween('delivery_date', [$from, $to]);
                 });
-            })
-            ->where(function ($query) use ($warehouseId) {
-                $query->where('warehouse_id', $warehouseId)
-                      ->orWhereNull('warehouse_id');
             })
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($searchQuery) use ($search) {
@@ -269,7 +264,12 @@ class OrderTransferController extends Controller
             'order_ids' => 'required|string',
         ]);
 
-        $orderIds = array_filter(explode(',', $data['order_ids']));
+        $orderIds = array_values(array_unique(array_filter(array_map('trim', explode(',', $data['order_ids'])))));
+        foreach ($orderIds as $orderId) {
+            if (!ctype_digit($orderId) || (int) $orderId <= 0) {
+                return back()->withErrors(['order_ids' => 'Danh sách mã đơn không hợp lệ. Vui lòng tải lại trang và chọn lại đơn.']);
+            }
+        }
         if (empty($orderIds)) {
             return back()->withErrors(['order_ids' => 'Vui lòng chọn ít nhất một đơn hàng.']);
         }
@@ -280,18 +280,32 @@ class OrderTransferController extends Controller
             return back()->withErrors(['warehouse_id' => 'Kho nhận phải khác kho đang quản lý.']);
         }
 
-        $orders = Order::query()
-            ->whereIn('id', $orderIds)
-            ->whereNull('order_transfer_id')
-            ->whereIn('status', ['ready_to_ship', 'packing', 'packed', 'packed_waiting_pickup'])
-            ->when($sourceWarehouseId, fn ($query) => $query->where('warehouse_id', $sourceWarehouseId))
-            ->get();
+        $orderTransfer = DB::transaction(function () use ($data, $orderIds, $sourceWarehouseId) {
+            $orders = $this->transferableOrders($sourceWarehouseId)
+                ->whereIn('id', $orderIds)
+                ->lockForUpdate()
+                ->get();
 
-        if ($orders->count() !== count($orderIds)) {
-            return back()->withErrors(['order_ids' => 'Một hoặc nhiều đơn không hợp lệ, đã được điều chuyển hoặc không thuộc kho đang quản lý.']);
-        }
+            if ($orders->count() !== count($orderIds)) {
+                $invalidIds = array_diff($orderIds, $orders->modelKeys());
+                $visibleOrders = Order::query()->whereIn('id', $invalidIds)
+                    ->when($sourceWarehouseId, fn ($query) => $query->where('warehouse_id', $sourceWarehouseId))
+                    ->get()->keyBy('id');
+                $reasons = collect($invalidIds)->map(function ($id) use ($visibleOrders) {
+                    $order = $visibleOrders->get($id);
+                    if (!$order) {
+                        return 'Đơn #'.$id.': không tồn tại hoặc chưa được gán cho kho đang quản lý';
+                    }
+                    $reason = $order->order_transfer_id
+                        ? 'đã thuộc phiếu điều chuyển #'.$order->order_transfer_id
+                        : (!$order->warehouse_id ? 'chưa được gán kho' : 'trạng thái hiện tại không cho phép điều chuyển');
+                    return 'Đơn '.($order->code ?: '#'.$id).': '.$reason;
+                });
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'order_ids' => $reasons->implode('; ').'. Vui lòng tải lại danh sách và chọn lại đơn.',
+                ]);
+            }
 
-        $orderTransfer = DB::transaction(function () use ($data, $orders, $sourceWarehouseId) {
             $orderTransfer = OrderTransfer::query()
                 ->with(['orders.warehouseTransfers' => fn ($query) => $query->latest('id')])
                 ->whereDoesntHave('dispatchEntry')
@@ -340,6 +354,15 @@ class OrderTransferController extends Controller
 
         return redirect()->route('warehouse.order-transfers')
             ->with('success', 'Đã cập nhật phiếu điều chuyển ngày hôm nay #' . $orderTransfer->id . '.');
+    }
+
+    private function transferableOrders(?int $warehouseId): \Illuminate\Database\Eloquent\Builder
+    {
+        return Order::query()
+            ->whereNull('order_transfer_id')
+            ->whereIn('status', ['ready_to_ship', 'packing', 'packed', 'packed_waiting_pickup'])
+            ->whereNotNull('warehouse_id')
+            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId));
     }
 
     private function transferStatusLabel($statuses): string

@@ -50,6 +50,25 @@ class WarehouseOrderTransferWeightTest extends TestCase
             'unit_weight' => 2.5,
         ]);
 
+        $unassigned = $order->replicate();
+        $unassigned->fill(['code' => 'TRANSFER-NO-WAREHOUSE', 'warehouse_id' => null])->save();
+        $otherWarehouse = $order->replicate();
+        $otherWarehouse->fill(['code' => 'TRANSFER-OTHER-WAREHOUSE', 'warehouse_id' => $target->id])->save();
+
+        $this->actingAs($warehouseUser)->get(route('warehouse.order-transfers'))
+            ->assertOk()
+            ->assertViewHas('orders', fn ($orders) => $orders->pluck('id')->all() === [$order->id])
+            ->assertDontSee('TRANSFER-NO-WAREHOUSE')
+            ->assertDontSee('TRANSFER-OTHER-WAREHOUSE');
+
+        $this->post(route('warehouse.order-transfers.store'), [
+            'shipper_id' => $shipper->id,
+            'warehouse_id' => $target->id,
+            'order_ids' => $order->id.','.$unassigned->id,
+        ])->assertSessionHasErrors('order_ids');
+        $this->assertNull($order->fresh()->order_transfer_id);
+        $this->assertDatabaseCount('warehouse_transfers', 0);
+
         $this->actingAs($warehouseUser)
             ->post(route('warehouse.order-transfers.store'), [
                 'shipper_id' => $shipper->id,
@@ -57,6 +76,14 @@ class WarehouseOrderTransferWeightTest extends TestCase
                 'order_ids' => (string) $order->id,
             ])
             ->assertRedirect(route('warehouse.order-transfers'));
+
+        $this->post(route('warehouse.order-transfers.store'), [
+            'shipper_id' => $shipper->id,
+            'warehouse_id' => $target->id,
+            'order_ids' => (string) $order->id,
+        ])->assertSessionHasErrors('order_ids')
+            ->assertSessionHas('errors', fn ($errors) => str_contains($errors->first('order_ids'), 'đã thuộc phiếu điều chuyển'));
+        $this->assertDatabaseCount('warehouse_transfers', 1);
 
         $this->assertDatabaseHas('warehouse_transfers', [
             'order_id' => $order->id,
