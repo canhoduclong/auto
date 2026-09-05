@@ -190,6 +190,24 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $this->assertDatabaseCount('order_item_packing_size_allocations', 0);
     }
 
+    public function test_cut_product_shortage_uses_bill_weight_instead_of_piece_count(): void
+    {
+        [$user, $order, $item, $variants, $inventories] = $this->fixture(40, 2.3);
+        $variants['2.3']->product->update(['product_type' => Product::TYPE_CUT]);
+        $item->update(['unit_weight' => 2.3, 'is_priced_by_kg' => true]);
+        $inventories['2.3']->update(['quantity' => 0]);
+        $controller = app(\App\Http\Controllers\WarehouseDashboardController::class);
+        $method = new \ReflectionMethod($controller, 'buildPackingQueueStockGuards');
+        $result = $method->invoke($controller, collect([$order->fresh()]), $order->warehouse_id, now()->toDateString());
+        $shortage = $result['guards'][$order->id]['shortages'][0];
+        $this->assertSame(92.0, $shortage['required_qty']);
+        $this->assertSame(92.0, $shortage['short_qty']);
+        $this->assertSame('kg', $shortage['unit']);
+        $inventories['2.3']->update(['quantity' => 42.06]);
+        $result = $method->invoke($controller, collect([$order->fresh()]), $order->warehouse_id, now()->toDateString());
+        $this->assertSame(49.94, $result['guards'][$order->id]['shortages'][0]['short_qty']);
+    }
+
     private function fixture(int $quantity, float $mainSize = 2.5): array
     {
         $warehouse = Warehouse::query()->create(['name' => 'Kho size mix', 'status' => true]);

@@ -2485,16 +2485,18 @@ class WarehouseDashboardController extends Controller
                     continue;
                 }
 
+                $isCutByWeight = $item->variant?->product?->product_type === Product::TYPE_CUT
+                    && $item->effective_priced_by_kg;
                 $savedAllocations = $item->packingSizeAllocations;
                 $requirements = $savedAllocations->sum('quantity') === (int) $neededQty
                     ? $savedAllocations->map(fn ($allocation) => [
                         'variant_id' => (int) $allocation->product_variant_id,
-                        'quantity' => (float) $allocation->quantity,
+                        'quantity' => (float) $allocation->quantity * ($isCutByWeight ? (float) ($allocation->variant?->effective_kg ?? $item->effective_unit_weight) : 1),
                         'name' => (string) ($allocation->variant?->name ?? ('SP #'.$allocation->product_variant_id)),
                     ])
                     : collect([[
                         'variant_id' => (int) $item->product_variant_id,
-                        'quantity' => $neededQty,
+                        'quantity' => $neededQty * ($isCutByWeight ? (float) $item->effective_unit_weight : 1),
                         'name' => (string) ($item->variant?->name ?? $item->product?->name ?? ('SP #'.$item->product_variant_id)),
                     ]]);
 
@@ -2514,6 +2516,7 @@ class WarehouseDashboardController extends Controller
                             'variant_id' => $variantId,
                             'variant_name' => (string) $requirement['name'],
                             'required_qty' => $requiredQty,
+                            'unit' => $isCutByWeight ? 'kg' : 'quantity',
                             'available_qty' => $remaining,
                             'short_qty' => round($requiredQty - $remaining, 3),
                             'reason' => ! empty($blockingOrders) ? 'blocked_by_prior_order' : 'insufficient_stock',
@@ -2596,8 +2599,8 @@ class WarehouseDashboardController extends Controller
         $result = [];
         foreach ($inventories as $inv) {
             $vid = (int) $inv->product_variant_id;
-            $currentQty = (int) $inv->quantity;
-            $afterDelta = (int) ($movementsAfter[$inv->id] ?? 0);
+            $currentQty = (float) $inv->quantity;
+            $afterDelta = (float) ($movementsAfter[$inv->id] ?? 0);
             $qtyAtDate = $currentQty - $afterDelta;
 
             $result[$vid] = ($result[$vid] ?? 0) + max(0, $qtyAtDate);

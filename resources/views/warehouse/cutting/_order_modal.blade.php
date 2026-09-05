@@ -115,6 +115,25 @@
                     border-radius: 8px;
                     padding: 12px;
                 }
+                .cutting-order-dialog .modal-header { padding: 12px 18px; }
+                .cutting-order-dialog .modal-title { font-size: 1.05rem; }
+                .cutting-order-dialog .modal-body { padding: 12px 18px; font-size: .875rem; }
+                .cutting-order-dialog .modal-footer { padding: 10px 18px; gap: 6px; }
+                .cutting-order-dialog .table > :not(caption) > * > * { padding: 6px 8px; }
+                .cutting-order-dialog .table th { font-size: .78rem; white-space: nowrap; }
+                .cutting-order-dialog .form-control-sm { padding: 3px 8px; min-height: 30px; }
+                .cutting-order-dialog .js-cutting-summary { padding: 12px; background: #f0f9f6; border: 1px solid #c8e3d8; color: #183b32; }
+                .cutting-summary-metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }
+                .cutting-summary-metrics > div { padding: 8px 10px; background: #fff; border-radius: 6px; }
+                .cutting-summary-metrics span { display: block; font-size: .75rem; color: #64748b; }
+                .cutting-summary-metrics strong { font-size: 1rem; }
+                .cutting-summary-flows { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+                .cutting-summary-flows ul { margin: 5px 0 0; padding-left: 18px; }
+                .cutting-summary-flows li { margin-bottom: 3px; }
+                @media (max-width: 767.98px) {
+                    .cutting-summary-metrics { grid-template-columns: repeat(2, 1fr); }
+                    .cutting-summary-flows { grid-template-columns: 1fr; gap: 10px; }
+                }
                 @media (max-width: 575.98px) {
                     .cutting-order-dialog .modal-content {
                         max-height: calc(100vh - 12px);
@@ -204,7 +223,7 @@
                             <div class="small px-3 py-2 bg-light border-top">
                                 Sản phẩm đang cần bổ sung:
                                 <strong>{{ $plan['target_name'] ?? 'Hàng pha lóc' }}</strong>,
-                                đơn cần {{ rtrim(rtrim(number_format((float) ($shortage['required_qty'] ?? $targetOrderItems->sum('quantity')), 3, '.', ''), '0'), '.') }},
+                                đơn cần {{ format_kg((float) ($shortage['required_qty'] ?? $plan['demand'] ?? 0)) }},
                                 khả dụng {{ rtrim(rtrim(number_format((float) ($shortage['available_qty'] ?? 0), 3, '.', ''), '0'), '.') }},
                                 thiếu <span class="text-danger fw-semibold">{{ format_kg((float) ($shortage['short_qty'] ?? $plan['demand'] ?? 0)) }}</span>.
                             </div>
@@ -477,31 +496,26 @@
                     const statusBadge = isEnough
                         ? '<span class="badge bg-success">Đủ bổ sung cho đơn</span>'
                         : '<span class="badge bg-danger">Chưa đủ so với đơn</span>';
-                    const orderTargetRows = (plan.order_items || []).filter((item) => item.is_target);
-                    const orderTargetHtml = orderTargetRows.length
-                        ? orderTargetRows.map((item) => `<li>${item.name}: SL ${formatCompactNumber(item.quantity)}${item.total_label ? `, tổng ${item.total_label}` : ''}</li>`).join('')
-                        : '<li>Không tìm thấy dòng sản phẩm cần bổ sung trong đơn.</li>';
-
                     const summary = modal.querySelector('.js-cutting-summary');
                     summary.classList.remove('d-none');
                     summary.innerHTML = `
-                        <div class="fw-semibold mb-1">3. Thông tin sẽ thực hiện</div>
-                        <div class="row g-2 mb-2">
-                            <div class="col-md-4"><span class="text-muted">Đơn cần:</span> <strong>${formatCompactNumber(requiredQty)}</strong></div>
-                            <div class="col-md-4"><span class="text-muted">Khả dụng:</span> <strong>${formatCompactNumber(availableQty)}</strong></div>
-                            <div class="col-md-4"><span class="text-muted">Thiếu:</span> <strong class="text-danger">${formatKg(shortQty)}</strong></div>
-                            <div class="col-md-4"><span class="text-muted">Thành phẩm dự kiến:</span> <strong>${formatKg(finishedWeight)}</strong></div>
-                            <div class="col-md-4"><span class="text-muted">Chênh lệch:</span> <strong class="${compareClass}">${finishedDelta >= 0 ? '+' : '-'}${formatKg(Math.abs(finishedDelta))}</strong></div>
-                            <div class="col-md-4">${statusBadge}</div>
+                        <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                            <strong>3. Kết quả pha lóc dự kiến</strong>${statusBadge}
                         </div>
-                        <div class="small mb-1">Dòng hàng trong đơn để đối chiếu:</div>
-                        <ul class="mb-2">${orderTargetHtml}</ul>
-                        <div>Lấy trong kho:</div>
-                        <ul class="mb-2">${sourceHtml}</ul>
-                        <div>Nhập kho thành phẩm: <strong>${plan.target_name || 'Hàng pha lóc'} ${formatKg(finishedWeight)}</strong></div>
-                        <div class="${compareClass} fw-semibold mt-1">${compareLabel}</div>
-                        <div class="mt-2">Nhập kho các thành phần:</div>
-                        <ul class="mb-0">${componentHtml}</ul>
+                        <div class="cutting-summary-metrics">
+                            <div><span>Bill cần</span><strong>${formatKg(requiredQty)}</strong></div>
+                            <div><span>Tồn khả dụng</span><strong>${formatKg(availableQty)}</strong></div>
+                            <div><span>Cần bổ sung</span><strong class="text-danger">${formatKg(shortQty)}</strong></div>
+                            <div><span>Thành phẩm dự kiến</span><strong>${formatKg(finishedWeight)}</strong></div>
+                        </div>
+                        <div class="cutting-summary-flows">
+                            <div><strong>Nguyên liệu lấy từ kho</strong><ul>${sourceHtml}</ul></div>
+                            <div><strong>Thành phẩm phụ nhập kho</strong><ul>${componentHtml}</ul></div>
+                        </div>
+                        <div class="border-top pt-2 mt-2 d-flex justify-content-between gap-2 flex-wrap">
+                            <span>Thành phẩm chính: <strong>${plan.target_name || 'Hàng pha lóc'} · ${formatKg(finishedWeight)}</strong></span>
+                            <strong class="${compareClass}">${compareLabel}</strong>
+                        </div>
                     `;
 
                     const confirmButton = modal.querySelector('.js-cutting-confirm');
