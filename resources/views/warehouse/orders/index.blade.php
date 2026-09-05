@@ -1790,6 +1790,11 @@
             return setValid();
         }
 
+        document.querySelectorAll('input[name="item_packed_quantity"]').forEach(input => {
+            input.addEventListener('input', () => {
+                input.closest('form')?.querySelector('.js-weight-input')?.dispatchEvent(new Event('input', {bubbles: true}));
+            });
+        });
         document.querySelectorAll('.js-weight-input').forEach(function (input) {
             input.addEventListener('input', function () {
                 const submitBtn = input.closest('form')?.querySelector('.js-logistics-submit-btn');

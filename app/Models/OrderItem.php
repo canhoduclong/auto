@@ -22,6 +22,7 @@ class OrderItem extends Model
         'unit_weight',
         'is_priced_by_kg',
         'total_weight',
+        'packed_quantity',
         'actual_weight',
         'packed_weight',
         'total',

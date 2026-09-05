@@ -677,6 +677,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         ->name('products.price-management.update')
         ->middleware('permission');
 
+    Route::get('products/cutting-ratios', [ProductController::class, 'cuttingRatios'])->name('products.cutting-ratios.index');
+    Route::put('products/cutting-ratios', [ProductController::class, 'updateCuttingRatios'])->name('products.cutting-ratios.update');
     // Quản lý sản phẩm
     Route::post('products/{product}/sort-order', [ProductController::class, 'updateSortOrder'])->name('products.sort-order')->middleware('permission');
     Route::resource('products', ProductController::class)->middleware('permission');

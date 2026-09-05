@@ -24,6 +24,31 @@ use Illuminate\Validation\Rule;
 class ProductController extends Controller
 {
     use AuthorizesRequests;
+    public function cuttingRatios(Request $request)
+    {
+        $this->authorize('viewAny', Product::class);
+        $products = Product::where('product_type', Product::TYPE_CUT)->withCount('variants')->orderBy('name')->get();
+        return view('products.cutting-ratios', compact('products'));
+    }
+
+    public function updateCuttingRatios(Request $request)
+    {
+        $this->authorize('update', Product::class);
+        $data = $request->validate([
+            'rates' => ['required', 'array', 'min:1'],
+            'rates.*' => ['nullable', 'numeric', 'min:0', 'max:100'],
+        ]);
+        DB::transaction(function () use ($data) {
+            $products = Product::where('product_type', Product::TYPE_CUT)->whereIn('id', array_keys($data['rates']))->lockForUpdate()->get();
+            abort_unless($products->count() === count($data['rates']), 422, 'Có sản phẩm không thuộc loại pha lóc.');
+            foreach ($products as $product) {
+                $this->authorize('update', $product);
+                $product->update(['cutting_percentage' => $data['rates'][$product->id]]);
+            }
+        });
+        return back()->with('success', 'Đã cập nhật tỷ lệ pha lóc chung của sản phẩm.');
+    }
+
     public function index(Request $request)
     {
         // Kiêm tra quyền xem có được view không

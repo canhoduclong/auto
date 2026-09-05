@@ -272,11 +272,18 @@
 							<i class="ph-dots-three sidebar-resize-show"></i>
 						</li>
 						<li class="nav-item">
-							<a href="{{ route('products.index') }}" class="nav-link{{ request()->routeIs('products.*') ? ' active' : '' }}">
+							<a href="{{ route('products.index') }}" class="nav-link{{ (request()->routeIs('products.*') && !request()->routeIs('products.cutting-ratios.*')) ? ' active' : '' }}">
 								<i class="ph-package"></i>
 								<span>{{ __('menu.products') }}</span>
 							</a>
 						</li>
+                        @can('viewAny', \App\Models\Product::class)
+                        <li class="nav-item">
+                            <a href="{{ route('products.cutting-ratios.index') }}" class="nav-link{{ request()->routeIs('products.cutting-ratios.*') ? ' active' : '' }}">
+                                <i class="ph-scissors"></i><span>Bảng tỷ lệ pha lóc</span>
+                            </a>
+                        </li>
+                        @endcan
 						<li class="nav-item">
 							<a href="{{ route('product-variants.index') }}" class="nav-link{{ request()->routeIs('product-variants.*') ? ' active' : '' }}">
 								<i class="ph-circles-four"></i>

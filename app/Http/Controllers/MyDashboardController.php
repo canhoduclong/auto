@@ -508,11 +508,10 @@ class MyDashboardController extends Controller
         $weeklyCustomerProduction = $this->buildWeeklyCustomerProduction($memberIds, $now);
 
         $pendingWarehouseAdjustments = Order::query()
-            ->with(['customer', 'warehouse', 'items.variant.product'])
+            ->with(['customer', 'warehouse', 'warehouseAdjustmentRequester'])
             ->whereIn('user_id', $memberIds)
             ->where('warehouse_adjustment_status', Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION)
-            ->orderByDesc('warehouse_adjustment_requested_at')
-            ->limit(10)
+            ->orderBy('warehouse_adjustment_requested_at')
             ->get();
 
         $productPriceBoard = $this->buildProductPriceBoard();

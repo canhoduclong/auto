@@ -208,6 +208,27 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $this->assertSame(49.94, $result['guards'][$order->id]['shortages'][0]['short_qty']);
     }
 
+    public function test_cut_items_can_pack_fewer_pieces_when_bill_weight_is_met(): void
+    {
+        [$user, $order, $item, $variants] = $this->fixture(40, 2.3);
+        $variants['2.3']->product->update(['product_type' => Product::TYPE_CUT]);
+        $item->update(['unit_weight' => 2.3, 'is_priced_by_kg' => true]);
+        $order->update(['status' => Order::STATUS_PACKING]);
+        $this->actingAs($user)->postJson(route('warehouse.orders.logistics', $order), [
+            'item_id' => $item->id, 'item_packed_quantity' => 35, 'item_actual_weight' => 92,
+        ])->assertOk();
+        $this->assertSame(35, (int) $item->fresh()->packed_quantity);
+        $this->assertSame(40, (int) $item->fresh()->quantity);
+        $this->postJson(route('warehouse.orders.logistics', $order), [
+            'item_id' => $item->id, 'item_packed_quantity' => 34, 'item_actual_weight' => 91,
+        ])->assertUnprocessable();
+        $this->assertSame(35, (int) $item->fresh()->packed_quantity);
+        $variants['2.3']->product->update(['product_type' => Product::TYPE_WHOLE]);
+        $this->postJson(route('warehouse.orders.logistics', $order), [
+            'item_id' => $item->id, 'item_packed_quantity' => 35, 'item_actual_weight' => 92,
+        ])->assertUnprocessable();
+    }
+
     private function fixture(int $quantity, float $mainSize = 2.5): array
     {
         $warehouse = Warehouse::query()->create(['name' => 'Kho size mix', 'status' => true]);

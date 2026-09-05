@@ -332,6 +332,7 @@
         </aside>
 
         <main class="dashboard-main">
+            @include('site.partials.warehouse_adjustment_requests')
             @if(($pendingApprovalAdjustments ?? collect())->isNotEmpty())
                 <section class="dashboard-card dashboard-approval-queue" aria-label="Yêu cầu điều chỉnh đơn đang chờ duyệt">
                     <div class="dashboard-approval-head">

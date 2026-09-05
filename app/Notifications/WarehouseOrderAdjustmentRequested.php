@@ -25,9 +25,9 @@ class WarehouseOrderAdjustmentRequested extends Notification
             'type' => 'warehouse_order_adjustment_requested',
             'order_id' => $this->order->id,
             'order_code' => $this->order->code,
-            'title' => 'Kho da gui yeu cau dieu chinh don',
-            'message' => 'Don ' . $this->order->code . ' dang cho sale xac nhan thay doi.',
-            'url' => route('pages.my_dashboard'),
+            'title' => 'Kho / đóng hàng gửi yêu cầu thay đổi đơn',
+            'message' => 'Đơn ' . $this->order->code . ' đang chờ xác nhận thay đổi.',
+            'url' => route('pages.my_dashboard').'#warehouse-adjustment-'.$this->order->id,
             'created_at' => now()->toDateTimeString(),
         ];
     }

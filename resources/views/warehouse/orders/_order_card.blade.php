@@ -431,6 +431,7 @@
 
                                             $variant = $item->variant;
                                             $orderedQty = (int) $item->quantity;
+                                            $isCutPackingItem = $item->variant?->product?->product_type === \App\Models\Product::TYPE_CUT;
                                             $unitPrice = (float) ($item->price ?? 0);
                                             $unitLabel = $variant?->product?->unit_label ?? '--'; 
                                             $pricedByKg = (bool) $item->effective_priced_by_kg;
@@ -475,7 +476,7 @@
                                                     @endif
                                                 </div>
                                                 <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
-                                                <div class="wh-item-cell"><strong>{{ number_format($orderedQty) }}</strong></div>
+                                                <div class="wh-item-cell"><strong>{{ number_format($orderedQty) }}</strong>@if($isCutPackingItem && $item->packed_quantity !== null)<small class="d-block text-success">Đóng: {{ $item->packed_quantity }}</small>@endif</div>
                                                 <div class="wh-item-cell"><strong>{{ $item->display_total_label }}</strong></div>
                                                 
                                                
@@ -494,13 +495,18 @@
                                                             <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.logistics', $order) }}" method="POST" class="js-logistics-item-form wh-compact-form justify-content-end">
                                                                 @csrf
                                                                 <input type="hidden" name="item_id" value="{{ $item->id }}">
+                                                                @if($isCutPackingItem)
+                                                                    <label class="small mb-0">SL đóng
+                                                                        <input type="number" name="item_packed_quantity" class="form-control form-control-sm" min="1" max="100000" step="1" required value="{{ $item->packed_quantity ?? $orderedQty }}" aria-label="Số lượng đóng thực tế" style="width:85px">
+                                                                    </label>
+                                                                @endif
                                                                 <input type="number" name="item_actual_weight" class="form-control form-control-sm actual_weight js-weight-input"
                                                                     value="{{ $itemWeightDefault }}"
                                                                     placeholder="{{ $weightUnitLabel }}"
                                                                     min="0" step="0.001" required
                                                                     inputmode="decimal"
                                                                     data-qty="{{ $orderedQty }}"
-                                                                    data-size="{{ is_numeric($variantSize) && (float)$variantSize > 0 ? (float)$variantSize : 0 }}">
+                                                                    data-size="{{ !$isCutPackingItem && is_numeric($variantSize) && (float)$variantSize > 0 ? (float)$variantSize : 0 }}">
                                                                 <button class="btn btn-sm {{ $isItemLogisticsSaved ? 'btn-secondary' : 'btn-success' }} js-logistics-submit-btn" type="submit">{{ $isItemLogisticsSaved ? 'Đã lưu' : 'Lưu' }}</button>
                                                                 <button class="btn btn-sm btn-outline-danger js-clear-item-weight {{ $isItemLogisticsSaved ? '' : 'd-none' }}"
                                                                         type="submit" formnovalidate title="Gỡ kg đã lưu nhầm">

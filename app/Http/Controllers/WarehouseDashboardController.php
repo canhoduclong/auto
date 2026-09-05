@@ -3077,6 +3077,7 @@ class WarehouseDashboardController extends Controller
         $rules = [
             'item_id' => ['nullable', 'integer'],
             'item_actual_weight' => ['nullable', 'numeric', 'min:0'],
+            'item_packed_quantity' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'clear_item_weight' => ['nullable', 'boolean'],
             'packing_details' => ['nullable', 'boolean'],
         ];
@@ -3149,6 +3150,7 @@ class WarehouseDashboardController extends Controller
                     $item->forceFill([
                         'actual_weight' => null,
                         'packed_weight' => null,
+                        'packed_quantity' => null,
                     ])->save();
 
                     $hasRemainingWeight = $order->items()->whereNotNull('actual_weight')->exists();
@@ -3185,8 +3187,19 @@ class WarehouseDashboardController extends Controller
                 }
 
                 $newWeight = round((float) $validated['item_actual_weight'], 3);
+                $isCutProduct = $item->variant?->product?->product_type === Product::TYPE_CUT;
+                if (isset($validated['item_packed_quantity'])) {
+                    if (!$isCutProduct) {
+                        throw \Illuminate\Validation\ValidationException::withMessages(['item_packed_quantity' => 'Chỉ hàng pha lóc được cập nhật số lượng đóng thực tế.']);
+                    }
+                    $requiredWeight = round((float) $item->quantity * (float) $item->effective_unit_weight, 3);
+                    if ($newWeight < $requiredWeight - 0.000001) {
+                        throw \Illuminate\Validation\ValidationException::withMessages(['item_actual_weight' => 'Hàng pha lóc phải đủ '.$requiredWeight.' kg theo bill khi cập nhật số lượng đóng thực tế.']);
+                    }
+                    $item->packed_quantity = (int) $validated['item_packed_quantity'];
+                }
                 $itemSize = (float) ($item->variant?->size ?? 0);
-                if ($itemSize > 0 && (int) $item->quantity > 0) {
+                if (!$isCutProduct && $itemSize > 0 && (int) $item->quantity > 0) {
                     $averageWeight = $newWeight / (int) $item->quantity;
                     $averageMin = max(0, $itemSize - 0.25);
                     $averageMax = $itemSize + 0.25;

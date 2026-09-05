@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Role;
+use App\Models\Order;
+use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -10,6 +12,53 @@ use Tests\TestCase;
 class MyDashboardLayoutTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_dashboard_shows_all_scoped_pending_warehouse_requests_and_allows_rejection(): void
+    {
+        $role = Role::query()->create(['name' => 'sale']);
+        $sale = User::factory()->create();
+        $sale->roles()->attach($role);
+        $customer = Customer::create(['name' => 'Khách xác nhận', 'status' => 'active']);
+        $attributes = [
+            'customer_id' => $customer->id,
+            'user_id' => $sale->id,
+            'warehouse_adjustment_status' => Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION,
+            'warehouse_adjustment_requested_at' => now()->subDays(3),
+            'warehouse_adjustment_note' => 'Thiếu hàng cần đổi số lượng',
+            'warehouse_adjustment_changes' => [[
+                'product_name' => 'Sản phẩm cần xác nhận', 'old_quantity' => 10, 'new_quantity' => 8,
+            ]],
+        ];
+        for ($i = 1; $i <= 11; $i++) {
+            $order = Order::create(array_merge($attributes, ['code' => 'WH-REQUEST-'.$i]));
+        }
+        $other = Order::create(array_merge($attributes, [
+            'code' => 'OTHER-SALE-REQUEST', 'user_id' => User::factory()->create()->id,
+        ]));
+        Order::create(array_merge($attributes, [
+            'code' => 'ALREADY-CONFIRMED',
+            'warehouse_adjustment_status' => Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED,
+        ]));
+
+        $this->actingAs($sale)->withSession(['active_role' => 'sale'])
+            ->get(route('pages.my_dashboard'))
+            ->assertOk()
+            ->assertViewHas('pendingWarehouseAdjustments', fn ($requests) => $requests->count() === 11)
+            ->assertSee('Sản phẩm cần xác nhận')
+            ->assertSee('Thiếu hàng cần đổi số lượng')
+            ->assertSee(route('pages.my_dashboard.order_adjustments.confirm', $order), false)
+            ->assertDontSee('OTHER-SALE-REQUEST')
+            ->assertDontSee('ALREADY-CONFIRMED');
+
+        $this->post(route('pages.my_dashboard.order_adjustments.reject', $other), ['reject_reason' => 'Không đồng ý'])
+            ->assertForbidden();
+        $this->from(route('pages.my_dashboard'))
+            ->post(route('pages.my_dashboard.order_adjustments.reject', $order), ['reject_reason' => 'Giữ số lượng đã đặt'])
+            ->assertRedirect(route('pages.my_dashboard'));
+        $this->assertSame(Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED, $order->fresh()->warehouse_adjustment_status);
+        $this->get(route('pages.my_dashboard'))
+            ->assertViewHas('pendingWarehouseAdjustments', fn ($requests) => $requests->count() === 10);
+    }
 
     public function test_sales_dashboard_uses_the_new_three_column_layout(): void
     {
