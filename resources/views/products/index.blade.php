@@ -87,6 +87,7 @@
                         <th width="100">Thứ tự</th>
                         <th>Đơn vị tính</th>
                         <th>Loại hình</th>
+                        <th class="text-end">Tỷ lệ pha lóc (%)</th>
                         <th>Trạng thái</th>
                 
                 <th class="text-center" >
@@ -154,6 +155,17 @@
                             {{ $product->product_type_label }}
                         </span>
                     </td>
+                <td class="text-end">
+                    @if($product->product_type === \App\Models\Product::TYPE_CUT)
+                        @if($product->cutting_percentage !== null)
+                            <span class="fw-semibold">{{ rtrim(rtrim(number_format((float) $product->cutting_percentage, 3, ',', '.'), '0'), ',') }}%</span>
+                        @else
+                            <span class="text-muted small">Chưa cấu hình</span>
+                        @endif
+                    @else
+                        <span class="text-muted">—</span>
+                    @endif
+                </td>
                 <td>
                     @if($product->status)
                         <span class="badge bg-success">Đang hoạt động</span>

@@ -268,7 +268,7 @@ class ProductCuttingService
         $rows = $this->componentRowsForVariant($variant);
         $target = ProductVariant::with('product')->find($targetVariantId);
         $percentages = $variant->product?->cuttingPercentagesForTarget((int) $target?->product_id);
-        if ($percentages === null && array_key_exists((int) $target?->product_id, $variant->product?->cutting_product_targets ?? [])) {
+        if ($percentages === null && ($rows->isEmpty() || array_key_exists((int) $target?->product_id, $variant->product?->cutting_product_targets ?? []))) {
             // An explicit product recipe must not silently use stale variant ratios.
             return collect([[
                 'variant_id' => $targetVariantId,
@@ -291,7 +291,7 @@ class ProductCuttingService
                 $configured[] = [
                     'variant_id' => (int) $component->id,
                     'name' => $this->componentName($component),
-                    'standard_weight' => round((float) $variant->effective_kg * (float) $percentage / 100, 3),
+                    'standard_weight' => round((float) $variant->effective_kg * (float) $percentage / 100, 6),
                     'percentage' => (float) $percentage,
                 ];
             }
@@ -375,6 +375,14 @@ class ProductCuttingService
     public function start(int $warehouseId, ProductVariant $targetVariant, array $materials, string $note, int $userId, ?int $orderId = null): ProductCuttingBatch
     {
         return DB::transaction(function () use ($warehouseId, $targetVariant, $materials, $note, $userId, $orderId) {
+            foreach ($materials as $material) {
+                if ((float) ($material['quantity'] ?? 0) <= 0) continue;
+                $source = ProductVariant::with('product')->findOrFail((int) $material['variant_id']);
+                $targetVariant->loadMissing('product');
+                if ($source->product?->product_type === Product::TYPE_CUT || $source->product?->cuttingPercentagesForTarget((int) $targetVariant->product_id) === null) {
+                    throw new \RuntimeException('Nguyên liệu '.$source->product?->name.' chưa có cấu hình thành phần và tỷ lệ pha lóc cho mục tiêu này.');
+                }
+            }
             $preview = $this->preview($targetVariant, $materials);
             if ((float) ($preview['input_weight'] ?? 0) <= 0 || (float) ($preview['finished_weight'] ?? 0) <= 0) {
                 throw new \RuntimeException('Vui lòng chọn nguyên liệu pha lóc có khối lượng hợp lệ.');

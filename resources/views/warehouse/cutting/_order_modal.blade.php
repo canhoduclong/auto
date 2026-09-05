@@ -211,7 +211,7 @@
                         </div>
 
                         <div class="fw-semibold mb-1">2. Danh sách sản phẩm/biến thể dùng để pha lóc</div>
-                        <div class="small text-muted mb-2">Toàn bộ biến thể nguyên con đang hoạt động trong kho của bạn. Tồn khả dụng đã trừ số lượng giữ chỗ. Với nguyên liệu chưa có định mức thành phần, hãy đối chiếu và cập nhật khối lượng thực tế sau pha lóc.</div>
+                        <div class="small text-muted mb-2">Toàn bộ biến thể nguyên con đang hoạt động trong kho của bạn. Khối lượng dự kiến tính theo tỷ lệ % chung của sản phẩm pha lóc. Tồn khả dụng đã trừ số lượng giữ chỗ. Nguyên liệu chưa cấu hình mục tiêu hoặc thiếu % thành phần phụ sẽ có sản lượng dự kiến bằng 0 và không được xác nhận lấy hàng.</div>
                         <div class="row g-2 align-items-end mb-2">
                             <div class="col-md-8">
                                 <label class="form-label small mb-1">Thêm biến thể nguyên con</label>

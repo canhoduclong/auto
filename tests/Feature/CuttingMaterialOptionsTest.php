@@ -14,6 +14,30 @@ class CuttingMaterialOptionsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_cutting_imports_main_and_remaining_weights_using_shared_percentages(): void
+    {
+        $warehouse = Warehouse::create(['name' => 'Kho pha lóc tỷ lệ', 'status' => true]);
+        $user = \App\Models\User::factory()->create();
+        $main = Product::factory()->create(['product_type' => Product::TYPE_CUT]);
+        $side = Product::factory()->create(['product_type' => Product::TYPE_CUT, 'cutting_percentage' => 15]);
+        $whole = Product::factory()->create(['product_type' => Product::TYPE_WHOLE, 'cutting_product_targets' => [$main->id => [$side->id]]]);
+        $source = ProductVariant::factory()->create(['product_id' => $whole->id, 'kg' => 2.5, 'status' => true]);
+        $target = ProductVariant::factory()->create(['product_id' => $main->id, 'status' => true]);
+        $part = ProductVariant::factory()->create(['product_id' => $side->id, 'status' => true]);
+        $inventory = Inventory::create(['warehouse_id' => $warehouse->id, 'product_variant_id' => $source->id, 'quantity' => 20]);
+        $service = app(ProductCuttingService::class);
+        $plan = $service->planForDemand($target, $warehouse->id, 10);
+        $this->assertSame(5, $plan['selected_materials'][$source->id]['quantity']);
+        $batch = $service->start($warehouse->id, $target, array_values($plan['selected_materials']), '', $user->id);
+        $this->assertSame(10.625, (float) $batch->planned_finished_weight);
+        $this->assertSame(15.0, (float) $inventory->fresh()->quantity);
+        $service->complete($batch, $batch->planned_finished_weight, $batch->planned_components, $user->id);
+        $this->assertSame(10.625, (float) Inventory::where('warehouse_id', $warehouse->id)->where('product_variant_id', $target->id)->value('quantity'));
+        $this->assertSame(1.875, (float) Inventory::where('warehouse_id', $warehouse->id)->where('product_variant_id', $part->id)->value('quantity'));
+        $unconfigured = ProductVariant::factory()->create(['product_id' => Product::factory()->create(['product_type' => Product::TYPE_WHOLE])->id, 'kg' => 1]);
+        $this->assertSame(0.0, $service->preview($target, [['variant_id' => $unconfigured->id, 'quantity' => 1]])['finished_weight']);
+    }
+
     public function test_percentages_scale_with_source_size_and_reject_totals_over_100(): void
     {
         $whole = Product::factory()->create(['product_type' => Product::TYPE_WHOLE]);
