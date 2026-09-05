@@ -2127,7 +2127,36 @@
                                                 </div>
                                                 <div class="monitor-edit-picker-results monitor-edit-product-results"></div>
                                             </div>
+                                            <div class="monitor-edit-picker" data-monitor-edit-fees
+                                                data-existing-fees="{{ ($order->charge_shipping_fee ? (float) $order->shipping_fee : 0) + ($order->charge_foam_box_fee ? (float) $order->foam_box_price : 0) }}">
+                                                <div class="monitor-edit-picker-label">Chi phí khác</div>
+                                                <div class="mb-3">
+                                                    <input type="hidden" name="charge_vat" value="0">
+                                                    <label class="form-check-label" for="editVat{{ $order->id }}">
+                                                        <input type="checkbox" class="form-check-input me-1 monitor-edit-fee" id="editVat{{ $order->id }}" name="charge_vat" value="1" @checked($order->charge_vat)>
+                                                        Tính chi phí VAT
+                                                    </label>
+                                                    <div class="input-group input-group-sm mt-2">
+                                                        <input type="number" class="form-control monitor-edit-fee" name="vat_percent" aria-label="Thuế VAT (%)" min="0.01" max="100" step="0.01" value="{{ $order->vat_percent > 0 ? $order->vat_percent : '' }}" placeholder="Nhập thuế VAT (%)">
+                                                        <span class="input-group-text">%</span>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <input type="hidden" name="collect_customer_shipping_fee" value="0">
+                                                    <label class="form-check-label" for="editShip{{ $order->id }}">
+                                                        <input type="checkbox" class="form-check-input me-1 monitor-edit-fee" id="editShip{{ $order->id }}" name="collect_customer_shipping_fee" value="1" @checked($order->collect_customer_shipping_fee)>
+                                                        Thu tiền ship của khách hàng
+                                                    </label>
+                                                    <div class="input-group input-group-sm mt-2">
+                                                        <input type="number" class="form-control monitor-edit-fee" name="customer_shipping_fee" aria-label="Tiền ship thu khách" min="1" max="999999999999.99" step="0.01" value="{{ $order->customer_shipping_fee > 0 ? $order->customer_shipping_fee : '' }}" placeholder="Nhập số tiền">
+                                                        <span class="input-group-text">đ</span>
+                                                    </div>
+                                                    <div class="form-text">Khoản thu khách này độc lập với phí ship do Shipper Manager ấn định.</div>
+                                                </div>
+                                            </div>
                                             <div class="monitor-inline-edit-total">Tổng sản phẩm: <span>{{ number_format((float) $order->items->sum('total'), 0, ',', '.') }}đ</span></div>
+                                            <div class="small text-end mt-1">VAT: <span data-edit-vat-total>0đ</span> · Ship thu khách: <span data-edit-shipping-total>0đ</span></div>
+                                            <div class="monitor-inline-edit-total mt-1">Tổng đơn sau phí/chiết khấu: <span data-edit-grand-total>{{ number_format($order->total, 0, ',', '.') }}đ</span></div>
                                             <div class="monitor-inline-edit-actions">
                                                 <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#monitorEdit{{ $order->id }}">Đóng</button>
                                                 <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check2 me-1"></i>Lưu thay đổi</button>
@@ -2794,6 +2823,23 @@ document.addEventListener('click', async event => {
             total += lineTotal;
         });
         form.querySelector('.monitor-inline-edit-total span').textContent = money(total);
+        const discount = Math.max(0, Number(form.elements.order_discount.value) || 0);
+        const productTotal = Math.max(0, total + (form.elements.order_discount_type.value === 'increase' ? discount : -discount));
+        const vatEnabled = form.querySelector('input[type="checkbox"][name="charge_vat"]').checked;
+        const shippingEnabled = form.querySelector('input[type="checkbox"][name="collect_customer_shipping_fee"]').checked;
+        const vatInput = form.elements.vat_percent;
+        const shippingInput = form.elements.customer_shipping_fee;
+        vatInput.disabled = !vatEnabled;
+        vatInput.required = vatEnabled;
+        shippingInput.disabled = !shippingEnabled;
+        shippingInput.required = shippingEnabled;
+        const vat = vatEnabled ? Math.round(productTotal * Math.min(100, Math.max(0, Number(vatInput.value) || 0))) / 100 : 0;
+        const shipping = shippingEnabled ? Math.max(0, Number(shippingInput.value) || 0) : 0;
+        const existingFees = Number(form.querySelector('[data-monitor-edit-fees]').dataset.existingFees) || 0;
+        form.querySelector('[data-edit-vat-total]').textContent = money(vat);
+        form.querySelector('[data-edit-shipping-total]').textContent = money(shipping);
+        form.querySelector('[data-edit-grand-total]').textContent = money(productTotal + vat + shipping + existingFees);
+
     }
 
     async function loadInlineCustomers(form, page = 1) {
@@ -3015,7 +3061,7 @@ document.addEventListener('click', async event => {
     });
 
     document.addEventListener('input', event => {
-        if (!event.target.matches('[data-monitor-edit-form] .monitor-edit-quantity')) return;
+        if (!event.target.matches('[data-monitor-edit-form] .monitor-edit-quantity, [data-monitor-edit-form] .monitor-edit-fee')) return;
         const form = event.target.closest('[data-monitor-edit-form]');
         if (form) updateInlineEditTotals(form);
     });

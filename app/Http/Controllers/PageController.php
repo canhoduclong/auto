@@ -5184,6 +5184,10 @@ public function apiTruckRoutes(Request $request)
             'shipper_note' => ['nullable', 'string', 'max:1000'],
             'order_discount' => ['nullable', 'numeric', 'min:0'],
             'order_discount_type' => ['nullable', 'in:decrease,increase'],
+            'charge_vat' => ['sometimes', 'boolean'],
+            'vat_percent' => [Rule::requiredIf($request->boolean('charge_vat')), 'nullable', 'numeric', 'gt:0', 'max:100'],
+            'collect_customer_shipping_fee' => ['sometimes', 'boolean'],
+            'customer_shipping_fee' => [Rule::requiredIf($request->boolean('collect_customer_shipping_fee')), 'nullable', 'numeric', 'gt:0', 'max:999999999999.99'],
             'warehouse_can_adjust' => ['nullable', 'boolean'],
             'item_discount' => ['nullable', 'array'],
             'item_discount.*' => ['nullable', 'numeric', 'min:0'],
@@ -5350,6 +5354,15 @@ public function apiTruckRoutes(Request $request)
                 ? -1 * $orderDiscountAmount
                 : $orderDiscountAmount;
             $productTotal = max($totalBeforeOrderDiscount - $orderAdjustment, 0);
+            if (array_key_exists('charge_vat', $validated)) {
+                $order->charge_vat = (bool) $validated['charge_vat'];
+                $order->vat_percent = $order->charge_vat ? (float) $validated['vat_percent'] : 0;
+            }
+            if (array_key_exists('collect_customer_shipping_fee', $validated)) {
+                $order->collect_customer_shipping_fee = (bool) $validated['collect_customer_shipping_fee'];
+                $order->customer_shipping_fee = $order->collect_customer_shipping_fee
+                    ? (float) $validated['customer_shipping_fee'] : 0;
+            }
             $vatAmount = $order->resolvedVatAmount($productTotal);
             $customerShippingFee = (bool) ($order->collect_customer_shipping_fee ?? false)
                 ? max(0, (float) ($order->customer_shipping_fee ?? 0))

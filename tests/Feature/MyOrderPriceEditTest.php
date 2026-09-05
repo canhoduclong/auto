@@ -55,6 +55,49 @@ class MyOrderPriceEditTest extends TestCase
         $this->assertSame(18000.0, (float) $order->fresh()->items()->firstOrFail()->price);
     }
 
+    public function test_direct_edit_adds_preserves_and_removes_customer_charges(): void
+    {
+        [$sale, $customer, $order, $variant] = $this->makeEditableOrder();
+        $payload = [
+            'customer_id' => $customer->id,
+            'recipient_name' => 'Khach hang',
+            'recipient_phone' => '0900000000',
+            'recipient_address' => 'Dia chi giao hang',
+            'items' => [['variant_id' => $variant->id, 'quantity' => 1]],
+        ];
+        $this->actingAs($sale)->withSession(['active_role' => 'sale']);
+        $this->put(route('site.orders.update', $order), $payload + [
+            'charge_vat' => 1, 'vat_percent' => 10,
+            'collect_customer_shipping_fee' => 1, 'customer_shipping_fee' => 15000,
+        ])->assertSessionHasNoErrors();
+        $order->refresh();
+        $this->assertTrue($order->charge_vat);
+        $this->assertSame(2200.0, (float) $order->vat_amount);
+        $this->assertSame(39200.0, (float) $order->total);
+        // Receivables are only recognized after accounting reconciliation.
+        $this->assertSame(0.0, (float) $order->amount_due);
+
+        // Other edit forms that omit these fields must keep the saved fees.
+        $this->put(route('site.orders.update', $order), $payload)->assertSessionHasNoErrors();
+        $this->assertSame(39200.0, (float) $order->fresh()->total);
+
+        $this->put(route('site.orders.update', $order), $payload + [
+            'charge_vat' => 1, 'vat_percent' => 0,
+            'collect_customer_shipping_fee' => 1, 'customer_shipping_fee' => -1,
+        ])->assertSessionHasErrors(['vat_percent', 'customer_shipping_fee']);
+        $this->assertSame(39200.0, (float) $order->fresh()->total);
+
+        $this->put(route('site.orders.update', $order), $payload + [
+            'charge_vat' => 0, 'collect_customer_shipping_fee' => 0,
+        ])->assertSessionHasNoErrors();
+        $order->refresh();
+        $this->assertFalse($order->charge_vat);
+        $this->assertFalse($order->collect_customer_shipping_fee);
+        $this->assertSame(0.0, (float) $order->vat_amount);
+        $this->assertSame(0.0, (float) $order->customer_shipping_fee);
+        $this->assertSame(22000.0, (float) $order->total);
+    }
+
     private function makeEditableOrder(): array
     {
         $saleRole = Role::query()->create(['name' => 'sale']);
