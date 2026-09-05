@@ -14,6 +14,37 @@ class CuttingMaterialOptionsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_product_targets_apply_to_each_target_variant_and_picker_groups_sizes(): void
+    {
+        $whole = Product::factory()->create(['product_type' => Product::TYPE_WHOLE]);
+        $main = Product::factory()->create(['product_type' => Product::TYPE_CUT]);
+        $side = Product::factory()->create(['product_type' => Product::TYPE_CUT]);
+        $source = ProductVariant::factory()->create(['product_id' => $whole->id, 'kg' => 3]);
+        $first = ProductVariant::factory()->create(['product_id' => $main->id]);
+        $second = ProductVariant::factory()->create(['product_id' => $main->id]);
+        $remaining = ProductVariant::factory()->create(['product_id' => $side->id]);
+        $controller = (new \ReflectionClass(\App\Http\Controllers\ProductController::class))->newInstanceWithoutConstructor();
+        (new \ReflectionMethod($controller, 'syncCuttingComponentTemplate'))->invoke($controller, [
+            'cutting_product_targets_present' => true,
+            'cutting_product_targets' => [$main->id => ['enabled' => true, 'remaining' => [$side->id]]],
+        ], $whole);
+        $this->assertSame([$side->id], $whole->fresh()->cutting_product_targets[$main->id]);
+        foreach ([$first, $second, $remaining] as $variant) {
+            \App\Models\ProductComponentRatio::create(['source_product_variant_id' => $source->id, 'component_product_variant_id' => $variant->id, 'standard_weight' => $variant->id === $remaining->id ? 0.5 : 2, 'percentage' => 0]);
+        }
+        foreach ([$first, $second] as $target) {
+            $preview = app(ProductCuttingService::class)->preview($target, [['variant_id' => $source->id, 'quantity' => 1]]);
+            $this->assertSame(2.0, $preview['finished_weight']);
+            $this->assertSame([$remaining->id], $preview['components']->pluck('variant_id')->all());
+        }
+        $scripts = \Illuminate\Support\Facades\Blade::render("@include('products._cutting_target_builder') @stack('scripts')", ['product' => $whole->fresh(), 'cutComponentVariants' => collect([$first, $second, $remaining])]);
+        preg_match('/const choices = (.*);/', $scripts, $matches);
+        $choices = json_decode($matches[1], true);
+        $this->assertCount(2, $choices);
+        $this->assertSame('2 biến thể', $choices[0]['variant']);
+        $this->assertStringContainsString('cutting_product_targets[', $scripts);
+    }
+
     public function test_target_configuration_is_saved_and_only_selected_remaining_components_are_used(): void
     {
         $whole = Product::factory()->create(['product_type' => Product::TYPE_WHOLE]);

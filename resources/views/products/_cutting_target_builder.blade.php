@@ -1,18 +1,28 @@
 @php
-    $cuttingChoices = $cutComponentVariants->map(fn ($variant) => [
-        'id' => (int) $variant->id,
-        'name' => $variant->product?->name ?? 'Sản phẩm',
-        'variant' => $variant->name ?: ($variant->size ?: 'Mặc định'),
-        'image' => ($variant->avatar?->media ?? $variant->product?->avatar?->media)?->url,
+    $cuttingChoices = $cutComponentVariants->groupBy('product_id')->map(fn ($variants) => [
+        'id' => (int) $variants->first()->product_id,
+        'name' => $variants->first()->product?->name ?? 'Sản phẩm',
+        'variant' => $variants->count().' biến thể',
+        'image' => $variants->first()->product?->avatar?->media?->url,
     ])->values();
-    $savedTargets = $product->cutting_targets ?? [];
-    if (old('cutting_targets_present')) {
-        $savedTargets = collect(old('cutting_targets', []))->filter(fn ($row) => !empty($row['enabled']))
+    $savedTargets = $product->cutting_product_targets;
+    if ($savedTargets === null) {
+        $savedTargets = [];
+        $legacyIds = collect(array_keys($product->cutting_targets ?? []))->merge(collect($product->cutting_targets ?? [])->flatten());
+        $legacyProducts = \App\Models\ProductVariant::whereIn('id', $legacyIds)->pluck('product_id', 'id');
+        foreach ($product->cutting_targets ?? [] as $targetId => $remaining) {
+            $mainId = $legacyProducts->get($targetId);
+            if (!$mainId) continue;
+            $savedTargets[$mainId] = collect($savedTargets[$mainId] ?? [])->merge(collect($remaining)->map(fn ($id) => $legacyProducts->get($id)))->filter(fn ($id) => $id && $id !== $mainId)->unique()->values()->all();
+        }
+    }
+    if (old('cutting_product_targets_present')) {
+        $savedTargets = collect(old('cutting_product_targets', []))->filter(fn ($row) => !empty($row['enabled']))
             ->map(fn ($row) => $row['remaining'] ?? [])->all();
     }
 @endphp
 <div data-cutting-builder>
-    <input type="hidden" name="cutting_targets_present" value="1">
+    <input type="hidden" name="cutting_product_targets_present" value="1">
     @foreach($product->cuttingComponents as $templateComponent)
         <input type="hidden" name="cutting_component_variant_ids[]" value="{{ $templateComponent->component_product_variant_id }}">
     @endforeach
@@ -21,7 +31,7 @@
     <button type="button" class="btn btn-success mt-3" data-add-cutting-main><i class="bi bi-plus-circle me-1"></i>Thêm loại Pha Lóc</button>
     <div class="border rounded p-3 mt-3 bg-light" data-cutting-picker hidden>
         <div class="d-flex justify-content-between align-items-center mb-2"><strong data-picker-title></strong><button type="button" class="btn btn-sm btn-outline-secondary" data-picker-close>Đóng</button></div>
-        <input type="search" class="form-control mb-3" placeholder="Tìm sản phẩm hoặc biến thể..." aria-label="Tìm thành phần pha lóc" data-picker-search>
+        <input type="search" class="form-control mb-3" placeholder="Tìm sản phẩm pha lóc..." aria-label="Tìm thành phần pha lóc" data-picker-search>
         <div class="d-flex flex-wrap gap-2" style="max-height:320px;overflow:auto" data-picker-options></div>
     </div>
     <div data-cutting-inputs></div>
@@ -69,12 +79,12 @@
         rows.replaceChildren(); inputs.replaceChildren();
         if (!targets.size) { const empty = document.createElement('p'); empty.className = 'text-muted'; empty.textContent = 'Bấm + Thêm loại Pha Lóc để chọn thành phần chính.'; rows.append(empty); }
         for (const [id, children] of targets) {
-            hidden(`cutting_targets[${id}][enabled]`, 1);
+            hidden(`cutting_product_targets[${id}][enabled]`, 1);
             const row = document.createElement('div'); row.className = 'cutting-builder-row';
             row.append(card(id, () => { targets.delete(id); picker.hidden = true; render(); }));
             const secondary = document.createElement('div'); secondary.className = 'd-flex flex-wrap gap-2 align-items-start';
             children.forEach(child => {
-                hidden(`cutting_targets[${id}][remaining][]`, child);
+                hidden(`cutting_product_targets[${id}][remaining][]`, child);
                 secondary.append(card(child, () => { targets.set(id, children.filter(value => value !== child)); render(); }));
             });
             const add = document.createElement('button'); add.type = 'button'; add.className = 'cutting-builder-add'; add.textContent = '+ Thành phần phụ'; add.onclick = () => openPicker(id); secondary.append(add);

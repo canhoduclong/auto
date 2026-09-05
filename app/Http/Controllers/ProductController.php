@@ -260,6 +260,11 @@ class ProductController extends Controller
                 'variants.*.stock' => 'nullable|integer|min:0',
                 'variants.*.sort_order' => 'nullable|integer|min:0|max:999999',
                 'variants.*.media_id' => 'nullable|integer|exists:media,id',
+                'cutting_product_targets_present' => 'sometimes|boolean',
+                'cutting_product_targets' => 'nullable|array',
+                'cutting_product_targets.*.enabled' => 'nullable|boolean',
+                'cutting_product_targets.*.remaining' => 'nullable|array',
+                'cutting_product_targets.*.remaining.*' => 'integer|exists:products,id',
                 'cutting_targets_present' => 'sometimes|boolean',
                 'cutting_targets' => 'nullable|array',
                 'cutting_targets.*.enabled' => 'nullable|boolean',
@@ -476,6 +481,24 @@ class ProductController extends Controller
         if ((string) $product->product_type !== Product::TYPE_WHOLE) {
             ProductCuttingComponent::query()->where('product_id', $product->id)->delete();
             return;
+        }
+
+        if (!empty($validated['cutting_product_targets_present'])) {
+            $targets = [];
+            $allowed = Product::where('product_type', Product::TYPE_CUT)->pluck('id')->map(fn ($id) => (int) $id)->all();
+            foreach ($validated['cutting_product_targets'] ?? [] as $targetId => $configuration) {
+                if (empty($configuration['enabled'])) continue;
+                $targetId = (int) $targetId;
+                $remaining = collect($configuration['remaining'] ?? [])->map(fn ($id) => (int) $id)->unique()->values()->all();
+                if (!in_array($targetId, $allowed, true) || array_diff($remaining, $allowed) || in_array($targetId, $remaining, true)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['cutting_product_targets' => 'Chọn sản phẩm pha lóc chính và phụ khác nhau.']);
+                }
+                $targets[$targetId] = $remaining;
+            }
+            $product->update(['cutting_product_targets' => $targets]);
+            $componentProducts = collect(array_keys($targets))->merge(collect($targets)->flatten())->unique();
+            $validated['cutting_component_variant_ids'] = collect($validated['cutting_component_variant_ids'] ?? [])
+                ->merge(ProductVariant::whereIn('product_id', $componentProducts)->pluck('id'))->unique()->all();
         }
 
         if (!empty($validated['cutting_targets_present'])) {
