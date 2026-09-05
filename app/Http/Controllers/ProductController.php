@@ -258,6 +258,11 @@ class ProductController extends Controller
                 'variants.*.stock' => 'nullable|integer|min:0',
                 'variants.*.sort_order' => 'nullable|integer|min:0|max:999999',
                 'variants.*.media_id' => 'nullable|integer|exists:media,id',
+                'cutting_targets_present' => 'sometimes|boolean',
+                'cutting_targets' => 'nullable|array',
+                'cutting_targets.*.enabled' => 'nullable|boolean',
+                'cutting_targets.*.remaining' => 'nullable|array',
+                'cutting_targets.*.remaining.*' => 'integer|exists:product_variants,id',
                 'cutting_component_variant_ids' => 'nullable|array',
                 'cutting_component_variant_ids.*' => 'integer|exists:product_variants,id',
             ]);
@@ -468,6 +473,29 @@ class ProductController extends Controller
         if ((string) $product->product_type !== Product::TYPE_WHOLE) {
             ProductCuttingComponent::query()->where('product_id', $product->id)->delete();
             return;
+        }
+
+        if (!empty($validated['cutting_targets_present'])) {
+            $targets = [];
+            $allowedIds = ProductVariant::query()
+                ->whereHas('product', fn ($query) => $query->where('product_type', Product::TYPE_CUT))
+                ->pluck('id')->map(fn ($id) => (int) $id)->all();
+            foreach ($validated['cutting_targets'] ?? [] as $targetId => $configuration) {
+                if (empty($configuration['enabled'])) {
+                    continue;
+                }
+                $targetId = (int) $targetId;
+                $remaining = collect($configuration['remaining'] ?? [])->map(fn ($id) => (int) $id)->unique()->values()->all();
+                if (!in_array($targetId, $allowedIds, true) || array_diff($remaining, $allowedIds) || in_array($targetId, $remaining, true)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'cutting_targets' => 'Mục tiêu và thành phần còn lại phải là sản phẩm pha lóc và không được trùng nhau.',
+                    ]);
+                }
+                $targets[(string) $targetId] = $remaining;
+            }
+            $product->update(['cutting_targets' => $targets]);
+            $validated['cutting_component_variant_ids'] = collect($validated['cutting_component_variant_ids'] ?? [])
+                ->merge(array_keys($targets))->merge(collect($targets)->flatten())->unique()->values()->all();
         }
 
         $componentIds = collect($validated['cutting_component_variant_ids'] ?? [])

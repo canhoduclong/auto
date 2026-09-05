@@ -1865,13 +1865,13 @@ class OrderController extends Controller
                     : 0;
 
                 $unitDiscountType = $this->normalizeDiscountType($item['unit_discount_type'] ?? null);
-                $minPrice = max(0, (float) ($variant->latestPriceRule?->min_price ?? 0));
+                $minPrice = \App\Support\OrderPriceBounds::minimum((float) ($variant->latestPriceRule?->min_price ?? 0));
 
                 $unitDiscount = max(0, $unitDiscount);
                 if ($unitDiscountType === 'decrease') {
                     $maxAllowedDecrease = max($basePrice - $minPrice, 0);
                     if ($unitDiscount > $maxAllowedDecrease) {
-                        throw new \RuntimeException('Gia ban SKU ' . ($variant->sku ?: $variant->id) . ' khong duoc nho hon gia Min.');
+                        throw new \RuntimeException('Gia ban SKU ' . ($variant->sku ?: $variant->id) . ' không được thấp hơn giá Min trừ 12.000đ (tối thiểu 0đ).');
                     }
                 }
 

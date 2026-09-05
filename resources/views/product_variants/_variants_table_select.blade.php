@@ -47,7 +47,7 @@
                     data-variant-weight="{{ $v->kg ?? 0 }}"
                     data-variant-weight-unit-label="{{ $v->product->unit_label ?? 'Kg' }}"
                     data-variant-is-priced-by-kg="{{ $v->is_priced_by_kg ? 1 : 0 }}"
-                    data-variant-min-price="{{ $v->latestPriceRule->min_price ?? 0 }}"
+                    data-variant-min-price="{{ \App\Support\OrderPriceBounds::minimum((float) ($v->latestPriceRule->min_price ?? 0)) }}"
                 >Thêm dòng</button>
             </td>
         </tr>

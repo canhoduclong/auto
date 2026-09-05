@@ -568,7 +568,7 @@
                                                 $isPricedByKg = old('item_is_priced_by_kg.' . ($variant?->id), $item->is_priced_by_kg ?? ($variant?->is_priced_by_kg ?? $variant?->product?->is_priced_by_kg ?? true));
                                                 $isPricedByKg = filter_var($isPricedByKg, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
                                                 $isPricedByKg = $isPricedByKg === null ? true : $isPricedByKg;
-                                                $minPrice = (float) ($variant?->latestPriceRule?->min_price ?? 0);
+                                                $minPrice = \App\Support\OrderPriceBounds::minimum((float) ($variant?->latestPriceRule?->min_price ?? 0));
                                                 $unitDiscount = max(0, $unitDiscount);
                                                 $lineUnitPrice = $unitDiscountType === 'increase'
                                                     ? ($basePrice + $unitDiscount)
@@ -1030,7 +1030,7 @@ document.addEventListener('DOMContentLoaded', function () {
         rowTotalEl?.classList.toggle('row-total-invalid', invalid);
         feedbackEl.classList.toggle('active', invalid);
         feedbackEl.textContent = invalid
-            ? `Giá bán ${formatMoney(sellingPrice)} thấp hơn giá Min ${formatMoney(minPrice)}.`
+            ? `Giá bán ${formatMoney(sellingPrice)} thấp hơn mức được phép ${formatMoney(minPrice)}.`
             : '';
 
         return invalid;

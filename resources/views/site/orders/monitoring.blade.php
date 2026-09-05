@@ -2089,7 +2089,7 @@
                                                             @php
                                                                 $editVariant = $item->variant;
                                                                 $editBasePrice = (float) ($editVariant?->latestPriceRule?->price ?? $editVariant?->final_price ?? $item->base_price ?? $item->price ?? 0);
-                                                                $editMinPrice = max(0, (float) ($editVariant?->latestPriceRule?->min_price ?? 0));
+                                                                $editMinPrice = \App\Support\OrderPriceBounds::minimum((float) ($editVariant?->latestPriceRule?->min_price ?? 0));
                                                                 $editSellingPrice = (float) ($item->price ?? $editBasePrice);
                                                                 $editDiscountType = $editSellingPrice > $editBasePrice ? 'increase' : 'decrease';
                                                                 $editDiscount = abs($editSellingPrice - $editBasePrice);

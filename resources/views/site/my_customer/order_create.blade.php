@@ -725,7 +725,7 @@ document.addEventListener('DOMContentLoaded', function () {
         rowTotalEl?.classList.toggle('row-total-invalid', invalid);
         feedbackEl.classList.toggle('active', invalid);
         feedbackEl.textContent = invalid
-            ? `Giá Min : ${formatMoney(minPrice)}. Giá bán hiện tại: ${formatMoney(sellingPrice)}.`
+            ? `Giá thấp nhất được nhập: ${formatMoney(minPrice)}. Giá bán hiện tại: ${formatMoney(sellingPrice)}.`
             : '';
 
         return invalid;
@@ -822,7 +822,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (validationAlert) {
             validationAlert.classList.toggle('d-none', !hasInvalidSellingPrice);
             validationAlert.textContent = hasInvalidSellingPrice
-                ? 'Có sản phẩm vi phạm giá tối thiểu. Giá Min : vui lòng kiểm tra các ô discount đang tô đỏ.'
+                ? 'Có sản phẩm vi phạm giá tối thiểu. Giá thấp nhất được nhập: vui lòng kiểm tra các ô discount đang tô đỏ.'
                 : '';
         }
 

@@ -57,7 +57,6 @@ class ProductCuttingService
     public function sourceMaterialOptions(ProductVariant $targetVariant, ?int $warehouseId): Collection
     {
         return $this->sourceMaterialRows($targetVariant, $warehouseId)
-            ->filter(fn (array $row) => collect($row['components'] ?? [])->isNotEmpty() && (float) ($row['available'] ?? 0) > 0)
             ->map(function (array $material) use ($targetVariant) {
                 $singlePreview = $this->preview($targetVariant, [
                     ['variant_id' => (int) $material['variant_id'], 'quantity' => 1],
@@ -84,7 +83,8 @@ class ProductCuttingService
             ])
             ->whereHas('product', fn ($query) => $query
                 ->whereNull('product_type')
-                ->orWhere('product_type', '!=', Product::TYPE_CUT))
+                ->orWhere('product_type', Product::TYPE_WHOLE))
+            ->whereHas('inventories', fn ($query) => $query->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId)))
             ->where('status', true)
             ->orderBy('product_id')
             ->orderBy('sort_order')
@@ -93,13 +93,16 @@ class ProductCuttingService
             ->map(function (ProductVariant $variant) use ($removedNames, $targetVariantId) {
                 $available = (float) $variant->inventories->sum(fn (Inventory $inventory) => max(0, (float) $inventory->quantity - (float) $inventory->reserved_quantity));
                 $unitWeight = (float) $variant->effective_kg;
-                $components = $this->componentRowsForVariant($variant);
+                $components = $this->componentRowsForTarget($variant, $targetVariantId);
+                $configuredRemaining = $variant->product?->cutting_targets[$targetVariantId] ?? null;
                 $targetComponentIds = $components
                     ->filter(fn (array $component) => (int) ($component['variant_id'] ?? 0) === $targetVariantId)
                     ->pluck('variant_id')
                     ->values();
                 $removedComponentIds = $components
-                    ->filter(fn (array $component) => $this->matchesRemovedComponent($component['name'], $removedNames))
+                    ->filter(fn (array $component) => $configuredRemaining !== null
+                        ? in_array((int) $component['variant_id'], array_map('intval', $configuredRemaining), true)
+                        : $this->matchesRemovedComponent($component['name'], $removedNames))
                     ->pluck('variant_id')
                     ->values();
 
@@ -203,7 +206,8 @@ class ProductCuttingService
             }
 
             $totalInputWeight += $quantity * (float) $variant->effective_kg;
-            $componentRows = $this->componentRowsForVariant($variant);
+            $componentRows = $this->componentRowsForTarget($variant, $targetVariantId);
+            $configuredRemaining = $variant->product?->cutting_targets[$targetVariantId] ?? null;
             $targetRows = $componentRows
                 ->filter(fn (array $component) => (int) ($component['variant_id'] ?? 0) === $targetVariantId);
 
@@ -224,7 +228,9 @@ class ProductCuttingService
             }
 
             foreach ($componentRows as $component) {
-                if (!$this->matchesRemovedComponent((string) $component['name'], $removedNames)) {
+                if ($configuredRemaining !== null
+                    ? !in_array((int) $component['variant_id'], array_map('intval', $configuredRemaining), true)
+                    : !$this->matchesRemovedComponent((string) $component['name'], $removedNames)) {
                     continue;
                 }
 
@@ -244,6 +250,18 @@ class ProductCuttingService
             'finished_weight' => round(max(0, $usesDirectTargetComponent ? $targetOutputWeight : $totalInputWeight - $legacyRemovedWeight), 3),
             'components' => $components,
         ];
+    }
+
+    private function componentRowsForTarget(ProductVariant $variant, int $targetVariantId): Collection
+    {
+        $rows = $this->componentRowsForVariant($variant);
+        $configuration = $variant->product?->cutting_targets ?? [];
+        if (!array_key_exists($targetVariantId, $configuration)) {
+            return $rows;
+        }
+
+        $ids = array_merge([$targetVariantId], array_map('intval', $configuration[$targetVariantId]));
+        return $rows->filter(fn (array $row) => in_array((int) $row['variant_id'], $ids, true))->values();
     }
 
     private function componentRowsForVariant(ProductVariant $variant): Collection

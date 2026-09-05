@@ -5224,7 +5224,7 @@ public function apiTruckRoutes(Request $request)
             }
 
             $basePrice = (float) ($variant->latestPriceRule?->price ?? $variant->final_price ?? 0);
-            $minPrice = max(0, (float) ($variant->latestPriceRule?->min_price ?? 0));
+            $minPrice = \App\Support\OrderPriceBounds::minimum((float) ($variant->latestPriceRule?->min_price ?? 0));
             $requestedUnitDiscount = max(0, (float) (($validated['item_discount'][(string) $variant->id] ?? 0)));
             $discountType = strtolower((string) ($validated['item_discount_type'][(string) $variant->id] ?? 'decrease'));
 
@@ -5232,7 +5232,7 @@ public function apiTruckRoutes(Request $request)
                 $maxAllowedDecrease = max($basePrice - $minPrice, 0);
                 if ($requestedUnitDiscount > $maxAllowedDecrease) {
                     return back()->withErrors([
-                        'item_discount.' . $variant->id => 'Giá bán SKU ' . ($variant->sku ?: $variant->id) . ' không được thấp hơn giá Min (' . number_format($minPrice, 0, ',', '.') . 'đ).',
+                        'item_discount.' . $variant->id => 'Giá bán SKU ' . ($variant->sku ?: $variant->id) . ' không được thấp hơn mức cho phép sau khi nới 12.000đ (' . number_format($minPrice, 0, ',', '.') . 'đ).',
                     ])->withInput();
                 }
             }
@@ -5309,7 +5309,7 @@ public function apiTruckRoutes(Request $request)
                 $unitDiscountType = strtolower((string) $itemDiscountTypeInput->get((string) $variant->id, 'decrease')) === 'increase'
                     ? 'increase'
                     : 'decrease';
-                $minPrice = max(0, (float) ($variant->latestPriceRule?->min_price ?? 0));
+                $minPrice = \App\Support\OrderPriceBounds::minimum((float) ($variant->latestPriceRule?->min_price ?? 0));
 
                 $unitDiscount = $requestedUnitDiscount;
                 if ($unitDiscountType === 'decrease') {

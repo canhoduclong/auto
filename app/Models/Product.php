@@ -19,6 +19,7 @@ class Product extends Model
         'name',
         'unit',
         'product_type',
+        'cutting_targets',
         'kg',
         'is_priced_by_kg',
         'slug',
@@ -27,6 +28,7 @@ class Product extends Model
     ];
 
     protected $casts = [
+        'cutting_targets' => 'array',
         'kg' => 'float',
         'is_priced_by_kg' => 'boolean',
         'status' => 'boolean',

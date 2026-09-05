@@ -108,7 +108,7 @@ class CartController extends Controller
             $discountType = strtolower((string) ($itemDiscountTypes[$id] ?? 'decrease')) === 'increase'
                 ? 'increase'
                 : 'decrease';
-            $minPrice = max(0, (float) ($item['min_price'] ?? 0));
+            $minPrice = \App\Support\OrderPriceBounds::minimum((float) ($item['min_price'] ?? 0));
 
             if ($discountType === 'decrease') {
                 $maxAllowedDecrease = max($price - $minPrice, 0);

@@ -23,7 +23,7 @@
         $defaultWeight = (float) ($details['unit_weight'] ?? 0);
         $inputWeight = (float) old('item_weight.' . $id, $defaultWeight);
         $isPricedByKg = (bool) ($details['is_priced_by_kg'] ?? true);
-        $minPrice = (float) ($details['min_price'] ?? 0);
+        $minPrice = \App\Support\OrderPriceBounds::minimum((float) ($details['min_price'] ?? 0));
         $unitDiscount = max(0, $inputDiscount);
         if ($inputDiscountType === 'decrease') {
             $unitDiscount = min($unitDiscount, max($unitPrice - $minPrice, 0));
@@ -707,7 +707,7 @@
                                                     $unitSize = (float) ($details['unit_weight'] ?? 0);
                                                     $isPricedByKg = (bool) ($details['is_priced_by_kg'] ?? true);
                                                     $inputDiscountType = old('item_discount_type.' . $id, (string) ($details['discount_type'] ?? 'decrease')) === 'increase' ? 'increase' : 'decrease';
-                                                    $minPrice = (float) ($details['min_price'] ?? 0);
+                                                    $minPrice = \App\Support\OrderPriceBounds::minimum((float) ($details['min_price'] ?? 0));
                                                     $unitDiscount = max(0, $inputDiscount);
                                                     $pricingFactor = $isPricedByKg ? max($unitSize, 0) : 1;
                                                     $lineSubtotal = $unitPrice * $quantity * $pricingFactor;
@@ -928,7 +928,7 @@
         lineTotalEl?.classList.toggle('row-total-invalid', invalid);
         feedbackEl.classList.toggle('active', invalid);
         feedbackEl.textContent = invalid
-            ? `Giá Min : ${formatMoney(minPrice)}. Giá bán hiện tại: ${formatMoney(sellingPrice)}.`
+            ? `Giá thấp nhất được nhập: ${formatMoney(minPrice)}. Giá bán hiện tại: ${formatMoney(sellingPrice)}.`
             : '';
 
         return invalid;
@@ -1002,7 +1002,7 @@
         if (validationAlert) {
             validationAlert.classList.toggle('d-none', !hasInvalidSellingPrice);
             validationAlert.textContent = hasInvalidSellingPrice
-                ? 'Có sản phẩm vi phạm giá tối thiểu. Giá Min : vui lòng kiểm tra các ô discount đang tô đỏ.'
+                ? 'Có sản phẩm vi phạm giá tối thiểu. Giá thấp nhất được nhập: vui lòng kiểm tra các ô discount đang tô đỏ.'
                 : '';
         }
 

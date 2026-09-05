@@ -6,6 +6,7 @@
     $selectedDateValue = $selectedDate ?? now()->toDateString();
     $materials = collect($plan['materials'] ?? []);
     $materialOptions = collect($plan['material_options'] ?? $materials);
+    $materials = $materialOptions;
     $selectedMaterials = collect($plan['selected_materials'] ?? []);
     $shortage = $plan['shortage'] ?? [];
     $orderItems = collect($modalOrder?->items ?? []);
@@ -210,7 +211,7 @@
                         </div>
 
                         <div class="fw-semibold mb-1">2. Danh sách sản phẩm/biến thể dùng để pha lóc</div>
-                        <div class="small text-muted mb-2">Danh sách bên dưới là gợi ý phù hợp; có thể thêm biến thể nguyên con khác đã có cấu hình thành phần.</div>
+                        <div class="small text-muted mb-2">Toàn bộ biến thể nguyên con đang hoạt động trong kho của bạn. Tồn khả dụng đã trừ số lượng giữ chỗ. Với nguyên liệu chưa có định mức thành phần, hãy đối chiếu và cập nhật khối lượng thực tế sau pha lóc.</div>
                         <div class="row g-2 align-items-end mb-2">
                             <div class="col-md-8">
                                 <label class="form-label small mb-1">Thêm biến thể nguyên con</label>
@@ -238,7 +239,7 @@
                                         <th style="width:60px;">Chọn</th>
                                         <th>Sản phẩm / biến thể</th>
                                         <th class="text-end">Size</th>
-                                        <th class="text-end">Tồn kho</th>
+                                        <th class="text-end">Tồn khả dụng</th>
                                         <th class="text-end">Dự kiến / con</th>
                                         <th style="width:170px;">Số lượng cần thêm</th>
                                         <th class="text-end" style="width:70px;"></th>
