@@ -176,6 +176,20 @@ class WarehousePackingSizeAllocationTest extends TestCase
         ]);
     }
 
+    public function test_disabled_product_hides_adjacent_sizes_and_rejects_new_allocations(): void
+    {
+        [$user, $order, $item, $variants, $inventories] = $this->fixture(100, 2.3);
+        $variants['2.3']->product->update(['allow_adjacent_packing_sizes' => false]);
+        $inventories['2.3']->update(['quantity' => 75]);
+        $this->actingAs($user)->get(route('warehouse.orders', ['date' => now()->toDateString()]))
+            ->assertOk()->assertDontSee('Không đủ tồn size 2,3 — chọn size liền kề');
+        $this->post(route('warehouse.orders.packing-size-allocation', $order), [
+            'order_item_id' => $item->id,
+            'allocations' => [$variants['2.2']->id => 25, $variants['2.3']->id => 75],
+        ])->assertSessionHasErrors('allocations');
+        $this->assertDatabaseCount('order_item_packing_size_allocations', 0);
+    }
+
     private function fixture(int $quantity, float $mainSize = 2.5): array
     {
         $warehouse = Warehouse::query()->create(['name' => 'Kho size mix', 'status' => true]);

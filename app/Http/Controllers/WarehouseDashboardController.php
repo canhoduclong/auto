@@ -2284,7 +2284,8 @@ class WarehouseDashboardController extends Controller
                 ->map(fn ($id) => (int) $id);
 
             return $order->items->filter(function ($item) use ($shortItemIds) {
-                return (float) ($item->variant?->size ?? 0) > 0
+                return ($item->variant?->product?->allow_adjacent_packing_sizes ?? true)
+                    && (float) ($item->variant?->size ?? 0) > 0
                     && ($shortItemIds->contains((int) $item->id) || $item->packingSizeAllocations->isNotEmpty());
             });
         })->values();
@@ -2938,6 +2939,9 @@ class WarehouseDashboardController extends Controller
         $mainSize = (float) ($item?->variant?->size ?? 0);
         if (! $item || $mainSize <= 0) {
             return back()->withErrors(['allocations' => 'Dòng hàng không có size hợp lệ để chọn size liền kề.']);
+        }
+        if (!($item->variant->product?->allow_adjacent_packing_sizes ?? true)) {
+            return back()->withErrors(['allocations' => 'Sản phẩm này đã tắt chức năng chọn size liền kề khi đóng hàng.']);
         }
         $mainSizeLabel = rtrim(rtrim(number_format($mainSize, 2, '.', ''), '0'), '.');
 

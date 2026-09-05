@@ -19,6 +19,7 @@ class Product extends Model
         'name',
         'unit',
         'product_type',
+        'allow_adjacent_packing_sizes',
         'cutting_targets',
         'kg',
         'is_priced_by_kg',
@@ -28,6 +29,7 @@ class Product extends Model
     ];
 
     protected $casts = [
+        'allow_adjacent_packing_sizes' => 'boolean',
         'cutting_targets' => 'array',
         'kg' => 'float',
         'is_priced_by_kg' => 'boolean',

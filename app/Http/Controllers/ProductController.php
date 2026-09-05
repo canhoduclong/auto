@@ -93,6 +93,7 @@ class ProductController extends Controller
             'brand_id' => 'nullable|numeric',
             'unit' => ['required', Rule::in(ProductUnit::values())],
             'product_type' => ['required', Rule::in(array_keys(Product::typeOptions()))],
+            'allow_adjacent_packing_sizes' => ['sometimes', 'boolean'],
             'sort_order' => 'nullable|integer|min:0|max:999999',
             'media_id' => 'nullable|integer|exists:media,id',
         ]);
@@ -243,6 +244,7 @@ class ProductController extends Controller
                 'brand_id' => 'nullable|numeric',
                 'unit' => ['required', Rule::in(ProductUnit::values())],
                 'product_type' => ['required', Rule::in(array_keys(Product::typeOptions()))],
+            'allow_adjacent_packing_sizes' => ['sometimes', 'boolean'],
                 'sort_order' => 'nullable|integer|min:0|max:999999',
                 'media_id'    => 'nullable|integer|exists:media,id',
                 'gallery'     => 'nullable|array',
@@ -275,6 +277,7 @@ class ProductController extends Controller
                 'brand_id' => $validated['brand_id'],
                 'unit' => $validated['unit'],
                 'product_type' => $validated['product_type'],
+                'allow_adjacent_packing_sizes' => $validated['allow_adjacent_packing_sizes'] ?? $product->allow_adjacent_packing_sizes,
                 'sort_order' => (int) ($validated['sort_order'] ?? 0),
                 'description' => $validated['description'] ?? $product->description,
             ]);

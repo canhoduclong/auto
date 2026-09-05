@@ -95,6 +95,14 @@
                             @enderror
                         </div>
 
+                        <div class="col-12 mb-3">
+                            <input type="hidden" name="allow_adjacent_packing_sizes" value="0">
+                            <label class="form-check-label" for="allow_adjacent_packing_sizes">
+                                <input type="checkbox" class="form-check-input me-2" id="allow_adjacent_packing_sizes" name="allow_adjacent_packing_sizes" value="1" @checked(old('allow_adjacent_packing_sizes', true))>
+                                Cho phép chọn size liền kề khi đóng hàng
+                            </label>
+                            <div class="form-text">Tắt để ẩn phần chọn size liền kề trong kho. Cơ cấu đóng đã lưu trước đó vẫn được giữ lại.</div>
+                        </div>
                         <div class="mb-3">
                             <label for="sort_order" class="form-label">Thứ tự hiển thị</label>
                             <input type="number"
