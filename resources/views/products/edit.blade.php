@@ -307,7 +307,12 @@
                                         <div class="invalid-feedback">{{ $message }}</div>
                                     @enderror
                                 </div>
-                                <div class="col-12 mb-3">
+                                <div class="col-12 mb-3" data-cutting-percentage-field>
+                            <label for="cutting_percentage" class="form-label">Tỷ lệ khối lượng pha lóc (%)</label>
+                            <input type="number" class="form-control" id="cutting_percentage" name="cutting_percentage" min="0" max="100" step="0.001" value="{{ old('cutting_percentage', $product->cutting_percentage) }}" placeholder="Nhập tỷ lệ %">
+                            <div class="form-text">Tỷ lệ chung khi sản phẩm được thu hồi làm thành phần phụ, áp dụng cho mọi size nguyên liệu. Thành phần chính tự tính bằng 100% trừ tổng thành phần phụ.</div>
+                        </div>
+                        <div class="col-12 mb-3">
                             <input type="hidden" name="allow_adjacent_packing_sizes" value="0">
                             <label class="form-check-label" for="allow_adjacent_packing_sizes">
                                 <input type="checkbox" class="form-check-input me-2" id="allow_adjacent_packing_sizes" name="allow_adjacent_packing_sizes" value="1" @checked(old('allow_adjacent_packing_sizes', $product->allow_adjacent_packing_sizes))>
@@ -907,3 +912,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 </script>
+
+@push('scripts')
+<script>
+(() => {
+ const type = document.getElementById('product_type');
+ const field = document.querySelector('[data-cutting-percentage-field]');
+ if (!type || !field) return;
+ const update = () => { field.hidden = type.value !== 'cut'; field.querySelector('input').disabled = field.hidden; };
+ type.addEventListener('change', update); update();
+})();
+</script>
+@endpush

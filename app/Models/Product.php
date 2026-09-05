@@ -23,6 +23,7 @@ class Product extends Model
         'cutting_targets',
         'cutting_product_targets',
         'cutting_percentages',
+        'cutting_percentage',
         'kg',
         'is_priced_by_kg',
         'slug',
@@ -35,11 +36,30 @@ class Product extends Model
         'cutting_targets' => 'array',
         'cutting_product_targets' => 'array',
         'cutting_percentages' => 'array',
+        'cutting_percentage' => 'float',
         'kg' => 'float',
         'is_priced_by_kg' => 'boolean',
         'status' => 'boolean',
         'sort_order' => 'integer',
     ];
+
+    public function cuttingPercentagesForTarget(int $mainProductId): ?array
+    {
+        $sides = $this->cutting_product_targets[$mainProductId] ?? null;
+        if ($sides === null) return null;
+        $products = self::whereIn('id', $sides)->get()->keyBy('id');
+        $rates = [];
+        foreach ($sides as $id) {
+            $rate = $products->get($id)?->cutting_percentage;
+            if ($rate === null) return null;
+            $rates[$id] = (float) $rate;
+        }
+        if (array_sum($rates) > 100.000001) {
+            throw new \RuntimeException('Tổng tỷ lệ thành phần phụ vượt 100%. Vui lòng cập nhật tỷ lệ sản phẩm pha lóc.');
+        }
+        $rates[$mainProductId] = round(max(0, 100 - array_sum($rates)), 6);
+        return $rates;
+    }
 
     public const TYPE_WHOLE = 'whole';
     public const TYPE_CUT = 'cut';

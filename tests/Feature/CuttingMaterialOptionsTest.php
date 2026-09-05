@@ -18,7 +18,7 @@ class CuttingMaterialOptionsTest extends TestCase
     {
         $whole = Product::factory()->create(['product_type' => Product::TYPE_WHOLE]);
         $mainProduct = Product::factory()->create(['product_type' => Product::TYPE_CUT]);
-        $sideProduct = Product::factory()->create(['product_type' => Product::TYPE_CUT]);
+        $sideProduct = Product::factory()->create(['product_type' => Product::TYPE_CUT, 'cutting_percentage' => 15]);
         $target = ProductVariant::factory()->create(['product_id' => $mainProduct->id, 'status' => true]);
         $side = ProductVariant::factory()->create(['product_id' => $sideProduct->id, 'status' => true]);
         $source = ProductVariant::factory()->create(['product_id' => $whole->id, 'kg' => 2.5]);
@@ -38,16 +38,20 @@ class CuttingMaterialOptionsTest extends TestCase
         $preview = $service->preview($target, [['variant_id' => $source->id, 'quantity' => 2]]);
         $this->assertSame(5.1, $preview['finished_weight']);
         $this->assertSame(0.9, $preview['components']->first()['weight']);
-        $payload['cutting_percentages'][$mainProduct->id][$sideProduct->id] = 101;
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
-        $method->invoke($controller, $payload, $whole);
+        $sideProduct->update(['cutting_percentage' => 20]);
+        $preview = $service->preview($target, [['variant_id' => $source->id, 'quantity' => 1]]);
+        $this->assertSame(2.4, $preview['finished_weight']);
+        $this->assertSame(0.6, $preview['components']->first()['weight']);
+        $sideProduct->update(['cutting_percentage' => null]);
+        $preview = $service->preview($target, [['variant_id' => $source->id, 'quantity' => 1]]);
+        $this->assertSame(0.0, $preview['finished_weight']);
     }
 
     public function test_product_targets_apply_to_each_target_variant_and_picker_groups_sizes(): void
     {
         $whole = Product::factory()->create(['product_type' => Product::TYPE_WHOLE]);
         $main = Product::factory()->create(['product_type' => Product::TYPE_CUT]);
-        $side = Product::factory()->create(['product_type' => Product::TYPE_CUT]);
+        $side = Product::factory()->create(['product_type' => Product::TYPE_CUT, 'cutting_percentage' => 16.667]);
         $source = ProductVariant::factory()->create(['product_id' => $whole->id, 'kg' => 3]);
         $first = ProductVariant::factory()->create(['product_id' => $main->id]);
         $second = ProductVariant::factory()->create(['product_id' => $main->id]);
@@ -63,7 +67,7 @@ class CuttingMaterialOptionsTest extends TestCase
         }
         foreach ([$first, $second] as $target) {
             $preview = app(ProductCuttingService::class)->preview($target, [['variant_id' => $source->id, 'quantity' => 1]]);
-            $this->assertSame(2.0, $preview['finished_weight']);
+            $this->assertSame(2.5, $preview['finished_weight']);
             $this->assertSame([$remaining->id], $preview['components']->pluck('variant_id')->all());
         }
         $scripts = \Illuminate\Support\Facades\Blade::render("@include('products._cutting_target_builder') @stack('scripts')", ['product' => $whole->fresh(), 'cutComponentVariants' => collect([$first, $second, $remaining])]);

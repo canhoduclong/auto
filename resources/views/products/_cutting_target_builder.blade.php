@@ -3,6 +3,8 @@
         'id' => (int) $variants->first()->product_id,
         'name' => $variants->first()->product?->name ?? 'Sản phẩm',
         'variant' => $variants->count().' biến thể',
+        'percentage' => $variants->first()->product?->cutting_percentage,
+        'edit_url' => route('products.edit', $variants->first()->product_id),
         'image' => $variants->first()->product?->avatar?->media?->url,
     ])->values();
     $savedTargets = $product->cutting_product_targets;
@@ -93,11 +95,12 @@
         field.className = 'mt-2';
         const label = document.createElement('label'); label.className = 'small'; label.textContent = 'Tỷ lệ khối lượng (%)';
         const input = document.createElement('input'); input.type = 'number'; input.min = id === mainId ? '0.001' : '0'; input.max = '100'; input.step = '0.001'; input.className = 'form-control form-control-sm';
-        input.readOnly = id === mainId;
-        input.style.width = '115px'; input.name = `cutting_percentages[${mainId}][${id}]`;
-        input.value = percentState[mainId]?.[id] ?? ''; input.placeholder = 'Nhập %';
+        input.readOnly = true;
+        input.style.width = '115px';
+        input.value = id === mainId ? (percentState[mainId]?.[id] ?? '') : (byId.get(id)?.percentage ?? ''); input.placeholder = 'Nhập %';
         input.dataset.percentMain = mainId; input.dataset.percentComponent = id;
         label.append(input); field.append(label);
+        if (id !== mainId && byId.get(id)?.edit_url) { const link = document.createElement('a'); link.href = byId.get(id).edit_url; link.target = '_blank'; link.rel = 'noopener'; link.textContent = 'Cập nhật tỷ lệ sản phẩm'; link.className = 'small d-block'; field.append(link); }
         const weight = document.createElement('small'); weight.dataset.componentWeight = id; field.append(weight);
         node.querySelector('strong').parentElement.append(field);
         input.oninput = () => { percentState[mainId] ||= {}; percentState[mainId][id] = input.value; updateWeights(); };
@@ -109,7 +112,7 @@
             const fields = [...rows.querySelectorAll('input[data-percent-main]')].filter(input => input.dataset.percentMain === mainId);
             const mainInput = fields.find(input => input.dataset.percentComponent === mainId);
             const secondary = fields.filter(input => input !== mainInput);
-            const any = fields.some(input => input.value !== '') || secondary.length === 0;
+            const any = secondary.every(input => input.value !== '');
             const secondaryTotal = secondary.reduce((sum, input) => sum + (Number(input.value) || 0), 0);
             mainInput.value = any ? String(Number(Math.max(0, 100 - secondaryTotal).toFixed(6))) : '';
             percentState[mainId] ||= {};
@@ -121,7 +124,7 @@
                 input.closest('.cutting-builder-card').querySelector('[data-component-weight]').textContent = input.value === '' ? 'Chưa cấu hình tỷ lệ' : (size * Number(input.value) / 100).toLocaleString('vi-VN', {maximumFractionDigits:3}) + ' kg / con';
             });
             const summary = rows.querySelector(`[data-percent-summary="${mainId}"]`);
-            if (summary) summary.textContent = any ? `Tổng: ${total.toLocaleString('vi-VN')}% · Thành phần chính tự tính: ${mainInput.value}%` : 'Nhập tỷ lệ để tính theo size; để trống toàn bộ để dùng định mức biến thể hiện có.';
+            if (summary) summary.textContent = any ? `Tổng: ${total.toLocaleString('vi-VN')}% · Thành phần chính tự tính: ${mainInput.value}%` : 'Cập nhật tỷ lệ chung tại các sản phẩm thành phần phụ để tính khối lượng.';
         }
     }
     function render() {

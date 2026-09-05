@@ -267,7 +267,16 @@ class ProductCuttingService
     {
         $rows = $this->componentRowsForVariant($variant);
         $target = ProductVariant::with('product')->find($targetVariantId);
-        $percentages = $variant->product?->cutting_percentages[$target?->product_id] ?? null;
+        $percentages = $variant->product?->cuttingPercentagesForTarget((int) $target?->product_id);
+        if ($percentages === null && array_key_exists((int) $target?->product_id, $variant->product?->cutting_product_targets ?? [])) {
+            // An explicit product recipe must not silently use stale variant ratios.
+            return collect([[
+                'variant_id' => $targetVariantId,
+                'name' => $this->componentName($target),
+                'standard_weight' => 0.0,
+                'percentage' => 0.0,
+            ]]);
+        }
         if ($percentages !== null) {
             $configured = [];
             foreach ($percentages as $productId => $percentage) {

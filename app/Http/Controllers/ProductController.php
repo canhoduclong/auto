@@ -94,6 +94,7 @@ class ProductController extends Controller
             'unit' => ['required', Rule::in(ProductUnit::values())],
             'product_type' => ['required', Rule::in(array_keys(Product::typeOptions()))],
             'allow_adjacent_packing_sizes' => ['sometimes', 'boolean'],
+            'cutting_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'sort_order' => 'nullable|integer|min:0|max:999999',
             'media_id' => 'nullable|integer|exists:media,id',
         ]);
@@ -245,6 +246,7 @@ class ProductController extends Controller
                 'unit' => ['required', Rule::in(ProductUnit::values())],
                 'product_type' => ['required', Rule::in(array_keys(Product::typeOptions()))],
             'allow_adjacent_packing_sizes' => ['sometimes', 'boolean'],
+            'cutting_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
                 'sort_order' => 'nullable|integer|min:0|max:999999',
                 'media_id'    => 'nullable|integer|exists:media,id',
                 'gallery'     => 'nullable|array',
@@ -285,6 +287,7 @@ class ProductController extends Controller
                 'brand_id' => $validated['brand_id'],
                 'unit' => $validated['unit'],
                 'product_type' => $validated['product_type'],
+                'cutting_percentage' => array_key_exists('cutting_percentage', $validated) ? $validated['cutting_percentage'] : $product->cutting_percentage,
                 'allow_adjacent_packing_sizes' => $validated['allow_adjacent_packing_sizes'] ?? $product->allow_adjacent_packing_sizes,
                 'sort_order' => (int) ($validated['sort_order'] ?? 0),
                 'description' => $validated['description'] ?? $product->description,
@@ -498,19 +501,7 @@ class ProductController extends Controller
                 }
                 $targets[$targetId] = $remaining;
             }
-            $percentages = [];
-            foreach ($targets as $mainId => $remainingIds) {
-                $componentIds = array_merge([(int) $mainId], $remainingIds);
-                $values = collect($validated['cutting_percentages'][$mainId] ?? [])->only($componentIds);
-                if ($values->filter(fn ($value) => $value !== null && $value !== '')->isEmpty()) continue;
-                $secondary = $values->only($remainingIds);
-                if ($secondary->count() !== count($remainingIds) || $secondary->contains(fn ($value) => $value === null || $value === '') || (float) $secondary->sum() > 100.000001) {
-                    throw \Illuminate\Validation\ValidationException::withMessages(['cutting_percentages' => 'Nhập đủ % thành phần phụ; tổng thành phần phụ không được vượt 100%.']);
-                }
-                $values = $secondary->put($mainId, round(max(0, 100 - (float) $secondary->sum()), 6));
-                $percentages[$mainId] = $values->map(fn ($value) => (float) $value)->all();
-            }
-            $product->update(['cutting_product_targets' => $targets, 'cutting_percentages' => $percentages]);
+            $product->update(['cutting_product_targets' => $targets]);
             $componentProducts = collect(array_keys($targets))->merge(collect($targets)->flatten())->unique();
             $validated['cutting_component_variant_ids'] = collect($validated['cutting_component_variant_ids'] ?? [])
                 ->merge(ProductVariant::whereIn('product_id', $componentProducts)->pluck('id'))->unique()->all();
