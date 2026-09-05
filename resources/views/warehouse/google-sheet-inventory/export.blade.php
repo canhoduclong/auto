@@ -56,13 +56,41 @@
     </div></div>
 
     <div class="sheet-export-summary p-3 mb-3">
-        <form method="POST" action="{{ route('warehouse.google-sheet-inventory.export.write-daily') }}" class="row g-3 align-items-end" onsubmit="return confirm('Ghi tồn kho ngày đã chọn lên file đích? Các ô tại cột Tồn tương ứng sẽ được cập nhật.');">
-            @csrf
+        <form method="GET" action="{{ route('warehouse.google-sheet-inventory.export.index') }}" class="row g-3 align-items-end">
             <input type="hidden" name="warehouse_id" value="{{ $warehouse->id }}">
-            <div class="col-lg-7"><h5 class="mb-1">Ghi tồn kho hằng ngày</h5><div class="small text-muted">Hệ thống tính tồn cuối của {{ $warehouse->name }} và ghi vào cột “Tồn” đúng ngày trên file đích.</div></div>
-            <div class="col-lg-3 col-md-6"><label class="form-label">Ngày ghi tồn</label><input type="date" name="date" class="form-control" value="{{ $selectedDate }}" max="{{ today()->toDateString() }}" required></div>
-            <div class="col-lg-2 col-md-6"><input type="hidden" name="confirm_write" value="1"><button class="btn btn-primary w-100" @disabled(!$sheetConfiguration['spreadsheet_url'])><i class="bi bi-cloud-upload me-1"></i>Ghi tồn kho</button></div>
+            <div class="col-lg-7"><h5 class="mb-1">Tra soát tồn kho theo ngày</h5><div class="small text-muted">Chọn ngày để xem tồn cuối của {{ $warehouse->name }} trước khi ghi lên Google Sheet.</div></div>
+            <div class="col-lg-3 col-md-6"><label class="form-label" for="inventoryPreviewDate">Ngày ghi tồn</label><input id="inventoryPreviewDate" type="date" name="date" class="form-control" value="{{ $selectedDate }}" max="{{ today()->toDateString() }}" required onchange="if (this.form.reportValidity()) this.form.requestSubmit();"></div>
+            <div class="col-lg-2 col-md-6"><button class="btn btn-outline-primary w-100">Xem tồn kho</button></div>
         </form>
+    </div>
+
+    <div class="card sheet-export-card mb-3">
+        <div class="card-body border-bottom">
+            <h5>Tồn cuối ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }} — {{ $warehouse->name }}</h5>
+            <div class="small text-muted">{{ $inventoryPreview->count() }} sản phẩm/SKU. Tồn cuối được tính từ số tồn hiện tại và hoàn tác các biến động sau ngày đã chọn. Khi ghi, hệ thống chỉ cập nhật sản phẩm khớp trên file đích.</div>
+        </div>
+        <div class="table-responsive" style="max-height: 520px; overflow: auto;">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light" style="position: sticky; top: 0;"><tr><th>Sản phẩm</th><th>SKU</th><th>Size</th><th>Tên tồn kho</th><th class="text-end">Tồn cuối</th></tr></thead>
+                <tbody>
+                    @forelse($inventoryPreview as $row)
+                        <tr><td>{{ $row['product_name'] }}</td><td>{{ $row['sku'] ?: '—' }}</td><td>{{ $row['size'] ?: '—' }}</td><td>{{ $row['inventory_name'] ?: '—' }}</td><td class="text-end fw-bold {{ $row['closing'] < 0 ? 'text-danger' : '' }}">{{ number_format($row['closing'], 3, ',', '.') }}</td></tr>
+                    @empty
+                        <tr><td colspan="5" class="text-center text-muted py-4">Chưa có dữ liệu tồn kho để tra soát.</td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+        <div class="card-body border-top d-flex justify-content-between align-items-center gap-3 flex-wrap">
+            <div class="small text-muted">Số liệu được tính lại khi ghi nếu có biến động kho mới.</div>
+            <form method="POST" action="{{ route('warehouse.google-sheet-inventory.export.write-daily') }}" onsubmit="return confirm('Ghi tồn kho ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }} lên file đích? Các ô tại cột Tồn tương ứng sẽ được cập nhật.');">
+                @csrf
+                <input type="hidden" name="warehouse_id" value="{{ $warehouse->id }}">
+                <input type="hidden" name="date" value="{{ $selectedDate }}">
+                <input type="hidden" name="confirm_write" value="1">
+                <button class="btn btn-primary" @disabled(!$sheetConfiguration['spreadsheet_url'] || $inventoryPreview->isEmpty())><i class="bi bi-cloud-upload me-1"></i>Ghi tồn kho ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</button>
+            </form>
+        </div>
     </div>
 
     <div class="card sheet-export-card"><div class="card-body p-0">

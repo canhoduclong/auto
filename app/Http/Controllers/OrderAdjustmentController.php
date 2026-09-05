@@ -656,7 +656,7 @@ class OrderAdjustmentController extends Controller
         abort_unless(
             $order->canRequestAdjustment(),
             422,
-            'Chỉ có thể gửi yêu cầu điều chỉnh sau khi đơn đã giao và kế toán đã xác nhận doanh thu.'
+            'Chỉ có thể gửi yêu cầu điều chỉnh khi đơn đã hoàn tất, hoặc đã giao và được kế toán xác nhận doanh thu.'
         );
 
         if ($user->hasRole('admin')) {

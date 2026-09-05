@@ -10,6 +10,19 @@ use Tests\TestCase;
 class OrderAdjustmentEligibilityTest extends TestCase
 {
     #[Test]
+    public function completed_order_can_request_adjustment_without_revenue_confirmation(): void
+    {
+        $order = new Order(['status' => Order::STATUS_COMPLETED]);
+        $order->setRelation('accountingReconciliation', null);
+        $this->assertTrue($order->canRequestAdjustment());
+
+        $order->setRelation('accountingReconciliation', new AccountingReconciliation([
+            'status' => AccountingReconciliation::STATUS_PENDING,
+        ]));
+        $this->assertTrue($order->canRequestAdjustment());
+    }
+
+    #[Test]
     public function delivered_order_with_confirmed_revenue_can_request_adjustment(): void
     {
         $order = new Order(['delivered_at' => now()]);

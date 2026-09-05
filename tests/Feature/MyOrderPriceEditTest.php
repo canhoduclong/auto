@@ -98,6 +98,33 @@ class MyOrderPriceEditTest extends TestCase
         $this->assertSame(22000.0, (float) $order->total);
     }
 
+    public function test_owner_can_submit_adjustment_for_completed_order_without_reconciliation(): void
+    {
+        [$sale, $customer, $order, $variant] = $this->makeEditableOrder();
+        $order->update(['status' => Order::STATUS_COMPLETED]);
+        $item = $order->items()->firstOrFail();
+        $payload = [
+            'action' => 'submit',
+            'adjustment_note' => 'Điều chỉnh đơn hoàn tất',
+            'items' => [[
+                'order_item_id' => $item->id,
+                'adjusted_quantity' => $item->quantity,
+                'adjusted_price' => 23000,
+            ]],
+        ];
+        $this->actingAs($sale)->withSession(['active_role' => 'sale']);
+        $this->getJson(route('site.order-adjustments.create', $order))
+            ->assertOk()->assertJsonPath('success', true);
+        $this->postJson(route('site.order-adjustments.store', $order), $payload)
+            ->assertSuccessful()->assertJsonPath('success', true);
+        $this->assertDatabaseHas('order_adjustments', ['order_id' => $order->id, 'requested_by' => $sale->id]);
+
+        $otherSale = User::factory()->create();
+        $otherSale->roles()->attach($sale->roles->first());
+        $this->actingAs($otherSale)->getJson(route('site.order-adjustments.create', $order))->assertForbidden();
+        $this->postJson(route('site.order-adjustments.store', $order), $payload)->assertForbidden();
+    }
+
     private function makeEditableOrder(): array
     {
         $saleRole = Role::query()->create(['name' => 'sale']);

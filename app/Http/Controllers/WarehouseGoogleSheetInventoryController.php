@@ -102,6 +102,7 @@ class WarehouseGoogleSheetInventoryController extends Controller
         ]);
         $warehouse = $this->resolveWarehouse($request);
         $selectedDate = Carbon::parse($validated['date'] ?? now())->toDateString();
+        $inventoryPreview = $sheets->exportInventoryPreview($warehouse, $selectedDate);
         $sheetConfiguration = $sheets->exportConfiguration($warehouse);
         $serviceAccountEmail = $sheets->serviceAccountEmail();
         $warehouses = Auth::user()?->isAdmin()
@@ -120,7 +121,8 @@ class WarehouseGoogleSheetInventoryController extends Controller
             'selectedDate',
             'sheetConfiguration',
             'serviceAccountEmail',
-            'writeHistory'
+            'writeHistory',
+            'inventoryPreview'
         ));
     }
 

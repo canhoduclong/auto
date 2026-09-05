@@ -534,8 +534,12 @@ class Order extends Model
 
     public function canRequestAdjustment(): bool
     {
+        if ($this->status === self::STATUS_COMPLETED) {
+            return true;
+        }
+
         $hasCompletedDelivery = $this->delivered_at !== null
-            || in_array($this->status, [self::STATUS_DELIVERED, self::STATUS_COMPLETED], true);
+            || $this->status === self::STATUS_DELIVERED;
 
         return $hasCompletedDelivery
             && $this->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED;

@@ -116,6 +116,41 @@ class WarehouseGoogleSheetInventoryImportTest extends TestCase
         $this->assertSame('987654321', Setting::get($prefix.'sheet_id'));
     }
 
+    public function test_export_page_previews_historical_closing_inventory_for_selected_warehouse(): void
+    {
+        $warehouse = Warehouse::query()->create(['name' => 'Kho tra soát', 'status' => true]);
+        $otherWarehouse = Warehouse::query()->create(['name' => 'Kho khác', 'status' => true]);
+        $role = Role::query()->create(['name' => 'warehouse']);
+        $user = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $user->roles()->attach($role);
+        $product = Product::factory()->create(['name' => 'Sản phẩm tra soát']);
+        $variant = $this->variant($product, '2.0 kg', 'MOC - 2.0');
+        $inventory = Inventory::query()->create([
+            'warehouse_id' => $warehouse->id, 'product_variant_id' => $variant->id, 'quantity' => 17.5,
+        ]);
+        Inventory::query()->create([
+            'warehouse_id' => $otherWarehouse->id, 'product_variant_id' => $variant->id, 'quantity' => 999,
+        ]);
+        foreach ([['2026-08-30 23:59:59', 5], ['2026-08-31 00:00:00', 10], ['2026-09-01 10:00:00', -2.5]] as [$date, $quantity]) {
+            $movement = new \App\Models\InventoryMovement([
+                'inventory_id' => $inventory->id, 'quantity' => $quantity, 'type' => $quantity > 0 ? 'import' : 'export',
+                'reference_type' => Inventory::class, 'reference_id' => $inventory->id, 'user_id' => $user->id,
+            ]);
+            $movement->created_at = $date;
+            $movement->updated_at = $date;
+            $movement->save();
+        }
+        $this->actingAs($user)->get(route('warehouse.google-sheet-inventory.export.index', [
+            'date' => '2026-08-30', 'warehouse_id' => $otherWarehouse->id,
+        ]))->assertOk()->assertSee('Tồn cuối ngày 30/08/2026')
+            ->assertSee('Ghi tồn kho ngày 30/08/2026')
+            ->assertViewHas('inventoryPreview', fn ($rows) => $rows->count() === 1 && $rows->first()['closing'] === 10.0);
+        $this->actingAs($user)->get(route('warehouse.google-sheet-inventory.export.index', [
+            'date' => '2026-09-01',
+        ]))->assertOk()->assertViewHas('inventoryPreview', fn ($rows) => $rows->first()['closing'] === 17.5);
+        $this->assertDatabaseCount('google_sheet_inventory_exports', 0);
+    }
+
     public function test_warehouse_can_write_daily_inventory_to_saved_google_sheet(): void
     {
         $warehouse = Warehouse::query()->create(['name' => 'Kho ghi Sheet', 'status' => true]);

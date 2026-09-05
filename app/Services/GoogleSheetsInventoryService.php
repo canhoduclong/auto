@@ -115,6 +115,41 @@ class GoogleSheetsInventoryService
     }
 
     /** @return array{rows:int,spreadsheet_id:string,sheet_id:int,spreadsheet_url:string,sheet_name:string,stock_column:int} */
+    public function closingInventoryForDate(Warehouse $warehouse, string $selectedDate): Collection
+    {
+        $inventories = Inventory::query()
+            ->where('warehouse_id', $warehouse->id)
+            ->get();
+        $futureMovements = InventoryMovement::query()
+            ->whereIn('inventory_id', $inventories->pluck('id'))
+            ->where('created_at', '>', Carbon::parse($selectedDate)->endOfDay())
+            ->selectRaw('inventory_id, SUM(quantity) AS quantity_after')
+            ->groupBy('inventory_id')
+            ->pluck('quantity_after', 'inventory_id');
+        return $inventories
+            ->groupBy('product_variant_id')
+            ->map(fn (Collection $rows): float => round((float) $rows->sum(
+                fn (Inventory $inventory): float => (float) $inventory->quantity
+                    - (float) ($futureMovements[$inventory->id] ?? 0)
+            ), 3));
+    }
+
+    public function exportInventoryPreview(Warehouse $warehouse, string $selectedDate): Collection
+    {
+        $closing = $this->closingInventoryForDate($warehouse, $selectedDate);
+
+        return ProductVariant::query()->with('product:id,name')
+            ->whereIn('id', $closing->keys())->orderBy('product_id')->orderBy('id')->get()
+            ->map(fn (ProductVariant $variant): array => [
+                'variant_id' => $variant->id,
+                'product_name' => $variant->product?->name ?? '—',
+                'sku' => $variant->sku,
+                'size' => $variant->size,
+                'inventory_name' => $variant->inventory_name ?: $variant->name,
+                'closing' => $closing->get($variant->id, 0),
+            ]);
+    }
+
     public function writeDailyInventory(Warehouse $warehouse, string $selectedDate): array
     {
         $selectedDate = Carbon::parse($selectedDate)->toDateString();
@@ -140,23 +175,7 @@ class GoogleSheetsInventoryService
             throw new RuntimeException('Không có sản phẩm nào trên Sheet được ánh xạ để ghi tồn kho.');
         }
 
-        $variantIds = $matchedRows->pluck('variant_id')->map(fn ($id) => (int) $id)->unique();
-        $inventories = Inventory::query()
-            ->where('warehouse_id', $warehouse->id)
-            ->whereIn('product_variant_id', $variantIds)
-            ->get();
-        $futureMovements = InventoryMovement::query()
-            ->whereIn('inventory_id', $inventories->pluck('id'))
-            ->where('created_at', '>', Carbon::parse($selectedDate)->endOfDay())
-            ->selectRaw('inventory_id, SUM(quantity) AS quantity_after')
-            ->groupBy('inventory_id')
-            ->pluck('quantity_after', 'inventory_id');
-        $closingByVariant = $inventories
-            ->groupBy('product_variant_id')
-            ->map(fn (Collection $rows): float => round((float) $rows->sum(
-                fn (Inventory $inventory): float => (float) $inventory->quantity
-                    - (float) ($futureMovements[$inventory->id] ?? 0)
-            ), 3));
+        $closingByVariant = $this->closingInventoryForDate($warehouse, $selectedDate);
         $stockColumn = (int) $parsed['stock_column'];
         $columnLetter = $this->columnLetter($stockColumn);
         $updates = $matchedRows->map(function (array $row) use ($rangeTitle, $columnLetter, $closingByVariant): ValueRange {
