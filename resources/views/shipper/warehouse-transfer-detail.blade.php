@@ -8,8 +8,8 @@
     $statusMeta = [
         'pending_shipper_pickup' => ['Cần nhận', 'pending', 'bi-box-arrow-in-down'],
         'in_transit' => ['Đang vận chuyển', 'transit', 'bi-truck'],
-        'delivered_waiting_receive' => ['Giao kho', 'waiting', 'bi-building-check'],
-        'received_completed' => ['Kho đã nhận', 'completed', 'bi-check2-circle'],
+        'delivered_waiting_receive' => ['Đã giao · Chờ kho nhận', 'waiting', 'bi-building-check'],
+        'received_completed' => ['Hoàn tất · Kho đã nhận', 'completed', 'bi-check2-circle'],
         'cancelled' => ['Đã hoàn lại', 'cancelled', 'bi-arrow-counterclockwise'],
     ];
 @endphp
@@ -26,8 +26,8 @@
     .js-transfer-card.wh-transfer-transit { border-color: #f59e0b !important; }
     .transfer-nav-pill.wh-transfer-waiting, .wh-transfer-status-badge.wh-transfer-waiting { background-color: #0ea5e9 !important; color: #fff !important; }
     .js-transfer-card.wh-transfer-waiting { border-color: #0ea5e9 !important; }
-    .transfer-nav-pill.wh-transfer-completed, .wh-transfer-status-badge.wh-transfer-completed { background-color: #64748b !important; color: #fff !important; }
-    .js-transfer-card.wh-transfer-completed { border-color: #64748b !important; }
+    .transfer-nav-pill.wh-transfer-completed, .wh-transfer-status-badge.wh-transfer-completed { background-color: #15803d !important; color: #fff !important; }
+    .js-transfer-card.wh-transfer-completed { border-color: #15803d !important; }
     .transfer-nav-pill.wh-transfer-cancelled, .wh-transfer-status-badge.wh-transfer-cancelled { background-color: #dc3545 !important; color: #fff !important; }
     .js-transfer-card.wh-transfer-cancelled { border-color: #dc3545 !important; }
     .wh-transfer-status-badge { display: inline-flex; align-items: center; border-radius: 999px; padding: .4rem .65rem; font-size: .78rem; font-weight: 700; }
@@ -55,7 +55,7 @@
         <div class="text-md-end">
             <div><i class="bi bi-calendar3 me-1"></i>{{ $dispatchSlip->business_date->format('d/m/Y') }}</div>
             <div class="small text-muted">{{ $dispatchSlip->entries_count }} mục · Shipper: {{ $dispatchSlip->shipper?->short_name ?: ($dispatchSlip->shipper?->name ?? '—') }}</div>
-            <span class="badge mt-1 {{ $dispatchSlip->status === 'finalized' ? 'bg-success' : ($dispatchSlip->status === 'cancelled' ? 'bg-danger' : 'bg-warning text-dark') }}">{{ $dispatchSlip->status === 'finalized' ? 'Đã chốt' : ($dispatchSlip->status === 'cancelled' ? 'Đã hủy' : 'Đang mở') }}</span>
+            <span class="badge mt-1 {{ $dispatchSlip->status === 'finalized' ? 'bg-light text-dark border' : ($dispatchSlip->status === 'cancelled' ? 'bg-danger' : 'bg-warning text-dark') }}">{{ $dispatchSlip->status === 'finalized' ? 'Phiếu đã chốt' : ($dispatchSlip->status === 'cancelled' ? 'Đã hủy' : 'Đang mở') }}</span>
         </div>
     </div>
 </div>

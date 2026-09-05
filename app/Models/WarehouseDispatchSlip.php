@@ -38,6 +38,41 @@ class WarehouseDispatchSlip extends Model
         });
     }
 
+    public function viewers()
+    {
+        return $this->belongsToMany(User::class, 'warehouse_dispatch_slip_views')->withPivot('viewed_at');
+    }
+
+    public function transportProgress(): array
+    {
+        $statuses = $this->entries->flatMap(function ($entry) {
+            if ($entry->warehouse_transfer_id) {
+                return [$entry->warehouseTransfer?->status ?? 'unknown'];
+            }
+            if ($entry->inventory_transfer_id) {
+                return [$entry->inventoryTransfer?->status ?? 'unknown'];
+            }
+            $orders = $entry->orderTransfer?->orders ?? collect();
+            return $orders->isEmpty() ? ['unknown'] : $orders->map(
+                fn ($order) => $order->warehouseTransfers->sortByDesc('id')->first()?->status ?? 'unknown'
+            );
+        });
+        $active = $statuses->reject(fn ($status) => $status === 'cancelled');
+        $completed = $active->filter(fn ($status) => $status === 'received_completed')->count();
+        $key = match (true) {
+            $this->status === self::STATUS_CANCELLED => 'cancelled',
+            $statuses->isNotEmpty() && $active->isEmpty() => 'cancelled',
+            $active->isNotEmpty() && $completed === $active->count() => 'completed',
+            $active->contains('in_transit') => 'transit',
+            $active->contains('pending_shipper_pickup') && $active->unique()->count() === 1 => 'pending',
+            $active->contains('pending_shipper_pickup') => 'transit',
+            $active->contains('delivered_waiting_receive') || $active->contains('pending_receive') => 'waiting',
+            default => 'pending',
+        };
+        $labels = ['pending' => 'Chờ nhận hàng', 'transit' => 'Đang thực hiện', 'waiting' => 'Đã giao · Chờ kho nhận', 'completed' => 'Hoàn tất · Kho đã nhận', 'cancelled' => 'Đã hủy'];
+        return ['key' => $key, 'label' => $labels[$key], 'completed' => $completed, 'total' => $active->count()];
+    }
+
     public function entries()
     {
         return $this->hasMany(WarehouseDispatchSlipEntry::class);

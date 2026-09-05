@@ -720,7 +720,11 @@ class ShipperDashboardController extends Controller
             : null;
 
         $dispatchSlipQuery = WarehouseDispatchSlip::query()
-            ->with(['sourceWarehouse:id,name', 'targetWarehouse:id,name', 'shipper:id,name,short_name'])
+            ->with(['sourceWarehouse:id,name', 'targetWarehouse:id,name', 'shipper:id,name,short_name',
+                'entries.warehouseTransfer', 'entries.inventoryTransfer',
+                'entries.orderTransfer.orders.warehouseTransfers',
+                'viewers' => fn ($query) => $query->where('users.id', $user->id),
+            ])
             ->withCount('entries')
             ->whereHas('entries', fn ($query) => $query
                 ->whereNotNull('warehouse_transfer_id')
@@ -762,6 +766,11 @@ class ShipperDashboardController extends Controller
 
         $today = $dispatchSlip->business_date->toDateString();
         $transfers = $this->warehouseTransfersForDispatchSlip($dispatchSlip, $user);
+
+        DB::table('warehouse_dispatch_slip_views')->updateOrInsert(
+            ['warehouse_dispatch_slip_id' => $dispatchSlip->id, 'user_id' => $user->id],
+            ['viewed_at' => now()]
+        );
 
         return view('shipper.warehouse-transfer-detail', compact('dispatchSlip', 'transfers', 'today'));
     }
