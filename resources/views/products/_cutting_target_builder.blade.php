@@ -33,7 +33,7 @@
                 <option value="{{ (float) $sourceSize->effective_kg }}">{{ $sourceSize->name ?: $sourceSize->size }} — {{ (float) $sourceSize->effective_kg }} kg</option>
             @endforeach
         </select>
-        <span class="small text-muted">Khối lượng = size × tỷ lệ %. Tổng dưới 100% là hao hụt dự kiến.</span>
+        <span class="small text-muted">Khối lượng = size × tỷ lệ %. Thành phần chính = 100% − tổng thành phần phụ.</span>
     </div>
     <div class="cutting-builder-heading"><strong>Thành phần chính</strong><strong>Thành phần phụ</strong></div>
     <div data-cutting-rows></div>
@@ -93,6 +93,7 @@
         field.className = 'mt-2';
         const label = document.createElement('label'); label.className = 'small'; label.textContent = 'Tỷ lệ khối lượng (%)';
         const input = document.createElement('input'); input.type = 'number'; input.min = id === mainId ? '0.001' : '0'; input.max = '100'; input.step = '0.001'; input.className = 'form-control form-control-sm';
+        input.readOnly = id === mainId;
         input.style.width = '115px'; input.name = `cutting_percentages[${mainId}][${id}]`;
         input.value = percentState[mainId]?.[id] ?? ''; input.placeholder = 'Nhập %';
         input.dataset.percentMain = mainId; input.dataset.percentComponent = id;
@@ -106,15 +107,21 @@
         const size = Number(sizeInput.value) || 0;
         for (const [mainId, children] of targets) {
             const fields = [...rows.querySelectorAll('input[data-percent-main]')].filter(input => input.dataset.percentMain === mainId);
-            const any = fields.some(input => input.value !== '');
-            const total = fields.reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+            const mainInput = fields.find(input => input.dataset.percentComponent === mainId);
+            const secondary = fields.filter(input => input !== mainInput);
+            const any = fields.some(input => input.value !== '') || secondary.length === 0;
+            const secondaryTotal = secondary.reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+            mainInput.value = any ? String(Number(Math.max(0, 100 - secondaryTotal).toFixed(6))) : '';
+            percentState[mainId] ||= {};
+            percentState[mainId][mainId] = mainInput.value;
+            const total = secondaryTotal + (Number(mainInput.value) || 0);
             fields.forEach(input => {
-                input.required = any;
+                input.required = any && input !== mainInput;
                 input.setCustomValidity(total > 100.000001 ? 'Tổng tỷ lệ của thành phần chính và phụ không được vượt 100%.' : '');
                 input.closest('.cutting-builder-card').querySelector('[data-component-weight]').textContent = input.value === '' ? 'Chưa cấu hình tỷ lệ' : (size * Number(input.value) / 100).toLocaleString('vi-VN', {maximumFractionDigits:3}) + ' kg / con';
             });
             const summary = rows.querySelector(`[data-percent-summary="${mainId}"]`);
-            if (summary) summary.textContent = any ? `Tổng: ${total.toLocaleString('vi-VN')}% · Hao hụt dự kiến: ${Math.max(0, 100-total).toLocaleString('vi-VN')}%` : 'Nhập tỷ lệ để tính theo size; để trống toàn bộ để dùng định mức biến thể hiện có.';
+            if (summary) summary.textContent = any ? `Tổng: ${total.toLocaleString('vi-VN')}% · Thành phần chính tự tính: ${mainInput.value}%` : 'Nhập tỷ lệ để tính theo size; để trống toàn bộ để dùng định mức biến thể hiện có.';
         }
     }
     function render() {

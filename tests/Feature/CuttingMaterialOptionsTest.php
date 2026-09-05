@@ -32,13 +32,13 @@ class CuttingMaterialOptionsTest extends TestCase
         $method->invoke($controller, $payload, $whole);
         $service = app(ProductCuttingService::class);
         $preview = $service->preview($target, [['variant_id' => $source->id, 'quantity' => 1]]);
-        $this->assertSame(2.0, $preview['finished_weight']);
+        $this->assertSame(2.125, $preview['finished_weight']);
         $this->assertSame(0.375, $preview['components']->first()['weight']);
         $source->update(['kg' => 3]);
         $preview = $service->preview($target, [['variant_id' => $source->id, 'quantity' => 2]]);
-        $this->assertSame(4.8, $preview['finished_weight']);
+        $this->assertSame(5.1, $preview['finished_weight']);
         $this->assertSame(0.9, $preview['components']->first()['weight']);
-        $payload['cutting_percentages'][$mainProduct->id][$sideProduct->id] = 25;
+        $payload['cutting_percentages'][$mainProduct->id][$sideProduct->id] = 101;
         $this->expectException(\Illuminate\Validation\ValidationException::class);
         $method->invoke($controller, $payload, $whole);
     }

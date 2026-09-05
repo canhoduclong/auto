@@ -503,9 +503,11 @@ class ProductController extends Controller
                 $componentIds = array_merge([(int) $mainId], $remainingIds);
                 $values = collect($validated['cutting_percentages'][$mainId] ?? [])->only($componentIds);
                 if ($values->filter(fn ($value) => $value !== null && $value !== '')->isEmpty()) continue;
-                if ($values->count() !== count($componentIds) || $values->contains(fn ($value) => $value === null || $value === '') || (float) ($values[$mainId] ?? 0) <= 0 || (float) $values->sum() > 100.000001) {
-                    throw \Illuminate\Validation\ValidationException::withMessages(['cutting_percentages' => 'Nhập đủ % cho các thành phần, thành phần chính lớn hơn 0% và tổng không vượt 100%.']);
+                $secondary = $values->only($remainingIds);
+                if ($secondary->count() !== count($remainingIds) || $secondary->contains(fn ($value) => $value === null || $value === '') || (float) $secondary->sum() > 100.000001) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['cutting_percentages' => 'Nhập đủ % thành phần phụ; tổng thành phần phụ không được vượt 100%.']);
                 }
+                $values = $secondary->put($mainId, round(max(0, 100 - (float) $secondary->sum()), 6));
                 $percentages[$mainId] = $values->map(fn ($value) => (float) $value)->all();
             }
             $product->update(['cutting_product_targets' => $targets, 'cutting_percentages' => $percentages]);
