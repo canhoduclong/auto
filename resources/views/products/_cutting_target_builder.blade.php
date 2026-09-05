@@ -26,6 +26,15 @@
     @foreach($product->cuttingComponents as $templateComponent)
         <input type="hidden" name="cutting_component_variant_ids[]" value="{{ $templateComponent->component_product_variant_id }}">
     @endforeach
+    <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+        <label for="cutting-preview-size">Chọn size nguyên con để xem khối lượng:</label>
+        <select id="cutting-preview-size" class="form-select w-auto" data-cutting-size>
+            @foreach($product->variants as $sourceSize)
+                <option value="{{ (float) $sourceSize->effective_kg }}">{{ $sourceSize->name ?: $sourceSize->size }} — {{ (float) $sourceSize->effective_kg }} kg</option>
+            @endforeach
+        </select>
+        <span class="small text-muted">Khối lượng = size × tỷ lệ %. Tổng dưới 100% là hao hụt dự kiến.</span>
+    </div>
     <div class="cutting-builder-heading"><strong>Thành phần chính</strong><strong>Thành phần phụ</strong></div>
     <div data-cutting-rows></div>
     <button type="button" class="btn btn-success mt-3" data-add-cutting-main><i class="bi bi-plus-circle me-1"></i>Thêm loại Pha Lóc</button>
@@ -54,6 +63,9 @@
     if (!root) return;
     const choices = @json($cuttingChoices);
     const saved = @json($savedTargets);
+    const percentages = @json(old('cutting_percentages', $product->cutting_percentages ?? []));
+    const sizeInput = root.querySelector('[data-cutting-size]');
+    const percentState = Object.fromEntries(Object.entries(percentages).map(([id, values]) => [id, {...values}]));
     const byId = new Map(choices.map(choice => [String(choice.id), choice]));
     const targets = new Map(Object.entries(saved).map(([id, children]) => [id, children.map(String)]));
     const rows = root.querySelector('[data-cutting-rows]');
@@ -75,22 +87,55 @@
         if (onRemove) { const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'cutting-builder-remove'; remove.textContent = '×'; remove.setAttribute('aria-label', 'Bỏ ' + choice.name); remove.onclick = onRemove; node.append(remove); }
         return node;
     }
+    function withPercentage(id, mainId, onRemove) {
+        const node = card(id, onRemove);
+        const field = document.createElement('div');
+        field.className = 'mt-2';
+        const label = document.createElement('label'); label.className = 'small'; label.textContent = 'Tỷ lệ khối lượng (%)';
+        const input = document.createElement('input'); input.type = 'number'; input.min = id === mainId ? '0.001' : '0'; input.max = '100'; input.step = '0.001'; input.className = 'form-control form-control-sm';
+        input.style.width = '115px'; input.name = `cutting_percentages[${mainId}][${id}]`;
+        input.value = percentState[mainId]?.[id] ?? ''; input.placeholder = 'Nhập %';
+        input.dataset.percentMain = mainId; input.dataset.percentComponent = id;
+        label.append(input); field.append(label);
+        const weight = document.createElement('small'); weight.dataset.componentWeight = id; field.append(weight);
+        node.querySelector('strong').parentElement.append(field);
+        input.oninput = () => { percentState[mainId] ||= {}; percentState[mainId][id] = input.value; updateWeights(); };
+        return node;
+    }
+    function updateWeights() {
+        const size = Number(sizeInput.value) || 0;
+        for (const [mainId, children] of targets) {
+            const fields = [...rows.querySelectorAll('input[data-percent-main]')].filter(input => input.dataset.percentMain === mainId);
+            const any = fields.some(input => input.value !== '');
+            const total = fields.reduce((sum, input) => sum + (Number(input.value) || 0), 0);
+            fields.forEach(input => {
+                input.required = any;
+                input.setCustomValidity(total > 100.000001 ? 'Tổng tỷ lệ của thành phần chính và phụ không được vượt 100%.' : '');
+                input.closest('.cutting-builder-card').querySelector('[data-component-weight]').textContent = input.value === '' ? 'Chưa cấu hình tỷ lệ' : (size * Number(input.value) / 100).toLocaleString('vi-VN', {maximumFractionDigits:3}) + ' kg / con';
+            });
+            const summary = rows.querySelector(`[data-percent-summary="${mainId}"]`);
+            if (summary) summary.textContent = any ? `Tổng: ${total.toLocaleString('vi-VN')}% · Hao hụt dự kiến: ${Math.max(0, 100-total).toLocaleString('vi-VN')}%` : 'Nhập tỷ lệ để tính theo size; để trống toàn bộ để dùng định mức biến thể hiện có.';
+        }
+    }
     function render() {
         rows.replaceChildren(); inputs.replaceChildren();
         if (!targets.size) { const empty = document.createElement('p'); empty.className = 'text-muted'; empty.textContent = 'Bấm + Thêm loại Pha Lóc để chọn thành phần chính.'; rows.append(empty); }
         for (const [id, children] of targets) {
             hidden(`cutting_product_targets[${id}][enabled]`, 1);
             const row = document.createElement('div'); row.className = 'cutting-builder-row';
-            row.append(card(id, () => { targets.delete(id); picker.hidden = true; render(); }));
+            row.append(withPercentage(id, id, () => { targets.delete(id); picker.hidden = true; render(); }));
             const secondary = document.createElement('div'); secondary.className = 'd-flex flex-wrap gap-2 align-items-start';
             children.forEach(child => {
                 hidden(`cutting_product_targets[${id}][remaining][]`, child);
-                secondary.append(card(child, () => { targets.set(id, children.filter(value => value !== child)); render(); }));
+                secondary.append(withPercentage(child, id, () => { targets.set(id, children.filter(value => value !== child)); render(); }));
             });
             const add = document.createElement('button'); add.type = 'button'; add.className = 'cutting-builder-add'; add.textContent = '+ Thành phần phụ'; add.onclick = () => openPicker(id); secondary.append(add);
+            const summary = document.createElement('div'); summary.dataset.percentSummary = id; summary.className = 'small text-muted w-100'; secondary.append(summary);
             row.append(secondary); rows.append(row);
         }
+        updateWeights();
     }
+    sizeInput.onchange = updateWeights;
     function renderPicker() {
         const options = root.querySelector('[data-picker-options]'); options.replaceChildren();
         const term = search.value.trim().toLocaleLowerCase('vi');

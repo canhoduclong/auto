@@ -14,6 +14,35 @@ class CuttingMaterialOptionsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_percentages_scale_with_source_size_and_reject_totals_over_100(): void
+    {
+        $whole = Product::factory()->create(['product_type' => Product::TYPE_WHOLE]);
+        $mainProduct = Product::factory()->create(['product_type' => Product::TYPE_CUT]);
+        $sideProduct = Product::factory()->create(['product_type' => Product::TYPE_CUT]);
+        $target = ProductVariant::factory()->create(['product_id' => $mainProduct->id, 'status' => true]);
+        $side = ProductVariant::factory()->create(['product_id' => $sideProduct->id, 'status' => true]);
+        $source = ProductVariant::factory()->create(['product_id' => $whole->id, 'kg' => 2.5]);
+        $controller = (new \ReflectionClass(\App\Http\Controllers\ProductController::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod($controller, 'syncCuttingComponentTemplate');
+        $payload = [
+            'cutting_product_targets_present' => true,
+            'cutting_product_targets' => [$mainProduct->id => ['enabled' => true, 'remaining' => [$sideProduct->id]]],
+            'cutting_percentages' => [$mainProduct->id => [$mainProduct->id => 80, $sideProduct->id => 15]],
+        ];
+        $method->invoke($controller, $payload, $whole);
+        $service = app(ProductCuttingService::class);
+        $preview = $service->preview($target, [['variant_id' => $source->id, 'quantity' => 1]]);
+        $this->assertSame(2.0, $preview['finished_weight']);
+        $this->assertSame(0.375, $preview['components']->first()['weight']);
+        $source->update(['kg' => 3]);
+        $preview = $service->preview($target, [['variant_id' => $source->id, 'quantity' => 2]]);
+        $this->assertSame(4.8, $preview['finished_weight']);
+        $this->assertSame(0.9, $preview['components']->first()['weight']);
+        $payload['cutting_percentages'][$mainProduct->id][$sideProduct->id] = 25;
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $method->invoke($controller, $payload, $whole);
+    }
+
     public function test_product_targets_apply_to_each_target_variant_and_picker_groups_sizes(): void
     {
         $whole = Product::factory()->create(['product_type' => Product::TYPE_WHOLE]);

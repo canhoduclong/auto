@@ -260,6 +260,9 @@ class ProductController extends Controller
                 'variants.*.stock' => 'nullable|integer|min:0',
                 'variants.*.sort_order' => 'nullable|integer|min:0|max:999999',
                 'variants.*.media_id' => 'nullable|integer|exists:media,id',
+                'cutting_percentages' => 'nullable|array',
+                'cutting_percentages.*' => 'array',
+                'cutting_percentages.*.*' => 'nullable|numeric|min:0|max:100',
                 'cutting_product_targets_present' => 'sometimes|boolean',
                 'cutting_product_targets' => 'nullable|array',
                 'cutting_product_targets.*.enabled' => 'nullable|boolean',
@@ -495,7 +498,17 @@ class ProductController extends Controller
                 }
                 $targets[$targetId] = $remaining;
             }
-            $product->update(['cutting_product_targets' => $targets]);
+            $percentages = [];
+            foreach ($targets as $mainId => $remainingIds) {
+                $componentIds = array_merge([(int) $mainId], $remainingIds);
+                $values = collect($validated['cutting_percentages'][$mainId] ?? [])->only($componentIds);
+                if ($values->filter(fn ($value) => $value !== null && $value !== '')->isEmpty()) continue;
+                if ($values->count() !== count($componentIds) || $values->contains(fn ($value) => $value === null || $value === '') || (float) ($values[$mainId] ?? 0) <= 0 || (float) $values->sum() > 100.000001) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['cutting_percentages' => 'Nhập đủ % cho các thành phần, thành phần chính lớn hơn 0% và tổng không vượt 100%.']);
+                }
+                $percentages[$mainId] = $values->map(fn ($value) => (float) $value)->all();
+            }
+            $product->update(['cutting_product_targets' => $targets, 'cutting_percentages' => $percentages]);
             $componentProducts = collect(array_keys($targets))->merge(collect($targets)->flatten())->unique();
             $validated['cutting_component_variant_ids'] = collect($validated['cutting_component_variant_ids'] ?? [])
                 ->merge(ProductVariant::whereIn('product_id', $componentProducts)->pluck('id'))->unique()->all();

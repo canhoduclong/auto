@@ -266,6 +266,28 @@ class ProductCuttingService
     private function componentRowsForTarget(ProductVariant $variant, int $targetVariantId): Collection
     {
         $rows = $this->componentRowsForVariant($variant);
+        $target = ProductVariant::with('product')->find($targetVariantId);
+        $percentages = $variant->product?->cutting_percentages[$target?->product_id] ?? null;
+        if ($percentages !== null) {
+            $configured = [];
+            foreach ($percentages as $productId => $percentage) {
+                if ((int) $productId === (int) $target->product_id) {
+                    $component = $target;
+                } else {
+                    $candidates = ProductVariant::with('product')->where('product_id', $productId)->where('status', true)->orderBy('sort_order')->orderBy('id')->get();
+                    $component = $candidates->first(fn ($candidate) => $rows->contains('variant_id', $candidate->id));
+                    $component ??= $candidates->first();
+                }
+                if (!$component) throw new \RuntimeException('Thành phần pha lóc chưa có biến thể đang hoạt động.');
+                $configured[] = [
+                    'variant_id' => (int) $component->id,
+                    'name' => $this->componentName($component),
+                    'standard_weight' => round((float) $variant->effective_kg * (float) $percentage / 100, 3),
+                    'percentage' => (float) $percentage,
+                ];
+            }
+            return collect($configured);
+        }
         $remaining = $this->configuredRemainingIds($variant, $targetVariantId);
         if ($remaining === null) return $rows;
         $ids = array_merge([$targetVariantId], $remaining);
