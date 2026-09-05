@@ -119,6 +119,8 @@
                 .cutting-order-dialog .modal-title { font-size: 1.05rem; }
                 .cutting-order-dialog .modal-body { padding: 12px 18px; font-size: .875rem; }
                 .cutting-order-dialog .modal-footer { padding: 10px 18px; gap: 6px; }
+                .cutting-order-dialog .cutting-defer-option { flex: 1 1 400px; font-size: .875rem; }
+                .cutting-order-dialog .cutting-defer-option .small { font-size: .75rem; }
                 .cutting-order-dialog .table > :not(caption) > * > * { padding: 6px 8px; }
                 .cutting-order-dialog .table th { font-size: .78rem; white-space: nowrap; }
                 .cutting-order-dialog .form-control-sm { padding: 3px 8px; min-height: 30px; }
@@ -335,8 +337,11 @@
                                 </table>
                             </div>
                         </div>
-                        <div class="form-check mt-3">
-                            <input class="form-check-input" type="checkbox" value="1" name="defer_components" id="{{ $modalId }}-defer-components">
+                    </div>
+
+                    <div class="modal-footer">
+                        <div class="form-check cutting-defer-option me-auto mb-0">
+                            <input class="form-check-input" type="checkbox" value="1" name="defer_components" checked id="{{ $modalId }}-defer-components">
                             <label class="form-check-label fw-semibold" for="{{ $modalId }}-defer-components">
                                 Nhập sau các thành phần còn lại
                             </label>
@@ -344,9 +349,7 @@
                                 Khi chọn, các thành phần phát sinh sẽ được gom vào phiếu yêu cầu nhập kho trên dashboard kho trong ngày.
                             </div>
                         </div>
-                    </div>
 
-                    <div class="modal-footer">
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Đóng</button>
                         <button type="button" class="btn btn-primary js-cutting-build-preview">
                             Tính lại
