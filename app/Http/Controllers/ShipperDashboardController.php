@@ -275,10 +275,12 @@ class ShipperDashboardController extends Controller
         $today = Carbon::today();
         $selectedDate = $today->toDateString();
         $deliveryScheduleOrders = $this->deliveryScheduleOrdersForShipper($userId, $selectedDate)->get();
-        $deliveryScheduleSnapshot = $this->buildDeliveryScheduleSnapshot($deliveryScheduleOrders);
-        $deliveryScheduleHash = $this->hashDeliveryScheduleSnapshot($deliveryScheduleSnapshot);
-        $latestScheduleHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
-        $deliveryScheduleStatus = $this->deliveryScheduleStatus($latestScheduleHistory, $deliveryScheduleHash);
+        $deliveryRoutes = collect($this->deliveryRoutesForShipper($userId, $selectedDate, $deliveryScheduleOrders));
+        $deliveryScheduleStatus = $deliveryRoutes->isEmpty()
+            ? 'none'
+            : ($deliveryRoutes->every(fn ($route) => $route['status'] === 'confirmed')
+                ? 'confirmed'
+                : ($deliveryRoutes->every(fn ($route) => $route['status'] === 'rejected') ? 'rejected' : 'waiting'));
 
         $stats = [
             'today_total' => Order::where('shipper_id', $userId)->whereDate('created_at', $today)->count(),
@@ -1877,8 +1879,7 @@ class ShipperDashboardController extends Controller
     private function currentDispatchEntryForWarehouseTransfer(
         WarehouseTransfer $transfer,
         ?int $dispatchSlipId = null
-    ): ?WarehouseDispatchSlipEntry
-    {
+    ): ?WarehouseDispatchSlipEntry {
         $order = $transfer->order;
         if (! $order) {
             return $transfer->dispatchEntry;
@@ -2302,11 +2303,7 @@ class ShipperDashboardController extends Controller
 
     private function archivedPlannedOrderIdsForShipperOnDate(int $shipperId, string $selectedDate): array
     {
-        $dispatch = ShipperDispatchHistory::query()
-            ->whereDate('schedule_date', $selectedDate)
-            ->orderByDesc('version')
-            ->orderByDesc('id')
-            ->first(['route_plan']);
+        $dispatch = $this->latestDispatchForDate($selectedDate);
 
         if (! $dispatch) {
             return [];
@@ -2323,6 +2320,81 @@ class ShipperDashboardController extends Controller
             ->unique()
             ->values()
             ->all();
+    }
+
+    private function latestDispatchForDate(string $selectedDate): ?ShipperDispatchHistory
+    {
+        return ShipperDispatchHistory::query()
+            ->whereDate('schedule_date', $selectedDate)
+            ->orderByDesc('version')
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
+     * Rebuild the manager's published route groups with the current Order models.
+     * Older schedules did not store a route group, so their orders are kept in a
+     * clearly labelled fallback route instead of disappearing from this screen.
+     */
+    private function deliveryRoutesForShipper(int $shipperId, string $selectedDate, $orders): array
+    {
+        $ordersById = $orders->keyBy(fn (Order $order) => (int) $order->id);
+        $assignedOrderIds = collect();
+        $dispatch = $this->latestDispatchForDate($selectedDate);
+        $shipperPlan = collect($dispatch?->route_plan ?? [])
+            ->first(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId);
+
+        $routes = collect($shipperPlan['routes'] ?? [])->map(function ($route, $index) use ($ordersById, $assignedOrderIds) {
+            $routeOrders = collect($route['orders'] ?? [])
+                ->pluck('order_id')
+                ->map(fn ($orderId) => (int) $orderId)
+                ->filter(fn ($orderId) => $ordersById->has($orderId))
+                ->unique()
+                ->map(function ($orderId) use ($ordersById, $assignedOrderIds) {
+                    $assignedOrderIds->push($orderId);
+
+                    return $ordersById->get($orderId);
+                })
+                ->values();
+
+            if ($routeOrders->isEmpty()) {
+                return null;
+            }
+
+            return [
+                'key' => 'route-'.((int) $index + 1),
+                'name' => filled($route['name'] ?? null) ? trim((string) $route['name']) : 'Lộ trình '.((int) $index + 1),
+                'orders' => $routeOrders,
+            ];
+        })->filter()->values();
+
+        $unplannedOrders = $orders->reject(fn (Order $order) => $assignedOrderIds->contains((int) $order->id))->values();
+        if ($unplannedOrders->isNotEmpty()) {
+            $routes->push([
+                'key' => 'unassigned',
+                'name' => $routes->isEmpty() ? 'Lộ trình giao hàng' : 'Đơn chưa phân nhóm',
+                'orders' => $unplannedOrders,
+            ]);
+        }
+
+        $latestActions = OrderHistory::query()
+            ->whereIn('order_id', $orders->pluck('id'))
+            ->whereIn('action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get(['order_id', 'action'])
+            ->unique('order_id')
+            ->pluck('action', 'order_id');
+
+        return $routes->map(function (array $route) use ($latestActions) {
+            $actions = $route['orders']->map(fn (Order $order) => $latestActions->get($order->id));
+            $route['status'] = $actions->isNotEmpty() && $actions->every(fn ($action) => $action === 'schedule_confirmed')
+                ? 'confirmed'
+                : ($actions->isNotEmpty() && $actions->every(fn ($action) => $action === 'schedule_rejected') ? 'rejected' : 'waiting');
+            $route['quantity'] = $route['orders']->sum(fn (Order $order) => $order->items->sum('quantity'));
+
+            return $route;
+        })->all();
     }
 
     private function deliveryScheduleStatus(?OrderHistory $latestHistory, string $currentSnapshotHash): string
@@ -2899,6 +2971,7 @@ class ShipperDashboardController extends Controller
             : Carbon::today()->toDateString();
 
         $orders = $this->deliveryScheduleOrdersForShipper($userId, $selectedDate)->get();
+        $deliveryRoutes = $this->deliveryRoutesForShipper($userId, $selectedDate, $orders);
 
         $deliveredOrders = Order::with([
             'customer:id,name,address',
@@ -2925,17 +2998,11 @@ class ShipperDashboardController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        $currentSnapshot = $this->buildDeliveryScheduleSnapshot($orders);
-        $currentSnapshotHash = $this->hashDeliveryScheduleSnapshot($currentSnapshot);
-        $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
-
-        $scheduleAlreadyConfirmed = $this->deliveryScheduleStatus($latestHistory, $currentSnapshotHash) === 'confirmed';
-
         return view('shipper.delivery-schedules', compact(
             'orders',
+            'deliveryRoutes',
             'deliveredOrders',
-            'selectedDate',
-            'scheduleAlreadyConfirmed'
+            'selectedDate'
         ));
     }
 
@@ -3103,15 +3170,8 @@ class ShipperDashboardController extends Controller
                 'order_ids.*' => ['integer', 'exists:orders,id'],
             ]);
 
-            $orders = Order::query()
+            $orders = $this->deliveryScheduleOrdersForShipper($userId, $selectedDate)
                 ->whereIn('id', $validated['order_ids'])
-                ->where('shipper_id', $userId)
-                ->forWorkflowDate($selectedDate)
-                ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
-                ->orderBy('daily_sequence', 'asc')
-                ->orderBy('delivery_time', 'asc')
-                ->orderBy('created_at', 'asc')
-                ->orderBy('id', 'asc')
                 ->get();
 
             abort_if($orders->count() !== count($validated['order_ids']), 403, 'Có đơn không thuộc về bạn.');

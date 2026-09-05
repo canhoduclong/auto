@@ -146,7 +146,11 @@
                 </div>
                 <div class="text-muted small mt-1">
                     Lộ trình do Shipper Manager tạo ngày {{ \Carbon\Carbon::parse($selectedDate ?? now())->format('d/m/Y') }}.
-                    Shipper cần xác nhận để đơn hàng được hiển thị trong mục “Có thể nhận” trên app.
+                    @if(($deliveryScheduleStatus ?? 'none') === 'confirmed')
+                        Bạn đã xác nhận lộ trình giao hàng này.
+                    @else
+                        Shipper cần xác nhận để đơn hàng được hiển thị trong mục “Có thể nhận” trên app.
+                    @endif
                 </div>
             </div>
             <a href="{{ route('shipper.delivery-schedules') }}" class="btn btn-sm btn-outline-primary">
@@ -195,6 +199,9 @@
 
                 <div class="d-flex justify-content-end gap-2 flex-wrap mt-3">
                     @if(($deliveryScheduleStatus ?? 'none') === 'confirmed')
+                        <button type="button" class="btn btn-success px-4" disabled>
+                            <i class="bi bi-check2-circle me-1"></i>Đã xác nhận lộ trình
+                        </button>
                         <a href="{{ route('shipper.available') }}" class="btn btn-success">
                             <i class="bi bi-collection me-1"></i>Đi tới đơn có thể nhận
                         </a>
