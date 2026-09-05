@@ -154,7 +154,7 @@ class ProductController extends Controller
         $unitOptions = ProductUnit::options();
         $typeOptions = Product::typeOptions();
         $cutComponentVariants = ProductVariant::query()
-            ->with('product')
+            ->with(['product.avatar.media', 'avatar.media'])
             ->whereHas('product', fn ($query) => $query->where('product_type', Product::TYPE_CUT))
             ->where('status', true)
             ->orderBy('product_id')

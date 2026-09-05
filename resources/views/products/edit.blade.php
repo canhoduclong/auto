@@ -485,57 +485,7 @@
                                 Chưa có sản phẩm nào được khai báo Loại hình = Pha lóc.
                             </div>
                         @else
-                            @php
-                                $selectedCutComponentIds = $product->cuttingComponents
-                                    ->pluck('component_product_variant_id')
-                                    ->map(fn($id) => (int) $id)
-                                    ->all();
-                            @endphp
-                            <input type="hidden" name="cutting_targets_present" value="1">
-                            <div class="fw-semibold mb-2">Mục tiêu chính và thành phần còn lại</div>
-                            <div class="small text-muted mb-3">Bật từng mục tiêu muốn sử dụng, sau đó chọn phần còn lại tương ứng. Có thể chọn sản phẩm riêng hoặc sản phẩm gộp; tránh chọn cả phần gộp và phần riêng trùng nhau. Khối lượng chuẩn được cấu hình tại từng size.</div>
-                            @foreach($cutComponentVariants as $targetOption)
-                                @php
-                                    $targetConfiguration = old('cutting_targets.'.$targetOption->id);
-                                    $targetEnabled = $targetConfiguration !== null ? !empty($targetConfiguration['enabled']) : array_key_exists($targetOption->id, $product->cutting_targets ?? []);
-                                    $remainingIds = array_map('intval', $targetConfiguration['remaining'] ?? ($product->cutting_targets[$targetOption->id] ?? []));
-                                @endphp
-                                <details class="border rounded p-3 mb-2" @if($targetEnabled) open @endif>
-                                    <summary class="fw-semibold">{{ $targetOption->product?->name }} — {{ $targetOption->name ?: 'Mặc định' }}</summary>
-                                    <label class="d-block my-2">
-                                        <input type="hidden" name="cutting_targets[{{ $targetOption->id }}][enabled]" value="0">
-                                        <input type="checkbox" name="cutting_targets[{{ $targetOption->id }}][enabled]" value="1" @checked($targetEnabled)> Dùng làm mục tiêu pha lóc chính
-                                    </label>
-                                    <div class="small fw-semibold mb-2">Thành phần còn lại (chọn các phần thu hồi)</div>
-                                    <div class="row g-2">
-                                        @foreach($cutComponentVariants as $remainingOption)
-                                            @continue($remainingOption->id === $targetOption->id)
-                                            <label class="col-md-4">
-                                                <input type="checkbox" name="cutting_targets[{{ $targetOption->id }}][remaining][]" value="{{ $remainingOption->id }}" @checked(in_array((int) $remainingOption->id, $remainingIds, true))>
-                                                {{ $remainingOption->product?->name }} — {{ $remainingOption->name ?: 'Mặc định' }}
-                                            </label>
-                                        @endforeach
-                                    </div>
-                                </details>
-                            @endforeach
-                            <div class="fw-semibold mt-4 mb-2">Danh mục thành phần dùng để nhập định mức từng size</div>
-                            <div class="row g-2">
-                                @foreach($cutComponentVariants as $componentVariant)
-                                    <div class="col-lg-4 col-md-6">
-                                        <label class="border rounded p-2 d-flex gap-2 align-items-start h-100">
-                                            <input type="checkbox"
-                                                   class="form-check-input mt-1"
-                                                   name="cutting_component_variant_ids[]"
-                                                   value="{{ $componentVariant->id }}"
-                                                   @checked(in_array((int) $componentVariant->id, $selectedCutComponentIds, true))>
-                                            <span>
-                                                <span class="fw-semibold d-block">{{ $componentVariant->product?->name }}</span>
-                                                <span class="text-muted small">{{ $componentVariant->name ?: 'Mặc định' }}</span>
-                                            </span>
-                                        </label>
-                                    </div>
-                                @endforeach
-                            </div>
+                            @include('products._cutting_target_builder')
                             <div class="mt-3 small text-muted">
                                 Sau khi lưu, vào <a href="{{ route('product-variants.index', ['product_id' => $product->id]) }}">Biến thể sản phẩm</a>
                                 để nhập khối lượng chuẩn và tỷ lệ % cho từng size.
