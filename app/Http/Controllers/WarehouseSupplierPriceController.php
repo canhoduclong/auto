@@ -25,15 +25,26 @@ class WarehouseSupplierPriceController extends Controller
         $from = $request->input('from');
         $to = $request->input('to');
 
-        $supplierProducts = SupplierProduct::query()
+        $supplierProductQuery = SupplierProduct::query()
             ->with(['supplier', 'product.variants.latestPriceRule'])
             ->when($supplierId, fn ($query) => $query->where('supplier_id', $supplierId))
             ->when($productId, fn ($query) => $query->where('product_id', $productId))
             ->when($status === 'active', fn ($query) => $query->where('active', true))
-            ->when($status === 'inactive', fn ($query) => $query->where('active', false))
-            ->orderByDesc('updated_at')
-            ->paginate(20)
+            ->when($status === 'inactive', fn ($query) => $query->where('active', false));
+
+        $supplierGroups = Supplier::query()
+            ->whereIn('id', (clone $supplierProductQuery)->select('supplier_id'))
+            ->orderBy('name')
+            ->orderBy('id')
+            ->paginate(10)
             ->withQueryString();
+
+        $supplierProducts = $supplierProductQuery
+            ->whereIn('supplier_id', $supplierGroups->getCollection()->pluck('id'))
+            ->orderByDesc('updated_at')
+            ->orderBy('id')
+            ->get();
+        $productsBySupplier = $supplierProducts->groupBy('supplier_id');
 
         $latestPrices = SupplierProductPrice::query()
             ->whereIn('id', function ($query) {
@@ -46,7 +57,7 @@ class WarehouseSupplierPriceController extends Controller
             ->get()
             ->keyBy(fn ($price) => $price->supplier_id . ':' . $price->product_id);
 
-        $saleSyncStatus = $supplierProducts->getCollection()
+        $saleSyncStatus = $supplierProducts
             ->mapWithKeys(function (SupplierProduct $row) use ($latestPrices) {
                 $key = $row->supplier_id . ':' . $row->product_id;
                 $latest = $latestPrices->get($key);
@@ -73,7 +84,8 @@ class WarehouseSupplierPriceController extends Controller
         $products = Product::query()->where('status', true)->orderBy('name')->get();
 
         return view('warehouse.supplier-prices.index', compact(
-            'supplierProducts',
+            'supplierGroups',
+            'productsBySupplier',
             'latestPrices',
             'suppliers',
             'products',

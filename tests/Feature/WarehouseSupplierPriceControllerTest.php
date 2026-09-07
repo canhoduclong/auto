@@ -19,6 +19,63 @@ class WarehouseSupplierPriceControllerTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_index_keeps_supplier_products_together_and_preserves_filters(): void
+    {
+        $this->withoutMiddleware();
+        view()->share('errors', new \Illuminate\Support\ViewErrorBag());
+        $user = User::factory()->create();
+        $category = Category::create(['name' => 'Grouping test']);
+        $supplier = Supplier::create(['name' => 'AAA Supplier', 'is_active' => true]);
+
+        for ($i = 1; $i <= 21; $i++) {
+            $product = Product::create([
+                'name' => "Grouped product {$i}",
+                'slug' => "grouped-product-{$i}",
+                'user_id' => $user->id,
+                'category_id' => $category->id,
+                'status' => true,
+                'unit' => 'cai',
+            ]);
+            SupplierProduct::create([
+                'supplier_id' => $supplier->id,
+                'product_id' => $product->id,
+                'active' => $i !== 21,
+            ]);
+        }
+
+        for ($i = 1; $i <= 10; $i++) {
+            $other = Supplier::create(['name' => sprintf('BBB Supplier %02d', $i)]);
+            SupplierProduct::create([
+                'supplier_id' => $other->id,
+                'product_id' => $product->id,
+                'active' => true,
+            ]);
+        }
+
+        $response = $this->actingAs($user)->get(route('warehouse.supplier-prices.index'));
+        $response->assertOk();
+        $response->assertViewHas('supplierGroups', fn ($groups) => $groups->total() === 11 && $groups->count() === 10);
+        $response->assertViewHas('productsBySupplier', fn ($groups) => $groups->get($supplier->id)->count() === 21);
+        $response->assertSee('21 sản phẩm');
+
+        $response = $this->get(route('warehouse.supplier-prices.index', ['page' => 2, 'status' => 'active']));
+        $response->assertOk();
+        $response->assertViewHas('productsBySupplier', fn ($groups) => !$groups->has($supplier->id) && $groups->count() === 1);
+        $response->assertViewHas('supplierGroups', fn ($groups) => str_contains($groups->url(1), 'status=active'));
+
+        $response = $this->get(route('warehouse.supplier-prices.index', [
+            'supplier_id' => $supplier->id,
+            'product_id' => $product->id,
+            'status' => 'inactive',
+        ]));
+        $response->assertOk();
+        $response->assertViewHas('productsBySupplier', fn ($groups) => $groups->count() === 1 && $groups->get($supplier->id)->count() === 1);
+
+        $this->get(route('warehouse.supplier-prices.index', ['supplier_id' => 999999]))
+            ->assertOk()
+            ->assertSee('Chưa có sản phẩm nào được gán cho nhà cung cấp phù hợp với bộ lọc.');
+    }
+
     public function test_apply_today_sale_price_button_updates_all_variants(): void
     {
         $this->withoutMiddleware();

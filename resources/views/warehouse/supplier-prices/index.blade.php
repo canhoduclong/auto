@@ -9,6 +9,13 @@
     .sp-table th { font-size:.74rem; text-transform:uppercase; color:#64748b; white-space:nowrap; }
     .sp-table td { vertical-align:middle; }
     .money-cell { font-variant-numeric: tabular-nums; text-align:right; white-space:nowrap; }
+    .sp-group summary { cursor:pointer; padding:1rem; display:flex; align-items:center; gap:.75rem; list-style:none; background:#f8fafc; border-radius:12px; }
+    .sp-group summary::-webkit-details-marker { display:none; }
+    .sp-group summary:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
+    .sp-group[open] summary { border-bottom:1px solid #e2e8f0; border-radius:12px 12px 0 0; }
+    .sp-group .sp-chevron { transition:transform .15s; }
+    .sp-group[open] .sp-chevron { transform:rotate(90deg); }
+    .sp-table td:last-child { min-width:260px; }
     .price-warning { display:none; }
     .price-warning.show { display:block; }
 </style>
@@ -75,11 +82,21 @@
     </div>
 @endif
 
-<div class="sp-card table-responsive">
+<div class="text-muted small mb-2">{{ $supplierGroups->total() }} nhà cung cấp · Bấm tên nhà cung cấp để thu gọn / mở rộng.</div>
+@forelse($supplierGroups as $supplierGroup)
+    @php
+        $groupProducts = $productsBySupplier->get($supplierGroup->id, collect());
+    @endphp
+    <details class="sp-card sp-group mb-3" open>
+        <summary>
+            <i class="bi bi-chevron-right sp-chevron" aria-hidden="true"></i>
+            <span class="fw-bold">{{ $supplierGroup->name }}</span>
+            <span class="badge bg-secondary ms-auto">{{ $groupProducts->count() }} sản phẩm</span>
+        </summary>
+<div class="table-responsive">
     <table class="table table-hover sp-table mb-0">
         <thead class="table-light">
             <tr>
-                <th>Nhà cung cấp</th>
                 <th>Sản phẩm</th>
                 <th>Kiểu tính giá</th>
                 <th class="text-end">Giá min</th>
@@ -91,14 +108,13 @@
             </tr>
         </thead>
         <tbody>
-            @forelse($supplierProducts as $row)
+            @foreach($groupProducts as $row)
                 @php
                     $latest = $latestPrices->get($row->supplier_id . ':' . $row->product_id);
                     $type = $latest?->price_calculation_type ?? $row->price_calculation_type ?? \App\Models\SupplierProduct::TYPE_COMPONENT_BASED;
                     $isSaleSynced = (bool) ($saleSyncStatus[$row->supplier_id . ':' . $row->product_id] ?? false);
                 @endphp
                 <tr>
-                    <td class="fw-semibold">{{ $row->supplier?->name ?? 'NCC' }}</td>
                     <td>{{ $row->product?->name ?? 'Sản phẩm' }}</td>
                     <td>
                         @if($type === \App\Models\SupplierProduct::TYPE_DIRECT_PURCHASE)
@@ -157,15 +173,15 @@
                         </form>
                     </td>
                 </tr>
-            @empty
-                <tr>
-                    <td colspan="8" class="text-center text-muted py-4">Chưa có sản phẩm nào được gán cho nhà cung cấp.</td>
-                </tr>
-            @endforelse
+            @endforeach
         </tbody>
     </table>
 </div>
-<div class="d-flex justify-content-center mt-3">{{ $supplierProducts->links() }}</div>
+    </details>
+@empty
+    <div class="sp-card text-center text-muted py-4">Chưa có sản phẩm nào được gán cho nhà cung cấp phù hợp với bộ lọc.</div>
+@endforelse
+<div class="d-flex justify-content-center mt-3">{{ $supplierGroups->links() }}</div>
 
 <div class="modal fade" id="attachProductModal" tabindex="-1">
     <div class="modal-dialog">

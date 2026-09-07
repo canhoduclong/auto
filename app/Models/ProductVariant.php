@@ -125,6 +125,8 @@ class ProductVariant extends Model
                 $q->whereNull('end_date')
                     ->orWhereDate('end_date', '>=', now()->toDateString());
             })
+            // Match the price board: prefer a published positive price that is still valid.
+            ->orderByRaw('CASE WHEN price > 0 THEN 0 ELSE 1 END')
             ->orderByDesc('start_date')
             ->orderByDesc('id');
     }
@@ -142,18 +144,7 @@ class ProductVariant extends Model
     // helper: lấy giá cuối cùng
     public function getFinalPriceAttribute()
     {
-        $activeRulePrice = $this->priceRules()
-            ->where(function ($q) {
-                $q->whereNull('start_date')
-                    ->orWhereDate('start_date', '<=', now()->toDateString());
-            })
-            ->where(function ($q) {
-                $q->whereNull('end_date')
-                    ->orWhereDate('end_date', '>=', now()->toDateString());
-            })
-            ->orderByDesc('start_date')
-            ->orderByDesc('id')
-            ->value('price');
+        $activeRulePrice = $this->latestPriceRule()->value('price');
 
         if ($activeRulePrice !== null) {
             return (float) $activeRulePrice;

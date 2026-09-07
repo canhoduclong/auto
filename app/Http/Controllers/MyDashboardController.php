@@ -1126,8 +1126,7 @@ class MyDashboardController extends Controller
                 $variants = $product->variants
                     ->map(function (ProductVariant $variant) use ($product) {
                         $rule = $variant->latestPriceRule;
-                        $publishedRule = $this->resolvePublishedPriceRule($variant, $rule);
-                        $price = (float) ($publishedRule?->price ?? $rule?->price ?? $variant->final_price ?? $product->price ?? 0);
+                        $price = (float) ($rule?->price ?? $variant->final_price ?? $product->price ?? 0);
 
                         if ($price <= 0) {
                             return null;
@@ -1147,7 +1146,7 @@ class MyDashboardController extends Controller
                             'price_key' => number_format($price, 2, '.', ''),
                             'price_unit' => $priceUnit,
                             'price_group_key' => number_format($price, 2, '.', '') . '|' . $priceUnit,
-                            'start_date' => $publishedRule?->start_date ?? $rule?->start_date,
+                            'start_date' => $rule?->start_date,
                         ];
                     })
                     ->filter()
@@ -1179,31 +1178,6 @@ class MyDashboardController extends Controller
             })
             ->filter()
             ->values();
-    }
-
-    private function resolvePublishedPriceRule(ProductVariant $variant, mixed $latestRule): mixed
-    {
-        if ($latestRule && (float) $latestRule->price > 0) {
-            return $latestRule;
-        }
-
-        if (!Schema::hasTable('product_price_rules')) {
-            return $latestRule;
-        }
-
-        return $variant->priceRules()
-            ->where('price', '>', 0)
-            ->where(function ($query) {
-                $query->whereNull('start_date')
-                    ->orWhereDate('start_date', '<=', now()->toDateString());
-            })
-            ->where(function ($query) {
-                $query->whereNull('end_date')
-                    ->orWhereDate('end_date', '>=', now()->toDateString());
-            })
-            ->orderByDesc('start_date')
-            ->orderByDesc('id')
-            ->first();
     }
 
     private function formatVariantSizeLabel(mixed $size): ?string
