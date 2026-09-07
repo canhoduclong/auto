@@ -135,6 +135,11 @@ class TextOrderImportController extends Controller
                 'delivery_date' => $this->today(),
                 'delivery_time' => $order->delivery_time,
                 'note' => $order->note,
+                'charge_vat' => $order->charge_vat ?? false,
+                'vat_percent' => $order->vat_percent ?? 0,
+                'collect_customer_shipping_fee' => $order->collect_customer_shipping_fee ?? false,
+                'customer_shipping_fee' => $order->customer_shipping_fee ?? 0,
+
                 'raw_text' => 'Tạo từ đơn '.$order->code,
                 'status' => 'draft',
             ]);
@@ -745,6 +750,11 @@ class TextOrderImportController extends Controller
                     'recipient_phone' => $draft->phone ?: $customer->phone,
                     'recipient_address' => $draft->address ?: $customer->address,
                     'note' => $draft->note,
+                    'charge_vat' => $draft->charge_vat,
+                    'vat_percent' => $draft->vat_percent,
+                    'collect_customer_shipping_fee' => $draft->collect_customer_shipping_fee,
+                    'customer_shipping_fee' => $draft->customer_shipping_fee,
+
                     'delivery_date' => $deliveryDate,
                     // Ngày Sale/Admin chọn là ngày nghiệp vụ của đơn trên các
                     // màn hình kho vốn phân nhóm đơn thường theo created_at.
@@ -894,6 +904,10 @@ class TextOrderImportController extends Controller
     private function validatedDraftData(Request $request): array
     {
         $validated = $request->validate([
+            'charge_vat' => ['sometimes', 'boolean'],
+            'vat_percent' => [Rule::requiredIf($request->boolean('charge_vat')), 'nullable', 'numeric', 'gt:0', 'max:100'],
+            'collect_customer_shipping_fee' => ['sometimes', 'boolean'],
+            'customer_shipping_fee' => [Rule::requiredIf($request->boolean('collect_customer_shipping_fee')), 'nullable', 'numeric', 'gt:0', 'max:999999999999.99'],
             'sale_id' => ['required', 'exists:users,id'],
             'customer_id' => ['nullable', 'exists:customers,id'],
             'truck_brand_id' => ['nullable', 'exists:truck_brands,id'],
@@ -924,6 +938,13 @@ class TextOrderImportController extends Controller
         if (isset($validated['items'])) {
             $validated['parsed_items'] = $validated['items'];
             unset($validated['items']);
+        }
+
+        foreach (['charge_vat' => 'vat_percent', 'collect_customer_shipping_fee' => 'customer_shipping_fee'] as $flag => $amount) {
+            if ($request->has($flag)) {
+                $validated[$flag] = $request->boolean($flag);
+                $validated[$amount] = $validated[$flag] ? round((float) $validated[$amount], 2) : 0;
+            }
         }
 
         $useTruckStation = $request->has('use_truck_station')

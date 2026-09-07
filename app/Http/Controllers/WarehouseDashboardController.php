@@ -1210,6 +1210,15 @@ class WarehouseDashboardController extends Controller
             ->get(['id', 'name']);
 
         $isPackageModule = $request->routeIs('package.*');
+        $deferredComponentImportRequests = $isPackageModule ? collect() : CuttingComponentImportRequest::query()
+            ->with(['items.productVariant.product', 'warehouse'])
+            ->where('status', CuttingComponentImportRequest::STATUS_OPEN)
+            ->when($managedWarehouseId, fn ($query) => $query->where('warehouse_id', $managedWarehouseId))
+            ->whereDate('request_date', $selectedDate)
+            ->whereHas('items', fn ($query) => $query->where('quantity', '>', 0))
+            ->orderByDesc('id')
+            ->get();
+
         $ordersLayout = $isPackageModule ? 'layouts.package' : 'layouts.warehouse';
         $orderRoutePrefix = $isPackageModule ? 'package' : 'warehouse';
         $packingInventoryRoute = $isPackageModule ? 'package.inventory' : 'warehouse.stock-in';
@@ -1228,6 +1237,7 @@ class WarehouseDashboardController extends Controller
             'packingReservedQuantitiesByOrder',
             'warehouses',
             'shippers',
+            'deferredComponentImportRequests',
             'ordersLayout',
             'orderRoutePrefix',
             'packingInventoryRoute',

@@ -276,6 +276,9 @@
                         $weight = max(0.01, (float) ($item['size_kg'] ?? 1));
                         return $quantity * $weight * max(0, (float) ($item['unit_price'] ?? 0));
                     });
+                    $draftVat = $draft->charge_vat ? round($draftTotal * (float) $draft->vat_percent / 100, 2) : 0;
+                    $draftShipping = $draft->collect_customer_shipping_fee ? (float) $draft->customer_shipping_fee : 0;
+                    $draftTotal += $draftVat + $draftShipping;
                     $selectedSchedule = $draft->automatedSchedules->first();
                     $hasOrderForSelectedDate = (bool) $selectedSchedule?->generated_order_id;
                     $statusText = $hasOrderForSelectedDate
@@ -362,6 +365,9 @@
                                         </tbody>
                                     </table>
                                 </div>
+                                @if($draftVat > 0 || $draftShipping > 0)
+                                    <div class="small text-end text-muted">VAT: {{ number_format($draftVat, 0, ',', '.') }}đ · Phí giao khách: {{ number_format($draftShipping, 0, ',', '.') }}đ</div>
+                                @endif
                                 <div class="draft-template-total"><span>Tổng cộng:</span><strong>{{ number_format($draftTotal, 0, ',', '.') }}đ</strong></div>
                             </div>
                         </div>
@@ -396,6 +402,26 @@
                                     <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-calendar3 me-1"></i>Ngày lên đơn:</span><input class="form-control fw-bold" value="{{ \Carbon\Carbon::parse($selectedDraftDate)->format('d/m/Y') }}" readonly></div>
                                     <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-clock me-1"></i>Giờ giao:</span><input name="delivery_time" class="form-control" value="{{ $draft->delivery_time }}" placeholder="Chưa cập nhật"></div>
                                 </div>
+
+                                <details class="border rounded p-2 my-2" @if($draft->charge_vat || $draft->collect_customer_shipping_fee) open @endif>
+                                    <summary class="fw-semibold">Thêm phí</summary>
+                                    <div class="row g-2 mt-1">
+                                        <div class="col-md-6">
+                                            <label><input type="checkbox" name="charge_vat" class="form-check-input js-draft-fee" @checked($draft->charge_vat)> Tính VAT</label>
+                                            <div class="input-group input-group-sm mt-1">
+                                                <input type="number" name="vat_percent" class="form-control js-draft-fee" aria-label="VAT (%)" min="0.01" max="100" step="0.01" value="{{ $draft->vat_percent }}">
+                                                <span class="input-group-text">%</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label><input type="checkbox" name="collect_customer_shipping_fee" class="form-check-input js-draft-fee" @checked($draft->collect_customer_shipping_fee)> Thu phí giao hàng của khách</label>
+                                            <div class="input-group input-group-sm mt-1">
+                                                <input type="number" name="customer_shipping_fee" class="form-control js-draft-fee" aria-label="Phí giao hàng thu khách" min="0.01" max="999999999999.99" step="0.01" value="{{ $draft->customer_shipping_fee }}">
+                                                <span class="input-group-text">đ</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </details>
 
                                 <div class="draft-edit-extra">
                                     <div>
@@ -709,6 +735,12 @@ document.addEventListener('DOMContentLoaded', () => {
             row.querySelector('.draft-edit-line-total').textContent = money(lineTotal);
             total += lineTotal;
         });
+        if (editor.querySelector('[name="charge_vat"]')?.checked) {
+            total += Math.round(total * Math.min(100, Math.max(0, Number(editor.querySelector('[name="vat_percent"]').value) || 0))) / 100;
+        }
+        if (editor.querySelector('[name="collect_customer_shipping_fee"]')?.checked) {
+            total += Math.max(0, Number(editor.querySelector('[name="customer_shipping_fee"]').value) || 0);
+        }
         const grandTotal = editor.querySelector('.draft-edit-grand-total');
         if (grandTotal) grandTotal.textContent = money(total);
     };
@@ -822,6 +854,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const editor = card.querySelector('.draft-template-editor');
         const value = name => editor?.querySelector(`[name="${name}"]`)?.value || null;
         return {
+            charge_vat: editor?.querySelector('[name="charge_vat"]')?.checked ? 1 : 0,
+            vat_percent: editor?.querySelector('[name="charge_vat"]')?.checked ? value('vat_percent') : null,
+            collect_customer_shipping_fee: editor?.querySelector('[name="collect_customer_shipping_fee"]')?.checked ? 1 : 0,
+            customer_shipping_fee: editor?.querySelector('[name="collect_customer_shipping_fee"]')?.checked ? value('customer_shipping_fee') : null,
             sale_id: value('sale_id'), customer_id: value('customer_id'), customer_name: value('customer_name'), phone: value('phone'), address: value('address'),
             truck_brand_id: value('truck_brand_id'), truck_station_id: value('truck_station_id'), truck_brand_name: value('truck_brand_name'), truck_station_address: value('truck_station_address'),
             use_truck_station: editor?.querySelector('.js-draft-use-truck')?.checked ? 1 : 0,
@@ -1220,7 +1256,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clearSelectedTruckStation(event.target.closest('.draft-template-editor'));
             return;
         }
-        if (!event.target.matches('.draft-edit-quantity')) return;
+        if (!event.target.matches('.draft-edit-quantity, .js-draft-fee')) return;
         updateDraftTotals(event.target.closest('.draft-template-editor'));
     });
     truckStationModalElement?.querySelector('.js-truck-brand-filter')?.addEventListener('change', filterTruckStations);

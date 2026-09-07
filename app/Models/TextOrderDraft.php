@@ -18,9 +18,14 @@ class TextOrderDraft extends Model
         'parsed_items', 'quantity', 'size_kg', 'unit_price', 'delivery_date', 'delivery_time',
         'note', 'raw_text', 'status', 'error_message', 'automation_mode', 'automation_enabled',
         'automation_dates', 'automation_last_run_at', 'automation_last_error',
+        'charge_vat', 'vat_percent', 'collect_customer_shipping_fee', 'customer_shipping_fee',
     ];
 
     protected $casts = [
+        'charge_vat' => 'boolean',
+        'vat_percent' => 'decimal:2',
+        'collect_customer_shipping_fee' => 'boolean',
+        'customer_shipping_fee' => 'decimal:2',
         'delivery_date' => 'date',
         'size_kg' => 'decimal:3',
         'unit_price' => 'decimal:2',

@@ -1147,7 +1147,14 @@
             <span class="badge bg-warning text-dark wh-summary-pill">Đang đóng: {{ $orders->where('status', 'packing')->count() }}</span>
             <span class="badge bg-danger wh-summary-pill">Sale từ chối điều chỉnh: {{ $orders->where('warehouse_adjustment_status', \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED)->count() }}</span>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
+            @if($deferredComponentImportRequests->isNotEmpty())
+                <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal"
+                    data-bs-target="#cuttingImportModal" aria-controls="cuttingImportModal">
+                    <i class="bi bi-box-arrow-in-down me-1"></i>Nhập kho Pha Lóc
+                    <span class="badge bg-dark ms-1">{{ $deferredComponentImportRequests->count() }}</span>
+                </button>
+            @endif
             <button type="button" class="btn btn-outline-primary btn-sm" onclick="window.print()">
                 <i class="bi bi-printer me-1"></i>In toàn bộ
             </button>
@@ -1169,6 +1176,22 @@
     </div>
 
 
+
+    @if($deferredComponentImportRequests->isNotEmpty())
+        <div class="modal fade" id="cuttingImportModal" tabindex="-1" aria-labelledby="cuttingImportModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="cuttingImportModalLabel">Nhập kho Pha Lóc</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                    </div>
+                    <div class="modal-body">
+                        @include('warehouse.cutting._deferred_import_requests')
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 
     @if($orders->isEmpty())
         <div class="card border-0 shadow-sm text-center py-5">

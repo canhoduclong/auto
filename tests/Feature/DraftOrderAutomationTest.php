@@ -74,6 +74,10 @@ class DraftOrderAutomationTest extends TestCase
                 'size_kg' => 2,
                 'unit_price' => 90000,
             ]],
+            'charge_vat' => true,
+            'vat_percent' => 8,
+            'collect_customer_shipping_fee' => true,
+            'customer_shipping_fee' => 30000,
             'automation_mode' => TextOrderDraft::AUTOMATION_DAILY,
             'automation_enabled' => true,
         ]);
@@ -88,6 +92,10 @@ class DraftOrderAutomationTest extends TestCase
         $controller->shouldReceive('createOrderFromSchedule')
             ->once()
             ->withArgs(function (array $items, array $orderData) {
+                $this->assertTrue($orderData['charge_vat']);
+                $this->assertEquals(8, $orderData['vat_percent']);
+                $this->assertTrue($orderData['collect_customer_shipping_fee']);
+                $this->assertEquals(30000, $orderData['customer_shipping_fee']);
                 $this->assertSame(125000.0, $items[0]['base_price']);
                 $this->assertSame(2, $items[0]['quantity']);
                 $this->assertSame('2026-07-22', $orderData['delivery_date']);

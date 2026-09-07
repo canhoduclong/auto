@@ -82,6 +82,44 @@ class SaleTextOrderDraftCreateTest extends TestCase
             ->assertSee('Đóng thùng kỹ và gọi khách trước khi gửi.');
     }
 
+    public function test_sale_can_save_remove_and_validate_draft_fees(): void
+    {
+        $sale = User::factory()->create();
+        $sale->roles()->attach(Role::query()->firstOrCreate(['name' => 'sale']));
+        $draft = TextOrderDraft::query()->create([
+            'created_by' => $sale->id,
+            'sale_id' => $sale->id,
+            'draft_scope' => TextOrderDraft::SCOPE_SALE_PRIVATE,
+            'raw_text' => '',
+            'status' => 'draft',
+        ]);
+        $url = route('pages.my_order_drafts.update', $draft);
+        $this->actingAs($sale)->putJson($url, [
+            'charge_vat' => true, 'vat_percent' => 8,
+            'collect_customer_shipping_fee' => true, 'customer_shipping_fee' => 30000,
+        ])->assertOk();
+        $draft->refresh();
+        $this->assertTrue($draft->charge_vat);
+        $this->assertEquals(8, $draft->vat_percent);
+        $this->assertTrue($draft->collect_customer_shipping_fee);
+        $this->assertEquals(30000, $draft->customer_shipping_fee);
+
+        $this->putJson($url, [
+            'charge_vat' => true, 'vat_percent' => 101,
+            'collect_customer_shipping_fee' => true, 'customer_shipping_fee' => -1,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['vat_percent', 'customer_shipping_fee']);
+
+        $this->putJson($url, [
+            'charge_vat' => false, 'vat_percent' => null,
+            'collect_customer_shipping_fee' => false, 'customer_shipping_fee' => null,
+        ])->assertOk();
+        $draft->refresh();
+        $this->assertFalse($draft->charge_vat);
+        $this->assertEquals(0, $draft->vat_percent);
+        $this->assertFalse($draft->collect_customer_shipping_fee);
+        $this->assertEquals(0, $draft->customer_shipping_fee);
+    }
+
     public function test_sale_can_search_drafts_by_customer_name_or_phone(): void
     {
         $saleRole = Role::query()->create(['name' => 'sale']);
