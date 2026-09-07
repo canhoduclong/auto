@@ -2413,6 +2413,11 @@ class WarehouseDashboardController extends Controller
                 continue;
             }
 
+            // Cutting plans express output in kg, while packing shortages are stock quantities.
+            foreach (['required_qty', 'available_qty', 'short_qty'] as $quantityKey) {
+                $shortage[$quantityKey] = round((float) ($shortage[$quantityKey] ?? 0) * (float) $targetVariant->effective_kg, 3);
+            }
+            $shortage['unit'] = 'kg';
             $plan = $service->planForDemand($targetVariant, $warehouseId, (float) ($shortage['short_qty'] ?? 0));
             $plan['material_options'] = $service->sourceMaterialOptions($targetVariant, $warehouseId);
             $plan['shortage'] = $shortage;
@@ -2497,18 +2502,17 @@ class WarehouseDashboardController extends Controller
                     continue;
                 }
 
-                $isCutByWeight = $item->variant?->product?->product_type === Product::TYPE_CUT
-                    && $item->effective_priced_by_kg;
+                // Inventory and reservations use quantities; pricing by kg does not change the stock unit.
                 $savedAllocations = $item->packingSizeAllocations;
                 $requirements = $savedAllocations->sum('quantity') === (int) $neededQty
                     ? $savedAllocations->map(fn ($allocation) => [
                         'variant_id' => (int) $allocation->product_variant_id,
-                        'quantity' => (float) $allocation->quantity * ($isCutByWeight ? (float) ($allocation->variant?->effective_kg ?? $item->effective_unit_weight) : 1),
+                        'quantity' => (float) $allocation->quantity,
                         'name' => (string) ($allocation->variant?->name ?? ('SP #'.$allocation->product_variant_id)),
                     ])
                     : collect([[
                         'variant_id' => (int) $item->product_variant_id,
-                        'quantity' => $neededQty * ($isCutByWeight ? (float) $item->effective_unit_weight : 1),
+                        'quantity' => $neededQty,
                         'name' => (string) ($item->variant?->name ?? $item->product?->name ?? ('SP #'.$item->product_variant_id)),
                     ]]);
 
@@ -2528,7 +2532,7 @@ class WarehouseDashboardController extends Controller
                             'variant_id' => $variantId,
                             'variant_name' => (string) $requirement['name'],
                             'required_qty' => $requiredQty,
-                            'unit' => $isCutByWeight ? 'kg' : 'quantity',
+                            'unit' => 'quantity',
                             'available_qty' => $remaining,
                             'short_qty' => round($requiredQty - $remaining, 3),
                             'reason' => ! empty($blockingOrders) ? 'blocked_by_prior_order' : 'insufficient_stock',

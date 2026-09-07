@@ -2043,7 +2043,6 @@
                                             <input type="hidden" name="shipper_note" value="{{ $order->shipper_note }}">
                                             <input type="hidden" name="order_discount" value="{{ (float) ($order->order_discount ?? 0) }}">
                                             <input type="hidden" name="order_discount_type" value="{{ ($order->order_discount_type ?? 'decrease') === 'increase' ? 'increase' : 'decrease' }}">
-                                            <input type="hidden" name="warehouse_can_adjust" value="{{ $order->warehouse_can_adjust ? 1 : 0 }}">
 
                                             <div class="monitor-inline-edit-title"><i class="bi bi-pencil-square me-1"></i>Sửa đơn {{ $order->code ?: ('#' . $order->id) }}</div>
                                             <div class="monitor-edit-picker">
@@ -2082,6 +2081,15 @@
                                                 <div class="is-wide">
                                                     <label for="monitorEditNote{{ $order->id }}">Ghi chú</label>
                                                     <textarea class="form-control form-control-sm" id="monitorEditNote{{ $order->id }}" name="note" rows="3">{{ $order->note }}</textarea>
+                                                </div>
+                                                <div class="is-wide">
+                                                    <input type="hidden" name="warehouse_can_adjust" value="0">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" name="warehouse_can_adjust" value="1"
+                                                               id="monitorEditWarehouseCanAdjust{{ $order->id }}" @checked($order->warehouse_can_adjust)>
+                                                        <label class="form-check-label" for="monitorEditWarehouseCanAdjust{{ $order->id }}">Cho phép kho thay đổi số lượng sản phẩm</label>
+                                                    </div>
+                                                    <div class="form-text">Kho có thể thay đổi số lượng sản phẩm mà không cần sale xác nhận.</div>
                                                 </div>
                                             </div>
 

@@ -190,22 +190,28 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $this->assertDatabaseCount('order_item_packing_size_allocations', 0);
     }
 
-    public function test_cut_product_shortage_uses_bill_weight_instead_of_piece_count(): void
+    public function test_cut_product_stock_guard_compares_piece_counts_and_can_start_packing(): void
     {
-        [$user, $order, $item, $variants, $inventories] = $this->fixture(40, 2.3);
-        $variants['2.3']->product->update(['product_type' => Product::TYPE_CUT]);
-        $item->update(['unit_weight' => 2.3, 'is_priced_by_kg' => true]);
-        $inventories['2.3']->update(['quantity' => 0]);
+        [$user, $order, $item, $variants, $inventories] = $this->fixture(236, 2.5);
+        $variants['2.5']->product->update(['product_type' => Product::TYPE_CUT]);
+        $item->update(['unit_weight' => 2.5, 'is_priced_by_kg' => true]);
+        $inventories['2.5']->update(['quantity' => 200]);
         $controller = app(\App\Http\Controllers\WarehouseDashboardController::class);
         $method = new \ReflectionMethod($controller, 'buildPackingQueueStockGuards');
         $result = $method->invoke($controller, collect([$order->fresh()]), $order->warehouse_id, now()->toDateString());
         $shortage = $result['guards'][$order->id]['shortages'][0];
-        $this->assertSame(92.0, $shortage['required_qty']);
-        $this->assertSame(92.0, $shortage['short_qty']);
-        $this->assertSame('kg', $shortage['unit']);
-        $inventories['2.3']->update(['quantity' => 42.06]);
+        $this->assertSame(236.0, $shortage['required_qty']);
+        $this->assertSame(36.0, $shortage['short_qty']);
+        $this->assertSame('quantity', $shortage['unit']);
+
+        $inventories['2.5']->update(['quantity' => 356]);
         $result = $method->invoke($controller, collect([$order->fresh()]), $order->warehouse_id, now()->toDateString());
-        $this->assertSame(49.94, $result['guards'][$order->id]['shortages'][0]['short_qty']);
+        $this->assertTrue($result['guards'][$order->id]['can_start_packing']);
+        $this->assertSame(120.0, $result['remaining_by_variant'][$variants['2.5']->id]);
+        $this->actingAs($user)->post(route('warehouse.orders.start-packing', $order), [
+            'packing_date' => now()->toDateString(),
+        ])->assertRedirect()->assertSessionHas('success');
+        $this->assertSame(Order::STATUS_PACKING, $order->fresh()->status);
     }
 
     public function test_cut_items_can_pack_fewer_pieces_when_bill_weight_is_met(): void
