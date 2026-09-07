@@ -2123,7 +2123,7 @@
                                                     </tbody>
                                                 </table>
                                             </div>
-                                            <div class="collapse" id="monitorEditProducts{{ $order->id }}">
+                                            <div class="collapse" id="monitorEditProducts{{ $order->id }}" data-monitor-edit-products>
                                                 <div class="monitor-edit-picker">
                                                     <div class="monitor-edit-picker-label">Thêm sản phẩm vào đơn</div>
                                                     <div class="monitor-edit-product-search">
@@ -2879,6 +2879,12 @@ document.addEventListener('click', async event => {
             results.innerHTML = `<div class="alert alert-danger py-2 mb-0">${escapeHtml(error.message)}</div>`;
         }
     }
+
+    document.addEventListener('show.bs.collapse', event => {
+        if (!event.target.matches('[data-monitor-edit-products]')) return;
+        const form = event.target.closest('[data-monitor-edit-form]');
+        if (form) loadInlineProducts(form);
+    });
 
     async function loadInlineProducts(form, url = variantEndpoint) {
         const results = form.querySelector('.monitor-edit-product-results');
