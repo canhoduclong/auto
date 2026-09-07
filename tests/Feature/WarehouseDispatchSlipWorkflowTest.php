@@ -528,6 +528,58 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
         $this->assertSame(WarehouseDispatchSlip::STATUS_FINALIZED, $blockedSlip->fresh()->status);
     }
 
+    public function test_admin_can_remove_one_pending_order_from_a_finalized_dispatch_slip(): void
+    {
+        $adminRole = Role::create(['name' => 'admin']);
+        $source = Warehouse::create(['name' => 'Kho nguồn tách đơn']);
+        $target = Warehouse::create(['name' => 'Kho nhận tách đơn']);
+        $admin = User::factory()->create();
+        $admin->roles()->attach($adminRole);
+        $shipper = User::factory()->create();
+        $customer = Customer::create(['name' => 'Khách tách đơn', 'status' => 'active']);
+        $orders = collect(['REMOVE-FROM-SLIP-1', 'KEEP-IN-SLIP-2'])->map(function (string $code) use ($customer, $source): Order {
+            return Order::create([
+                'customer_id' => $customer->id,
+                'warehouse_id' => $source->id,
+                'code' => $code,
+                'status' => Order::STATUS_READY_TO_SHIP,
+            ]);
+        });
+        $orderTransfer = OrderTransfer::create([
+            'shipper_id' => $shipper->id,
+            'warehouse_id' => $target->id,
+            'created_by' => $admin->id,
+        ]);
+        $orders->each(fn (Order $order) => $order->forceFill(['order_transfer_id' => $orderTransfer->id])->save());
+        $transfers = $orders->map(fn (Order $order) => WarehouseTransfer::create([
+            'order_id' => $order->id,
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+        ]));
+        $slip = WarehouseDispatchSlip::create([
+            'business_date' => now(),
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseDispatchSlip::STATUS_FINALIZED,
+            'created_by' => $admin->id,
+            'finalized_by' => $admin->id,
+            'finalized_at' => now(),
+        ]);
+        $slip->entries()->create(['order_transfer_id' => $orderTransfer->id]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.warehouse-dispatch-slips.orders.remove', [$slip, $orders->first()]))
+            ->assertSessionHas('success');
+
+        $this->assertNull($orders->first()->fresh()->order_transfer_id);
+        $this->assertSame($orderTransfer->id, $orders->last()->fresh()->order_transfer_id);
+        $this->assertDatabaseHas('warehouse_transfers', ['id' => $transfers->first()->id, 'status' => WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP]);
+        $this->assertDatabaseHas('warehouse_dispatch_slip_entries', ['warehouse_dispatch_slip_id' => $slip->id, 'order_transfer_id' => $orderTransfer->id]);
+    }
+
     public function test_unified_transfer_screen_links_both_creation_flows_and_prints_selected_driver_slips(): void
     {
         $warehouseRole = Role::create(['name' => 'warehouse']);

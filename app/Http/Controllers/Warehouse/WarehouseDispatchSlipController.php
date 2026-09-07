@@ -295,6 +295,47 @@ class WarehouseDispatchSlipController extends Controller
         ] + $this->documentData($dispatchSlip));
     }
 
+    public function removeOrder(WarehouseDispatchSlip $dispatchSlip, Order $order)
+    {
+        $this->authorizeSource($dispatchSlip);
+        if (! Auth::user()?->hasRole('admin')) {
+            abort(403, 'Chỉ quản trị viên được bỏ đơn khỏi phiếu xuất kho tổng.');
+        }
+        if (! in_array($dispatchSlip->status, [
+            WarehouseDispatchSlip::STATUS_DRAFT,
+            WarehouseDispatchSlip::STATUS_FINALIZED,
+        ], true)) {
+            return back()->with('error', 'Phiếu không còn cho phép thay đổi.');
+        }
+
+        DB::transaction(function () use ($dispatchSlip, $order): void {
+            $lockedSlip = WarehouseDispatchSlip::query()->lockForUpdate()->findOrFail($dispatchSlip->id);
+            $entry = $lockedSlip->entries()
+                ->whereHas('orderTransfer.orders', fn ($query) => $query->whereKey($order->id))
+                ->with(['orderTransfer.orders.warehouseTransfers' => fn ($query) => $query->latest('id')])
+                ->lockForUpdate()
+                ->first();
+
+            if (! $entry?->orderTransfer) {
+                throw ValidationException::withMessages(['order' => 'Đơn không thuộc phiếu xuất kho tổng này.']);
+            }
+
+            $linkedOrder = $entry->orderTransfer->orders->firstWhere('id', $order->id);
+            $movement = $linkedOrder?->warehouseTransfers->first();
+            if (! $linkedOrder || $movement?->status !== WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP) {
+                throw ValidationException::withMessages(['order' => 'Chỉ được bỏ đơn khi tài xế chưa đến nhận.']);
+            }
+
+            $linkedOrder->forceFill(['order_transfer_id' => null])->save();
+            if (! $entry->orderTransfer->orders()->exists()) {
+                $entry->delete();
+                $entry->orderTransfer->delete();
+            }
+        });
+
+        return back()->with('success', 'Đã bỏ đơn '.($order->code ?: '#'.$order->id).' khỏi phiếu '.$dispatchSlip->code.'. Đơn vẫn giữ nguyên để lập phiếu lại.');
+    }
+
     public function edit(WarehouseDispatchSlip $dispatchSlip)
     {
         $this->authorizeSource($dispatchSlip);

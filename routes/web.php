@@ -755,6 +755,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/{dispatchSlip}/edit', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'edit'])->name('edit');
         Route::put('/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'update'])->name('update');
         Route::get('/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'show'])->name('show');
+        Route::post('/{dispatchSlip}/orders/{order}/remove', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'removeOrder'])->name('orders.remove');
         Route::post('/{dispatchSlip}/finalize', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'finalize'])->name('finalize');
         Route::post('/{dispatchSlip}/unfinalize', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'unfinalize'])->name('unfinalize');
         Route::delete('/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'destroy'])->name('destroy');
