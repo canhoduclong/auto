@@ -71,6 +71,8 @@ class AutoCancelOverdueOrders extends Command
                     $this->releaseReservedStock($order);
 
                     $order->status = Order::STATUS_CANCELLED;
+                    $order->cancelled_at = now();
+                    $order->cancel_reason = 'Hệ thống tự hủy do quá hạn giao hàng 6 tiếng (hạn giao được tính sớm nhất vào ngày sau ngày lên đơn).';
                     $order->save();
 
                     OrderHistory::create([
@@ -80,7 +82,7 @@ class AutoCancelOverdueOrders extends Command
                         'role'          => 'system',
                         'status_before' => $statusBefore,
                         'status_after'  => Order::STATUS_CANCELLED,
-                        'note'          => 'Hủy do quá thời gian giao dịch',
+                        'note'          => $order->cancel_reason,
                     ]);
                 });
 
@@ -98,8 +100,12 @@ class AutoCancelOverdueOrders extends Command
 
     private function isPastCancellationDeadline(Order $order, Carbon $now): bool
     {
-        $deliveryDate = $order->delivery_date?->toDateString()
-            ?: $order->created_at->copy()->addDay()->toDateString();
+        // Some import/automation flows store the business date as delivery_date.
+        // Never expire an order before the next day's delivery window, even
+        // when it can be fulfilled on the day it was placed.
+        $earliestDeliveryDate = $order->created_at->copy()
+            ->setTimezone(self::BUSINESS_TIMEZONE)->addDay()->toDateString();
+        $deliveryDate = max($earliestDeliveryDate, $order->delivery_date?->toDateString() ?? $earliestDeliveryDate);
         $deliveryTime = trim((string) ($order->delivery_time ?: $order->customer?->delivery_time));
         $time = $this->extractDeliveryTime($deliveryTime);
 
