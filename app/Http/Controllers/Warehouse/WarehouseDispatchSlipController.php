@@ -287,12 +287,82 @@ class WarehouseDispatchSlipController extends Controller
         $this->authorizeSlip($dispatchSlip);
         $this->loadSlip($dispatchSlip);
         $this->attachProgress($dispatchSlip);
+        $dispatchSlip->setAttribute('mismatched_order_count', $this->mismatchedOrderCount($dispatchSlip));
 
         return view('warehouse.dispatch-slips.show', [
             'slip' => $dispatchSlip,
             'dispatchRoutePrefix' => $this->managementRoutePrefix(),
             'layout' => request()->routeIs('admin.warehouse-dispatch-slips.*') ? 'layouts.admin' : 'layouts.warehouse',
         ] + $this->documentData($dispatchSlip));
+    }
+
+    public function removeMismatchedOrders(WarehouseDispatchSlip $dispatchSlip)
+    {
+        $this->authorizeSource($dispatchSlip);
+        if (! Auth::user()?->hasRole('admin')) {
+            abort(403, 'Chỉ quản trị viên được gỡ đơn khỏi phiếu xuất kho tổng.');
+        }
+        if (! in_array($dispatchSlip->status, [
+            WarehouseDispatchSlip::STATUS_DRAFT,
+            WarehouseDispatchSlip::STATUS_FINALIZED,
+        ], true)) {
+            return back()->with('error', 'Phiếu không còn cho phép thay đổi.');
+        }
+
+        [$removed, $blocked] = DB::transaction(function () use ($dispatchSlip): array {
+            $lockedSlip = WarehouseDispatchSlip::query()->lockForUpdate()->findOrFail($dispatchSlip->id);
+            $lockedSlip->load([
+                'entries.orderTransfer.orders.warehouseTransfers' => fn ($query) => $query->latest('id'),
+                'entries.warehouseTransfer.order',
+            ]);
+            $slipDate = $lockedSlip->business_date->toDateString();
+            $removed = 0;
+            $blocked = 0;
+
+            foreach ($lockedSlip->entries as $entry) {
+                if ($entry->orderTransfer) {
+                    foreach ($entry->orderTransfer->orders as $order) {
+                        if ($order->created_at->toDateString() === $slipDate) {
+                            continue;
+                        }
+                        $movement = $order->warehouseTransfers->first();
+                        if ($movement?->status !== WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP) {
+                            $blocked++;
+                            continue;
+                        }
+                        $order->forceFill(['order_transfer_id' => null])->save();
+                        $removed++;
+                    }
+                    if (! $entry->orderTransfer->orders()->exists()) {
+                        $entry->delete();
+                        $entry->orderTransfer->delete();
+                    }
+                } elseif ($entry->warehouseTransfer?->order) {
+                    $order = $entry->warehouseTransfer->order;
+                    if ($order->created_at->toDateString() !== $slipDate) {
+                        if ($entry->warehouseTransfer->status !== WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP) {
+                            $blocked++;
+                            continue;
+                        }
+                        $entry->delete();
+                        $removed++;
+                    }
+                }
+            }
+
+            return [$removed, $blocked];
+        });
+
+        if ($removed === 0 && $blocked > 0) {
+            return back()->with('error', 'Các đơn khác ngày đều đã được tài xế nhận hoặc đã bắt đầu vận chuyển, không thể gỡ.');
+        }
+
+        $message = 'Đã gỡ '.$removed.' đơn khác ngày khỏi phiếu '.$dispatchSlip->code.'.';
+        if ($blocked > 0) {
+            $message .= ' Có '.$blocked.' đơn không thể gỡ vì đã bắt đầu vận chuyển.';
+        }
+
+        return back()->with('success', $message);
     }
 
     public function removeOrder(WarehouseDispatchSlip $dispatchSlip, Order $order)
@@ -967,6 +1037,22 @@ class WarehouseDispatchSlipController extends Controller
             }
 
             return false;
+        });
+    }
+
+    private function mismatchedOrderCount(WarehouseDispatchSlip $slip): int
+    {
+        $slipDate = $slip->business_date->toDateString();
+
+        return $slip->entries->sum(function ($entry) use ($slipDate): int {
+            if ($entry->orderTransfer) {
+                return $entry->orderTransfer->orders->filter(
+                    fn (Order $order): bool => $order->created_at->toDateString() !== $slipDate
+                )->count();
+            }
+
+            return $entry->warehouseTransfer?->order
+                && $entry->warehouseTransfer->order->created_at->toDateString() !== $slipDate ? 1 : 0;
         });
     }
 

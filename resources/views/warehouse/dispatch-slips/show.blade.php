@@ -35,6 +35,15 @@
 </div>
 
 @if($slip->notes)<div class="alert alert-light border"><strong>Ghi chú bàn giao:</strong> {{ $slip->notes }}</div>@endif
+@if(!$readOnly && request()->routeIs('admin.warehouse-dispatch-slips.*') && $slip->status === 'finalized' && ($slip->mismatched_order_count ?? 0) > 0)
+    <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 flex-wrap">
+        <div><strong>Cảnh báo ngày:</strong> Có {{ $slip->mismatched_order_count }} đơn được tạo khác ngày nghiệp vụ {{ $slip->business_date->format('d/m/Y') }}.</div>
+        <form method="POST" action="{{ route($dispatchRoutePrefix.'.mismatched-orders.remove', $slip) }}" onsubmit="return confirm('Gỡ tất cả đơn khác ngày khỏi phiếu? Các đơn đã bắt đầu vận chuyển sẽ được giữ lại.');">
+            @csrf
+            <button type="submit" class="btn btn-warning btn-sm"><i class="bi bi-calendar-x me-1"></i>Gỡ tất cả đơn khác ngày</button>
+        </form>
+    </div>
+@endif
 
 <div class="card mb-3"><div class="card-header bg-white fw-bold">Danh sách đơn hoàn thiện</div><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead class="table-light"><tr><th>STT</th><th>Khách hàng / Mã đơn</th><th>Sale</th><th>Size</th><th class="text-end">Số lượng hàng</th><th class="text-end">KL bàn giao</th><th class="text-end">KL nhận</th><th>Trạng thái</th></tr></thead><tbody>
 @forelse($orderRows as $row)<tr><td>{{ $loop->iteration }}</td><td><div class="fs-5 fw-bold lh-sm text-dark">{{ $row['customer_name'] ?: 'Không rõ khách hàng' }}</div><div class="small fw-normal text-muted mt-1">Mã đơn: {{ $row['code'] }}</div><div class="small text-muted">Ngày tạo đơn: {{ optional($row['order']->created_at)->format('d/m/Y H:i') ?: '—' }}</div></td><td>{{ $row['sale_name'] }}</td><td class="fw-semibold">{{ $row['sizes'] }}</td><td class="text-end fw-bold text-nowrap">{{ number_format($row['item_quantity']) }}</td><td class="text-end fw-semibold text-nowrap">{{ $formatKg($row['packed_weight']) }}</td><td class="text-end text-nowrap">{{ $row['movement']?->received_total_weight !== null ? $formatKg($row['movement']->received_total_weight) : '—' }}</td><td><span class="badge {{ $row['received'] ? 'bg-success' : 'bg-warning text-dark' }}">{{ $row['received'] ? 'Đã tiếp nhận' : 'Chưa tiếp nhận' }}</span>@if(request()->routeIs('admin.warehouse-dispatch-slips.*') && $slip->status === 'finalized' && !$row['received'] && $row['movement']?->status === \App\Models\WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP)<form method="POST" action="{{ route($dispatchRoutePrefix.'.orders.remove', [$slip, $row['order']]) }}" class="mt-1" onsubmit="return confirm('Bỏ đơn {{ $row['code'] }} khỏi phiếu? Đơn vẫn giữ nguyên để lập phiếu lại.');">@csrf<button type="submit" class="btn btn-outline-danger btn-sm py-0">Bỏ khỏi phiếu</button></form>@endif</td></tr>@empty<tr><td colspan="8" class="text-center text-muted py-3">Phiếu không có đơn hoàn thiện.</td></tr>@endforelse

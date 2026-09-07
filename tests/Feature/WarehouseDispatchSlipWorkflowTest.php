@@ -580,6 +580,69 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
         $this->assertDatabaseHas('warehouse_dispatch_slip_entries', ['warehouse_dispatch_slip_id' => $slip->id, 'order_transfer_id' => $orderTransfer->id]);
     }
 
+    public function test_admin_can_bulk_remove_orders_created_on_the_wrong_date(): void
+    {
+        $adminRole = Role::create(['name' => 'admin']);
+        $source = Warehouse::create(['name' => 'Kho nguồn lệch ngày']);
+        $target = Warehouse::create(['name' => 'Kho nhận lệch ngày']);
+        $admin = User::factory()->create();
+        $admin->roles()->attach($adminRole);
+        $shipper = User::factory()->create();
+        $customer = Customer::create(['name' => 'Khách lệch ngày', 'status' => 'active']);
+        $pendingOrder = Order::create([
+            'customer_id' => $customer->id,
+            'warehouse_id' => $source->id,
+            'code' => 'WRONG-DATE-PENDING',
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $pendingOrder->forceFill(['created_at' => '2026-09-07 09:00:00'])->saveQuietly();
+        $inTransitOrder = $pendingOrder->replicate();
+        $inTransitOrder->forceFill(['code' => 'WRONG-DATE-IN-TRANSIT', 'created_at' => '2026-09-07 10:00:00'])->save();
+        $orderTransfer = OrderTransfer::create([
+            'shipper_id' => $shipper->id,
+            'warehouse_id' => $target->id,
+            'created_by' => $admin->id,
+        ]);
+        $pendingOrder->forceFill(['order_transfer_id' => $orderTransfer->id])->save();
+        $inTransitOrder->forceFill(['order_transfer_id' => $orderTransfer->id])->save();
+        WarehouseTransfer::create([
+            'order_id' => $pendingOrder->id,
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+        ]);
+        WarehouseTransfer::create([
+            'order_id' => $inTransitOrder->id,
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseTransfer::STATUS_IN_TRANSIT,
+        ]);
+        $slip = WarehouseDispatchSlip::create([
+            'business_date' => '2026-09-05',
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseDispatchSlip::STATUS_FINALIZED,
+            'created_by' => $admin->id,
+            'finalized_by' => $admin->id,
+            'finalized_at' => now(),
+        ]);
+        $slip->entries()->create(['order_transfer_id' => $orderTransfer->id]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.warehouse-dispatch-slips.mismatched-orders.remove', $slip))
+            ->assertSessionHas('success');
+
+        $this->assertNull($pendingOrder->fresh()->order_transfer_id);
+        $this->assertSame($orderTransfer->id, $inTransitOrder->fresh()->order_transfer_id);
+        $this->assertDatabaseHas('warehouse_dispatch_slip_entries', [
+            'warehouse_dispatch_slip_id' => $slip->id,
+            'order_transfer_id' => $orderTransfer->id,
+        ]);
+    }
+
     public function test_unified_transfer_screen_links_both_creation_flows_and_prints_selected_driver_slips(): void
     {
         $warehouseRole = Role::create(['name' => 'warehouse']);
