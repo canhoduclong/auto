@@ -47,6 +47,36 @@ class WarehouseOrderTransferWeightTest extends TestCase
         ]))->assertOk()->assertViewHas('orders', fn ($orders) => $orders->isEmpty());
     }
 
+    public function test_all_packed_orders_are_listed_including_legacy_completion_history(): void
+    {
+        $role = Role::create(['name' => 'warehouse']);
+        $warehouse = Warehouse::factory()->create();
+        $user = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $user->roles()->attach($role);
+        $customer = Customer::create(['name' => 'Khách đủ danh sách', 'status' => 'active']);
+        $ids = [];
+        for ($i = 0; $i < 25; $i++) {
+            $order = Order::create([
+                'customer_id' => $customer->id, 'user_id' => $user->id,
+                'warehouse_id' => $warehouse->id, 'status' => Order::STATUS_READY_TO_SHIP,
+                'delivery_date' => '2026-07-22',
+            ]);
+            $order->forceFill(['created_at' => '2026-07-21 10:00:00'])->saveQuietly();
+            $order->histories()->create([
+                'action' => 'warehouse_complete_packing', 'user_id' => $user->id, 'role' => 'warehouse',
+                'status_before' => Order::STATUS_PACKING, 'status_after' => Order::STATUS_READY_TO_SHIP,
+                'created_at' => '2026-09-07 10:00:00',
+            ]);
+            $ids[] = $order->id;
+        }
+        $packing = $order->replicate();
+        $packing->forceFill(['code' => 'STILL-PACKING', 'status' => Order::STATUS_PACKING, 'created_at' => '2026-09-07 10:00:00'])->saveQuietly();
+        $this->actingAs($user)->get(route('warehouse.order-transfers', [
+            'from_date' => '2026-09-07', 'to_date' => '2026-09-07', 'orders_page' => 2,
+        ]))->assertOk()->assertViewHas('orders', fn ($orders) => $orders->pluck('id')->all() === $ids)
+            ->assertDontSee('STILL-PACKING');
+    }
+
     public function test_batch_order_transfer_snapshots_packed_weight_for_future_loss_calculation(): void
     {
         $warehouseRole = Role::create(['name' => 'warehouse']);

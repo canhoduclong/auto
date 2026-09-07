@@ -121,10 +121,10 @@
                 <input type="hidden" name="order_ids" id="orderIdsInput">
             </form>
             <div id="orderListRight" style="display:none"></div>
-            <h5 class="mt-3">Đơn hàng chưa điều chuyển <span class="badge bg-secondary">{{ $orders->total() }}</span></h5>
-            <div class="small text-muted mb-2">Hiển thị theo ngày đơn hoặc ngày hoàn tất đóng hàng trong khoảng đã chọn. Mỗi trang tối đa 20 đơn.</div>
+            <h5 class="mt-3">Đơn hàng chưa điều chuyển <span class="badge bg-secondary">{{ $orders->count() }}</span></h5>
+            <div class="small text-muted mb-2">Hiển thị theo ngày đơn hoặc ngày hoàn tất đóng hàng trong khoảng đã chọn. Hiển thị toàn bộ đơn đủ điều kiện trong kết quả lọc.</div>
             <div class="d-flex mb-2 gap-2">
-                <input type="text" class="form-control" id="orderSearchInput" placeholder="Tìm trong trang hiện tại...">
+                <input type="text" class="form-control" id="orderSearchInput" placeholder="Tìm trong danh sách đã lọc...">
                 <button type="button" class="btn btn-outline-primary btn-sm" id="selectAllOrdersBtn">Chọn tất cả</button>
                 <button type="button" class="btn btn-outline-secondary btn-sm" id="deselectAllOrdersBtn">Bỏ chọn tất cả</button>
             </div>
@@ -139,9 +139,6 @@
                     @endforelse
                 @endif
             </div>
-            @if(is_iterable($orders))
-                {{ $orders->links() }}
-            @endif
         </div>
     </div>
     <div class="col-md-6">

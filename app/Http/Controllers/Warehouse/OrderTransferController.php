@@ -44,7 +44,7 @@ class OrderTransferController extends Controller
                     $importQuery->whereNotNull('accounting_sales_import_batch_id')
                         ->whereBetween('delivery_date', [$from, $to]);
                 })->orWhereHas('histories', function ($historyQuery) use ($from, $to): void {
-                    $historyQuery->where('action', 'complete_packing')
+                    $historyQuery->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
                         ->whereBetween('created_at', [Carbon::parse($from)->startOfDay(), Carbon::parse($to)->endOfDay()]);
                 });
             })
@@ -57,8 +57,7 @@ class OrderTransferController extends Controller
             ->with(['customer', 'items.variant', 'warehouse'])
             ->orderBy('daily_sequence')
             ->orderBy('id')
-            ->paginate(20, ['*'], 'orders_page')
-            ->withQueryString();
+            ->get();
 
         // Lấy danh sách shipper và kho
         $shippers = User::whereHas('roles', function ($q) {
@@ -364,7 +363,7 @@ class OrderTransferController extends Controller
     {
         return Order::query()
             ->whereNull('order_transfer_id')
-            ->whereIn('status', ['ready_to_ship', 'packing', 'packed', 'packed_waiting_pickup'])
+            ->whereIn('status', ['ready_to_ship', 'packed', 'packed_waiting_pickup'])
             ->whereNotNull('warehouse_id')
             ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId));
     }
