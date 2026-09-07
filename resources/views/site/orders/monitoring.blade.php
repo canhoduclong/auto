@@ -966,6 +966,7 @@
 
 @section('content')
 @php
+    $createBusinessDate = auth()->user()?->isAdmin() && $selectedDate < now()->toDateString() ? $selectedDate : now()->toDateString();
     $statusLabels = \App\Models\Order::statusOptions() + [
         \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL => 'Chờ Leader duyệt',
         \App\Models\Order::STATUS_PENDING_MANAGER_APPROVAL => 'Chờ Manager duyệt',
@@ -1343,7 +1344,7 @@
             </div>
             <button type="button" class="btn btn-sm btn-success" id="monitorOpenCreate">
                 <i class="bi bi-plus-circle me-1"></i>Thêm đơn
-                @if(\Carbon\Carbon::parse($selectedDate)->isBefore(\Carbon\Carbon::today()))
+                @if($createBusinessDate < now()->toDateString())
                     - {{ \Carbon\Carbon::parse($selectedDate)->format('d/m') }}
                 @endif
             </button>
@@ -1548,10 +1549,10 @@
 
         <section class="monitor-panel monitor-create" id="monitorCreateOrder" hidden aria-label="Tạo đơn hàng mới">
             <div class="monitor-create-head d-flex align-items-center justify-content-between gap-2">
-                <h2>Tạo đơn hàng ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</h2>
+                <h2>Tạo đơn hàng ngày {{ \Carbon\Carbon::parse($createBusinessDate)->format('d/m/Y') }}</h2>
                 <button type="button" class="btn-close" id="monitorCloseCreate" aria-label="Đóng"></button>
             </div>
-            @if(\Carbon\Carbon::parse($selectedDate)->isBefore(\Carbon\Carbon::today()))
+            @if($createBusinessDate < now()->toDateString())
                 <div class="alert alert-warning mx-3 mt-3 mb-0 py-2 small">
                     <i class="bi bi-exclamation-triangle me-1"></i>
                     Đây là đơn bổ sung cho ngày trước. Đơn sẽ tự động được đánh dấu <strong>đơn ngoại lệ</strong>, không bị tự hủy do quá hạn và được xếp cuối thứ tự ưu tiên ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}.
@@ -2426,7 +2427,7 @@ document.addEventListener('click', async event => {
     const variantEndpoint = @json(route('site.orders.variants.ajax'));
     const customerEndpoint = @json(route('site.orders.customers.ajax'));
     const storeEndpoint = @json(route('pages.my_orders.monitoring.store'));
-    const selectedBusinessDate = @json($selectedDate);
+    const selectedBusinessDate = @json($createBusinessDate);
     const selectedItems = new Map();
     let selectedCustomer = null;
     let variantsLoaded = false;

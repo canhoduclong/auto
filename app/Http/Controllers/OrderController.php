@@ -732,7 +732,7 @@ class OrderController extends Controller
         ])->values()->all();
 
         $useTruckStation = (bool) ($validated['use_truck_station'] ?? false);
-        $businessDate = isset($validated['business_date'])
+        $businessDate = $currentUser?->isAdmin() && isset($validated['business_date'])
             ? Carbon::parse($validated['business_date'])->toDateString()
             : now()->toDateString();
         $isBusinessDateException = Order::isNonCurrentBusinessDate($businessDate);

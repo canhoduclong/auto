@@ -18,11 +18,12 @@ class MonitoringOrderAdditionalChargesTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_monitoring_can_add_a_missing_order_to_a_past_business_day_as_an_exception(): void
+    #[\PHPUnit\Framework\Attributes\DataProvider('monitoringCreationRoles')]
+    public function test_only_admin_can_create_for_a_past_business_day(string $role): void
     {
         Carbon::setTestNow('2026-08-25 10:00:00');
 
-        $saleRole = Role::query()->create(['name' => 'sale']);
+        $saleRole = Role::query()->create(['name' => $role]);
         $sale = User::factory()->create();
         $sale->roles()->attach($saleRole);
         $customer = Customer::query()->create([
@@ -47,7 +48,7 @@ class MonitoringOrderAdditionalChargesTest extends TestCase
         ]);
 
         $response = $this->actingAs($sale)
-            ->withSession(['active_role' => 'sale'])
+            ->withSession(['active_role' => $role])
             ->postJson(route('pages.my_orders.monitoring.store'), [
                 'business_date' => '2026-08-23',
                 'customer_id' => $customer->id,
@@ -58,13 +59,18 @@ class MonitoringOrderAdditionalChargesTest extends TestCase
             ->assertJsonPath('success', true);
 
         $order = Order::query()->latest('id')->firstOrFail();
-        $this->assertSame('2026-08-23', $order->created_at->toDateString());
-        $this->assertSame('23:59:59', $order->created_at->format('H:i:s'));
-        $this->assertSame('2026-08-23', $order->delivery_date->toDateString());
-        $this->assertTrue($order->skip_auto_cancel);
-        $this->assertStringContainsString('date=2026-08-23', $response->json('monitoring_url'));
+        $expectedDate = $role === 'admin' ? '2026-08-23' : '2026-08-25';
+        $this->assertSame($expectedDate, $order->created_at->toDateString());
+        $this->assertSame($role === 'admin' ? '2026-08-23' : '2026-08-26', $order->delivery_date->toDateString());
+        $this->assertSame($role === 'admin', $order->skip_auto_cancel);
+        $this->assertStringContainsString('date='.$expectedDate, $response->json('monitoring_url'));
         $this->assertStringContainsString('date_field=business_date', $response->json('monitoring_url'));
 
+    }
+
+    public static function monitoringCreationRoles(): array
+    {
+        return [['admin'], ['sale'], ['leader'], ['manager']];
     }
 
     public function test_monitoring_order_adds_vat_and_customer_shipping_without_using_assigned_shipping_fee(): void
