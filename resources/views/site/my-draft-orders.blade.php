@@ -403,8 +403,8 @@
                                     <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-clock me-1"></i>Giờ giao:</span><input name="delivery_time" class="form-control" value="{{ $draft->delivery_time }}" placeholder="Chưa cập nhật"></div>
                                 </div>
 
-                                <details class="border rounded p-2 my-2" @if($draft->charge_vat || $draft->collect_customer_shipping_fee) open @endif>
-                                    <summary class="fw-semibold">Thêm phí</summary>
+                                <details id="draftFees{{ $draft->id }}" class="border rounded p-2 my-2 js-draft-fees" @if($draft->charge_vat || $draft->collect_customer_shipping_fee) open @endif>
+                                    <summary class="fw-semibold">Chi phí khác</summary>
                                     <div class="row g-2 mt-1">
                                         <div class="col-md-6">
                                             <label><input type="checkbox" name="charge_vat" class="form-check-input js-draft-fee" @checked($draft->charge_vat)> Tính VAT</label>
@@ -529,6 +529,7 @@
                                     <div class="draft-edit-total"><span>Tổng cộng:</span><strong class="draft-edit-grand-total">{{ number_format($draftTotal, 0, ',', '.') }}đ</strong></div>
                                     <div class="draft-edit-footer">
                                         <div class="draft-edit-footer-actions">
+                                            <button type="button" class="btn btn-sm btn-outline-success js-draft-fees-toggle" aria-controls="draftFees{{ $draft->id }}"><i class="bi bi-plus-circle me-1"></i>Chi phí khác</button>
                                             <button type="button" class="btn btn-sm btn-outline-success js-draft-product-toggle"><i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm</button>
                                             <button type="button" class="btn btn-sm btn-outline-success js-draft-customer-toggle"><i class="bi bi-person-check me-1"></i>Chọn khách hàng</button>
                                         </div>
@@ -1058,6 +1059,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const phoneMeta = card.querySelector('.draft-template-meta .draft-customer-phone');
             if (phoneMeta) phoneMeta.textContent = customerButton.dataset.customerPhone || '';
             editor.querySelector('.draft-customer-picker').hidden = true;
+            return;
+        }
+        const feesToggle = event.target.closest('.js-draft-fees-toggle');
+        if (feesToggle) {
+            const fees = feesToggle.closest('.draft-template-editor').querySelector('.js-draft-fees');
+            fees.open = true;
+            fees.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            fees.querySelector('input')?.focus({ preventScroll: true });
             return;
         }
         const productToggle = event.target.closest('.js-draft-product-toggle');
