@@ -806,11 +806,18 @@
                                     <details class="wh-footer-adjustment">
                                         <summary>
                                             <i class="bi bi-pencil-square me-1"></i>
-                                            {{ $warehouseCanAdjust ? 'Yêu cầu Điều chỉnh' : 'Yêu cầu Điều chỉnh' }}
+                                            {{ $warehouseCanAdjust ? 'Sửa số lượng sản phẩm' : 'Yêu cầu điều chỉnh' }}
                                         </summary>
                                         <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.request-adjustment', $order) }}" method="POST" class="mt-2">
                                             @csrf
-                                            <div class="small text-muted mb-2">Đặt số lượng = 0 để xóa sản phẩm khỏi đơn.</div>
+                                            <div class="small text-muted mb-2">
+                                                @if($warehouseCanAdjust)
+                                                    Kho được phép sửa trực tiếp số lượng sản phẩm trên đơn, không cần sale xác nhận.
+                                                @else
+                                                    Thay đổi chỉ được áp dụng vào đơn sau khi sale xác nhận.
+                                                @endif
+                                                Đặt số lượng = 0 để xóa sản phẩm khỏi đơn.
+                                            </div>
                                             <div class="d-grid gap-2 mb-2">
                                                 @foreach($order->items as $item)
                                                     @php
@@ -870,7 +877,7 @@
                                             </div>
                                             <button class="btn btn-outline-warning btn-sm" type="submit">
                                                 <i class="bi {{ $warehouseCanAdjust ? 'bi-save2' : 'bi-send' }} me-1"></i>
-                                                {{ $warehouseCanAdjust ? 'Lưu điều chỉnh' : 'Lưu thay đổi và gửi sale xác nhận' }}
+                                                {{ $warehouseCanAdjust ? 'Lưu số lượng vào đơn' : 'Lưu thay đổi và gửi sale xác nhận' }}
                                             </button>
                                         </form>
                                     </details>

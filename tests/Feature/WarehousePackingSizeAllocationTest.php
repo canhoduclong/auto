@@ -31,6 +31,21 @@ class WarehousePackingSizeAllocationTest extends TestCase
         parent::tearDown();
     }
 
+    public function test_authorized_warehouse_quantity_edit_updates_order_without_sale_confirmation(): void
+    {
+        [$user, $order, $item] = $this->fixture(100);
+        $order->update(['warehouse_can_adjust' => true]);
+        $this->actingAs($user)->postJson(route('warehouse.orders.request-adjustment', $order), [
+            'reason' => 'Cập nhật số lượng trên đơn',
+            'items' => [['order_item_id' => $item->id, 'quantity' => 80]],
+        ])->assertOk()->assertJsonPath('ok', true);
+        $this->assertSame(80, (int) $item->fresh()->quantity);
+        $this->assertSame(Order::WAREHOUSE_ADJUSTMENT_STATUS_NONE, $order->fresh()->warehouse_adjustment_status);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id, 'action' => 'warehouse_direct_adjustment',
+        ]);
+    }
+
     public function test_it_saves_a_valid_adjacent_size_mix_and_moves_reservations(): void
     {
         [$user, $order, $item, $variants, $inventories] = $this->fixture(100);
