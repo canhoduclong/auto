@@ -43,6 +43,9 @@ class OrderTransferController extends Controller
                 })->orWhere(function ($importQuery) use ($from, $to): void {
                     $importQuery->whereNotNull('accounting_sales_import_batch_id')
                         ->whereBetween('delivery_date', [$from, $to]);
+                })->orWhereHas('histories', function ($historyQuery) use ($from, $to): void {
+                    $historyQuery->where('action', 'complete_packing')
+                        ->whereBetween('created_at', [Carbon::parse($from)->startOfDay(), Carbon::parse($to)->endOfDay()]);
                 });
             })
             ->when($search !== '', function ($query) use ($search) {
@@ -53,6 +56,7 @@ class OrderTransferController extends Controller
             })
             ->with(['customer', 'items.variant', 'warehouse'])
             ->orderBy('daily_sequence')
+            ->orderBy('id')
             ->paginate(20, ['*'], 'orders_page')
             ->withQueryString();
 

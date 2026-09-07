@@ -16,6 +16,37 @@ class WarehouseOrderTransferWeightTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_old_orders_packed_in_selected_range_are_listed_only_for_their_warehouse(): void
+    {
+        $role = Role::create(['name' => 'warehouse']);
+        $source = Warehouse::factory()->create();
+        $other = Warehouse::factory()->create();
+        $user = User::factory()->create(['warehouse_id' => $source->id]);
+        $user->roles()->attach($role);
+        $customer = Customer::create(['name' => 'Khách đơn cũ vừa đóng', 'status' => 'active']);
+        $ids = [];
+        foreach ([$source->id, $other->id] as $warehouseId) {
+            $order = Order::create([
+                'customer_id' => $customer->id, 'user_id' => $user->id,
+                'warehouse_id' => $warehouseId, 'status' => Order::STATUS_READY_TO_SHIP,
+                'delivery_date' => '2026-07-22',
+            ]);
+            $order->forceFill(['created_at' => '2026-07-21 10:00:00'])->saveQuietly();
+            $order->histories()->create([
+                'action' => 'complete_packing', 'user_id' => $user->id, 'role' => 'warehouse',
+                'status_before' => Order::STATUS_PACKING, 'status_after' => Order::STATUS_READY_TO_SHIP,
+                'created_at' => '2026-09-07 10:00:00',
+            ]);
+            $ids[] = $order->id;
+        }
+        $this->actingAs($user)->get(route('warehouse.order-transfers', [
+            'from_date' => '2026-09-07', 'to_date' => '2026-09-07',
+        ]))->assertOk()->assertViewHas('orders', fn ($orders) => $orders->pluck('id')->all() === [$ids[0]]);
+        $this->get(route('warehouse.order-transfers', [
+            'from_date' => '2026-09-08', 'to_date' => '2026-09-08',
+        ]))->assertOk()->assertViewHas('orders', fn ($orders) => $orders->isEmpty());
+    }
+
     public function test_batch_order_transfer_snapshots_packed_weight_for_future_loss_calculation(): void
     {
         $warehouseRole = Role::create(['name' => 'warehouse']);
