@@ -453,6 +453,81 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
         $this->assertDatabaseMissing('warehouse_dispatch_slips', ['id' => $slip->id]);
     }
 
+    public function test_admin_can_unfinalize_and_delete_a_slip_before_driver_pickup(): void
+    {
+        $adminRole = Role::create(['name' => 'admin']);
+        $source = Warehouse::create(['name' => 'Kho nguồn gỡ chốt']);
+        $target = Warehouse::create(['name' => 'Kho nhận gỡ chốt']);
+        $admin = User::factory()->create();
+        $admin->roles()->attach($adminRole);
+        $shipper = User::factory()->create();
+        $customer = Customer::create(['name' => 'Khách chờ tài xế', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'warehouse_id' => $source->id,
+            'code' => 'ORD-UNFINALIZE-1',
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $transfer = WarehouseTransfer::create([
+            'order_id' => $order->id,
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+        ]);
+        $slip = WarehouseDispatchSlip::create([
+            'business_date' => now(),
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseDispatchSlip::STATUS_FINALIZED,
+            'created_by' => $admin->id,
+            'finalized_by' => $admin->id,
+            'finalized_at' => now(),
+        ]);
+        $slip->entries()->create(['warehouse_transfer_id' => $transfer->id]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.warehouse-dispatch-slips.index'))
+            ->assertOk()
+            ->assertSee('Gỡ chốt');
+
+        $this->actingAs($admin)
+            ->post(route('admin.warehouse-dispatch-slips.unfinalize', $slip))
+            ->assertSessionHas('success');
+        $this->assertSame(WarehouseDispatchSlip::STATUS_DRAFT, $slip->fresh()->status);
+
+        $slip->update([
+            'status' => WarehouseDispatchSlip::STATUS_FINALIZED,
+            'finalized_by' => $admin->id,
+            'finalized_at' => now(),
+        ]);
+        $this->actingAs($admin)
+            ->delete(route('admin.warehouse-dispatch-slips.destroy', $slip))
+            ->assertSessionHas('success');
+        $this->assertDatabaseMissing('warehouse_dispatch_slips', ['id' => $slip->id]);
+        $this->assertNull($transfer->fresh()->dispatchEntry);
+
+        $blockedSlip = WarehouseDispatchSlip::create([
+            'business_date' => now(),
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseDispatchSlip::STATUS_FINALIZED,
+            'created_by' => $admin->id,
+            'finalized_by' => $admin->id,
+            'finalized_at' => now(),
+        ]);
+        $slipTransfer = $transfer->fresh();
+        $slipTransfer->update(['status' => WarehouseTransfer::STATUS_IN_TRANSIT]);
+        $blockedSlip->entries()->create(['warehouse_transfer_id' => $slipTransfer->id]);
+
+        $this->actingAs($admin)
+            ->post(route('admin.warehouse-dispatch-slips.unfinalize', $blockedSlip))
+            ->assertSessionHas('error');
+        $this->assertSame(WarehouseDispatchSlip::STATUS_FINALIZED, $blockedSlip->fresh()->status);
+    }
+
     public function test_unified_transfer_screen_links_both_creation_flows_and_prints_selected_driver_slips(): void
     {
         $warehouseRole = Role::create(['name' => 'warehouse']);

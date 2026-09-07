@@ -756,6 +756,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::put('/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'update'])->name('update');
         Route::get('/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'show'])->name('show');
         Route::post('/{dispatchSlip}/finalize', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'finalize'])->name('finalize');
+        Route::post('/{dispatchSlip}/unfinalize', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'unfinalize'])->name('unfinalize');
         Route::delete('/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'destroy'])->name('destroy');
         Route::get('/{dispatchSlip}/print-export', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'printExport'])->name('print-export');
         Route::get('/{dispatchSlip}/print-import', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'printImport'])->name('print-import');

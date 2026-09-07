@@ -462,11 +462,43 @@ class WarehouseDispatchSlipController extends Controller
         return back()->with('success', 'Đã chốt phiếu. Danh sách bàn giao đã được khóa.');
     }
 
+    public function unfinalize(WarehouseDispatchSlip $dispatchSlip)
+    {
+        $this->authorizeSource($dispatchSlip);
+        if (! Auth::user()?->hasRole('admin')) {
+            abort(403, 'Chỉ quản trị viên được gỡ chốt phiếu.');
+        }
+        if ($dispatchSlip->status !== WarehouseDispatchSlip::STATUS_FINALIZED) {
+            return back()->with('error', 'Chỉ được gỡ chốt phiếu đã chốt.');
+        }
+
+        $this->loadSlip($dispatchSlip);
+        if (! $this->canReleaseForDriverPickup($dispatchSlip)) {
+            return back()->with('error', 'Chỉ được gỡ chốt khi toàn bộ đơn vẫn đang chờ tài xế đến nhận.');
+        }
+
+        $dispatchSlip->update([
+            'status' => WarehouseDispatchSlip::STATUS_DRAFT,
+            'finalized_by' => null,
+            'finalized_at' => null,
+        ]);
+
+        return back()->with('success', 'Đã gỡ chốt phiếu '.$dispatchSlip->code.'.');
+    }
+
     public function destroy(WarehouseDispatchSlip $dispatchSlip)
     {
         $this->authorizeSource($dispatchSlip);
-        if ($dispatchSlip->status !== WarehouseDispatchSlip::STATUS_DRAFT) {
-            return back()->with('error', 'Chỉ được xóa phiếu đang mở.');
+        if ($dispatchSlip->status === WarehouseDispatchSlip::STATUS_FINALIZED) {
+            if (! Auth::user()?->hasRole('admin')) {
+                abort(403, 'Chỉ quản trị viên được xóa phiếu đã chốt.');
+            }
+            $this->loadSlip($dispatchSlip);
+            if (! $this->canReleaseForDriverPickup($dispatchSlip)) {
+                return back()->with('error', 'Chỉ được xóa phiếu đã chốt khi toàn bộ đơn vẫn đang chờ tài xế đến nhận.');
+            }
+        } elseif ($dispatchSlip->status !== WarehouseDispatchSlip::STATUS_DRAFT) {
+            return back()->with('error', 'Chỉ được xóa phiếu đang mở hoặc phiếu đã chốt chưa có tài xế nhận.');
         }
         $dispatchSlip->delete();
 
@@ -873,6 +905,28 @@ class WarehouseDispatchSlipController extends Controller
         $slip->setAttribute('entry_total', $statuses->count());
         $slip->setAttribute('entry_received', $received);
         $slip->setAttribute('progress_label', $received.'/'.$statuses->count().' mục đã tiếp nhận');
+        $slip->setAttribute('can_release_for_driver_pickup', $this->canReleaseForDriverPickup($slip));
+    }
+
+    private function canReleaseForDriverPickup(WarehouseDispatchSlip $slip): bool
+    {
+        if ($slip->entries->isEmpty()) {
+            return false;
+        }
+
+        return $slip->entries->every(function ($entry): bool {
+            if ($entry->warehouseTransfer) {
+                return $entry->warehouseTransfer->status === WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP;
+            }
+            if ($entry->orderTransfer) {
+                return $entry->orderTransfer->orders->isNotEmpty()
+                    && $entry->orderTransfer->orders->every(function (Order $order): bool {
+                        return $order->warehouseTransfers->first()?->status === WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP;
+                    });
+            }
+
+            return false;
+        });
     }
 
     private function authorizeSlip(WarehouseDispatchSlip $slip): void

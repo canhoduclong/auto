@@ -13,6 +13,7 @@ use App\Models\InventoryReservation;
 use App\Models\InventoryStocktake;
 use App\Models\Order;
 use App\Models\OrderHistory;
+use App\Models\OrderTransfer;
 use App\Models\OrderItemPackingSizeAllocation;
 use App\Models\OrderReturn;
 use App\Models\ProcurementPurchase;
@@ -1688,46 +1689,63 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Người nhận vận chuyển không phải shipper hợp lệ.');
         }
 
-        $activeTransfer = WarehouseTransfer::query()
-            ->where('order_id', $order->id)
-            ->whereIn('status', [
-                WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
-                WarehouseTransfer::STATUS_IN_TRANSIT,
-                WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
-            ])
-            ->exists();
+        try {
+            [$transfer, $orderTransfer] = DB::transaction(function () use ($order, $sourceWarehouseId, $targetWarehouseId, $shipperId, $shipper, $request): array {
+                $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+                if ($lockedOrder->order_transfer_id) {
+                    throw new \RuntimeException('Đơn này đã thuộc phiếu điều chuyển #'.$lockedOrder->order_transfer_id.'. Không tự động nhập thêm vào phiếu cũ.');
+                }
 
-        if ($activeTransfer) {
-            return back()->with('error', 'Đơn này đang có phiếu điều chuyển chưa hoàn tất.');
+                $activeTransfer = WarehouseTransfer::query()
+                    ->where('order_id', $lockedOrder->id)
+                    ->whereIn('status', [
+                        WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                        WarehouseTransfer::STATUS_IN_TRANSIT,
+                        WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                    ])
+                    ->exists();
+                if ($activeTransfer) {
+                    throw new \RuntimeException('Đơn này đang có phiếu điều chuyển chưa hoàn tất.');
+                }
+
+                $orderTransfer = OrderTransfer::create([
+                    'shipper_id' => $shipperId,
+                    'warehouse_id' => $targetWarehouseId,
+                    'notes' => trim((string) $request->input('note', '')) ?: null,
+                    'created_by' => Auth::id(),
+                ]);
+                $lockedOrder->forceFill(['order_transfer_id' => $orderTransfer->id])->save();
+
+                $transfer = WarehouseTransfer::create([
+                    'order_id' => $lockedOrder->id,
+                    'source_warehouse_id' => $sourceWarehouseId,
+                    'target_warehouse_id' => $targetWarehouseId,
+                    'shipper_id' => $shipperId,
+                    'status' => WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                    'note' => trim((string) $request->input('note', '')) ?: null,
+                    'packed_total_weight' => $lockedOrder->transferBaselineWeight(),
+                ]);
+
+                $targetWarehouse = Warehouse::query()->find($targetWarehouseId);
+                OrderHistory::create([
+                    'order_id' => $lockedOrder->id,
+                    'action' => 'warehouse_transfer_requested',
+                    'user_id' => Auth::id(),
+                    'role' => $this->packingActorRole(),
+                    'status_before' => $lockedOrder->status,
+                    'status_after' => $lockedOrder->status,
+                    'note' => 'Tạo phiếu điều chuyển #'.$transfer->id
+                        .' (phiếu đơn #'.$orderTransfer->id.') đến kho '.($targetWarehouse?->name ?? ('ID '.$targetWarehouseId))
+                        .' và giao shipper '.$shipper->name,
+                ]);
+
+                return [$transfer, $orderTransfer];
+            });
+        } catch (\RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
         }
 
-        $packedTotalWeight = $order->transferBaselineWeight();
-
-        $transfer = WarehouseTransfer::create([
-            'order_id' => $order->id,
-            'source_warehouse_id' => $sourceWarehouseId,
-            'target_warehouse_id' => $targetWarehouseId,
-            'shipper_id' => $shipperId,
-            'status' => WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
-            'note' => trim((string) $request->input('note', '')) ?: null,
-            'packed_total_weight' => $packedTotalWeight,
-        ]);
-
-        $targetWarehouse = Warehouse::query()->find($targetWarehouseId);
-
-        OrderHistory::create([
-            'order_id' => $order->id,
-            'action' => 'warehouse_transfer_requested',
-            'user_id' => Auth::id(),
-            'role' => $this->packingActorRole(),
-            'status_before' => $order->status,
-            'status_after' => $order->status,
-            'note' => 'Tạo phiếu điều chuyển #'.$transfer->id
-                .' đến kho '.($targetWarehouse?->name ?? ('ID '.$targetWarehouseId))
-                .' và giao shipper '.$shipper->name,
-        ]);
-
-        return back()->with('success', 'Đã tạo phiếu điều chuyển và chờ shipper nhận hàng.');
+        return back()->with('success', 'Đã tạo phiếu điều chuyển đơn #'.$orderTransfer->id.' và chờ shipper nhận hàng.');
     }
 
     public function incomingTransfers(Request $request)

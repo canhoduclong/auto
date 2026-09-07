@@ -38,8 +38,7 @@ class OrderTransferController extends Controller
         $orders = $this->transferableOrders($warehouseId ? (int) $warehouseId : null)
             ->where(function ($dateQuery) use ($from, $to): void {
                 $dateQuery->where(function ($normalQuery) use ($from, $to): void {
-                    $normalQuery->whereNull('accounting_sales_import_batch_id')
-                        ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to]);
+                    $normalQuery->whereBetween(DB::raw('DATE(created_at)'), [$from, $to]);
                 })->orWhere(function ($importQuery) use ($from, $to): void {
                     $importQuery->whereNotNull('accounting_sales_import_batch_id')
                         ->whereBetween('delivery_date', [$from, $to]);
@@ -309,35 +308,14 @@ class OrderTransferController extends Controller
                 ]);
             }
 
-            $orderTransfer = OrderTransfer::query()
-                ->with(['orders.warehouseTransfers' => fn ($query) => $query->latest('id')])
-                ->whereDoesntHave('dispatchEntry')
-                ->where('shipper_id', $data['shipper_id'])
-                ->where('warehouse_id', $data['warehouse_id'])
-                ->whereDate('created_at', Carbon::today())
-                ->when($sourceWarehouseId, fn ($query) => $query->whereHas(
-                    'orders.warehouseTransfers',
-                    fn ($warehouseTransferQuery) => $warehouseTransferQuery->where('source_warehouse_id', $sourceWarehouseId)
-                ))
-                ->latest('id')
-                ->get()
-                ->first(function (OrderTransfer $transfer) {
-                    $latestStatuses = $transfer->orders
-                        ->map(fn (Order $order) => $order->warehouseTransfers->first()?->status)
-                        ->filter();
-
-                    return $latestStatuses->isNotEmpty()
-                        && $latestStatuses->every(fn ($status) => $status === WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP);
-                });
-
-            if (!$orderTransfer) {
-                $orderTransfer = OrderTransfer::create([
-                    'shipper_id' => $data['shipper_id'],
-                    'warehouse_id' => $data['warehouse_id'],
-                    'notes' => null,
-                    'created_by' => auth()->id(),
-                ]);
-            }
+            // Each explicit creation is a new group. Never append today's
+            // selection to an existing transfer or change an earlier manifest.
+            $orderTransfer = OrderTransfer::create([
+                'shipper_id' => $data['shipper_id'],
+                'warehouse_id' => $data['warehouse_id'],
+                'notes' => null,
+                'created_by' => auth()->id(),
+            ]);
 
             foreach ($orders as $order) {
                 $order->order_transfer_id = $orderTransfer->id;
@@ -356,7 +334,7 @@ class OrderTransferController extends Controller
         });
 
         return redirect()->route('warehouse.order-transfers')
-            ->with('success', 'Đã cập nhật phiếu điều chuyển ngày hôm nay #' . $orderTransfer->id . '.');
+            ->with('success', 'Đã tạo phiếu điều chuyển mới #' . $orderTransfer->id . '.');
     }
 
     private function transferableOrders(?int $warehouseId): \Illuminate\Database\Eloquent\Builder

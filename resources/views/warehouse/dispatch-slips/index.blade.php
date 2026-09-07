@@ -191,6 +191,9 @@
                         <a href="{{ route($dispatchRoutePrefix.'.edit', $slip) }}" class="btn btn-warning btn-sm"><i class="bi bi-pencil-square me-1"></i>Sửa</a>
                         <form method="POST" action="{{ route($dispatchRoutePrefix.'.finalize', $slip) }}" onsubmit="return confirm('Chốt phiếu {{ $slip->code }} và khóa danh sách bàn giao?');">@csrf<button class="btn btn-success btn-sm"><i class="bi bi-check2-circle me-1"></i>Chốt</button></form>
                         <form method="POST" action="{{ route($dispatchRoutePrefix.'.destroy', $slip) }}" class="ms-auto" onsubmit="return confirm('Xóa phiếu {{ $slip->code }}? Nội dung sẽ được trả về danh sách để lập phiếu khác.');">@csrf @method('DELETE')<button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash me-1"></i>Xóa</button></form>
+                    @elseif(!empty($isAdminManagement) && $slip->status === 'finalized' && $slip->can_release_for_driver_pickup)
+                        <form method="POST" action="{{ route($dispatchRoutePrefix.'.unfinalize', $slip) }}" onsubmit="return confirm('Gỡ chốt phiếu {{ $slip->code }} để chỉnh sửa lại?');">@csrf<button class="btn btn-warning btn-sm"><i class="bi bi-unlock me-1"></i>Gỡ chốt</button></form>
+                        <form method="POST" action="{{ route($dispatchRoutePrefix.'.destroy', $slip) }}" class="ms-auto" onsubmit="return confirm('Xóa phiếu {{ $slip->code }}? Nội dung sẽ được trả về danh sách để lập phiếu khác.');">@csrf @method('DELETE')<button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash me-1"></i>Xóa</button></form>
                     @endif
                 </div>
             </div>
