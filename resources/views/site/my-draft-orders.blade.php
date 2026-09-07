@@ -114,6 +114,13 @@
     .draft-edit-line-weight { color: #047857; font-size: .85rem; font-weight: 900; white-space: nowrap; }
     .draft-edit-line-total { font-weight: 900; white-space: nowrap; }
     .draft-edit-total { display: grid; grid-template-columns: auto minmax(100px, auto); justify-content: end; gap: 18px; padding: 9px 6px 20px; color: #0f172a; font-size: .8rem; font-weight: 900; text-align: right; }
+    .js-draft-fees { margin: 16px 0 !important; padding: 10px !important; }
+    .js-draft-fees label { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; font-weight: 600; }
+    .js-draft-fees .form-check-input { flex: 0 0 auto; width: 1em; height: 1em; margin: 0; }
+    .js-draft-fees .input-group { flex-wrap: nowrap; }
+    .js-draft-fees .input-group > .form-control { width: 1%; min-width: 0; }
+    .draft-edit-footer-actions { align-items: center; }
+    .draft-edit-footer-actions .btn { white-space: nowrap; }
     .draft-edit-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 4px 0; border-top: 1px solid #dce6f1; }
     .draft-edit-footer-actions { display: flex; flex-wrap: wrap; gap: 10px; }
     .draft-automation { padding-top: 12px; }
@@ -403,25 +410,7 @@
                                     <div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-clock me-1"></i>Giờ giao:</span><input name="delivery_time" class="form-control" value="{{ $draft->delivery_time }}" placeholder="Chưa cập nhật"></div>
                                 </div>
 
-                                <details id="draftFees{{ $draft->id }}" class="border rounded p-2 my-2 js-draft-fees" @if($draft->charge_vat || $draft->collect_customer_shipping_fee) open @endif>
-                                    <summary class="fw-semibold">Chi phí khác</summary>
-                                    <div class="row g-2 mt-1">
-                                        <div class="col-md-6">
-                                            <label><input type="checkbox" name="charge_vat" class="form-check-input js-draft-fee" @checked($draft->charge_vat)> Tính VAT</label>
-                                            <div class="input-group input-group-sm mt-1">
-                                                <input type="number" name="vat_percent" class="form-control js-draft-fee" aria-label="VAT (%)" min="0.01" max="100" step="0.01" value="{{ $draft->vat_percent }}">
-                                                <span class="input-group-text">%</span>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <label><input type="checkbox" name="collect_customer_shipping_fee" class="form-check-input js-draft-fee" @checked($draft->collect_customer_shipping_fee)> Thu phí giao hàng của khách</label>
-                                            <div class="input-group input-group-sm mt-1">
-                                                <input type="number" name="customer_shipping_fee" class="form-control js-draft-fee" aria-label="Phí giao hàng thu khách" min="0.01" max="999999999999.99" step="0.01" value="{{ $draft->customer_shipping_fee }}">
-                                                <span class="input-group-text">đ</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </details>
+
 
                                 <div class="draft-edit-extra">
                                     <div>
@@ -527,6 +516,25 @@
                                         <div class="draft-product-results"><div class="text-center text-muted py-3">Đang tải danh sách sản phẩm...</div></div>
                                     </div>
                                     <div class="draft-edit-total"><span>Tổng cộng:</span><strong class="draft-edit-grand-total">{{ number_format($draftTotal, 0, ',', '.') }}đ</strong></div>
+                                <details id="draftFees{{ $draft->id }}" class="border rounded p-2 my-2 js-draft-fees" @if($draft->charge_vat || $draft->collect_customer_shipping_fee) open @endif>
+                                    <summary class="fw-semibold">Chi phí khác</summary>
+                                    <div class="row g-2 mt-1">
+                                        <div class="col-md-6">
+                                            <label><input type="checkbox" name="charge_vat" class="form-check-input js-draft-fee" @checked($draft->charge_vat)> Tính VAT</label>
+                                            <div class="input-group input-group-sm mt-1">
+                                                <input type="number" name="vat_percent" class="form-control js-draft-fee" aria-label="VAT (%)" min="0.01" max="100" step="0.01" value="{{ $draft->vat_percent }}">
+                                                <span class="input-group-text">%</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label><input type="checkbox" name="collect_customer_shipping_fee" class="form-check-input js-draft-fee" @checked($draft->collect_customer_shipping_fee)> Thu phí giao hàng của khách</label>
+                                            <div class="input-group input-group-sm mt-1">
+                                                <input type="number" name="customer_shipping_fee" class="form-control js-draft-fee" aria-label="Phí giao hàng thu khách" min="0.01" max="999999999999.99" step="0.01" value="{{ $draft->customer_shipping_fee }}">
+                                                <span class="input-group-text">đ</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </details>
                                     <div class="draft-edit-footer">
                                         <div class="draft-edit-footer-actions">
                                             <button type="button" class="btn btn-sm btn-outline-success js-draft-fees-toggle" aria-controls="draftFees{{ $draft->id }}"><i class="bi bi-plus-circle me-1"></i>Chi phí khác</button>
@@ -535,8 +543,8 @@
                                         </div>
                                         <div class="draft-edit-footer-actions">
                                             <button type="button" class="btn btn-sm btn-outline-secondary js-cancel-draft-confirm" hidden><i class="bi bi-x-circle me-1"></i>Hủy</button>
-                                            <button type="button" class="btn btn-sm btn-outline-success js-save-draft"><i class="bi bi-check2 me-1"></i>Lưu thay đổi</button>
-                                            <button type="button" class="btn btn-sm btn-success js-confirm-draft" hidden><i class="bi bi-check2-circle me-1"></i>Xác nhận lên đơn {{ \Carbon\Carbon::parse($selectedDraftDate)->format('d/m') }}</button>
+                                            <button type="button" class="btn btn-sm btn-outline-success js-save-draft"><i class="bi bi-check2 me-1"></i>Lưu</button>
+                                            <button type="button" class="btn btn-sm btn-success js-confirm-draft" hidden><i class="bi bi-check2-circle me-1"></i>Xác nhận đơn {{ \Carbon\Carbon::parse($selectedDraftDate)->format('d/m') }}</button>
                                         </div>
                                     </div>
                                 @endif
@@ -850,6 +858,7 @@ document.addEventListener('DOMContentLoaded', () => {
         button.classList.add('is-selected');
         button.disabled = true;
         button.title = 'Biến thể đã có trong đơn mẫu';
+        editor.querySelector('.draft-product-picker').hidden = true;
     };
     const rowData = card => {
         const editor = card.querySelector('.draft-template-editor');

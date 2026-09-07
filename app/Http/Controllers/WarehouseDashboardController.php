@@ -2313,29 +2313,36 @@ class WarehouseDashboardController extends Controller
             ->get()
             ->groupBy('product_id');
 
+        $reservedByInventory = InventoryReservation::query()
+            ->whereIn('inventory_id', $variantsByProduct->flatten()->flatMap(fn ($variant) => $variant->inventories->pluck('id')))
+            ->selectRaw('inventory_id, SUM(quantity) as quantity')
+            ->groupBy('inventory_id')->pluck('quantity', 'inventory_id');
+
         $reservationByItemAndInventory = InventoryReservation::query()
             ->whereIn('order_item_id', $eligibleItems->pluck('id')->all())
             ->get()
             ->groupBy('order_item_id')
             ->map(fn ($rows) => $rows->pluck('quantity', 'inventory_id'));
 
-        return $eligibleItems->mapWithKeys(function ($item) use ($variantsByProduct, $reservationByItemAndInventory) {
+        return $eligibleItems->mapWithKeys(function ($item) use ($variantsByProduct, $reservationByItemAndInventory, $reservedByInventory) {
             $saved = $item->packingSizeAllocations->pluck('quantity', 'product_variant_id');
             $mainSize = (float) $item->variant->size;
             $options = collect($variantsByProduct->get((int) $item->variant->product_id, collect()))
                 ->filter(fn (ProductVariant $variant) => abs((float) $variant->size - $mainSize) <= 0.100001)
-                ->map(function (ProductVariant $variant) use ($item, $saved, $reservationByItemAndInventory) {
+                ->map(function (ProductVariant $variant) use ($item, $saved, $reservationByItemAndInventory, $reservedByInventory) {
                     $inventories = $variant->inventories;
-                    $ownReserved = (int) $inventories->sum(function (Inventory $inventory) use ($item, $reservationByItemAndInventory) {
-                        return (int) ($reservationByItemAndInventory->get($item->id)?->get($inventory->id) ?? 0);
+                    $available = (int) $inventories->sum(function (Inventory $inventory) use ($item, $reservationByItemAndInventory, $reservedByInventory) {
+                        $ownReserved = (int) ($reservationByItemAndInventory->get($item->id)?->get($inventory->id) ?? 0);
+                        $reserved = max((int) $inventory->reserved_quantity, (int) ($reservedByInventory[$inventory->id] ?? 0));
+
+                        return max(0, (int) $inventory->quantity - max(0, $reserved - $ownReserved));
                     });
-                    $available = (int) $inventories->sum(fn (Inventory $inventory) => max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity));
 
                     return [
                         'variant_id' => (int) $variant->id,
                         'size' => (float) $variant->size,
                         'name' => (string) ($variant->name ?: $variant->sku),
-                        'available' => $available + $ownReserved,
+                        'available' => $available,
                         'quantity' => (int) ($saved[$variant->id] ?? ((int) $variant->id === (int) $item->product_variant_id ? $item->quantity : 0)),
                     ];
                 })
@@ -2481,6 +2488,21 @@ class WarehouseDashboardController extends Controller
         // pool. Orders from this date are applied exactly once by the FIFO loop
         // below; orders from every other date are excluded by forPackingDate().
         $stockByVariant = $this->getStockAtDate($variantIds, $warehouseId, $forDate);
+
+        // Packed orders retain reservations until dispatch. They are no longer
+        // in the FIFO queue, but their stock cannot be offered to another order.
+        $packedReservations = InventoryReservation::query()
+            ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
+            ->whereIn('inventories.product_variant_id', $variantIds->all())
+            ->when($warehouseId, fn ($query) => $query->where('inventories.warehouse_id', $warehouseId))
+            ->whereHas('orderItem.order', fn ($query) => $query
+                ->whereIn('status', self::PACKED_STATUSES)->forPackingDate($forDate))
+            ->selectRaw('inventories.product_variant_id, SUM(inventory_reservations.quantity) as quantity')
+            ->groupBy('inventories.product_variant_id')
+            ->pluck('quantity', 'product_variant_id');
+        foreach ($packedReservations as $variantId => $quantity) {
+            $stockByVariant[$variantId] = max(0, (float) ($stockByVariant[$variantId] ?? 0) - (float) $quantity);
+        }
 
         // Running pool — decremented only when a complete order can be packed (FIFO)
         $remainingByVariant = array_map(fn ($v) => (float) $v, $stockByVariant);

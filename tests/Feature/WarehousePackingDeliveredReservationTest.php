@@ -99,6 +99,85 @@ class WarehousePackingDeliveredReservationTest extends TestCase
         $this->assertSame([], $result['guards'][$waitingOrder->id]['shortages']);
     }
 
+    public function test_packed_order_reservation_is_not_available_to_the_next_order(): void
+    {
+        Carbon::setTestNow('2026-08-25 10:00:00');
+
+        $user = User::factory()->create();
+        $customer = Customer::query()->create(['name' => 'Khách kiểm tra FIFO', 'status' => 'active']);
+        $warehouse = Warehouse::query()->create(['name' => 'Kho FIFO', 'status' => true]);
+        $product = Product::query()->create([
+            'user_id' => $user->id,
+            'name' => 'Sản phẩm FIFO',
+            'unit' => 'cái',
+            'status' => true,
+        ]);
+        $variant = $product->variants()->create([
+            'name' => '2.5 kg',
+            'sku' => 'FIFO-DELIVERED-2-5',
+            'kg' => 2.5,
+        ]);
+        $inventory = Inventory::query()->create([
+            'warehouse_id' => $warehouse->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 4,
+            'reserved_quantity' => 4,
+        ]);
+
+        $deliveredOrder = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'warehouse_id' => $warehouse->id,
+            'code' => 'FIFO-DELIVERED',
+            'status' => Order::STATUS_READY_TO_SHIP,
+            'skip_auto_cancel' => true,
+        ]);
+        $deliveredOrder->forceFill(['created_at' => '2026-08-23 08:00:00'])->saveQuietly();
+        $deliveredItem = $deliveredOrder->items()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 4,
+            'price' => 10000,
+            'total' => 40000,
+            'is_priced_by_kg' => false,
+        ]);
+        InventoryReservation::query()->create([
+            'order_item_id' => $deliveredItem->id,
+            'inventory_id' => $inventory->id,
+            'quantity' => 4,
+        ]);
+
+        $waitingOrder = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'warehouse_id' => $warehouse->id,
+            'code' => 'FIFO-WAITING',
+            'status' => Order::STATUS_READY_TO_PACK,
+            'skip_auto_cancel' => true,
+        ]);
+        $waitingOrder->forceFill(['created_at' => '2026-08-23 12:00:00'])->saveQuietly();
+        $waitingOrder->items()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 4,
+            'price' => 10000,
+            'total' => 40000,
+            'is_priced_by_kg' => false,
+        ]);
+
+        $method = new ReflectionMethod(WarehouseDashboardController::class, 'buildPackingQueueStockGuards');
+        $result = $method->invoke(
+            app(WarehouseDashboardController::class),
+            collect([$waitingOrder]),
+            $warehouse->id,
+            '2026-08-23'
+        );
+
+        $this->assertTrue($result['guards'][$waitingOrder->id]['has_shortage']);
+        $this->assertFalse($result['guards'][$waitingOrder->id]['can_start_packing']);
+        $this->assertSame(0.0, (float) $result['guards'][$waitingOrder->id]['shortages'][0]['available_qty']);
+    }
+
     public function test_reservation_from_another_day_does_not_reduce_selected_days_packing_stock(): void
     {
         Carbon::setTestNow('2026-08-25 10:00:00');
