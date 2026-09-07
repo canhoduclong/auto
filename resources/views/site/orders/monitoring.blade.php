@@ -513,7 +513,11 @@
     .monitor-edit-price-stepper .btn:disabled { color: #94a3b8; background: #f1f5f9; opacity: 1; }
     .monitor-edit-price-value { min-width: 90px; display: inline-flex; align-items: center; justify-content: center; padding: 4px 7px; border-block: 1px solid #cbd5e1; background: #fff; color: #047857; font-weight: 900; white-space: nowrap; }
     .monitor-inline-edit-total { color: #047857; font-size: .9rem; font-weight: 900; text-align: right; }
-    .monitor-inline-edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+    .monitor-inline-edit-fields textarea { min-height: 72px; resize: vertical; }
+    .monitor-inline-edit-summary { padding: 10px 0 18px; }
+    .monitor-inline-edit-actions { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 0; padding-top: 24px; border-top: 1px solid #dce6f1; }
+    .monitor-inline-edit-action-group { display: flex; flex-wrap: wrap; gap: 8px; }
+    .monitor-inline-edit-action-group:last-child { margin-left: auto; }
     .monitor-order > .collapse { grid-column: 1; margin-top: -18px; border: 1px solid var(--monitor-border); border-radius: 0 0 10px 10px; background: #fff; }
     .monitor-empty { padding: 44px 20px; text-align: center; color: #64748b; }
     .monitor-pagination { padding: 14px 0 0; }
@@ -2059,7 +2063,7 @@
                                                 </div>
                                             </div>
                                             <div class="monitor-inline-edit-fields">
-                                                <div>
+                                                <div class="is-wide">
                                                     <label for="monitorEditName{{ $order->id }}">Người nhận</label>
                                                     <input class="form-control form-control-sm" id="monitorEditName{{ $order->id }}" name="recipient_name" value="{{ $order->recipient_name ?: ($order->customer?->name ?? '') }}" required>
                                                 </div>
@@ -2067,17 +2071,17 @@
                                                     <label for="monitorEditPhone{{ $order->id }}">Số điện thoại</label>
                                                     <input class="form-control form-control-sm" id="monitorEditPhone{{ $order->id }}" name="recipient_phone" value="{{ $order->recipient_phone ?: ($order->customer?->phone ?? '') }}" required>
                                                 </div>
-                                                <div class="is-wide">
-                                                    <label for="monitorEditAddress{{ $order->id }}">Địa chỉ nhận hàng</label>
-                                                    <input class="form-control form-control-sm" id="monitorEditAddress{{ $order->id }}" name="recipient_address" value="{{ $order->recipient_address ?: ($order->customer?->address ?? '') }}" required>
-                                                </div>
                                                 <div>
                                                     <label for="monitorEditDelivery{{ $order->id }}">Giờ giao hàng</label>
                                                     <input class="form-control form-control-sm" id="monitorEditDelivery{{ $order->id }}" name="delivery_time" value="{{ $order->delivery_time }}">
                                                 </div>
-                                                <div>
+                                                <div class="is-wide">
+                                                    <label for="monitorEditAddress{{ $order->id }}">Địa chỉ nhận hàng</label>
+                                                    <input class="form-control form-control-sm" id="monitorEditAddress{{ $order->id }}" name="recipient_address" value="{{ $order->recipient_address ?: ($order->customer?->address ?? '') }}" required>
+                                                </div>
+                                                <div class="is-wide">
                                                     <label for="monitorEditNote{{ $order->id }}">Ghi chú</label>
-                                                    <input class="form-control form-control-sm" id="monitorEditNote{{ $order->id }}" name="note" value="{{ $order->note }}">
+                                                    <textarea class="form-control form-control-sm" id="monitorEditNote{{ $order->id }}" name="note" rows="3">{{ $order->note }}</textarea>
                                                 </div>
                                             </div>
 
@@ -2119,47 +2123,60 @@
                                                     </tbody>
                                                 </table>
                                             </div>
-                                            <div class="monitor-edit-picker">
-                                                <div class="monitor-edit-picker-label">Thêm sản phẩm vào đơn</div>
-                                                <div class="monitor-edit-product-search">
-                                                    <input type="search" class="form-control form-control-sm monitor-edit-product-search-input" placeholder="Tìm sản phẩm, SKU hoặc size...">
-                                                    <button type="button" class="btn btn-sm btn-outline-primary monitor-edit-product-search-button"><i class="bi bi-search me-1"></i>Tìm</button>
-                                                </div>
-                                                <div class="monitor-edit-picker-results monitor-edit-product-results"></div>
-                                            </div>
-                                            <div class="monitor-edit-picker" data-monitor-edit-fees
-                                                data-existing-fees="{{ ($order->charge_shipping_fee ? (float) $order->shipping_fee : 0) + ($order->charge_foam_box_fee ? (float) $order->foam_box_price : 0) }}">
-                                                <div class="monitor-edit-picker-label">Chi phí khác</div>
-                                                <div class="mb-3">
-                                                    <input type="hidden" name="charge_vat" value="0">
-                                                    <label class="form-check-label" for="editVat{{ $order->id }}">
-                                                        <input type="checkbox" class="form-check-input me-1 monitor-edit-fee" id="editVat{{ $order->id }}" name="charge_vat" value="1" @checked($order->charge_vat)>
-                                                        Tính chi phí VAT
-                                                    </label>
-                                                    <div class="input-group input-group-sm mt-2">
-                                                        <input type="number" class="form-control monitor-edit-fee" name="vat_percent" aria-label="Thuế VAT (%)" min="0.01" max="100" step="0.01" value="{{ $order->vat_percent > 0 ? $order->vat_percent : '' }}" placeholder="Nhập thuế VAT (%)">
-                                                        <span class="input-group-text">%</span>
+                                            <div class="collapse" id="monitorEditProducts{{ $order->id }}">
+                                                <div class="monitor-edit-picker">
+                                                    <div class="monitor-edit-picker-label">Thêm sản phẩm vào đơn</div>
+                                                    <div class="monitor-edit-product-search">
+                                                        <input type="search" class="form-control form-control-sm monitor-edit-product-search-input" placeholder="Tìm sản phẩm, SKU hoặc size...">
+                                                        <button type="button" class="btn btn-sm btn-outline-primary monitor-edit-product-search-button"><i class="bi bi-search me-1"></i>Tìm</button>
                                                     </div>
-                                                </div>
-                                                <div>
-                                                    <input type="hidden" name="collect_customer_shipping_fee" value="0">
-                                                    <label class="form-check-label" for="editShip{{ $order->id }}">
-                                                        <input type="checkbox" class="form-check-input me-1 monitor-edit-fee" id="editShip{{ $order->id }}" name="collect_customer_shipping_fee" value="1" @checked($order->collect_customer_shipping_fee)>
-                                                        Thu tiền ship của khách hàng
-                                                    </label>
-                                                    <div class="input-group input-group-sm mt-2">
-                                                        <input type="number" class="form-control monitor-edit-fee" name="customer_shipping_fee" aria-label="Tiền ship thu khách" min="1" max="999999999999.99" step="0.01" value="{{ $order->customer_shipping_fee > 0 ? $order->customer_shipping_fee : '' }}" placeholder="Nhập số tiền">
-                                                        <span class="input-group-text">đ</span>
-                                                    </div>
-                                                    <div class="form-text">Khoản thu khách này độc lập với phí ship do Shipper Manager ấn định.</div>
+                                                    <div class="monitor-edit-picker-results monitor-edit-product-results"></div>
                                                 </div>
                                             </div>
-                                            <div class="monitor-inline-edit-total">Tổng sản phẩm: <span>{{ number_format((float) $order->items->sum('total'), 0, ',', '.') }}đ</span></div>
-                                            <div class="small text-end mt-1">VAT: <span data-edit-vat-total>0đ</span> · Ship thu khách: <span data-edit-shipping-total>0đ</span></div>
-                                            <div class="monitor-inline-edit-total mt-1">Tổng đơn sau phí/chiết khấu: <span data-edit-grand-total>{{ number_format($order->total, 0, ',', '.') }}đ</span></div>
+                                            <div class="collapse" id="monitorEditFees{{ $order->id }}">
+                                                <div class="monitor-edit-picker" data-monitor-edit-fees
+                                                    data-existing-fees="{{ ($order->charge_shipping_fee ? (float) $order->shipping_fee : 0) + ($order->charge_foam_box_fee ? (float) $order->foam_box_price : 0) }}">
+                                                    <div class="monitor-edit-picker-label">Chi phí khác</div>
+                                                    <div class="mb-3">
+                                                        <input type="hidden" name="charge_vat" value="0">
+                                                        <label class="form-check-label" for="editVat{{ $order->id }}">
+                                                            <input type="checkbox" class="form-check-input me-1 monitor-edit-fee" id="editVat{{ $order->id }}" name="charge_vat" value="1" @checked($order->charge_vat)>
+                                                            Tính chi phí VAT
+                                                        </label>
+                                                        <div class="input-group input-group-sm mt-2">
+                                                            <input type="number" class="form-control monitor-edit-fee" name="vat_percent" aria-label="Thuế VAT (%)" min="0.01" max="100" step="0.01" value="{{ $order->vat_percent > 0 ? $order->vat_percent : '' }}" placeholder="Nhập thuế VAT (%)">
+                                                            <span class="input-group-text">%</span>
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <input type="hidden" name="collect_customer_shipping_fee" value="0">
+                                                        <label class="form-check-label" for="editShip{{ $order->id }}">
+                                                            <input type="checkbox" class="form-check-input me-1 monitor-edit-fee" id="editShip{{ $order->id }}" name="collect_customer_shipping_fee" value="1" @checked($order->collect_customer_shipping_fee)>
+                                                            Thu tiền ship của khách hàng
+                                                        </label>
+                                                        <div class="input-group input-group-sm mt-2">
+                                                            <input type="number" class="form-control monitor-edit-fee" name="customer_shipping_fee" aria-label="Tiền ship thu khách" min="1" max="999999999999.99" step="0.01" value="{{ $order->customer_shipping_fee > 0 ? $order->customer_shipping_fee : '' }}" placeholder="Nhập số tiền">
+                                                            <span class="input-group-text">đ</span>
+                                                        </div>
+                                                        <div class="form-text">Khoản thu khách này độc lập với phí ship do Shipper Manager ấn định.</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="monitor-inline-edit-summary">
+                                                <div class="monitor-inline-edit-total">Tổng: <span>{{ number_format((float) $order->items->sum('total'), 0, ',', '.') }}đ</span></div>
+                                                <div class="small text-end mt-1">VAT: <span data-edit-vat-total>0đ</span></div>
+                                                <div class="small text-end mt-1">Ship thu khách: <span data-edit-shipping-total>0đ</span></div>
+                                                <div class="monitor-inline-edit-total mt-1">Tổng đơn sau phí/chiết khấu: <span data-edit-grand-total>{{ number_format($order->total, 0, ',', '.') }}đ</span></div>
+                                            </div>
                                             <div class="monitor-inline-edit-actions">
-                                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#monitorEdit{{ $order->id }}">Đóng</button>
-                                                <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check2 me-1"></i>Lưu thay đổi</button>
+                                                <div class="monitor-inline-edit-action-group">
+                                                    <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="collapse" data-bs-target="#monitorEditProducts{{ $order->id }}" aria-expanded="false" aria-controls="monitorEditProducts{{ $order->id }}"><i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm</button>
+                                                    <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="collapse" data-bs-target="#monitorEditFees{{ $order->id }}" aria-expanded="false" aria-controls="monitorEditFees{{ $order->id }}"><i class="bi bi-plus-circle me-1"></i>Chi phí khác</button>
+                                                </div>
+                                                <div class="monitor-inline-edit-action-group">
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#monitorEdit{{ $order->id }}">Đóng</button>
+                                                    <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check2 me-1"></i>Lưu thay đổi</button>
+                                                </div>
                                             </div>
                                         </form>
                                     </div>
