@@ -801,6 +801,23 @@ class ShipperDashboardController extends Controller
                 WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
                 WarehouseTransfer::STATUS_CANCELLED,
             ])
+            ->where(function ($statusQuery): void {
+                $statusQuery
+                    ->where('warehouse_transfers.status', '!=', WarehouseTransfer::STATUS_CANCELLED)
+                    ->orWhereNotExists(function ($newerTransferQuery): void {
+                        $newerTransferQuery
+                            ->selectRaw('1')
+                            ->from('warehouse_transfers as newer_transfers')
+                            ->whereColumn('newer_transfers.order_id', 'warehouse_transfers.order_id')
+                            ->whereColumn('newer_transfers.id', '>', 'warehouse_transfers.id')
+                            ->whereIn('newer_transfers.status', [
+                                WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                                WarehouseTransfer::STATUS_IN_TRANSIT,
+                                WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                                WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+                            ]);
+                    });
+            })
             ->whereHas('order')
             ->where(function ($slipQuery) use ($selectedSlipId): void {
                 $slipQuery->whereHas('dispatchEntry', fn ($entryQuery) => $entryQuery

@@ -242,4 +242,65 @@ class ShipperWarehouseTransferVisibilityTest extends TestCase
             ->assertOk()
             ->assertDontSee('TRANSFER-SNAPSHOT-25');
     }
+
+    public function test_stale_cancelled_transfer_is_hidden_when_order_has_newer_active_transfer(): void
+    {
+        $shipperRole = Role::create(['name' => 'shipper']);
+        $shipper = User::factory()->create();
+        $shipper->roles()->attach($shipperRole);
+        $source = Warehouse::factory()->create();
+        $target = Warehouse::factory()->create();
+        $customer = Customer::create(['name' => 'Khách thay phiếu', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'warehouse_id' => $source->id,
+            'code' => 'STALE-CANCELLED-TRANSFER',
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $oldTransfer = WarehouseTransfer::create([
+            'order_id' => $order->id,
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseTransfer::STATUS_CANCELLED,
+        ]);
+        $newTransfer = WarehouseTransfer::create([
+            'order_id' => $order->id,
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+        ]);
+        $slip = WarehouseDispatchSlip::create([
+            'business_date' => now()->toDateString(),
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseDispatchSlip::STATUS_FINALIZED,
+            'created_by' => $shipper->id,
+            'finalized_by' => $shipper->id,
+            'finalized_at' => now(),
+        ]);
+        $orderTransfer = \App\Models\OrderTransfer::create([
+            'shipper_id' => $shipper->id,
+            'warehouse_id' => $target->id,
+            'created_by' => $shipper->id,
+        ]);
+        $order->forceFill(['order_transfer_id' => $orderTransfer->id])->save();
+        WarehouseDispatchSlipEntry::create([
+            'warehouse_dispatch_slip_id' => $slip->id,
+            'order_transfer_id' => $orderTransfer->id,
+            'snapshot' => ['type' => 'order_transfer'],
+        ]);
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.warehouse-transfers.show', $slip))
+            ->assertOk()
+            ->assertSee('STALE-CANCELLED-TRANSFER')
+            ->assertSee('Giao kho')
+            ->assertDontSee('Đã hoàn lại');
+
+        $this->assertDatabaseHas('warehouse_transfers', ['id' => $oldTransfer->id, 'status' => WarehouseTransfer::STATUS_CANCELLED]);
+        $this->assertDatabaseHas('warehouse_transfers', ['id' => $newTransfer->id, 'status' => WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE]);
+    }
 }

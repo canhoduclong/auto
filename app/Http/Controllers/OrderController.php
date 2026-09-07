@@ -1124,7 +1124,11 @@ class OrderController extends Controller
             'recipient_email' => ['nullable', 'email', 'max:255'],
             'recipient_address' => ['nullable', 'string', 'max:1000'],
             'note' => ['nullable', 'string', 'max:2000'],
-            'delivery_date' => ['nullable', 'date'],
+            'delivery_date' => [
+                'nullable',
+                'date',
+                'after_or_equal:'.$order->created_at->toDateString(),
+            ],
             'delivery_time' => ['nullable', 'string', 'max:255'],
             'actual_weight' => ['nullable', 'numeric', 'min:0'],
             'charge_shipping_fee' => ['nullable', 'boolean'],

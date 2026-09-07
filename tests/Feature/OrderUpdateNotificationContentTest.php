@@ -52,4 +52,39 @@ class OrderUpdateNotificationContentTest extends TestCase
             return true;
         });
     }
+
+    public function test_admin_can_correct_delivery_date_but_cannot_set_it_before_order_creation(): void
+    {
+        $adminRole = Role::create(['name' => 'admin']);
+        $admin = User::factory()->create();
+        $admin->roles()->attach($adminRole);
+        $customer = Customer::create(['name' => 'Khách sửa ngày giao', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $admin->id,
+            'code' => 'ORD-FIX-DELIVERY-DATE',
+            'status' => Order::STATUS_APPROVED,
+            'delivery_date' => '2026-07-22',
+        ]);
+        $order->forceFill(['created_at' => '2026-09-07 10:00:00'])->saveQuietly();
+
+        $payload = [
+            'customer_id' => $customer->id,
+            'user_id' => $admin->id,
+            'status' => Order::STATUS_APPROVED,
+            'delivery_date' => '2026-09-08',
+        ];
+
+        $this->actingAs($admin)
+            ->put(route('orders.update', $order), $payload)
+            ->assertRedirect(route('orders.edit', $order));
+        $this->assertSame('2026-09-08', $order->fresh()->delivery_date->toDateString());
+
+        $this->actingAs($admin)
+            ->put(route('orders.update', $order), array_merge($payload, [
+                'delivery_date' => '2026-09-06',
+            ]))
+            ->assertSessionHasErrors('delivery_date');
+        $this->assertSame('2026-09-08', $order->fresh()->delivery_date->toDateString());
+    }
 }

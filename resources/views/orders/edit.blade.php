@@ -103,7 +103,8 @@
 
                         <div class="col-md-4">
                             <label for="delivery_date" class="form-label">Ngày giao</label>
-                            <input type="date" name="delivery_date" id="delivery_date" class="form-control" value="{{ old('delivery_date', optional($order->delivery_date)->format('Y-m-d')) }}">
+                            <input type="date" name="delivery_date" id="delivery_date" class="form-control" min="{{ $order->created_at->toDateString() }}" value="{{ old('delivery_date', optional($order->delivery_date)->format('Y-m-d')) }}">
+                            <div class="form-text">Ngày giao không được trước ngày tạo đơn {{ $order->created_at->format('d/m/Y') }}.</div>
                         </div>
                         <div class="col-md-4">
                             <label for="delivery_time" class="form-label">Khung giờ giao</label>
