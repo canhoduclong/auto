@@ -400,6 +400,12 @@
                                 <i class="bi bi-clock me-1"></i>
                                 Giờ giao: {{ $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật') }}
                             </div>
+                            @if(trim((string) $order->note) !== '')
+                                <div class="alert alert-warning mt-2 mb-0" role="note">
+                                    <div class="fw-semibold"><i class="bi bi-sticky me-1"></i>Ghi chú đơn hàng</div>
+                                    <div class="mt-1" style="white-space: pre-wrap; overflow-wrap: anywhere;">{{ $order->note }}</div>
+                                </div>
+                            @endif
                             @if($isPackedReadonly)
                                 <div class="small text-muted mt-1">
                                     <i class="bi bi-box-seam me-1"></i>
