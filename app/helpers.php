@@ -111,9 +111,9 @@ if (!function_exists('getWarehouseNotifications')) {
         }
 
         // Sale: Gửi yêu cầu thay đổi đơn hàng tới kho, cần phê duyệt
-        $pendingSaleConfirmOrders = \App\Models\Order::query()
-            ->with(['customer', 'user'])
-            ->where('warehouse_id', $warehouseId)
+        $pendingSaleConfirmOrders = app(\App\Services\WarehouseAdjustmentAccess::class)
+            ->scope(\App\Models\Order::query(), $user)
+            ->with(['customer', 'user', 'warehouse'])
             ->where('warehouse_adjustment_status', \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION)
             ->orderByDesc('warehouse_adjustment_requested_at')
             ->limit(2)
@@ -124,15 +124,15 @@ if (!function_exists('getWarehouseNotifications')) {
             if ($isWarehouse) {
                 $title = 'Đã gửi yêu cầu thay đổi đơn hàng ' . $orderCode . ' tới Sale';
                 $meta = $order->customer?->name ?: 'Khách hàng';
-                $link = route('warehouse.orders') . '?highlight=' . $order->id;
+                $link = route('pages.my_dashboard') . '#warehouse-adjustment-' . $order->id;
             } elseif ($isSale) {
                 $title = $warehouseName . ' yêu cầu thay đổi đơn hàng ' . $orderCode;
                 $meta = $order->customer?->name ?: 'Khách hàng';
-                $link = route('pages.my_orders') . '?highlight=' . $order->id;
+                $link = route('pages.my_dashboard') . '#warehouse-adjustment-' . $order->id;
             } else {
                 $title = 'Kho đã gửi yêu cầu thay đổi đơn hàng ' . $orderCode;
                 $meta = $order->customer?->name ?: 'Khách hàng';
-                $link = route('pages.my_orders') . '?highlight=' . $order->id;
+                $link = route('pages.my_dashboard') . '#warehouse-adjustment-' . $order->id;
             }
             $notifications->push([
                 'type' => 'sale',

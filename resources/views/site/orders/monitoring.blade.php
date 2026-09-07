@@ -1934,6 +1934,13 @@
                                     @endif
                                 </div>
 
+                                @if(trim((string) $order->note) !== '')
+                                    <div class="alert alert-warning mt-2 mb-3" role="note">
+                                        <div class="fw-semibold"><i class="bi bi-sticky me-1"></i>Ghi chú đơn hàng</div>
+                                        <div class="mt-1" style="white-space: pre-wrap; overflow-wrap: anywhere;">{{ $order->note }}</div>
+                                    </div>
+                                @endif
+
                                 <div class="table-responsive">
                                     <table class="table table-sm monitor-items">
                                         <thead>

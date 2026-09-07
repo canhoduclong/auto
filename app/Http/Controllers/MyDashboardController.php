@@ -193,10 +193,7 @@ class MyDashboardController extends Controller
         $user = auth()->user();
         abort_unless($user, 403);
 
-        $memberIds = $this->resolveScopedUserIds($user);
-        if (!in_array((int) $order->user_id, array_map('intval', $memberIds), true)) {
-            abort(403);
-        }
+        abort_unless(app(\App\Services\WarehouseAdjustmentAccess::class)->allows($user, $order), 403);
 
         if ($order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
             return back()->with('error', 'Yêu cầu điều chỉnh không còn ở trạng thái chờ xác nhận.');
@@ -378,10 +375,7 @@ class MyDashboardController extends Controller
         $user = auth()->user();
         abort_unless($user, 403);
 
-        $memberIds = $this->resolveScopedUserIds($user);
-        if (!in_array((int) $order->user_id, array_map('intval', $memberIds), true)) {
-            abort(403);
-        }
+        abort_unless(app(\App\Services\WarehouseAdjustmentAccess::class)->allows($user, $order), 403);
 
         if ($order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
             return back()->with('error', 'Yêu cầu điều chỉnh không còn ở trạng thái chờ xác nhận.');
@@ -507,9 +501,8 @@ class MyDashboardController extends Controller
         $salesChart = $this->buildSalesChart($memberIds, $monthStart, $now);
         $weeklyCustomerProduction = $this->buildWeeklyCustomerProduction($memberIds, $now);
 
-        $pendingWarehouseAdjustments = Order::query()
+        $pendingWarehouseAdjustments = app(\App\Services\WarehouseAdjustmentAccess::class)->scope(Order::query(), $user)
             ->with(['customer', 'warehouse', 'warehouseAdjustmentRequester'])
-            ->whereIn('user_id', $memberIds)
             ->where('warehouse_adjustment_status', Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION)
             ->orderBy('warehouse_adjustment_requested_at')
             ->get();
