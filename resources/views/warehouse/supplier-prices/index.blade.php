@@ -9,7 +9,7 @@
     .sp-table th { font-size:.74rem; text-transform:uppercase; color:#64748b; white-space:nowrap; }
     .sp-table td { vertical-align:middle; }
     .money-cell { font-variant-numeric: tabular-nums; text-align:right; white-space:nowrap; }
-    .sp-group summary { cursor:pointer; padding:1rem; display:flex; align-items:center; gap:.75rem; list-style:none; background:#f8fafc; border-radius:12px; }
+    .sp-group summary { cursor:pointer; padding:1rem; display:flex; flex-wrap:wrap; align-items:center; gap:.75rem; list-style:none; background:#f8fafc; border-radius:12px; }
     .sp-group summary::-webkit-details-marker { display:none; }
     .sp-group summary:focus-visible { outline:2px solid #2563eb; outline-offset:2px; }
     .sp-group[open] summary { border-bottom:1px solid #e2e8f0; border-radius:12px 12px 0 0; }
@@ -92,6 +92,12 @@
             <i class="bi bi-chevron-right sp-chevron" aria-hidden="true"></i>
             <span class="fw-bold">{{ $supplierGroup->name }}</span>
             <span class="badge bg-secondary ms-auto">{{ $groupProducts->count() }} sản phẩm</span>
+            <button type="button" class="btn btn-sm btn-outline-primary"
+                    data-bs-toggle="modal" data-bs-target="#attachProductModal"
+                    data-supplier-id="{{ $supplierGroup->id }}"
+                    aria-label="Thêm sản phẩm cho {{ $supplierGroup->name }}">
+                <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Thêm sản phẩm
+            </button>
         </summary>
 <div class="table-responsive">
     <table class="table table-hover sp-table mb-0">
@@ -328,8 +334,15 @@
 @push('scripts')
 <script>
 const attachForm = document.getElementById('attachProductForm');
-document.getElementById('attachSupplier')?.addEventListener('change', function () {
-    attachForm.action = this.value ? `{{ url('/warehouse/suppliers') }}/${this.value}/products` : '';
+const attachSupplier = document.getElementById('attachSupplier');
+function syncAttachSupplier() {
+    attachForm.action = attachSupplier.value ? `{{ url('/warehouse/suppliers') }}/${attachSupplier.value}/products` : '';
+}
+attachSupplier?.addEventListener('change', syncAttachSupplier);
+document.getElementById('attachProductModal')?.addEventListener('show.bs.modal', function (event) {
+    attachForm.reset();
+    attachSupplier.value = event.relatedTarget?.dataset.supplierId || '';
+    syncAttachSupplier();
 });
 
 function numberValue(input) {
