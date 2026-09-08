@@ -89,6 +89,34 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $this->assertSame(Order::STATUS_PACKING, $order->fresh()->status);
     }
 
+    public function test_zero_percent_main_size_can_be_saved_and_started_with_a_distant_size(): void
+    {
+        [$user, $order, $item, $variants, $inventories] = $this->fixture(20, 2.2);
+        $inventories['2.2']->update(['quantity' => 1]);
+        $otherSize = $variants['2.3'];
+        $otherSize->update(['size' => 2.8, 'kg' => 2.8]);
+        $inventories['2.3']->update(['quantity' => 52]);
+
+        $this->actingAs($user)->get(route('warehouse.orders', ['date' => now()->toDateString()]))
+            ->assertOk()->assertSee('cho phép 0%');
+        $this->post(route('warehouse.orders.packing-size-allocation', $order), [
+            'order_item_id' => $item->id,
+            'allocations' => [$variants['2.2']->id => 0, $otherSize->id => 20],
+        ])->assertSessionHasNoErrors()->assertSessionHas('success');
+        $this->assertDatabaseHas('order_item_packing_size_allocations', [
+            'order_item_id' => $item->id, 'product_variant_id' => $otherSize->id, 'quantity' => 20,
+        ]);
+        $this->assertDatabaseMissing('order_item_packing_size_allocations', [
+            'order_item_id' => $item->id, 'product_variant_id' => $variants['2.2']->id,
+        ]);
+        $this->assertSame(0, (int) $inventories['2.2']->fresh()->reserved_quantity);
+        $this->assertSame(20, (int) $inventories['2.3']->fresh()->reserved_quantity);
+        $this->post(route('warehouse.orders.start-packing', $order), [
+            'packing_date' => now()->toDateString(),
+        ])->assertSessionHasNoErrors()->assertSessionHas('success');
+        $this->assertSame(Order::STATUS_PACKING, $order->fresh()->status);
+    }
+
     public function test_half_main_size_accepts_other_sizes_and_respects_prior_fifo_orders(): void
     {
         [$user, $order, $item, $variants, $inventories] = $this->fixture(50);
