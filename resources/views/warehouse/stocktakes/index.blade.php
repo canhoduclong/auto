@@ -41,6 +41,12 @@
     Chọn ngày và loại tồn cần kiểm kê. Tồn đầu lấy tại đầu ngày; tồn cuối lấy tại cuối ngày đã chọn (riêng hôm nay lấy đến thời điểm hiện tại). Có thể nhập số lượng, số kg hoặc cả hai; đại lượng để trống sẽ được giữ nguyên.
 </div>
 
+@if($sheetLoadError)
+    <div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-1"></i><strong>Không nạp được tồn cuối Google Sheet.</strong> {{ $sheetLoadError }}</div>
+@elseif(request()->boolean('load_sheet_closing'))
+    <div class="alert alert-success"><i class="bi bi-check-circle me-1"></i>Đã nạp tồn cuối từ file Google Sheet cấu hình trong <strong>Nhập SX = Thu Mua</strong>. Hãy rà soát rồi chốt kiểm kê.</div>
+@endif
+
 <div class="stocktake-card mb-3">
     <div class="p-3 border-bottom">
         <form method="GET" action="{{ route('warehouse.stocktakes.index') }}" class="row g-2 align-items-end">
@@ -76,6 +82,14 @@
                 <button class="btn btn-primary btn-sm flex-fill"><i class="bi bi-arrow-clockwise me-1"></i>Tải tồn</button>
                 <a href="{{ route('warehouse.stocktakes.index', ['warehouse_id' => $warehouse->id]) }}" class="btn btn-outline-secondary btn-sm">Đặt lại</a>
             </div>
+            @if($stocktakeType === 'closing')
+                <div class="col-12 d-flex justify-content-end">
+                    <a class="btn btn-outline-success btn-sm"
+                       href="{{ route('warehouse.stocktakes.index', ['warehouse_id' => $warehouse->id, 'inventory_date' => $inventoryDate->toDateString(), 'stocktake_type' => 'closing', 'search' => $search, 'load_sheet_closing' => 1]) }}">
+                        <i class="bi bi-file-earmark-spreadsheet me-1"></i>Nạp Tồn cuối từ Google Sheet
+                    </a>
+                </div>
+            @endif
         </form>
     </div>
 
@@ -140,6 +154,7 @@
                             $variantName = $variant?->name ?: 'Mặc định';
                             $oldQuantity = old('items.'.$inventory->id.'.counted_quantity');
                             $oldWeight = old('items.'.$inventory->id.'.counted_weight_kg');
+                            $sheetQuantity = $inventory->sheet_closing_quantity ?? null;
                         @endphp
                         <tr>
                             <td class="text-muted">{{ $inventories->firstItem() + $loop->index }}</td>
@@ -159,7 +174,7 @@
                                 <input type="number"
                                        name="items[{{ $inventory->id }}][counted_quantity]"
                                        class="form-control form-control-sm stocktake-input ms-auto js-counted-value"
-                                       value="{{ $oldQuantity }}"
+                                       value="{{ $oldQuantity !== null ? $oldQuantity : ($sheetQuantity !== null ? number_format((float) $sheetQuantity, 3, '.', '') : '') }}"
                                        min="0" step="1"
                                        data-system="{{ number_format((float) $inventory->stocktake_quantity, 3, '.', '') }}"
                                        data-diff-target="quantity-diff-{{ $inventory->id }}"

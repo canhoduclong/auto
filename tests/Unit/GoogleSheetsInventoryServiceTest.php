@@ -114,6 +114,7 @@ class GoogleSheetsInventoryServiceTest extends TestCase
         $this->assertSame(10.0, $row['stock_quantity']);
         $this->assertSame(5.0, $row['import_quantity']);
         $this->assertSame(5.0, $row['quantity']);
+        $this->assertSame(10.0, $row['stock_quantity']);
         $this->assertSame([2, 3], $result['import_columns']);
     }
 

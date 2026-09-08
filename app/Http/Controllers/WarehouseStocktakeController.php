@@ -8,6 +8,7 @@ use App\Models\InventoryMovement;
 use App\Models\InventoryStocktake;
 use App\Models\ProductVariant;
 use App\Models\Warehouse;
+use App\Services\GoogleSheetsInventoryService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -17,7 +18,7 @@ use Illuminate\Validation\ValidationException;
 
 class WarehouseStocktakeController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, GoogleSheetsInventoryService $sheets)
     {
         $request->validate([
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
@@ -25,6 +26,7 @@ class WarehouseStocktakeController extends Controller
             'counted_at' => ['nullable', 'date', 'before_or_equal:now'],
             'inventory_date' => ['nullable', 'date', 'before_or_equal:today'],
             'stocktake_type' => ['nullable', 'in:opening,closing'],
+            'load_sheet_closing' => ['nullable', 'boolean'],
         ]);
 
         $warehouse = $this->resolveWarehouse($request);
@@ -37,6 +39,24 @@ class WarehouseStocktakeController extends Controller
         $countedAt = $usesLegacyCountedAt
             ? Carbon::parse($request->input('counted_at'))
             : $this->resolveCountedAt($inventoryDate, $stocktakeType);
+        $sheetClosingByVariant = collect();
+        $sheetLoadError = null;
+
+        if ($request->boolean('load_sheet_closing')) {
+            if ($stocktakeType !== InventoryStocktake::TYPE_CLOSING) {
+                $sheetLoadError = 'Chỉ có thể nạp tồn cuối Google Sheet khi loại kiểm kê là Tồn cuối.';
+            } else {
+                try {
+                    $preview = $sheets->preview($warehouse, $inventoryDate->toDateString());
+                    $sheetClosingByVariant = $preview['rows']
+                        ->filter(fn (array $row): bool => $row['matched'] && $row['variant_id'] !== null)
+                        ->mapWithKeys(fn (array $row): array => [(int) $row['variant_id'] => (float) $row['stock_quantity']]);
+                } catch (\Throwable $exception) {
+                    report($exception);
+                    $sheetLoadError = $exception->getMessage();
+                }
+            }
+        }
 
         $inventories = Inventory::query()
             ->with(['productVariant.product:id,name,unit'])
@@ -59,6 +79,14 @@ class WarehouseStocktakeController extends Controller
             ->withQueryString();
 
         $this->attachBalancesAt($inventories->getCollection(), $countedAt);
+        foreach ($inventories as $inventory) {
+            if ($sheetClosingByVariant->has((int) $inventory->product_variant_id)) {
+                $inventory->setAttribute(
+                    'sheet_closing_quantity',
+                    $sheetClosingByVariant->get((int) $inventory->product_variant_id)
+                );
+            }
+        }
 
         $recentStocktakes = InventoryStocktake::query()
             ->with(['creator:id,name', 'items.productVariant.product:id,name'])
@@ -81,6 +109,7 @@ class WarehouseStocktakeController extends Controller
             'countedAt',
             'inventoryDate',
             'stocktakeType'
+            ,'sheetLoadError'
         ));
     }
 
