@@ -1190,22 +1190,19 @@ class MyDashboardController extends Controller
             return [$user->id];
         }
 
-        if (in_array($dashboardRole, ['leader', 'leader_sale', 'sale_manager'], true)) {
-            $memberIds = User::query()
-                ->where('team_id', $user->team_id)
+        if ($user->isAdmin() || in_array($dashboardRole, [
+            'leader',
+            'leader_sale',
+            'sale_manager',
+            'manager',
+            'manager_sale',
+        ], true)) {
+            $saleIds = User::query()
+                ->whereHas('roles', fn ($query) => $query->whereRaw('LOWER(name) = ?', ['sale']))
                 ->pluck('id')
                 ->all();
 
-            return empty($memberIds) ? [$user->id] : $memberIds;
-        }
-
-        if (in_array($dashboardRole, ['manager', 'manager_sale'], true)) {
-            $memberIds = User::query()
-                ->when($user->team_id, fn ($q) => $q->where('team_id', $user->team_id))
-                ->pluck('id')
-                ->all();
-
-            return empty($memberIds) ? [$user->id] : $memberIds;
+            return empty($saleIds) ? [$user->id] : $saleIds;
         }
 
         return [$user->id];

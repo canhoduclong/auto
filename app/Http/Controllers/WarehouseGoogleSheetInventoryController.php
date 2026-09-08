@@ -31,6 +31,9 @@ class WarehouseGoogleSheetInventoryController extends Controller
         $validated = $request->validate([
             'date' => ['nullable', 'date'],
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
+            'choose_import_columns' => ['nullable', 'boolean'],
+            'import_columns' => ['nullable', 'array'],
+            'import_columns.*' => ['integer', 'min:1', 'distinct'],
         ]);
         $warehouse = $this->resolveWarehouse($request);
         $selectedDate = Carbon::parse($validated['date'] ?? now())->toDateString();
@@ -42,10 +45,15 @@ class WarehouseGoogleSheetInventoryController extends Controller
 
         try {
             $preview = $sheets->preview($warehouse, $selectedDate);
+            if ($request->boolean('choose_import_columns')) {
+                $preview = $sheets->selectImportColumns($preview, $validated['import_columns'] ?? []);
+            }
             $marker = $this->importMarker($preview['spreadsheet_id'], $preview['sheet_id'], $selectedDate, (int) $warehouse->id);
             $comparison = $comparisonService->compare($preview, $warehouse, $marker);
             $preview['rows'] = $comparison['rows'];
         } catch (\Throwable $exception) {
+            $preview = null;
+            $comparison = null;
             report($exception);
             $loadError = $this->friendlyGoogleError($exception, $sheets);
         }
@@ -204,6 +212,9 @@ class WarehouseGoogleSheetInventoryController extends Controller
         $validated = $request->validate([
             'date' => ['required', 'date'],
             'warehouse_id' => ['nullable', 'integer', 'exists:warehouses,id'],
+            'choose_import_columns' => ['nullable', 'boolean'],
+            'import_columns' => ['nullable', 'array'],
+            'import_columns.*' => ['integer', 'min:1', 'distinct'],
             'confirm_import' => ['accepted'],
             'ignore_unmatched' => ['nullable', 'boolean'],
             'selected_variant_ids' => ['required', 'array', 'min:1'],
@@ -214,6 +225,9 @@ class WarehouseGoogleSheetInventoryController extends Controller
 
         try {
             $preview = $sheets->preview($warehouse, $selectedDate);
+            if ($request->boolean('choose_import_columns')) {
+                $preview = $sheets->selectImportColumns($preview, $validated['import_columns'] ?? []);
+            }
         } catch (\Throwable $exception) {
             return back()->withInput()->with('error', $this->friendlyGoogleError($exception, $sheets));
         }
@@ -380,6 +394,8 @@ class WarehouseGoogleSheetInventoryController extends Controller
         return redirect()->route('warehouse.google-sheet-inventory.index', [
             'date' => $selectedDate,
             'warehouse_id' => $warehouse->id,
+            'choose_import_columns' => $request->boolean('choose_import_columns') ? 1 : null,
+            'import_columns' => $request->boolean('choose_import_columns') ? ($validated['import_columns'] ?? []) : null,
         ])->with('success', 'Đã đồng bộ lần '.$sync->sync_number.': nhập thêm '
             .number_format((float) $sync->total_positive_delta, 0, ',', '.')
             .', điều chỉnh giảm '.number_format((float) $sync->total_negative_delta, 0, ',', '.')

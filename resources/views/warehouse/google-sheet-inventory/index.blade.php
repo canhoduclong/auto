@@ -63,6 +63,24 @@
             @if(auth()->user()?->isAdmin() && !auth()->user()?->warehouse_id)
                 <div class="col-md-4"><label class="form-label">Kho nhận dữ liệu</label><select name="warehouse_id" class="form-select">@foreach($warehouses as $warehouseOption)<option value="{{ $warehouseOption->id }}" @selected($warehouseOption->id === $warehouse->id)>{{ $warehouseOption->name }}</option>@endforeach</select></div>
             @endif
+            @if($preview)
+                <div class="col-12">
+                    <input type="hidden" name="choose_import_columns" value="1">
+                    <label class="form-label fw-semibold">Chọn cột Nhập của ngày đã Load</label>
+                    <div class="d-flex flex-wrap gap-3">
+                        @forelse($preview['available_import_columns'] ?? [] as $importColumn)
+                            <label class="form-check">
+                                <input class="form-check-input" type="checkbox" name="import_columns[]" value="{{ $importColumn['column'] }}"
+                                    @checked(in_array($importColumn['column'], $preview['import_columns'] ?? [], true))>
+                                <span class="form-check-label">Cột {{ $importColumn['letter'] }} — {{ $importColumn['label'] }}</span>
+                            </label>
+                        @empty
+                            <span class="text-muted">Ngày này không có cột Nhập.</span>
+                        @endforelse
+                    </div>
+                    <div class="small text-muted">Tổng đọc = Tồn + các cột Nhập đã chọn. Bỏ chọn tất cả để chỉ đọc Tồn. Bấm Load và so sánh sau khi đổi lựa chọn.</div>
+                </div>
+            @endif
             <div class="col-md-4"><button class="btn btn-success"><i class="bi bi-cloud-download me-1"></i>Load và so sánh</button></div>
         </form>
     </div></div>
@@ -179,6 +197,13 @@
                 <form method="POST" action="{{ route('warehouse.google-sheet-inventory.store') }}" id="sheet-sync-form">
                     @csrf
                     <input type="hidden" name="date" value="{{ $selectedDate }}"><input type="hidden" name="warehouse_id" value="{{ $warehouse->id }}">
+                    @if(request()->boolean('choose_import_columns'))
+                        <input type="hidden" name="choose_import_columns" value="1">
+                        @foreach($preview['import_columns'] ?? [] as $importColumn)
+                            <input type="hidden" name="import_columns[]" value="{{ $importColumn }}">
+                        @endforeach
+                    @endif
+
                     <div class="modal-header"><div><h5 class="modal-title" id="sheetSyncModalLabel">Quản trị thay đổi tồn kho</h5><div class="small text-muted">{{ $warehouse->name }} · ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</div></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button></div>
                     <div class="modal-body">
                         @if($comparison['has_previous'])<div class="alert alert-warning"><strong>Đã có lần nhập cho đúng ngày này.</strong> Chỉ các chênh lệch được chọn bên dưới mới được áp dụng. Dòng không chọn sẽ tiếp tục xuất hiện ở lần kiểm tra sau.</div>@endif
@@ -215,6 +240,11 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const loadForm = document.querySelector('input[name="choose_import_columns"]')?.form;
+    loadForm?.querySelector('input[name="date"]')?.addEventListener('change', function () {
+        loadForm.querySelectorAll('[name="choose_import_columns"], [name="import_columns[]"]').forEach(input => input.disabled = true);
+    });
+
     const modalElement = document.getElementById('sheetSyncModal');
     if (!modalElement) return;
     const checkboxes = Array.from(modalElement.querySelectorAll('.sync-row-checkbox:not(:disabled)'));

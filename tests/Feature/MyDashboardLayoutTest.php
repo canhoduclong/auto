@@ -111,4 +111,42 @@ class MyDashboardLayoutTest extends TestCase
             ->assertSee('KPI tổng hợp')
             ->assertSee('Bảng báo giá sản phẩm');
     }
+
+    public function test_dashboard_order_scope_is_all_sales_for_leaders_managers_and_admins(): void
+    {
+        $saleRole = Role::query()->create(['name' => 'sale']);
+        $leaderRole = Role::query()->create(['name' => 'leader']);
+        $managerRole = Role::query()->create(['name' => 'manager']);
+        $adminRole = Role::query()->create(['name' => 'admin']);
+
+        $saleOne = User::factory()->create();
+        $saleOne->roles()->attach($saleRole);
+        $saleTwo = User::factory()->create();
+        $saleTwo->roles()->attach($saleRole);
+        $manager = User::factory()->create();
+        $manager->roles()->attach($managerRole);
+        $leader = User::factory()->create();
+        $leader->roles()->attach($leaderRole);
+        $admin = User::factory()->create();
+        $admin->roles()->attach($adminRole);
+        $customer = Customer::create(['name' => 'Khách kiểm tra dashboard', 'status' => 'active']);
+
+        Order::create(['code' => 'SALE-ONE', 'user_id' => $saleOne->id, 'customer_id' => $customer->id]);
+        Order::create(['code' => 'SALE-TWO', 'user_id' => $saleTwo->id, 'customer_id' => $customer->id]);
+        Order::create(['code' => 'MANAGER-ORDER', 'user_id' => $manager->id, 'customer_id' => $customer->id]);
+
+        foreach ([$leader, $manager, $admin] as $viewer) {
+            $this->actingAs($viewer)
+                ->withSession(['active_role' => $viewer->roles->first()->name])
+                ->get(route('pages.my_dashboard'))
+                ->assertOk()
+                ->assertViewHas('dashboardStats.orders_this_month', 2);
+        }
+
+        $this->actingAs($saleOne)
+            ->withSession(['active_role' => 'sale'])
+            ->get(route('pages.my_dashboard'))
+            ->assertOk()
+            ->assertViewHas('dashboardStats.orders_this_month', 1);
+    }
 }

@@ -312,6 +312,7 @@ class GoogleSheetsInventoryService
                 'sheet_code' => $sheetCode,
                 'normalized_code' => $size !== null ? 'MOC - '.$size : ($variant?->inventory_name ?: $sheetCode),
                 'stock_quantity' => $stockQuantity,
+                'import_quantities_by_column' => $importColumns->mapWithKeys(fn (int $column): array => [$column + 1 => $this->number($values[$rowIndex][$column] ?? null)])->all(),
                 'import_quantity' => $importQuantity,
                 'quantity' => $quantity,
                 'variant_id' => $variant?->id,
@@ -334,6 +335,11 @@ class GoogleSheetsInventoryService
             'selected_date' => $selectedDate,
             'available_dates' => array_keys($availableDates),
             'stock_column' => $stockColumn + 1,
+            'available_import_columns' => $importColumns->map(fn (int $column): array => [
+                'column' => $column + 1,
+                'letter' => $this->columnLetter($column + 1),
+                'label' => trim((string) ($typeHeader[$column] ?? 'Nhập')),
+            ])->all(),
             'import_columns' => $importColumns->map(fn (int $column): int => $column + 1)->all(),
             'import_column_labels' => $importColumns
                 ->map(fn (int $column): string => trim((string) ($typeHeader[$column] ?? 'Nhập')))
@@ -346,6 +352,30 @@ class GoogleSheetsInventoryService
             'total_quantity' => (float) $positiveRows->where('matched', true)->sum('quantity'),
             'has_blocking_errors' => $unmatchedPositive->isNotEmpty(),
         ];
+    }
+
+    public function selectImportColumns(array $preview, array $columns): array
+    {
+        $columns = collect($columns)->map(fn ($column) => (int) $column)->unique()->values();
+        $options = collect($preview['available_import_columns'] ?? []);
+        if ($columns->diff($options->pluck('column'))->isNotEmpty()) {
+            throw new RuntimeException('Cột Nhập đã chọn không thuộc ngày này. Vui lòng Load lại dữ liệu và chọn cột.');
+        }
+        $preview['import_columns'] = $columns->all();
+        $preview['import_column_labels'] = $options->whereIn('column', $columns)->pluck('label')->all();
+        $preview['rows'] = $preview['rows']->map(function (array $row) use ($columns): array {
+            $row['import_quantity'] = (float) $columns->sum(fn ($column) => (float) ($row['import_quantities_by_column'][$column] ?? 0));
+            $row['quantity'] = round((float) $row['stock_quantity'] + $row['import_quantity'], 3);
+
+            return $row;
+        });
+        $positiveRows = $preview['rows']->where('quantity', '>', 0)->values();
+        $preview['import_rows'] = $positiveRows->where('matched', true)->values();
+        $preview['unmatched_positive_rows'] = $positiveRows->where('matched', false)->values();
+        $preview['total_quantity'] = (float) $preview['import_rows']->sum('quantity');
+        $preview['has_blocking_errors'] = $preview['unmatched_positive_rows']->isNotEmpty();
+
+        return $preview;
     }
 
     public function serviceAccountEmail(): ?string

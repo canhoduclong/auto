@@ -47,6 +47,27 @@ class GoogleSheetsInventoryServiceTest extends TestCase
         $this->assertFalse($result['has_blocking_errors']);
     }
 
+    public function test_it_only_adds_selected_import_columns_and_can_read_stock_alone(): void
+    {
+        $service = new GoogleSheetsInventoryService;
+        $preview = $service->parseValues([
+            ['0'], ['SIZE/Ngày Tháng', '08/09/2026', '', ''],
+            ['QUAY LÔNG', 'Tồn', 'Nhập SX', 'Nhập KCL'],
+            ['HÀNG MÓC'], ['M 2', '10', '3', '7'],
+        ], new Warehouse(['name' => 'Kho Long An']), '2026-09-08',
+            new Collection([$this->variant(10, '2.00', 'MOC - 2.00', '2.0 kg')]));
+        $this->assertSame(20.0, $preview['rows'][0]['quantity']);
+        $this->assertSame('C', $preview['available_import_columns'][0]['letter']);
+        $selected = $service->selectImportColumns($preview, [3]);
+        $this->assertSame(13.0, $selected['rows'][0]['quantity']);
+        $this->assertSame(3.0, $selected['rows'][0]['import_quantity']);
+        $this->assertSame([3], $selected['import_columns']);
+        $this->assertSame(13.0, $selected['total_quantity']);
+        $this->assertSame(10.0, $service->selectImportColumns($preview, [])['total_quantity']);
+        $this->expectException(\RuntimeException::class);
+        $service->selectImportColumns($preview, [2]);
+    }
+
     public function test_strategic_warehouse_reads_only_the_strategic_section(): void
     {
         $values = [
