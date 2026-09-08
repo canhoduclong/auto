@@ -310,11 +310,35 @@ class ShipperDashboardController extends Controller
     /**
      * Orders ready to be picked up by a shipper.
      */
+    private function latestAvailableRouteDate(): string
+    {
+        $eligibleOrders = Order::query()->where(function ($query): void {
+            $query->where(fn ($readyQuery) => $this->constrainAvailableReadyOrder($readyQuery))
+                ->orWhere(function ($acceptedQuery): void {
+                    $acceptedQuery->where('status', Order::STATUS_DELIVERING)->where('shipper_id', Auth::id());
+                    $this->constrainNoActiveWarehouseTransfer($acceptedQuery);
+                });
+        })->get(['id', 'created_at']);
+        $eligibleIds = $eligibleOrders->pluck('id')->flip();
+        $dispatches = ShipperDispatchHistory::query()->orderByDesc('schedule_date')
+            ->orderByDesc('version')->orderByDesc('id')->get()
+            ->unique(fn ($dispatch) => $dispatch->schedule_date->toDateString());
+        foreach ($dispatches as $dispatch) {
+            $plan = collect($dispatch->route_plan ?? [])->first(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === (int) Auth::id());
+            $hasOrders = collect($plan['routes'] ?? [])->flatMap(fn ($route) => $route['orders'] ?? [])
+                ->contains(fn ($entry) => $eligibleIds->has((int) ($entry['order_id'] ?? 0)));
+            if ($hasOrders) {
+                return $dispatch->schedule_date->toDateString();
+            }
+        }
+
+        return $eligibleOrders->max('created_at')?->toDateString() ?? Carbon::today()->toDateString();
+    }
+
     public function available(Request $request)
     {
-        $selectedDate = $request->filled('date')
-            ? Carbon::parse($request->input('date'))->toDateString()
-            : Carbon::today()->toDateString();
+        $validated = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
+        $selectedDate = $validated['date'] ?? $this->latestAvailableRouteDate();
 
         $today = Carbon::today();
         $startDate = $today->copy()->subDays(6)->toDateString();
@@ -364,8 +388,7 @@ class ShipperDashboardController extends Controller
                 $dateQuery->forWorkflowDate($selectedDate);
                 if ($plannedExceptionOrderIds !== []) {
                     $dateQuery->orWhere(function ($exceptionQuery) use ($plannedExceptionOrderIds): void {
-                        $exceptionQuery->where('skip_auto_cancel', true)
-                            ->whereIn('id', $plannedExceptionOrderIds);
+                        $exceptionQuery->whereIn('id', $plannedExceptionOrderIds);
                     });
                 }
             })

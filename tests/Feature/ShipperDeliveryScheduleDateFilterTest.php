@@ -49,4 +49,33 @@ class ShipperDeliveryScheduleDateFilterTest extends TestCase
             ->assertOk()->assertViewHas('deliveryRoutes', []);
         $this->getJson(route('shipper.delivery-schedules', ['date' => 'invalid']))->assertUnprocessable();
     }
+    public function test_available_defaults_to_latest_route_with_eligible_orders_and_respects_filter(): void
+    {
+        Carbon::setTestNow('2026-09-08 10:00:00');
+        $shipper = User::factory()->create();
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
+        $customer = Customer::create(['name' => 'Khách nhận đơn', 'status' => 'active']);
+        foreach (['2026-09-06', '2026-09-07', '2026-09-08'] as $date) {
+            $order = Order::create([
+                'user_id' => $shipper->id, 'shipper_id' => $shipper->id,
+                'customer_id' => $customer->id, 'code' => 'AVAILABLE-'.$date,
+                'status' => $date === '2026-09-08' ? Order::STATUS_DELIVERED : Order::STATUS_READY_TO_SHIP,
+                'skip_auto_cancel' => true,
+            ]);
+            $order->forceFill(['created_at' => $date.' 08:00:00'])->saveQuietly();
+            ShipperDispatchHistory::create([
+                'schedule_date' => $date, 'published_at' => now(), 'version' => 1, 'created_by' => $shipper->id,
+                'route_plan' => [['shipper_id' => $shipper->id, 'routes' => [
+                    ['orders' => [['order_id' => $order->id]]],
+                ]]],
+            ]);
+        }
+        $this->actingAs($shipper)->get(route('shipper.available'))
+            ->assertOk()->assertViewHas('selectedDate', '2026-09-07')->assertSee('AVAILABLE-2026-09-07');
+        $this->get(route('shipper.available', ['date' => '2026-09-06']))
+            ->assertOk()->assertViewHas('selectedDate', '2026-09-06')->assertSee('AVAILABLE-2026-09-06');
+        $this->get(route('shipper.available', ['date' => '2026-09-05']))
+            ->assertOk()->assertViewHas('selectedDate', '2026-09-05')->assertViewHas('orders', fn ($orders) => $orders->isEmpty());
+    }
+
 }
