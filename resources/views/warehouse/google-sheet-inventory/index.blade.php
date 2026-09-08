@@ -1,6 +1,6 @@
 @extends('layouts.warehouse')
 
-@section('title', 'Tồn kho Google Sheet')
+@section('title', 'Nhập SX = Thu Mua')
 
 @push('styles')
 <style>
@@ -18,8 +18,8 @@
 <div class="container-fluid py-3">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
         <div>
-            <h3 class="mb-1"><i class="bi bi-file-earmark-spreadsheet text-success me-2"></i>Tồn kho Google Sheet</h3>
-            <div class="text-muted">Cấu hình file nguồn và load thay đổi tồn kho từ Google Sheet vào hệ thống.</div>
+            <h3 class="mb-1"><i class="bi bi-file-earmark-spreadsheet text-success me-2"></i>Nhập SX = Thu Mua</h3>
+            <div class="text-muted">Nhập kho từ đúng hai cột Nhập SX và Nhập Từ KCL trong Google Sheet.</div>
         </div>
         <a href="{{ route('warehouse.dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Về Dashboard kho</a>
     </div>
@@ -32,7 +32,7 @@
     <div class="card sheet-import-card mb-3 border border-success-subtle"><div class="card-body">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
             <div>
-                <h5 class="mb-1"><i class="bi bi-link-45deg text-success me-1"></i>File nguồn Load tồn kho</h5>
+                <h5 class="mb-1"><i class="bi bi-link-45deg text-success me-1"></i>File nguồn Nhập SX = Thu Mua</h5>
                 <div class="small text-muted">Cấu hình này chỉ dùng để đọc dữ liệu vào {{ $warehouse->name }}.</div>
                 @if($serviceAccountEmail)<div class="small text-muted mt-1">Hãy chia sẻ quyền <strong>Người xem</strong> cho: <code>{{ $serviceAccountEmail }}</code></div>@endif
             </div>
@@ -57,7 +57,7 @@
     </div></div>
 
     <div class="card sheet-import-card mb-3"><div class="card-body">
-        <h5 class="mb-3"><i class="bi bi-cloud-download text-success me-1"></i>Load tồn kho từ file đã lưu</h5>
+        <h5 class="mb-3"><i class="bi bi-cloud-download text-success me-1"></i>Nhập SX = Thu Mua từ file đã lưu</h5>
         <form method="GET" action="{{ route('warehouse.google-sheet-inventory.index') }}" class="row g-3 align-items-end">
             <div class="col-md-4"><label class="form-label">Ngày lấy tồn kho</label><input type="date" name="date" class="form-control" value="{{ $selectedDate }}" required></div>
             @if(auth()->user()?->isAdmin() && !auth()->user()?->warehouse_id)
@@ -65,20 +65,7 @@
             @endif
             @if($preview)
                 <div class="col-12">
-                    <input type="hidden" name="choose_import_columns" value="1">
-                    <label class="form-label fw-semibold">Chọn cột Nhập của ngày đã Load</label>
-                    <div class="d-flex flex-wrap gap-3">
-                        @forelse($preview['available_import_columns'] ?? [] as $importColumn)
-                            <label class="form-check">
-                                <input class="form-check-input" type="checkbox" name="import_columns[]" value="{{ $importColumn['column'] }}"
-                                    @checked(in_array($importColumn['column'], $preview['import_columns'] ?? [], true))>
-                                <span class="form-check-label">Cột {{ $importColumn['letter'] }} — {{ $importColumn['label'] }}</span>
-                            </label>
-                        @empty
-                            <span class="text-muted">Ngày này không có cột Nhập.</span>
-                        @endforelse
-                    </div>
-                    <div class="small text-muted">Tổng đọc = Tồn + các cột Nhập đã chọn. Bỏ chọn tất cả để chỉ đọc Tồn. Bấm Load và so sánh sau khi đổi lựa chọn.</div>
+                    <div class="alert alert-info py-2 mb-0"><i class="bi bi-info-circle me-1"></i>Hệ thống chỉ đọc hai cột <strong>Nhập SX</strong> và <strong>Nhập Từ KCL</strong> để thực hiện nhập kho. Cột Tồn không được cộng vào số lượng nhập.</div>
                 </div>
             @endif
             <div class="col-md-4"><button class="btn btn-success"><i class="bi bi-cloud-download me-1"></i>Load và so sánh</button></div>
@@ -145,7 +132,7 @@
         @endif
 
         <div class="card sheet-import-card mb-3"><div class="table-responsive"><table class="table table-hover align-middle mb-0 sheet-import-table">
-            <thead><tr><th>Dòng</th><th>Mã Sheet</th><th>Sản phẩm hệ thống</th><th class="text-end">Lần trước</th><th class="text-end">Tồn Sheet</th><th class="text-end">Nhập trong ngày</th><th class="text-end">Tổng đọc</th><th class="text-end">Chênh lệch</th><th class="text-end">Tồn hệ thống</th><th class="text-end">Sau áp dụng</th><th>Trạng thái</th></tr></thead>
+            <thead><tr><th>Dòng</th><th>Mã Sheet</th><th>Sản phẩm hệ thống</th><th class="text-end">Lần trước</th><th class="text-end">Tồn Sheet</th><th class="text-end">Nhập SX + Nhập Từ KCL</th><th class="text-end">Số lượng nhập</th><th class="text-end">Chênh lệch</th><th class="text-end">Tồn hệ thống</th><th class="text-end">Sau áp dụng</th><th>Trạng thái</th></tr></thead>
             <tbody>
             @foreach($preview['rows'] as $row)
                 @php($isProblem = !$row['matched'] && $row['quantity'] > 0)

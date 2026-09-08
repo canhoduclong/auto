@@ -18,6 +18,8 @@ use RuntimeException;
 
 class GoogleSheetsInventoryService
 {
+    private const IMPORT_COLUMN_LABELS = ['nhap sx', 'nhap tu kcl'];
+
     /** @return array<string, mixed> */
     public function preview(Warehouse $warehouse, string $selectedDate): array
     {
@@ -249,9 +251,10 @@ class GoogleSheetsInventoryService
         $importColumns = collect($columnDates)
             ->filter(fn (?string $date): bool => $date === $selectedDate)
             ->keys()
-            ->filter(fn (int $column): bool => str_starts_with(
+            ->filter(fn (int $column): bool => in_array(
                 $this->normalize((string) ($typeHeader[$column] ?? '')),
-                'nhap'
+                self::IMPORT_COLUMN_LABELS,
+                true
             ))
             ->values();
         $section = Str::contains($this->normalize($warehouse->name), 'chien luoc') ? 'strategic' : 'main';
@@ -299,7 +302,7 @@ class GoogleSheetsInventoryService
             $importQuantity = (float) $importColumns->sum(
                 fn (int $column): float => $this->number($values[$rowIndex][$column] ?? null)
             );
-            $quantity = round($stockQuantity + $importQuantity, 3);
+            $quantity = round($importQuantity, 3);
             $hasAmbiguousInventoryName = $configuredMatches->count() > 1;
             $variant = $configuredMatches->count() === 1
                 ? $configuredMatches->first()
@@ -365,7 +368,7 @@ class GoogleSheetsInventoryService
         $preview['import_column_labels'] = $options->whereIn('column', $columns)->pluck('label')->all();
         $preview['rows'] = $preview['rows']->map(function (array $row) use ($columns): array {
             $row['import_quantity'] = (float) $columns->sum(fn ($column) => (float) ($row['import_quantities_by_column'][$column] ?? 0));
-            $row['quantity'] = round((float) $row['stock_quantity'] + $row['import_quantity'], 3);
+            $row['quantity'] = round($row['import_quantity'], 3);
 
             return $row;
         });

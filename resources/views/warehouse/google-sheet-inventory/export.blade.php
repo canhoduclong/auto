@@ -17,7 +17,7 @@
             <div class="text-muted">Ghi tồn cuối theo ngày ra file đích riêng và lưu lại lịch sử thực hiện.</div>
         </div>
         <div class="d-flex gap-2">
-            <a href="{{ route('warehouse.google-sheet-inventory.index', ['date' => $selectedDate, 'warehouse_id' => $warehouse->id]) }}" class="btn btn-outline-success"><i class="bi bi-cloud-download me-1"></i>Sang trang Load tồn kho</a>
+            <a href="{{ route('warehouse.google-sheet-inventory.index', ['date' => $selectedDate, 'warehouse_id' => $warehouse->id]) }}" class="btn btn-outline-success"><i class="bi bi-cloud-download me-1"></i>Sang trang Nhập SX = Thu Mua</a>
             <a href="{{ route('warehouse.dashboard') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>Về Dashboard kho</a>
         </div>
     </div>
@@ -40,7 +40,7 @@
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
             <div>
                 <h5 class="mb-1"><i class="bi bi-link-45deg text-primary me-1"></i>File đích ghi tồn kho</h5>
-                <div class="small text-muted">Lưu riêng cho {{ $warehouse->name }}, không dùng chung với file nguồn Load tồn kho.</div>
+                <div class="small text-muted">Lưu riêng cho {{ $warehouse->name }}, không dùng chung với file nguồn Nhập SX = Thu Mua.</div>
                 @if($serviceAccountEmail)<div class="small text-muted mt-1">Bắt buộc chia sẻ quyền <strong>Người chỉnh sửa</strong> cho: <code>{{ $serviceAccountEmail }}</code></div>@endif
             </div>
             @if($sheetConfiguration['spreadsheet_url'])<a href="{{ $sheetConfiguration['spreadsheet_url'] }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">Mở file đích <i class="bi bi-box-arrow-up-right ms-1"></i></a>@endif

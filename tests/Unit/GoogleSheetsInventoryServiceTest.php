@@ -38,11 +38,11 @@ class GoogleSheetsInventoryServiceTest extends TestCase
             $variants
         );
 
-        $this->assertSame(5.0, $result['rows'][0]['quantity']);
+        $this->assertSame(0.0, $result['rows'][0]['quantity']);
         $this->assertSame(10, $result['rows'][0]['variant_id']);
         $this->assertSame('inventory_name', $result['rows'][0]['match_method']);
         $this->assertSame('MOC - 2.0', $result['rows'][0]['normalized_code']);
-        $this->assertSame(17.0, $result['total_quantity']);
+        $this->assertSame(0.0, $result['total_quantity']);
         $this->assertSame(13, $result['rows']->firstWhere('sheet_code', 'Loại lớn')['variant_id']);
         $this->assertFalse($result['has_blocking_errors']);
     }
@@ -52,18 +52,18 @@ class GoogleSheetsInventoryServiceTest extends TestCase
         $service = new GoogleSheetsInventoryService;
         $preview = $service->parseValues([
             ['0'], ['SIZE/Ngày Tháng', '08/09/2026', '', ''],
-            ['QUAY LÔNG', 'Tồn', 'Nhập SX', 'Nhập KCL'],
+            ['QUAY LÔNG', 'Tồn', 'Nhập SX', 'Nhập Từ KCL'],
             ['HÀNG MÓC'], ['M 2', '10', '3', '7'],
         ], new Warehouse(['name' => 'Kho Long An']), '2026-09-08',
             new Collection([$this->variant(10, '2.00', 'MOC - 2.00', '2.0 kg')]));
-        $this->assertSame(20.0, $preview['rows'][0]['quantity']);
+        $this->assertSame(10.0, $preview['rows'][0]['quantity']);
         $this->assertSame('C', $preview['available_import_columns'][0]['letter']);
         $selected = $service->selectImportColumns($preview, [3]);
-        $this->assertSame(13.0, $selected['rows'][0]['quantity']);
+        $this->assertSame(3.0, $selected['rows'][0]['quantity']);
         $this->assertSame(3.0, $selected['rows'][0]['import_quantity']);
         $this->assertSame([3], $selected['import_columns']);
-        $this->assertSame(13.0, $selected['total_quantity']);
-        $this->assertSame(10.0, $service->selectImportColumns($preview, [])['total_quantity']);
+        $this->assertSame(3.0, $selected['total_quantity']);
+        $this->assertSame(0.0, $service->selectImportColumns($preview, [])['total_quantity']);
         $this->expectException(\RuntimeException::class);
         $service->selectImportColumns($preview, [2]);
     }
@@ -89,17 +89,17 @@ class GoogleSheetsInventoryServiceTest extends TestCase
         );
 
         $this->assertSame('strategic', $result['warehouse_section']);
-        $this->assertSame(3.0, $result['total_quantity']);
+        $this->assertSame(0.0, $result['total_quantity']);
     }
 
-    public function test_it_combines_stock_and_all_import_columns_for_the_selected_date(): void
+    public function test_it_imports_only_production_and_kcl_columns_for_the_selected_date(): void
     {
         $values = [
             ['0'],
             ['SIZE/Ngày Tháng', '25/08/2026', '', ''],
-            ['QUAY LÔNG', 'Nhập SX', 'Nhập Từ KCL', 'Tồn'],
+            ['QUAY LÔNG', 'Nhập SX', 'Nhập Từ KCL', 'Tồn', 'Nhập KCL'],
             ['HÀNG MÓC'],
-            ['M 2', '3', '2', '10'],
+            ['M 2', '3', '2', '10', '100'],
             ['CHIẾN LƯỢC'],
         ];
 
@@ -113,7 +113,7 @@ class GoogleSheetsInventoryServiceTest extends TestCase
         $row = $result['rows']->first();
         $this->assertSame(10.0, $row['stock_quantity']);
         $this->assertSame(5.0, $row['import_quantity']);
-        $this->assertSame(15.0, $row['quantity']);
+        $this->assertSame(5.0, $row['quantity']);
         $this->assertSame([2, 3], $result['import_columns']);
     }
 

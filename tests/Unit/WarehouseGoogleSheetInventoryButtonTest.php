@@ -15,7 +15,7 @@ class WarehouseGoogleSheetInventoryButtonTest extends TestCase
         $this->assertNotFalse($stocktake);
         $this->assertNotFalse($sheetImport);
         $this->assertGreaterThan($stocktake, $sheetImport);
-        $this->assertStringContainsString('Load tồn kho', $view);
+        $this->assertStringContainsString('Nhập SX = Thu Mua', $view);
         $this->assertStringContainsString('Ghi tồn kho', $view);
         $this->assertStringContainsString("route('warehouse.google-sheet-inventory.export.index')", $view);
     }

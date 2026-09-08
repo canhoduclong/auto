@@ -367,7 +367,7 @@
                 <i class="bi bi-clipboard2-check me-1"></i>Kiểm kê kho
             </a>
             <a href="{{ route('warehouse.google-sheet-inventory.index') }}" class="btn btn-sm btn-outline-success">
-                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Load tồn kho
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Nhập SX = Thu Mua
             </a>
             <a href="{{ route('warehouse.google-sheet-inventory.export.index') }}" class="btn btn-sm btn-outline-primary">
                 <i class="bi bi-cloud-upload me-1"></i>Ghi tồn kho
