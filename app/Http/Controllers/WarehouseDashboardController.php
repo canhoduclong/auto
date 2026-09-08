@@ -2342,12 +2342,14 @@ class WarehouseDashboardController extends Controller
             ->groupBy('order_item_id')
             ->map(fn ($rows) => $rows->pluck('quantity', 'inventory_id'));
 
-        return $eligibleItems->mapWithKeys(function ($item) use ($variantsByProduct, $reservationByItemAndInventory, $reservedByInventory) {
+        return $eligibleItems->mapWithKeys(function ($item) use ($variantsByProduct, $reservationByItemAndInventory, $reservedByInventory, $warehouseId) {
+            $fifoAvailable = $this->packingSizeFifoAvailability($item, (int) $warehouseId,
+                $variantsByProduct->get((int) $item->variant->product_id, collect())->pluck('id')->all());
             $saved = $item->packingSizeAllocations->pluck('quantity', 'product_variant_id');
             $mainSize = (float) $item->variant->size;
             $options = collect($variantsByProduct->get((int) $item->variant->product_id, collect()))
-                ->filter(fn (ProductVariant $variant) => abs((float) $variant->size - $mainSize) <= 0.100001)
-                ->map(function (ProductVariant $variant) use ($item, $saved, $reservationByItemAndInventory, $reservedByInventory) {
+                ->filter(fn (ProductVariant $variant) => (float) $variant->size > 0)
+                ->map(function (ProductVariant $variant) use ($item, $saved, $reservationByItemAndInventory, $reservedByInventory, $fifoAvailable) {
                     $inventories = $variant->inventories;
                     $available = (int) $inventories->sum(function (Inventory $inventory) use ($item, $reservationByItemAndInventory, $reservedByInventory) {
                         $ownReserved = (int) ($reservationByItemAndInventory->get($item->id)?->get($inventory->id) ?? 0);
@@ -2360,7 +2362,7 @@ class WarehouseDashboardController extends Controller
                         'variant_id' => (int) $variant->id,
                         'size' => (float) $variant->size,
                         'name' => (string) ($variant->name ?: $variant->sku),
-                        'available' => $available,
+                        'available' => min($available, (int) ($fifoAvailable[$variant->id] ?? 0)),
                         'quantity' => (int) ($saved[$variant->id] ?? ((int) $variant->id === (int) $item->product_variant_id ? $item->quantity : 0)),
                     ];
                 })
@@ -2369,6 +2371,28 @@ class WarehouseDashboardController extends Controller
 
             return $options->count() > 1 ? [(int) $item->id => $options] : [];
         })->all();
+    }
+
+    private function packingSizeFifoAvailability($item, int $warehouseId, array $variantIds): array
+    {
+        $order = Order::with('items.packingSizeAllocations')->findOrFail($item->order_id);
+        $date = ($order->accounting_sales_import_batch_id ? $order->delivery_date : $order->created_at)->toDateString();
+        $result = $this->buildPackingQueueStockGuards(collect([$order]), $warehouseId, $date, $variantIds);
+        $available = $result['guards'][$order->id]['available_before_order'] ?? [];
+        foreach ($order->items as $otherItem) {
+            if ((int) $otherItem->id === (int) $item->id) {
+                continue;
+            }
+            $allocations = $otherItem->packingSizeAllocations;
+            $requirements = $allocations->isNotEmpty() && (int) $allocations->sum('quantity') === (int) $otherItem->quantity
+                ? $allocations->groupBy('product_variant_id')->map(fn ($rows) => $rows->sum('quantity'))->all()
+                : [(int) $otherItem->product_variant_id => (int) $otherItem->quantity];
+            foreach ($requirements as $variantId => $quantity) {
+                $available[$variantId] = max(0, ($available[$variantId] ?? 0) - $quantity);
+            }
+        }
+
+        return $available;
     }
 
     private function cuttingOrdersForVariant(ProductVariant $variant, ?int $warehouseId, string $forDate): Collection
@@ -2452,7 +2476,7 @@ class WarehouseDashboardController extends Controller
         return $plans;
     }
 
-    private function buildPackingQueueStockGuards(Collection $orders, ?int $warehouseId, ?string $forDate = null): array
+    private function buildPackingQueueStockGuards(Collection $orders, ?int $warehouseId, ?string $forDate = null, array $extraVariantIds = []): array
     {
         $queueStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
         $forDate = $forDate ?? now()->toDateString();
@@ -2499,6 +2523,8 @@ class WarehouseDashboardController extends Controller
             ->map(fn ($id) => (int) $id)
             ->unique()
             ->values();
+
+        $variantIds = $variantIds->merge($extraVariantIds)->unique()->values();
 
         // Each date owns an independent packing pool. Its starting quantity is
         // the closing inventory snapshot of that date. Global reservation rows
@@ -2554,6 +2580,7 @@ class WarehouseDashboardController extends Controller
         $guards = [];
 
         foreach ($allQueueOrders as $order) {
+            $availableBeforeOrder = $remainingByVariant;
             $shortages = [];
             $pendingDeductions = [];  // staged; applied only if order has NO shortage
 
@@ -2626,6 +2653,7 @@ class WarehouseDashboardController extends Controller
 
             if (isset($displayedOrderIds[$order->id])) {
                 $guards[$order->id] = [
+                    'available_before_order' => $availableBeforeOrder,
                     'has_shortage' => $hasShortage,
                     'can_start_packing' => ! $hasShortage,
                     'message' => $hasShortage ? 'Không đủ tồn kho để đóng hàng' : null,
@@ -3034,8 +3062,8 @@ class WarehouseDashboardController extends Controller
             ->get()
             ->keyBy('id');
         if ($variants->count() !== $allocationInput->count()
-            || $variants->contains(fn (ProductVariant $variant) => abs((float) $variant->size - $mainSize) > 0.100001)) {
-            return back()->withErrors(['allocations' => 'Chỉ được dùng size chính '.$mainSizeLabel.' hoặc size liền kề ±0.1 của cùng sản phẩm.']);
+            || $variants->contains(fn (ProductVariant $variant) => (float) $variant->size <= 0)) {
+            return back()->withErrors(['allocations' => 'Chỉ được dùng size chính '.$mainSizeLabel.' hoặc size khác của cùng sản phẩm.']);
         }
 
         $orderedQuantity = (int) $item->quantity;
@@ -3045,8 +3073,8 @@ class WarehouseDashboardController extends Controller
         $mainSizeQuantity = (int) $allocationInput
             ->map(fn (int $quantity, int $variantId) => abs((float) $variants[$variantId]->size - $mainSize) < 0.0001 ? $quantity : 0)
             ->sum();
-        if ($orderedQuantity <= 0 || $mainSizeQuantity * 100 < $orderedQuantity * 75) {
-            return back()->withErrors(['allocations' => 'Tỷ lệ size chính '.$mainSizeLabel.' phải đạt tối thiểu 75% tổng số lượng.']);
+        if ($orderedQuantity <= 0 || $mainSizeQuantity * 100 < $orderedQuantity * 50) {
+            return back()->withErrors(['allocations' => 'Tỷ lệ size chính '.$mainSizeLabel.' phải đạt tối thiểu 50% tổng số lượng.']);
         }
         $weightedAverage = (float) $allocationInput
             ->map(fn (int $quantity, int $variantId) => $quantity * (float) $variants[$variantId]->size)
@@ -3059,6 +3087,14 @@ class WarehouseDashboardController extends Controller
 
         try {
             DB::transaction(function () use ($item, $allocationInput, $warehouseId): void {
+                // Serialize allocations at this warehouse before recalculating FIFO.
+                Inventory::query()->where('warehouse_id', $warehouseId)->orderBy('id')->lockForUpdate()->get();
+                $fifoAvailable = $this->packingSizeFifoAvailability($item, $warehouseId, $allocationInput->keys()->all());
+                foreach ($allocationInput as $variantId => $quantity) {
+                    if ($quantity > ($fifoAvailable[$variantId] ?? 0)) {
+                        throw new \RuntimeException('Không đủ tồn khả dụng sau khi trừ hàng của các đơn ưu tiên trước.');
+                    }
+                }
                 $oldReservations = InventoryReservation::query()->where('order_item_id', $item->id)->lockForUpdate()->get();
                 foreach ($oldReservations as $reservation) {
                     $inventory = Inventory::query()->lockForUpdate()->find($reservation->inventory_id);

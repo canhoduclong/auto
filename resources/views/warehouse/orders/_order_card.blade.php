@@ -541,8 +541,8 @@
                                                 <div class="mx-2 mb-2 mt-1 rounded border border-warning-subtle bg-warning-subtle p-2">
                                                     <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
                                                         <div>
-                                                            <strong><i class="bi bi-boxes me-1"></i>Không đủ tồn size {{ $formattedVariantSize }} — chọn size liền kề</strong>
-                                                            <div class="small text-muted">Tổng phải đủ {{ number_format($orderedQty) }} con; size chính {{ $formattedVariantSize }} tối thiểu 75%, tối đa 25% dùng size liền kề.</div>
+                                                            <strong><i class="bi bi-boxes me-1"></i>Không đủ tồn size {{ $formattedVariantSize }} — chọn size khác</strong>
+                                                            <div class="small text-muted">Tổng phải đủ {{ number_format($orderedQty) }} con; size chính {{ $formattedVariantSize }} tối thiểu 50%, tối đa 50% dùng size khác.</div>
                                                         </div>
                                                     </div>
                                                     <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.packing-size-allocation', $order) }}"

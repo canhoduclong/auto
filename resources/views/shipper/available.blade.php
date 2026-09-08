@@ -565,10 +565,6 @@
                     @foreach($group['orders'] as $order)
                         @php
                             $isAccepted = (string) $order->status === $acceptedStatus;
-                            $canAcceptToday = !$isAccepted && (
-                                \Illuminate\Support\Carbon::parse($selectedDate)->isToday()
-                                || (bool) $order->skip_auto_cancel
-                            );
                             $recipientName = $order->recipient_name ?: ($order->customer?->name ?? '—');
                             $deliveryAddress = $order->recipient_address ?: ($order->customer?->address ?? null);
                             $customerDeliveryTime = $order->delivery_time ?: $order->customer?->delivery_time;
@@ -643,17 +639,13 @@
                                                         </button>
                                                     </form>
                                                 </div>
-                                            @elseif($canAcceptToday && ($order->updated_at->isToday() || $order->created_at->isToday() || (bool) $order->skip_auto_cancel))
+                                            @else
                                                 <form action="{{ route('shipper.accept', $order) }}" method="POST" class="js-shipper-accept-form">
                                                     @csrf
                                                     <button class="btn btn-teal shadow-sm d-inline-flex align-items-center gap-1" type="submit">
                                                         <i class="bi bi-hand-index-thumb"></i> Nhận đơn này
                                                     </button>
                                                 </form>
-                                            @else
-                                                <button class="btn btn-outline-secondary" disabled>
-                                                    <i class="bi bi-calendar-x me-1"></i>Chỉ nhận đơn có ngày hôm nay
-                                                </button>
                                             @endif
                                         </div>
 

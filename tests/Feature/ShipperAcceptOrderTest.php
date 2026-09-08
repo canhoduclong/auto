@@ -67,6 +67,19 @@ class ShipperAcceptOrderTest extends TestCase
             'reserved_at' => now(),
         ]);
 
+        // A confirmed, ordinary order remains receivable after its packing day.
+        $order->forceFill([
+            'skip_auto_cancel' => false,
+            'created_at' => now()->subDays(2),
+            'updated_at' => now()->subDays(2),
+        ])->saveQuietly();
+        $order->histories()->create([
+            'action' => 'schedule_confirmed', 'user_id' => $shipper->id,
+            'role' => 'shipper', 'status_after' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $this->actingAs($shipper)->get(route('shipper.available', ['date' => $order->created_at->toDateString()]))
+            ->assertOk()->assertSee('Nhận đơn này')->assertDontSee('Chỉ nhận đơn có ngày hôm nay');
+
         $this->actingAs($shipper)->postJson(route('shipper.accept', $order))->assertOk();
         $exportDocument = InventoryDocument::query()
             ->where('notes', 'Xuất kho cho đơn #'.$order->code)

@@ -89,7 +89,43 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $this->assertSame(Order::STATUS_PACKING, $order->fresh()->status);
     }
 
-    public function test_it_rejects_a_mix_when_the_main_size_is_below_75_percent(): void
+    public function test_half_main_size_accepts_other_sizes_and_respects_prior_fifo_orders(): void
+    {
+        [$user, $order, $item, $variants, $inventories] = $this->fixture(50);
+        $inventories['2.5']->update(['quantity' => 60]);
+        $otherSize = $variants['2.6'];
+        $otherSize->update(['size' => 2.8]);
+        $prior = Order::create([
+            'customer_id' => $order->customer_id, 'warehouse_id' => $order->warehouse_id,
+            'status' => Order::STATUS_READY_TO_PACK,
+        ]);
+        $prior->forceFill(['created_at' => now()->subHour()])->saveQuietly();
+        $prior->items()->create([
+            'product_id' => $item->product_id, 'product_variant_id' => $variants['2.5']->id,
+            'quantity' => 30, 'price' => 70000, 'total' => 2100000,
+        ]);
+        $controller = app(\App\Http\Controllers\WarehouseDashboardController::class);
+        $options = (new \ReflectionMethod($controller, 'buildPackingSizeOptions'))->invoke(
+            $controller, collect([$order->load('items.variant.product', 'items.packingSizeAllocations')]),
+            [$order->id => ['shortages' => [['order_item_id' => $item->id]]]], $order->warehouse_id
+        );
+        $this->assertSame(30, collect($options[$item->id])->firstWhere('variant_id', $variants['2.5']->id)['available']);
+        $url = route('warehouse.orders.packing-size-allocation', $order);
+        $this->actingAs($user)->post($url, [
+            'order_item_id' => $item->id,
+            'allocations' => [$variants['2.5']->id => 31, $otherSize->id => 19],
+        ])->assertSessionHasErrors('allocations');
+        $this->assertDatabaseCount('order_item_packing_size_allocations', 0);
+        $this->actingAs($user)->post($url, [
+            'order_item_id' => $item->id,
+            'allocations' => [$variants['2.5']->id => 25, $otherSize->id => 25],
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('order_item_packing_size_allocations', [
+            'order_item_id' => $item->id, 'product_variant_id' => $variants['2.5']->id, 'quantity' => 25,
+        ]);
+    }
+
+    public function test_it_rejects_a_mix_when_the_main_size_is_below_50_percent(): void
     {
         [$user, $order, $item, $variants] = $this->fixture(100);
 
@@ -98,9 +134,9 @@ class WarehousePackingSizeAllocationTest extends TestCase
             ->post(route('warehouse.orders.packing-size-allocation', $order), [
                 'order_item_id' => $item->id,
                 'allocations' => [
-                    $variants['2.4']->id => 13,
-                    $variants['2.5']->id => 74,
-                    $variants['2.6']->id => 13,
+                    $variants['2.4']->id => 25,
+                    $variants['2.5']->id => 49,
+                    $variants['2.6']->id => 26,
                 ],
             ])
             ->assertRedirect(route('warehouse.orders'))
@@ -169,7 +205,7 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $this->actingAs($user)
             ->get(route('warehouse.orders', ['date' => now()->toDateString()]))
             ->assertOk()
-            ->assertSee('Không đủ tồn size 2,3 — chọn size liền kề')
+            ->assertSee('Không đủ tồn size 2,3 — chọn size khác')
             ->assertSee('data-main-size="2.3"', false);
 
         $this->actingAs($user)
@@ -197,7 +233,7 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $variants['2.3']->product->update(['allow_adjacent_packing_sizes' => false]);
         $inventories['2.3']->update(['quantity' => 75]);
         $this->actingAs($user)->get(route('warehouse.orders', ['date' => now()->toDateString()]))
-            ->assertOk()->assertDontSee('Không đủ tồn size 2,3 — chọn size liền kề');
+            ->assertOk()->assertDontSee('Không đủ tồn size 2,3 — chọn size khác');
         $this->post(route('warehouse.orders.packing-size-allocation', $order), [
             'order_item_id' => $item->id,
             'allocations' => [$variants['2.2']->id => 25, $variants['2.3']->id => 75],

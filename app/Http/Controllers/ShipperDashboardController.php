@@ -431,14 +431,6 @@ class ShipperDashboardController extends Controller
                     ->where(function ($query) {
                         $this->constrainAvailableReadyOrder($query);
                     })
-                    ->where(function ($query) {
-                        $today = Carbon::today()->toDateString();
-
-                        $query->whereDate('updated_at', $today)
-                            ->orWhereDate('created_at', $today)
-                            ->orWhere('skip_auto_cancel', true)
-                            ->orWhereNotNull('accounting_sales_import_batch_id');
-                    })
                     ->lockForUpdate()
                     ->first();
 
@@ -557,11 +549,11 @@ class ShipperDashboardController extends Controller
         if (! $accepted) {
             if (request()->expectsJson()) {
                 return response()->json([
-                    'message' => 'Đơn hàng này không còn khả dụng hoặc không thuộc ngày lên đón hôm nay.',
+                    'message' => 'Đơn hàng này không còn khả dụng để nhận.',
                 ], 409);
             }
 
-            return back()->with('error', 'Đơn hàng này không còn khả dụng hoặc không thuộc ngày lên đón hôm nay.');
+            return back()->with('error', 'Đơn hàng này không còn khả dụng để nhận.');
         }
 
         if (request()->expectsJson()) {
