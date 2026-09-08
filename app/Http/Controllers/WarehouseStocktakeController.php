@@ -51,6 +51,20 @@ class WarehouseStocktakeController extends Controller
                     $sheetClosingByVariant = $preview['rows']
                         ->filter(fn (array $row): bool => $row['matched'] && $row['variant_id'] !== null)
                         ->mapWithKeys(fn (array $row): array => [(int) $row['variant_id'] => (float) $row['stock_quantity']]);
+
+                    foreach ($sheetClosingByVariant->keys() as $variantId) {
+                        Inventory::query()->firstOrCreate(
+                            [
+                                'warehouse_id' => $warehouse->id,
+                                'product_variant_id' => (int) $variantId,
+                            ],
+                            [
+                                'quantity' => 0,
+                                'weight_kg' => 0,
+                                'reserved_quantity' => 0,
+                            ]
+                        );
+                    }
                 } catch (\Throwable $exception) {
                     report($exception);
                     $sheetLoadError = $exception->getMessage();
