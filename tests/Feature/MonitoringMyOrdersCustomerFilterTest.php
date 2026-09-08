@@ -101,4 +101,40 @@ class MonitoringMyOrdersCustomerFilterTest extends TestCase
         $existingResponse->assertOk()->assertJsonPath('total', 0);
         $this->assertStringNotContainsString('Thêm khách hàng mới', $existingResponse->json('html'));
     }
+
+    public function test_sale_only_sees_own_orders_in_daily_monitoring(): void
+    {
+        $saleRole = Role::query()->create(['name' => 'sale']);
+        $currentSale = User::factory()->create();
+        $currentSale->roles()->attach($saleRole);
+        $otherSale = User::factory()->create();
+        $otherSale->roles()->attach($saleRole);
+        $customer = Customer::query()->create(['name' => 'Khách theo dõi đơn']);
+
+        Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $currentSale->id,
+            'code' => 'MONITORING-MY-ORDER',
+            'delivery_date' => now()->toDateString(),
+            'status' => 'pending',
+        ]);
+        Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $otherSale->id,
+            'code' => 'MONITORING-OTHER-ORDER',
+            'delivery_date' => now()->toDateString(),
+            'status' => 'pending',
+        ]);
+
+        $this->actingAs($currentSale)
+            ->withSession(['active_role' => 'sale'])
+            ->get(route('pages.my_orders.monitoring', [
+                'tab' => 'today',
+                'date' => now()->toDateString(),
+                'date_field' => 'delivery_date',
+            ]))
+            ->assertOk()
+            ->assertSee('MONITORING-MY-ORDER')
+            ->assertDontSee('MONITORING-OTHER-ORDER');
+    }
 }

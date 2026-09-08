@@ -1045,6 +1045,7 @@ class PageController extends Controller
                 'items.variant.latestPriceRule',
             ]);
         $this->applyMonitoringDateFilter($dateQuery, $selectedDate, $selectedDateField);
+        $this->applyMonitoringVisibilityScope($dateQuery, $user);
 
         if ($this->hasOrderColumn('trash_at')) {
             $dateQuery->whereNull('trash_at');
@@ -1898,6 +1899,32 @@ class PageController extends Controller
         }
 
         return $query->orderBy('name')->get(['id', 'name', 'team_id']);
+    }
+
+    private function applyMonitoringVisibilityScope(Builder $query, User $user): Builder
+    {
+        $activeRole = strtolower(trim((string) (session('active_role') ?: $user->defaultRole?->name)));
+        $isSaleView = $activeRole === 'sale' || (
+            $activeRole === ''
+            && $user->hasRole('sale')
+            && !$user->hasRole(['admin', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale', 'director'])
+        );
+
+        if ($isSaleView) {
+            return $query->where('user_id', $user->id);
+        }
+
+        if ($user->isAdmin() || $user->hasRole([
+            'leader',
+            'leader_sale',
+            'sale_manager',
+            'manager',
+            'manager_sale',
+        ])) {
+            return $query->whereHas('user.roles', fn ($roles) => $roles->whereRaw('LOWER(name) = ?', ['sale']));
+        }
+
+        return $query->where('user_id', $user->id);
     }
 
     private function renderMonitoringTab(string $tab, Request $request): string
