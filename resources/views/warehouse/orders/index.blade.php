@@ -1884,6 +1884,13 @@
                 if (submit) submit.disabled = !valid;
             }
             inputs.forEach(input => input.addEventListener('input', refreshSizeMix));
+            form.querySelector('.js-packing-size-reset')?.addEventListener('click', function () {
+                inputs.forEach(function (input) {
+                    input.value = input.defaultValue;
+                });
+                refreshSizeMix();
+                inputs.find(input => parseInt(input.max || '0', 10) > 0)?.focus();
+            });
             refreshSizeMix();
         });
 

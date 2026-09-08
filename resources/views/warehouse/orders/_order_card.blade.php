@@ -586,6 +586,10 @@
                                                                 <button class="btn btn-warning btn-sm js-packing-size-submit" type="submit">
                                                                     <i class="bi bi-save2 me-1"></i>Lưu cơ cấu thực đóng
                                                                 </button>
+                                                                <button class="btn btn-outline-secondary btn-sm js-packing-size-reset" type="button"
+                                                                        title="Khôi phục cơ cấu khi mở trang để nhập lại">
+                                                                    <i class="bi bi-arrow-clockwise me-1"></i>Làm lại
+                                                                </button>
                                                             </div>
                                                         </div>
                                                     </form>
