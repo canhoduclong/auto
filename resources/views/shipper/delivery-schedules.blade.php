@@ -40,7 +40,7 @@
             <form method="GET" action="{{ route('shipper.delivery-schedules') }}" class="d-flex gap-2 align-items-center">
                 <input type="date" name="date" value="{{ $selectedDate }}" class="form-control form-control-sm" style="max-width: 160px" aria-label="Ngày giao hàng">
                 <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search me-1"></i>Xem</button>
-                <a href="{{ route('shipper.delivery-schedules') }}" class="btn btn-sm btn-outline-secondary" title="Về hôm nay"><i class="bi bi-arrow-clockwise"></i></a>
+                <a href="{{ route('shipper.delivery-schedules') }}" class="btn btn-sm btn-outline-secondary" title="Hiển thị tất cả lộ trình">Tất cả</a>
             </form>
         </div>
     </div>
@@ -50,7 +50,7 @@
     <div class="card ds-route-detail">
         <div class="card-body text-center py-5">
             <i class="bi bi-signpost-split fs-1 text-muted"></i>
-            <p class="mt-3 mb-0 text-muted">Không có lộ trình giao hàng nào cho ngày này.</p>
+            <p class="mt-3 mb-0 text-muted">{{ $selectedDate ? 'Không có lộ trình giao hàng nào cho ngày này.' : 'Chưa có lộ trình giao hàng.' }}</p>
         </div>
     </div>
 @else
@@ -61,7 +61,7 @@
     <div class="ds-layout" data-route-browser data-initial-route="{{ $initialRouteKey }}">
         <aside class="card ds-route-list" aria-label="Danh sách lộ trình">
             <div class="card-header bg-white border-0 px-3 pt-3 pb-2">
-                <div class="fw-bold">Các lộ trình trong ngày</div>
+                <div class="fw-bold">{{ $selectedDate ? 'Lộ trình ngày '.\Carbon\Carbon::parse($selectedDate)->format('d/m/Y') : 'Các lộ trình giao hàng' }}</div>
                 <div class="text-muted small">Chạm vào lộ trình để xem đơn</div>
             </div>
             <div>
@@ -75,6 +75,7 @@
                             <span class="ds-route-number">{{ $routeIndex + 1 }}</span>
                             <span class="flex-fill min-w-0">
                                 <span class="d-flex align-items-start justify-content-between gap-2"><span class="fw-bold text-dark">{{ $deliveryRoute['name'] }}</span><i class="bi bi-chevron-right text-muted"></i></span>
+                                <span class="d-block text-muted small mt-1"><i class="bi bi-calendar3 me-1"></i>Ngày giao: {{ \Carbon\Carbon::parse($deliveryRoute['date'])->format('d/m/Y') }}</span>
                                 <span class="d-flex align-items-center justify-content-between mt-2 gap-2"><span class="text-muted small">{{ $deliveryRoute['orders']->count() }} đơn · {{ $deliveryRoute['quantity'] }} sp</span><span class="badge {{ $routeStatusClass }}">{{ $routeStatusLabel }}</span></span>
                             </span>
                         </span>
@@ -88,14 +89,14 @@
                 <section id="{{ $deliveryRoute['key'] }}-panel" class="card ds-route-detail ds-route-panel" data-route-panel="{{ $deliveryRoute['key'] }}" @if($deliveryRoute['key'] !== $initialRouteKey) hidden @endif>
                     <div class="card-header ds-detail-header border-0 p-3">
                         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                            <div><div class="small opacity-75">LỘ TRÌNH {{ $routeIndex + 1 }}</div><h5 class="mb-1 fw-bold">{{ $deliveryRoute['name'] }}</h5><div class="small opacity-75">Kiểm tra các đơn bên dưới trước khi xác nhận nhận lộ trình.</div></div>
+                            <div><div class="small opacity-75">LỘ TRÌNH {{ $routeIndex + 1 }} · Ngày giao: {{ \Carbon\Carbon::parse($deliveryRoute['date'])->format('d/m/Y') }}</div><h5 class="mb-1 fw-bold">{{ $deliveryRoute['name'] }}</h5><div class="small opacity-75">Kiểm tra các đơn bên dưới trước khi xác nhận nhận lộ trình.</div></div>
                             <span class="badge bg-white text-dark fs-6">{{ $deliveryRoute['orders']->count() }} đơn</span>
                         </div>
                     </div>
 
                     <form method="POST" action="{{ route('shipper.confirm-delivery-schedule', ['schedule' => 'bulk']) }}">
                         @csrf
-                        <input type="hidden" name="date" value="{{ $selectedDate }}">
+                        <input type="hidden" name="date" value="{{ $deliveryRoute['date'] }}">
                         <div class="card-body d-flex flex-column gap-3">
                             @foreach($deliveryRoute['orders'] as $orderIndex => $order)
                                 <input type="hidden" name="order_ids[]" value="{{ $order->id }}">

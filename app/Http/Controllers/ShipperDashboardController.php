@@ -2992,12 +2992,46 @@ class ShipperDashboardController extends Controller
     public function deliverySchedules(Request $request)
     {
         $userId = Auth::id();
-        $selectedDate = $request->filled('date')
-            ? Carbon::parse($request->input('date'))->toDateString()
-            : Carbon::today()->toDateString();
+        $validated = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
+        $selectedDate = $validated['date'] ?? null;
+        $dates = $selectedDate ? collect([$selectedDate]) : ShipperDispatchHistory::query()
+            ->select('schedule_date')->distinct()->pluck('schedule_date')
+            ->map(fn ($date) => Carbon::parse($date)->toDateString())
+            ->merge(Order::query()->where('shipper_id', $userId)
+                ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
+                ->selectRaw('DATE(created_at) as route_date')->distinct()->pluck('route_date'))
+            ->filter()->unique()->sortDesc()->values();
 
-        $orders = $this->deliveryScheduleOrdersForShipper($userId, $selectedDate)->get();
-        $deliveryRoutes = $this->deliveryRoutesForShipper($userId, $selectedDate, $orders);
+        // A restored order may match several workflow dates. When browsing
+        // all dates, keep published orders on their actual route dates only.
+        $publishedDatesByOrder = [];
+        if (! $selectedDate) {
+            $dispatches = ShipperDispatchHistory::query()->orderByDesc('version')->orderByDesc('id')
+                ->get()->unique(fn ($dispatch) => $dispatch->schedule_date->toDateString());
+            foreach ($dispatches as $dispatch) {
+                $plan = collect($dispatch->route_plan ?? [])->first(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $userId);
+                foreach (collect($plan['routes'] ?? [])->flatMap(fn ($route) => $route['orders'] ?? []) as $entry) {
+                    $publishedDatesByOrder[(int) $entry['order_id']][] = $dispatch->schedule_date->toDateString();
+                }
+            }
+        }
+
+        $orders = collect();
+        $deliveryRoutes = [];
+        foreach ($dates as $date) {
+            $dayOrders = $this->deliveryScheduleOrdersForShipper($userId, $date)->get();
+            if (! $selectedDate) {
+                $dayOrders = $dayOrders->filter(fn ($order) => ! isset($publishedDatesByOrder[$order->id])
+                    || in_array($date, $publishedDatesByOrder[$order->id], true))->values();
+            }
+            $orders = $orders->merge($dayOrders);
+            foreach ($this->deliveryRoutesForShipper($userId, $date, $dayOrders) as $route) {
+                $route['date'] = $date;
+                $route['key'] = $date.'-'.$route['key'];
+                $deliveryRoutes[] = $route;
+            }
+        }
+        $orders = $orders->unique('id')->values();
 
         $deliveredOrders = Order::with([
             'customer:id,name,address',
@@ -3019,7 +3053,7 @@ class ShipperDashboardController extends Controller
                     ->orWhereHas('histories', fn ($historyQuery) => $historyQuery
                         ->whereIn('action', $this->customerDeliveryCompletionActions()));
             })
-            ->forWorkflowDate($selectedDate)
+            ->when($selectedDate, fn ($query) => $query->forWorkflowDate($selectedDate))
             ->orderByDesc('delivered_at')
             ->orderByDesc('id')
             ->get();
