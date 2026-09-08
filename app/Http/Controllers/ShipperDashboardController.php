@@ -2308,7 +2308,7 @@ class ShipperDashboardController extends Controller
     {
         $plannedExceptionOrderIds = $this->archivedPlannedOrderIdsForShipperOnDate($shipperId, $selectedDate);
 
-        return Order::with(['customer', 'items.variant'])
+        return Order::with(['customer', 'user:id,name', 'items.variant'])
             ->where('shipper_id', $shipperId)
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
             ->where(function ($dateQuery) use ($selectedDate, $plannedExceptionOrderIds): void {

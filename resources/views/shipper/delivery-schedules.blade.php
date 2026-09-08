@@ -107,6 +107,7 @@
                                                 <div><div class="fw-bold text-dark">{{ $order->customer?->name ?? $order->recipient_name ?? 'Khách hàng' }}</div><div class="text-muted small">Mã đơn: {{ $order->code ?: '#'.$order->id }}</div></div>
                                                 <span class="badge bg-light text-primary border"><i class="bi bi-clock me-1"></i>{{ $order->delivery_time ?: 'Chưa có giờ giao' }}</span>
                                             </div>
+                                            @include('shipper.partials.order-date-sale', ['order' => $order])
                                             <div class="small mt-3 d-grid gap-2">
                                                 <div><i class="bi bi-geo-alt text-danger me-2"></i>{{ $order->recipient_address ?: $order->customer?->address ?: 'Chưa cập nhật địa chỉ' }}</div>
                                                 @if($order->recipient_phone || $order->customer?->phone)<div><i class="bi bi-telephone text-primary me-2"></i>{{ $order->recipient_phone ?: $order->customer?->phone }}</div>@endif

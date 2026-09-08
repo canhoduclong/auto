@@ -2507,19 +2507,40 @@ class WarehouseDashboardController extends Controller
         // below; orders from every other date are excluded by forPackingDate().
         $stockByVariant = $this->getStockAtDate($variantIds, $warehouseId, $forDate);
 
-        // Packed orders retain reservations until dispatch. They are no longer
-        // in the FIFO queue, but their stock cannot be offered to another order.
-        $packedReservations = InventoryReservation::query()
-            ->join('inventories', 'inventories.id', '=', 'inventory_reservations.inventory_id')
-            ->whereIn('inventories.product_variant_id', $variantIds->all())
-            ->when($warehouseId, fn ($query) => $query->where('inventories.warehouse_id', $warehouseId))
-            ->whereHas('orderItem.order', fn ($query) => $query
-                ->whereIn('status', self::PACKED_STATUSES)->forPackingDate($forDate))
-            ->selectRaw('inventories.product_variant_id, SUM(inventory_reservations.quantity) as quantity')
-            ->groupBy('inventories.product_variant_id')
-            ->pluck('quantity', 'product_variant_id');
-        foreach ($packedReservations as $variantId => $quantity) {
-            $stockByVariant[$variantId] = max(0, (float) ($stockByVariant[$variantId] ?? 0) - (float) $quantity);
+        // Packed goods still occupy this day's stock until dispatch. Historical
+        // completion can release reservation rows, so reservations alone are not
+        // a reliable ledger of what has already been packed.
+        $packedOrders = Order::query()
+            ->with(['items.packingSizeAllocations', 'items.reservations.inventory'])
+            ->whereIn('status', self::PACKED_STATUSES)
+            ->forPackingDate($forDate)
+            ->when($warehouseId, fn ($query) => $query->where(fn ($scope) => $scope
+                ->where('warehouse_id', $warehouseId)->orWhereNull('warehouse_id')))
+            ->get();
+        foreach ($packedOrders as $packedOrder) {
+            foreach ($packedOrder->items as $item) {
+                $allocations = $item->packingSizeAllocations;
+                $requirements = $allocations->isNotEmpty() && $allocations->sum('quantity') === (int) $item->quantity
+                    ? $allocations->groupBy('product_variant_id')->map(fn ($rows) => (float) $rows->sum('quantity'))->all()
+                    : [(int) $item->product_variant_id => (float) $item->quantity];
+                // Legacy unassigned orders can only be attributed to a
+                // specific warehouse through their remaining reservations.
+                if ($warehouseId && ! $packedOrder->warehouse_id) {
+                    $requirements = [];
+                }
+                $reserved = $item->reservations
+                    ->filter(fn ($row) => $row->inventory && (! $warehouseId || (int) $row->inventory->warehouse_id === $warehouseId))
+                    ->groupBy(fn ($row) => (int) $row->inventory->product_variant_id)
+                    ->map(fn ($rows) => (float) $rows->sum('quantity'));
+                foreach ($reserved as $variantId => $quantity) {
+                    $requirements[$variantId] = max((float) ($requirements[$variantId] ?? 0), $quantity);
+                }
+                foreach ($requirements as $variantId => $quantity) {
+                    if (array_key_exists($variantId, $stockByVariant)) {
+                        $stockByVariant[$variantId] = max(0, (float) $stockByVariant[$variantId] - $quantity);
+                    }
+                }
+            }
         }
 
         // Running pool — decremented only when a complete order can be packed (FIFO)

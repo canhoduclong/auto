@@ -176,6 +176,42 @@ class WarehousePackingDeliveredReservationTest extends TestCase
         $this->assertTrue($result['guards'][$waitingOrder->id]['has_shortage']);
         $this->assertFalse($result['guards'][$waitingOrder->id]['can_start_packing']);
         $this->assertSame(0.0, (float) $result['guards'][$waitingOrder->id]['shortages'][0]['available_qty']);
+        // Completing a restored historical order releases its reservations.
+        // The packed quantity must still be unavailable to the next order.
+        app(OrderController::class)->rebuildRestoredOrderStockReservation(
+            $deliveredOrder, $warehouse->id, '2026-08-23'
+        );
+        $this->assertDatabaseMissing('inventory_reservations', ['order_item_id' => $deliveredItem->id]);
+        $result = $method->invoke(
+            app(WarehouseDashboardController::class), collect([$waitingOrder]), $warehouse->id, '2026-08-23'
+        );
+        $this->assertFalse($result['guards'][$waitingOrder->id]['can_start_packing']);
+        $this->assertSame(0.0, (float) $result['guards'][$waitingOrder->id]['shortages'][0]['available_qty']);
+
+        // A substituted size consumes the allocated variant, not the ordered one.
+        $orderedVariant = $product->variants()->create(['name' => '3 kg', 'sku' => 'FIFO-ORDERED-3']);
+        $deliveredItem->update(['product_variant_id' => $orderedVariant->id]);
+        $deliveredItem->packingSizeAllocations()->create([
+            'product_variant_id' => $variant->id, 'quantity' => 4,
+        ]);
+        $result = $method->invoke(
+            app(WarehouseDashboardController::class), collect([$waitingOrder]), $warehouse->id, '2026-08-23'
+        );
+        $this->assertFalse($result['guards'][$waitingOrder->id]['can_start_packing']);
+
+        $otherWarehouse = Warehouse::query()->create(['name' => 'Kho khác', 'status' => true]);
+        $deliveredOrder->update(['warehouse_id' => $otherWarehouse->id]);
+        $result = $method->invoke(
+            app(WarehouseDashboardController::class), collect([$waitingOrder]), $warehouse->id, '2026-08-23'
+        );
+        $this->assertTrue($result['guards'][$waitingOrder->id]['can_start_packing']);
+
+        $deliveredOrder->update(['warehouse_id' => $warehouse->id]);
+        $deliveredOrder->forceFill(['created_at' => '2026-08-24 08:00:00'])->saveQuietly();
+        $result = $method->invoke(
+            app(WarehouseDashboardController::class), collect([$waitingOrder]), $warehouse->id, '2026-08-23'
+        );
+        $this->assertTrue($result['guards'][$waitingOrder->id]['can_start_packing']);
     }
 
     public function test_reservation_from_another_day_does_not_reduce_selected_days_packing_stock(): void

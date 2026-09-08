@@ -184,6 +184,7 @@
                                     </div>
                                     <span class="badge bg-light text-dark border">#{{ $order->code ?: $order->id }}</span>
                                 </div>
+                                @include('shipper.partials.order-date-sale', ['order' => $order])
                                 <div class="text-muted small mt-1">
                                     <i class="bi bi-geo-alt me-1"></i>
                                     {{ $order->recipient_address ?: $order->customer?->address ?: 'Chưa cập nhật địa chỉ' }}
