@@ -37,6 +37,8 @@ class OrderObserver
 
     public function updated(Order $order): void
     {
+        app(\App\Services\WarehouseSaleChangeService::class)->recordOrderChanges($order);
+
         $action = $order->wasChanged('status') ? 'status_changed' : 'updated';
         $order->loadMissing(['customer:id,name', 'user:id,name,short_name']);
         $customerName = trim((string) ($order->customer?->name ?: $order->recipient_name ?: 'Chưa xác định'));

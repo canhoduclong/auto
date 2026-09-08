@@ -5239,6 +5239,9 @@ public function apiTruckRoutes(Request $request)
         }
 
         DB::transaction(function () use ($order, $validated, $itemsInput, $variants, $isCopiedOrder, $isReturnOrder): void {
+            $saleChangeService = app(\App\Services\WarehouseSaleChangeService::class);
+            $trackSaleItems = $saleChangeService->shouldTrack($order);
+            $beforeSaleItems = $trackSaleItems ? $saleChangeService->itemSummary($order) : null;
             $order->items()->delete();
 
             $parseWeightToKg = static function ($size): float {
@@ -5432,6 +5435,10 @@ public function apiTruckRoutes(Request $request)
                     DB::table('orders')->where('id', $order->id)->update($copyUpdates);
                 }
                 $order->refresh();
+            }
+
+            if ($trackSaleItems && $beforeSaleItems !== $saleChangeService->itemSummary($order)) {
+                $saleChangeService->record($order, 'Hàng hóa: '.$beforeSaleItems.' → '.$saleChangeService->itemSummary($order));
             }
 
             // Sau khi sửa đơn, reset lại luồng duyệt tương tự tạo mới.

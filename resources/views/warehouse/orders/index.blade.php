@@ -22,6 +22,8 @@
         height: 100%;
         scroll-margin-top: 140px;
     }
+    .wh-order-card.sale-change-pending, .wh-order-card.sale-change-pending > .card-header { background: #fff3cd !important; border-color: #f59e0b !important; }
+    .wh-order-card.sale-change-confirmed, .wh-order-card.sale-change-confirmed > .card-header { background: #d1e7dd !important; border-color: #198754 !important; }
     .wh-order-card.has-cutting-in-progress {
         border: 2px solid #7c3aed;
         background: #f5f3ff;
@@ -1225,6 +1227,31 @@
             @endforeach
         </div>
     </div>
+
+    @php $saleChangedOrders = $orders->filter(fn ($entry) => collect($entry->sale_changes_pending)->isNotEmpty())->sortBy('daily_sequence'); @endphp
+    @if($saleChangedOrders->isNotEmpty())
+        <div class="card border-warning mb-3">
+            <div class="card-header bg-warning-subtle fw-bold">Thay đổi từ sale — chờ xác nhận</div>
+            <div class="table-responsive">
+                <table class="table mb-0 align-middle">
+                    <thead><tr><th>STT ưu tiên</th><th>Khách</th><th>Nội dung thay đổi</th></tr></thead>
+                    <tbody>
+                    @foreach($saleChangedOrders as $changedOrder)
+                        <tr>
+                            <td>{{ $changedOrder->daily_sequence ?? '—' }}</td>
+                            <td>{{ $changedOrder->customer?->name ?? '—' }}</td>
+                            <td><a href="#order-card-{{ $changedOrder->id }}" onclick="event.preventDefault(); document.getElementById('order-card-{{ $changedOrder->id }}')?.scrollIntoView({behavior: 'smooth', block: 'start'});">
+                                @foreach($changedOrder->sale_changes_pending as $change)
+                                    <span class="d-block">{{ $change->user?->name ?? 'Sale' }} · {{ $change->created_at->format('d/m H:i') }}: {{ $change->note }}</span>
+                                @endforeach
+                            </a></td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    @endif
 
     @php
         $orderedPackingList = $unpackedOrders->values()

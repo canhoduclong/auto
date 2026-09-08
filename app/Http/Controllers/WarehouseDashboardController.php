@@ -1026,7 +1026,8 @@ class WarehouseDashboardController extends Controller
                 $query->withAvailableStock()->with('avatar.media');
             },
         ])
-            ->whereIn('status', self::PACKING_PAGE_STATUSES)
+            ->where(fn ($query) => $query->whereIn('status', self::PACKING_PAGE_STATUSES)
+                ->orWhereHas('histories', fn ($history) => $history->where('action', \App\Services\WarehouseSaleChangeService::CHANGED)))
             ->whereNull('trash_at')
             ->where(function ($query) {
                 $query->whereNull('is_return_order')
@@ -1053,6 +1054,7 @@ class WarehouseDashboardController extends Controller
             ->get();
 
         $this->attachCustomerFeedbackContext($orders);
+        app(\App\Services\WarehouseSaleChangeService::class)->attach($orders);
 
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
         $stockGuardResult = $this->buildPackingQueueStockGuards($orders, $managedWarehouseId, $selectedDate);
@@ -1988,6 +1990,32 @@ class WarehouseDashboardController extends Controller
     /**
      * Start packing: ready_to_pack → packing
      */
+    public function confirmSaleChanges(Request $request, Order $order)
+    {
+        $this->authorizePackingOrderAccess($order);
+        abort_unless($request->user()?->hasRole('admin') ||
+            ((int) $request->user()?->warehouse_id > 0 && (int) $request->user()->warehouse_id === (int) $order->warehouse_id), 403);
+        $validated = $request->validate(['through_id' => ['required', 'integer', 'min:1']]);
+        DB::transaction(function () use ($order, $validated): void {
+            $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
+            $change = $locked->histories()->where('action', \App\Services\WarehouseSaleChangeService::CHANGED)
+                ->whereKey($validated['through_id'])->firstOrFail();
+            $alreadyConfirmed = $locked->histories()->where('action', \App\Services\WarehouseSaleChangeService::CONFIRMED)
+                ->get()->contains(fn ($history) => (int) $history->schedule_snapshot_hash >= $change->id);
+            if (! $alreadyConfirmed) {
+                OrderHistory::create([
+                    'order_id' => $locked->id, 'action' => \App\Services\WarehouseSaleChangeService::CONFIRMED,
+                    'user_id' => Auth::id(), 'role' => $this->packingActorRole(),
+                    'status_before' => $locked->status, 'status_after' => $locked->status,
+                    'schedule_snapshot_hash' => (string) $change->id,
+                    'note' => 'Đã xác nhận các thay đổi từ sale đến lần #'.$change->id,
+                ]);
+            }
+        });
+
+        return back()->with('success', 'Đã xác nhận thay đổi từ sale.');
+    }
+
     public function startPacking(Request $request, Order $order)
     {
         $this->authorizePackingOrderAccess($order);

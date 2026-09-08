@@ -76,7 +76,24 @@
             <div class="col-12" id="order-card-{{ $order->id }}">
                 <div class="wh-order-card-grid {{ $hasCustomerFeedback ? 'has-feedback' : 'no-feedback' }}">
                 <div class="wh-order-main">
-                <div class="card wh-order-card js-order-card {{ $hasActiveCuttingBatch ? 'has-cutting-in-progress' : '' }}" data-order-id="{{ $order->id }}">
+                <div class="card wh-order-card js-order-card {{ collect($order->sale_changes_pending)->isNotEmpty() ? 'sale-change-pending' : ($order->sale_changes_confirmed ? 'sale-change-confirmed' : '') }} {{ $hasActiveCuttingBatch ? 'has-cutting-in-progress' : '' }}" data-order-id="{{ $order->id }}">
+                    @if(collect($order->sale_changes_pending)->isNotEmpty())
+                        <div class="p-3 border-bottom">
+                            <strong class="text-warning-emphasis">Đơn điều chỉnh từ sale — chờ xác nhận</strong>
+                            @foreach($order->sale_changes_pending as $saleChange)
+                                <div class="small mt-1">{{ $saleChange->note }}</div>
+                            @endforeach
+                            @if(!$orderCardReadonly)
+                                <form method="POST" action="{{ route(request()->routeIs('package.*') ? 'package.orders.confirm-sale-changes' : 'warehouse.orders.confirm-sale-changes', $order) }}" class="mt-2">
+                                    @csrf
+                                    <input type="hidden" name="through_id" value="{{ $order->sale_changes_latest_id }}">
+                                    <button type="submit" class="btn btn-warning fw-bold">Xác Nhận</button>
+                                </form>
+                            @endif
+                        </div>
+                    @elseif($order->sale_changes_confirmed)
+                        <div class="p-2 text-success fw-semibold">Đã xác nhận thay đổi từ sale</div>
+                    @endif
                     <div class="d-flex align-items-center card-header bg-white">
                         @php
                             $isPacked = in_array($order->status, ['packed', 'packed_waiting_pickup', 'delivering', 'delivered', 'completed'], true);
