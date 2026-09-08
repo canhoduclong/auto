@@ -169,10 +169,24 @@
         @if($comparison['syncs']->isNotEmpty() || $comparison['legacy_documents']->isNotEmpty())
             <div class="card sheet-import-card mb-3"><div class="card-body">
                 <h6 class="mb-3"><i class="bi bi-clock-history me-1"></i>Lịch sử xử lý đúng ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</h6>
+                @if(auth()->user()?->isAdmin())
+                    <p class="small text-muted">Xóa sẽ hoàn tác số tồn của lần nhập. Vui lòng xóa từ lần mới nhất; lịch sử hoàn tác vẫn được giữ để tra cứu.</p>
+                @endif
                 <div class="d-flex flex-wrap gap-2">
                     @foreach($comparison['syncs']->sortByDesc('id') as $historySync)
+                        <div class="d-flex flex-wrap align-items-center gap-2 border rounded p-2">
                         <span class="badge {{ $historySync->status === 'reset' ? 'bg-danger-subtle text-danger border-danger-subtle' : 'bg-light text-dark border' }} p-2">Lần #{{ $historySync->sync_number }} · {{ $historySync->applied_rows_count }} dòng · +{{ number_format($historySync->total_positive_delta, 0, ',', '.') }} / -{{ number_format($historySync->total_negative_delta, 0, ',', '.') }} · {{ optional($historySync->created_at)->format('H:i d/m/Y') }}{{ $historySync->status === 'reset' ? ' · ĐÃ RESET' : '' }}</span>
+                        @if(auth()->user()?->isAdmin() && $historySync->status === 'completed')
+                            <form method="POST" action="{{ route('warehouse.google-sheet-inventory.history.destroy', $historySync) }}" onsubmit="return confirm('Xóa lần nhập #{{ $historySync->sync_number }} và hoàn tác số tồn tương ứng?');">
+                                @csrf
+                                @method('DELETE')
+                                <input type="hidden" name="warehouse_id" value="{{ $warehouse->id }}">
+                                <input type="hidden" name="confirm_delete" value="1">
+                                <button class="btn btn-sm btn-outline-danger" type="submit">Xóa lần #{{ $historySync->sync_number }}</button>
+                            </form>
+                        @endif
                         @if($historySync->importDocument)<a class="btn btn-sm btn-outline-success" href="{{ route('warehouse.stock-in.show', $historySync->importDocument) }}">{{ $historySync->importDocument->document_number }}</a>@endif
+                        </div>
                     @endforeach
                     @foreach($comparison['legacy_documents'] as $legacyDocument)<a class="btn btn-sm btn-outline-secondary" href="{{ route('warehouse.stock-in.show', $legacyDocument) }}">Phiếu cũ {{ $legacyDocument->document_number }}</a>@endforeach
                 </div>

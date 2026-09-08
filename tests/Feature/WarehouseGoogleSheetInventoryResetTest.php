@@ -168,6 +168,44 @@ class WarehouseGoogleSheetInventoryResetTest extends TestCase
         $this->assertStringContainsString('Clear ngày', (string) $sync->fresh()->reset_reason);
     }
 
+    public function test_only_admin_can_delete_one_sync_and_rollback_once_in_reverse_order(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $admin = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $admin->roles()->attach(Role::create(['name' => 'admin']));
+        $user = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $user->roles()->attach(Role::create(['name' => 'warehouse']));
+        $product = Product::factory()->create();
+        $variant = $product->variants()->create(['name' => 'M 2', 'sku' => 'DELETE-SYNC']);
+        $inventory = Inventory::create([
+            'warehouse_id' => $warehouse->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 15,
+            'reserved_quantity' => 12,
+        ]);
+        $first = $this->sync($warehouse, $admin, $variant->id, '2026-09-08', 1, 10);
+        $last = $this->sync($warehouse, $admin, $variant->id, '2026-09-08', 2, 5);
+        $last->update(['snapshot' => [$variant->id => 15]]);
+        $payload = ['warehouse_id' => $warehouse->id, 'confirm_delete' => '1'];
+        $url = route('warehouse.google-sheet-inventory.history.destroy', $last);
+        $this->actingAs($user)->deleteJson($url, $payload)->assertForbidden();
+        $this->actingAs($admin)->delete(route('warehouse.google-sheet-inventory.history.destroy', $first), $payload)
+            ->assertSessionHasErrors('history');
+        $this->actingAs($admin)->delete($url, $payload)->assertSessionHasErrors('from_date');
+        $this->assertSame('completed', $last->fresh()->status);
+        $this->assertSame(15.0, (float) $inventory->fresh()->quantity);
+        $inventory->update(['reserved_quantity' => 0]);
+        $this->actingAs($admin)->delete($url, $payload)->assertSessionHasNoErrors()->assertSessionHas('success');
+        $this->assertSame(10.0, (float) $inventory->fresh()->quantity);
+        $this->assertSame(10.0, (float) $variant->fresh()->stock);
+        $this->assertSame('completed', $first->fresh()->status);
+        $this->assertSame('reset', $last->fresh()->status);
+        $this->assertSame($admin->id, $last->fresh()->reset_by);
+        $this->actingAs($admin)->delete($url, $payload)->assertSessionHasErrors('from_date');
+        $this->assertSame(10.0, (float) $inventory->fresh()->quantity);
+        $this->assertSame(1, InventoryMovement::where('reference_id', $last->id)->where('type', 'google_sheet_reset')->count());
+    }
+
     private function sync(
         Warehouse $warehouse,
         User $user,

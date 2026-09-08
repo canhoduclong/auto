@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\GoogleSheetInventorySync;
 use App\Models\GoogleSheetInventoryExport;
+use App\Models\GoogleSheetInventorySync;
 use App\Models\Inventory;
 use App\Models\InventoryAdjustment;
 use App\Models\InventoryDocument;
@@ -402,7 +402,27 @@ class WarehouseGoogleSheetInventoryController extends Controller
             .' tại '.$warehouse->name.'.');
     }
 
-    public function resetRange(Request $request)
+    public function destroySync(Request $request, GoogleSheetInventorySync $sync)
+    {
+        abort_unless($request->user()?->isAdmin(), 403, 'Chỉ Admin được xóa lịch sử nhập.');
+        $warehouse = $this->resolveWarehouse($request);
+        abort_unless((int) $sync->warehouse_id === (int) $warehouse->id, 404);
+        $request->validate(['confirm_delete' => ['accepted']]);
+        $request->merge([
+            'from_date' => $sync->inventory_date->toDateString(),
+            'to_date' => $sync->inventory_date->toDateString(),
+            'warehouse_id' => $warehouse->id,
+            'confirm_reset' => '1',
+            'reset_reason' => 'Admin xóa lần nhập #'.$sync->sync_number,
+            '_clear_day_mode' => false,
+        ]);
+        $marker = $this->importMarker($sync->spreadsheet_id, $sync->sheet_id, $sync->inventory_date->toDateString(), (int) $warehouse->id);
+
+        return Cache::lock('google-sheet-inventory-import:'.sha1($marker), 120)
+            ->block(10, fn () => $this->resetRange($request, (int) $sync->id));
+    }
+
+    public function resetRange(Request $request, ?int $onlySyncId = null)
     {
         abort_unless($request->user()?->isAdmin(), 403, 'Chỉ Admin được reset dữ liệu tồn kho Google Sheet.');
 
@@ -424,12 +444,13 @@ class WarehouseGoogleSheetInventoryController extends Controller
             $result = Cache::lock(
                 'google-sheet-inventory-reset:'.$warehouse->id,
                 120
-            )->block(10, function () use ($warehouse, $fromDate, $toDate, $validated, $clearDayMode) {
-                return DB::transaction(function () use ($warehouse, $fromDate, $toDate, $validated, $clearDayMode): array {
+            )->block(10, function () use ($warehouse, $fromDate, $toDate, $validated, $clearDayMode, $onlySyncId) {
+                return DB::transaction(function () use ($warehouse, $fromDate, $toDate, $validated, $clearDayMode, $onlySyncId): array {
                     $syncs = GoogleSheetInventorySync::query()
                         ->where('warehouse_id', $warehouse->id)
                         ->where('status', 'completed')
                         ->whereBetween('inventory_date', [$fromDate, $toDate])
+                        ->when($onlySyncId !== null, fn ($query) => $query->whereKey($onlySyncId))
                         ->orderByDesc('inventory_date')
                         ->orderByDesc('id')
                         ->lockForUpdate()
@@ -439,6 +460,23 @@ class WarehouseGoogleSheetInventoryController extends Controller
                         throw ValidationException::withMessages([
                             'from_date' => 'Không có lần đồng bộ Google Sheet nào cần reset trong khoảng ngày đã chọn.',
                         ]);
+                    }
+
+                    if ($onlySyncId !== null) {
+                        $target = $syncs->first();
+                        $hasLaterSync = GoogleSheetInventorySync::query()
+                            ->where('warehouse_id', $warehouse->id)
+                            ->where('spreadsheet_id', $target->spreadsheet_id)
+                            ->where('sheet_id', $target->sheet_id)
+                            ->whereDate('inventory_date', $target->inventory_date)
+                            ->where('status', 'completed')
+                            ->where('id', '>', $target->id)
+                            ->exists();
+                        if ($hasLaterSync) {
+                            throw ValidationException::withMessages([
+                                'history' => 'Vui lòng xóa từ lần nhập mới nhất của ngày này để giữ đúng dữ liệu đối chiếu.',
+                            ]);
+                        }
                     }
 
                     $deltasByVariant = [];
@@ -536,6 +574,13 @@ class WarehouseGoogleSheetInventoryController extends Controller
                 ->refreshQueuedOrdersAfterInventoryChange((int) $warehouse->id);
         } catch (\Throwable $exception) {
             report($exception);
+        }
+
+        if ($onlySyncId !== null) {
+            return redirect()->route('warehouse.google-sheet-inventory.index', [
+                'date' => $fromDate,
+                'warehouse_id' => $warehouse->id,
+            ])->with('success', 'Đã xóa lần nhập và hoàn tác số tồn tương ứng. Lịch sử được giữ để tra cứu.');
         }
 
         if ($clearDayMode) {
