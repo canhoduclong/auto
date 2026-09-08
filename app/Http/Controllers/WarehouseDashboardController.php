@@ -3101,8 +3101,8 @@ class WarehouseDashboardController extends Controller
         $mainSizeQuantity = (int) $allocationInput
             ->map(fn (int $quantity, int $variantId) => abs((float) $variants[$variantId]->size - $mainSize) < 0.0001 ? $quantity : 0)
             ->sum();
-        if ($orderedQuantity <= 0 || $mainSizeQuantity * 100 < $orderedQuantity * 50) {
-            return back()->withErrors(['allocations' => 'Tỷ lệ size chính '.$mainSizeLabel.' phải đạt tối thiểu 50% tổng số lượng.']);
+        if ($orderedQuantity <= 0) {
+            return back()->withErrors(['allocations' => 'Tổng số lượng đóng phải lớn hơn 0.']);
         }
         $weightedAverage = (float) $allocationInput
             ->map(fn (int $quantity, int $variantId) => $quantity * (float) $variants[$variantId]->size)

@@ -125,12 +125,11 @@ class WarehousePackingSizeAllocationTest extends TestCase
         ]);
     }
 
-    public function test_it_rejects_a_mix_when_the_main_size_is_below_50_percent(): void
+    public function test_it_accepts_a_mix_when_the_main_size_is_below_50_percent(): void
     {
         [$user, $order, $item, $variants] = $this->fixture(100);
 
         $this->actingAs($user)
-            ->from(route('warehouse.orders'))
             ->post(route('warehouse.orders.packing-size-allocation', $order), [
                 'order_item_id' => $item->id,
                 'allocations' => [
@@ -139,10 +138,14 @@ class WarehousePackingSizeAllocationTest extends TestCase
                     $variants['2.6']->id => 26,
                 ],
             ])
-            ->assertRedirect(route('warehouse.orders'))
-            ->assertSessionHasErrors('allocations');
+            ->assertRedirect()
+            ->assertSessionHasNoErrors();
 
-        $this->assertDatabaseCount('order_item_packing_size_allocations', 0);
+        $this->assertDatabaseHas('order_item_packing_size_allocations', [
+            'order_item_id' => $item->id,
+            'product_variant_id' => $variants['2.5']->id,
+            'quantity' => 49,
+        ]);
     }
 
     public function test_actual_weight_uses_the_wider_quarter_kg_range_for_every_size(): void
