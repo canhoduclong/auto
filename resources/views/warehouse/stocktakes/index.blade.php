@@ -47,6 +47,10 @@
     <div class="alert alert-success"><i class="bi bi-check-circle me-1"></i>Đã nạp tồn cuối từ file Google Sheet cấu hình trong <strong>Nhập SX = Thu Mua</strong>. Hãy rà soát rồi chốt kiểm kê.</div>
 @endif
 
+@if($sheetUnmatchedRows->isNotEmpty())
+    <div class="alert alert-warning">Chưa ghép được sản phẩm: {{ $sheetUnmatchedRows->implode(', ') }}. Hãy cấu hình Tên tồn kho cho đúng biến thể rồi nạp lại.</div>
+@endif
+
 <div class="stocktake-card mb-3">
     <div class="p-3 border-bottom">
         <form method="GET" action="{{ route('warehouse.stocktakes.index') }}" class="row g-2 align-items-end">
@@ -130,6 +134,7 @@
                     <col style="width:82px;">
                     <col style="width:82px;">
                     <col style="width:98px;">
+                    <col style="width:110px;">
                 </colgroup>
                 <thead>
                     <tr>
@@ -144,6 +149,7 @@
                         <th class="text-end">Lệch SL</th>
                         <th class="text-end">Lệch kg</th>
                         <th class="text-end">Đã giữ chỗ</th>
+                        <th>Thao tác</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -155,6 +161,7 @@
                             $oldQuantity = old('items.'.$inventory->id.'.counted_quantity');
                             $oldWeight = old('items.'.$inventory->id.'.counted_weight_kg');
                             $sheetQuantity = $inventory->sheet_closing_quantity ?? null;
+                            $sheetIsWeight = $variant?->product?->unit === 'kg';
                         @endphp
                         <tr>
                             <td class="text-muted">{{ $inventories->firstItem() + $loop->index }}</td>
@@ -174,7 +181,7 @@
                                 <input type="number"
                                        name="items[{{ $inventory->id }}][counted_quantity]"
                                        class="form-control form-control-sm stocktake-input ms-auto js-counted-value"
-                                       value="{{ $oldQuantity !== null ? $oldQuantity : ($sheetQuantity !== null ? number_format((float) $sheetQuantity, 3, '.', '') : '') }}"
+                                       value="{{ $oldQuantity !== null ? $oldQuantity : (!$sheetIsWeight && $sheetQuantity !== null ? number_format((float) $sheetQuantity, 3, '.', '') : '') }}"
                                        min="0" step="1"
                                        data-system="{{ number_format((float) $inventory->stocktake_quantity, 3, '.', '') }}"
                                        data-diff-target="quantity-diff-{{ $inventory->id }}"
@@ -185,7 +192,7 @@
                                 <input type="number"
                                        name="items[{{ $inventory->id }}][counted_weight_kg]"
                                        class="form-control form-control-sm stocktake-input ms-auto js-counted-value"
-                                       value="{{ $oldWeight }}"
+                                       value="{{ $oldWeight !== null ? $oldWeight : ($sheetIsWeight && $sheetQuantity !== null ? number_format((float) $sheetQuantity, 3, '.', '') : '') }}"
                                        min="0" step="0.001"
                                        data-system="{{ number_format((float) $inventory->stocktake_weight_kg, 3, '.', '') }}"
                                        data-diff-target="weight-diff-{{ $inventory->id }}"
@@ -201,9 +208,10 @@
                             <td class="text-end {{ (float) $inventory->reserved_quantity > (float) $inventory->quantity ? 'text-danger fw-semibold' : 'text-muted' }}">
                                 {{ number_format((float) $inventory->reserved_quantity, 0, ',', '.') }}
                             </td>
+                            <td><button type="button" class="btn btn-outline-danger btn-sm js-remove-stocktake" aria-label="Xóa {{ $productName }} {{ $variantName }} khỏi lần kiểm kê">Xóa dòng</button></td>
                         </tr>
                     @empty
-                        <tr><td colspan="11" class="text-center text-muted py-4">Kho chưa có dữ liệu tồn phù hợp.</td></tr>
+                        <tr><td colspan="12" class="text-center text-muted py-4">Kho chưa có dữ liệu tồn phù hợp.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -211,7 +219,7 @@
 
         @if($inventories->isNotEmpty())
             <div class="p-3 border-top d-flex flex-wrap align-items-center justify-content-between gap-2">
-                <div class="small text-muted">Bỏ trống mặt hàng chưa kiểm kê. Nếu chỉ nhập một đại lượng, đại lượng còn lại được giữ nguyên.</div>
+                <div class="small text-muted">Xóa dòng để bỏ sản phẩm khỏi lần kiểm kê này. Bỏ trống mặt hàng chưa kiểm kê. Nếu chỉ nhập một đại lượng, đại lượng còn lại được giữ nguyên.</div>
                 <button type="submit" class="btn btn-success" onclick="return confirm('Chốt kiểm kê và cập nhật tồn kho theo số thực tế đã nhập?');">
                     <i class="bi bi-check2-square me-1"></i>Chốt kiểm kê & cập nhật tồn
                 </button>
@@ -286,6 +294,12 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.js-remove-stocktake').forEach(function (button) {
+        button.addEventListener('click', function () {
+            button.closest('tr').remove();
+        });
+    });
+
     const formatter = new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 0, maximumFractionDigits: 3 });
 
     document.querySelectorAll('.js-counted-value').forEach(function (input) {

@@ -118,6 +118,41 @@ class GoogleSheetsInventoryServiceTest extends TestCase
         $this->assertSame([2, 3], $result['import_columns']);
     }
 
+    public function test_stocktake_reads_parts_below_main_products_and_keeps_ambiguous_matches_unresolved(): void
+    {
+        $parts = ['Đùi góc tư vịt', 'Ức vịt', 'Chân vịt', 'Cánh vịt', 'Phao câu vịt', 'Lòng vịt'];
+        $variants = new Collection;
+        foreach ($parts as $index => $name) {
+            $variant = $this->variant(20 + $index, '', 'PART'.$index, $name);
+            $variant->setRelation('product', new Product(['name' => $name]));
+            $variants->push($variant);
+        }
+        $values = [
+            ['0'], ['Ngày', '07/09/2026', '', '', '', '08/09/2026', '', '', ''],
+            ['QUAY LÔNG', 'Nhập SX', 'Nhập Từ KCL', 'Xuất', 'Tồn', 'Nhập SX', 'Nhập Từ KCL', 'Xuất', 'Tồn'],
+            ['Bọng (Theo Con)'],
+        ];
+        foreach (['ĐÙI', 'ỨC', 'CHÂN', 'CÁNH', 'Phap câu', 'lòng'] as $index => $name) {
+            $values[] = [$name, 1, 2, 3, 999, 4, 5, 6, (string) (95 + $index)];
+        }
+        $service = new GoogleSheetsInventoryService;
+        $warehouse = new Warehouse(['name' => 'Kho Long An']);
+        $result = $service->parseValues($values, $warehouse, '2026-09-08', $variants, true);
+        $this->assertCount(6, $result['rows']);
+        foreach ($result['rows'] as $index => $row) {
+            $this->assertSame(20 + $index, $row['variant_id']);
+            $this->assertSame((float) (95 + $index), $row['stock_quantity']);
+        }
+        $duplicate = $this->variant(99, '', 'UC2', 'Ức khác');
+        $duplicate->setRelation('product', new Product(['name' => 'Ức vịt']));
+        $variants->push($duplicate);
+        $result = $service->parseValues($values, $warehouse, '2026-09-08', $variants, true);
+        $this->assertFalse($result['rows']->firstWhere('sheet_code', 'ỨC')['matched']);
+        $duplicate->inventory_name = 'ỨC';
+        $result = $service->parseValues($values, $warehouse, '2026-09-08', $variants, true);
+        $this->assertSame(99, $result['rows']->firstWhere('sheet_code', 'ỨC')['variant_id']);
+    }
+
     private function variant(int $id, string $size, string $sku, string $name, ?string $inventoryName = null): ProductVariant
     {
         $variant = new ProductVariant(['size' => $size, 'sku' => $sku, 'name' => $name, 'inventory_name' => $inventoryName]);

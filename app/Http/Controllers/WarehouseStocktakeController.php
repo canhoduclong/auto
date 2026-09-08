@@ -41,13 +41,15 @@ class WarehouseStocktakeController extends Controller
             : $this->resolveCountedAt($inventoryDate, $stocktakeType);
         $sheetClosingByVariant = collect();
         $sheetLoadError = null;
+        $sheetUnmatchedRows = collect();
 
         if ($request->boolean('load_sheet_closing')) {
             if ($stocktakeType !== InventoryStocktake::TYPE_CLOSING) {
                 $sheetLoadError = 'Chỉ có thể nạp tồn cuối Google Sheet khi loại kiểm kê là Tồn cuối.';
             } else {
                 try {
-                    $preview = $sheets->preview($warehouse, $inventoryDate->toDateString());
+                    $preview = $sheets->preview($warehouse, $inventoryDate->toDateString(), true);
+                    $sheetUnmatchedRows = $preview['rows']->where('matched', false)->pluck('sheet_code');
                     $sheetClosingByVariant = $preview['rows']
                         ->filter(fn (array $row): bool => $row['matched'] && $row['variant_id'] !== null)
                         ->mapWithKeys(fn (array $row): array => [(int) $row['variant_id'] => (float) $row['stock_quantity']]);
@@ -122,8 +124,9 @@ class WarehouseStocktakeController extends Controller
             'search',
             'countedAt',
             'inventoryDate',
-            'stocktakeType'
-            ,'sheetLoadError'
+            'stocktakeType',
+            'sheetLoadError',
+            'sheetUnmatchedRows'
         ));
     }
 

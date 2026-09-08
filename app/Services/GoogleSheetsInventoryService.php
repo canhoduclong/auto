@@ -21,7 +21,7 @@ class GoogleSheetsInventoryService
     private const IMPORT_COLUMN_LABELS = ['nhap sx', 'nhap tu kcl'];
 
     /** @return array<string, mixed> */
-    public function preview(Warehouse $warehouse, string $selectedDate): array
+    public function preview(Warehouse $warehouse, string $selectedDate, bool $includeParts = false): array
     {
         $source = $this->configuration($warehouse);
         $spreadsheetId = $source['spreadsheet_id'];
@@ -40,7 +40,7 @@ class GoogleSheetsInventoryService
             ->get(['id', 'product_id', 'name', 'sku', 'inventory_name', 'size']);
 
         return array_merge(
-            $this->parseValues($response->getValues() ?? [], $warehouse, $selectedDate, $variants),
+            $this->parseValues($response->getValues() ?? [], $warehouse, $selectedDate, $variants, $includeParts),
             [
                 'spreadsheet_id' => $spreadsheetId,
                 'sheet_id' => $sheetId,
@@ -128,6 +128,7 @@ class GoogleSheetsInventoryService
             ->selectRaw('inventory_id, SUM(quantity) AS quantity_after')
             ->groupBy('inventory_id')
             ->pluck('quantity_after', 'inventory_id');
+
         return $inventories
             ->groupBy('product_variant_id')
             ->map(fn (Collection $rows): float => round((float) $rows->sum(
@@ -209,7 +210,7 @@ class GoogleSheetsInventoryService
      * @param  array<int, array<int, mixed>>  $values
      * @return array<string, mixed>
      */
-    public function parseValues(array $values, Warehouse $warehouse, string $selectedDate, Collection $variants): array
+    public function parseValues(array $values, Warehouse $warehouse, string $selectedDate, Collection $variants, bool $includeParts = false): array
     {
         if (count($values) < 3) {
             throw new RuntimeException('Google Sheet không có đủ hàng tiêu đề để đọc tồn kho.');
@@ -286,12 +287,29 @@ class GoogleSheetsInventoryService
                 return $size === null ? [] : [number_format($size, 1, '.', '') => $variant];
             });
 
+        $partsByName = collect();
+        if ($includeParts) {
+            foreach ($variants as $variant) {
+                foreach ([$variant->name, $variant->product?->name] as $name) {
+                    $key = $this->partName((string) $name);
+                    if ($key !== null) {
+                        $partsByName->put($key, $partsByName->get($key, collect())->push($variant)->unique('id'));
+                    }
+                }
+            }
+        }
+
         $rows = collect();
         for ($rowIndex = $start; $rowIndex < $end; $rowIndex++) {
             $sheetCode = trim((string) ($values[$rowIndex][0] ?? ''));
             $configuredMatches = $variantsByInventoryName->get($this->canonicalInventoryName($sheetCode), collect());
+            $partName = $includeParts ? $this->partName($sheetCode) : null;
+            $usesPartName = $configuredMatches->isEmpty() && $partName !== null;
+            if ($usesPartName) {
+                $configuredMatches = $partsByName->get($partName, collect());
+            }
             $isMocCode = preg_match('/^M\s*(\d+)(?:[,.](\d+))?$/iu', $sheetCode, $matches) === 1;
-            if ($configuredMatches->isEmpty() && ! $isMocCode) {
+            if ($configuredMatches->isEmpty() && ! $isMocCode && $partName === null) {
                 continue;
             }
 
@@ -308,7 +326,7 @@ class GoogleSheetsInventoryService
                 ? $configuredMatches->first()
                 : ($hasAmbiguousInventoryName || $size === null ? null : $variantBySize->get($size));
             $matchMethod = $variant
-                ? ($configuredMatches->count() === 1 ? 'inventory_name' : 'fallback_size')
+                ? ($configuredMatches->count() === 1 ? ($usesPartName ? 'part_name' : 'inventory_name') : 'fallback_size')
                 : null;
             $rows->push([
                 'sheet_row' => $rowIndex + 1,
@@ -468,6 +486,18 @@ class GoogleSheetsInventoryService
         }
 
         return $this->normalize($value);
+    }
+
+    private function partName(string $value): ?string
+    {
+        $name = preg_replace('/\s+vit$/', '', $this->normalize($value));
+
+        return match ($name) {
+            'dui', 'dui goc tu' => 'dui goc tu',
+            'phap cau', 'phao cau' => 'phao cau',
+            'uc', 'chan', 'canh', 'long', 'dau', 'dau co', 'me', 'tim', 'gan', 'huyet', 'luoi', 'luoi phu pham' => $name,
+            default => null,
+        };
     }
 
     private function number(mixed $value): float
