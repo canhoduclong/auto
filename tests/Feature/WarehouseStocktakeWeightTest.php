@@ -15,7 +15,13 @@ class WarehouseStocktakeWeightTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_stocktake_updates_quantity_and_weight_with_audit_history(): void
+    public static function wholeQuantityInputs(): array
+    {
+        return [['9'], ['9.000']];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('wholeQuantityInputs')]
+    public function test_stocktake_updates_quantity_and_weight_with_audit_history(string $quantity): void
     {
         $warehouse = Warehouse::factory()->create();
         $user = User::factory()->create(['warehouse_id' => $warehouse->id]);
@@ -37,7 +43,7 @@ class WarehouseStocktakeWeightTest extends TestCase
                     $inventory->id => [
                         'expected_quantity' => 10,
                         'expected_weight_kg' => 25,
-                        'counted_quantity' => 9,
+                        'counted_quantity' => $quantity,
                         'counted_weight_kg' => 21.75,
                     ],
                 ],
@@ -65,6 +71,32 @@ class WarehouseStocktakeWeightTest extends TestCase
             'weight_kg' => -3.25,
             'type' => 'stocktake_adjustment',
         ]);
+    }
+
+    public function test_stocktake_rejects_fractional_counts_without_changing_inventory(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $user = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $user->roles()->attach(Role::create(['name' => 'warehouse']));
+        $inventory = Inventory::factory()->create([
+            'warehouse_id' => $warehouse->id,
+            'quantity' => 10,
+            'weight_kg' => 25,
+            'reserved_quantity' => 0,
+        ]);
+
+        $this->actingAs($user)->post(route('warehouse.stocktakes.store'), [
+            'warehouse_id' => $warehouse->id,
+            'counted_at' => now()->subMinute()->format('Y-m-d H:i:s'),
+            'items' => [$inventory->id => [
+                'expected_quantity' => '10.000',
+                'expected_weight_kg' => '25.000',
+                'counted_quantity' => '9.500',
+            ]],
+        ])->assertSessionHasErrors('items.'.$inventory->id.'.counted_quantity');
+
+        $this->assertSame(10.0, (float) $inventory->fresh()->quantity);
+        $this->assertDatabaseCount('inventory_stocktakes', 0);
     }
 
     public function test_weight_only_stocktake_keeps_quantity_unchanged(): void

@@ -141,8 +141,12 @@ class WarehouseStocktakeController extends Controller
             'items' => ['required', 'array'],
             'items.*.expected_quantity' => ['required', 'numeric', 'min:0'],
             'items.*.expected_weight_kg' => ['required', 'numeric', 'min:0'],
-            'items.*.counted_quantity' => ['nullable', 'integer', 'min:0'],
+            'items.*.counted_quantity' => ['nullable', 'numeric', 'multiple_of:1', 'min:0'],
             'items.*.counted_weight_kg' => ['nullable', 'numeric', 'min:0'],
+        ], [
+            'items.*.counted_quantity.numeric' => 'Số lượng thực tế phải là số.',
+            'items.*.counted_quantity.multiple_of' => 'Số lượng thực tế phải là số nguyên. Vui lòng nhập khối lượng vào ô Kg thực tế.',
+            'items.*.counted_quantity.min' => 'Số lượng thực tế không được âm.',
         ]);
 
         $countedRows = collect($validated['items'])

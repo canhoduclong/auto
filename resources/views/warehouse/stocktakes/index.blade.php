@@ -181,7 +181,7 @@
                                 <input type="number"
                                        name="items[{{ $inventory->id }}][counted_quantity]"
                                        class="form-control form-control-sm stocktake-input ms-auto js-counted-value"
-                                       value="{{ $oldQuantity !== null ? $oldQuantity : (!$sheetIsWeight && $sheetQuantity !== null ? number_format((float) $sheetQuantity, 3, '.', '') : '') }}"
+                                       value="{{ $oldQuantity !== null ? $oldQuantity : (!$sheetIsWeight && $sheetQuantity !== null ? rtrim(rtrim(number_format((float) $sheetQuantity, 3, '.', ''), '0'), '.') : '') }}"
                                        min="0" step="1"
                                        data-system="{{ number_format((float) $inventory->stocktake_quantity, 3, '.', '') }}"
                                        data-diff-target="quantity-diff-{{ $inventory->id }}"
