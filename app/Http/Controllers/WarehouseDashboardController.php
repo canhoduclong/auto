@@ -5546,8 +5546,15 @@ class WarehouseDashboardController extends Controller
             abort(403, 'Bạn không có quyền xem phiếu kho này.');
         }
         $document->load('items.productVariant.product', 'warehouse', 'user', 'edits.user');
+        $linkedOrder = null;
+        if (preg_match('/(?:đơn|don)\s*#\s*([A-Za-z0-9\-]+)/iu', (string) $document->notes, $matches)) {
+            $linkedOrder = Order::query()
+                ->with('customer:id,name,phone,address')
+                ->whereRaw('UPPER(code) = ?', [strtoupper(trim((string) ($matches[1] ?? '')))])
+                ->first();
+        }
 
-        return view('warehouse.document-show', compact('document'));
+        return view('warehouse.document-show', compact('document', 'linkedOrder'));
     }
 
     /**

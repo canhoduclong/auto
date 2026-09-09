@@ -33,6 +33,23 @@
 .edit-history-meta { font-size: .8rem; color: #64748b; }
 .edit-history-title { font-weight: 700; color: #0f172a; font-size: .88rem; }
 .edit-history-table th, .edit-history-table td { font-size: .8rem; }
+@media print {
+    @page { size: A4 landscape; margin: 8mm; }
+    body { background: #fff !important; font-size: 9px !important; }
+    .wh-sidebar, .wh-topbar, .doc-show-header, .mobile-drawer-overlay,
+    .mb-3 > a, .meta-block .btn, .edit-history-card { display: none !important; }
+    .wh-main, .wh-content, .container, .container-fluid { margin: 0 !important; padding: 0 !important; max-width: none !important; width: 100% !important; }
+    .meta-block, .items-table { box-shadow: none !important; border: 1px solid #adb5bd; border-radius: 0 !important; margin-bottom: 5px !important; padding: 5px 8px !important; }
+    .meta-row { display: inline-flex; width: 49%; padding: 2px 0; border: 0; font-size: 9px; }
+    .meta-label { min-width: 82px; }
+    .items-table th, .items-table td { padding: 3px 4px !important; font-size: 8.5px !important; line-height: 1.15; }
+    .items-table th { text-transform: none; letter-spacing: 0; }
+    .items-table td:nth-child(2) div { font-size: 8.5px !important; }
+    .items-table td:nth-child(2) div + div { display: none; }
+    .row > .col-lg-8, .row > .col-lg-4 { width: 100% !important; }
+    .row > .col-lg-4 .meta-block { display: none; }
+    .items-table { page-break-inside: avoid; }
+}
 </style>
 @endpush
 
@@ -45,6 +62,7 @@
     $itemsSubtotal = $document->items->sum(fn($i) => $i->quantity * $i->unit_cost);
     $shippingFee   = (float) ($document->shipping_fee ?? 0);
     $grandTotal    = $itemsSubtotal + $shippingFee;
+    $customer = $linkedOrder?->customer;
     $editVariantIds = collect($document->edits)
         ->flatMap(fn($edit) => collect($edit->changes ?? [])->pluck('variant_id'))
         ->filter()
@@ -113,6 +131,20 @@
                 <div class="meta-value" style="font-weight:400;">{{ $document->notes }}</div>
             </div>
             @endif
+            @if(!$isImport)
+            <div class="meta-row">
+                <div class="meta-label"><i class="bi bi-person-badge me-2 text-muted"></i>Khách hàng</div>
+                <div class="meta-value">{{ $customer?->name ?? '—' }}</div>
+            </div>
+            <div class="meta-row">
+                <div class="meta-label"><i class="bi bi-geo-alt me-2 text-muted"></i>Địa chỉ</div>
+                <div class="meta-value">{{ $linkedOrder?->recipient_address ?: $customer?->address ?: '—' }}</div>
+            </div>
+            <div class="meta-row">
+                <div class="meta-label"><i class="bi bi-telephone me-2 text-muted"></i>Điện thoại</div>
+                <div class="meta-value">{{ $linkedOrder?->recipient_phone ?: $customer?->phone ?: '—' }}</div>
+            </div>
+            @endif
         </div>
 
         {{-- Items --}}
@@ -129,6 +161,7 @@
                         <th class="text-center">Số lượng</th>
                         <th class="text-center">ĐVT</th>
                         <th class="text-center">Khối lượng</th>
+                        @if(!$isImport)<th class="text-center">Thực giao</th>@endif
                         <th class="text-end">Đơn giá</th>
                         <th class="text-end">Thành tiền</th>
                     </tr>
@@ -154,6 +187,7 @@
                         </td>
                         <td class="text-center">{{ $unitLabel }}</td>
                         <td class="text-center">{{ format_kg($lineWeight) }}</td>
+                        @if(!$isImport)<td class="text-center" style="min-width:72px;height:28px;border-bottom:1px dotted #64748b;"></td>@endif
                         <td class="text-end">{{ number_format($item->unit_cost) }}đ</td>
                         <td class="text-end fw-700">{{ number_format($item->quantity * $item->unit_cost) }}đ</td>
                     </tr>
