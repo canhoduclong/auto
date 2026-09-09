@@ -5549,7 +5549,7 @@ class WarehouseDashboardController extends Controller
         $linkedOrder = null;
         if (preg_match('/(?:đơn|don)\s*#\s*([A-Za-z0-9\-]+)/iu', (string) $document->notes, $matches)) {
             $linkedOrder = Order::query()
-                ->with('customer:id,name,phone,address')
+                ->with(['customer:id,name,phone,address', 'shipper:id,name,phone'])
                 ->whereRaw('UPPER(code) = ?', [strtoupper(trim((string) ($matches[1] ?? '')))])
                 ->first();
         }

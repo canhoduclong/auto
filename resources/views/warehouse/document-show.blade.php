@@ -33,22 +33,36 @@
 .edit-history-meta { font-size: .8rem; color: #64748b; }
 .edit-history-title { font-weight: 700; color: #0f172a; font-size: .88rem; }
 .edit-history-table th, .edit-history-table td { font-size: .8rem; }
+.stockout-print-sheet { display: none; }
 @media print {
-    @page { size: A4 landscape; margin: 8mm; }
-    body { background: #fff !important; font-size: 9px !important; }
-    .wh-sidebar, .wh-topbar, .doc-show-header, .mobile-drawer-overlay,
-    .mb-3 > a, .meta-block .btn, .edit-history-card { display: none !important; }
-    .wh-main, .wh-content, .container, .container-fluid { margin: 0 !important; padding: 0 !important; max-width: none !important; width: 100% !important; }
-    .meta-block, .items-table { box-shadow: none !important; border: 1px solid #adb5bd; border-radius: 0 !important; margin-bottom: 5px !important; padding: 5px 8px !important; }
-    .meta-row { display: inline-flex; width: 49%; padding: 2px 0; border: 0; font-size: 9px; }
-    .meta-label { min-width: 82px; }
-    .items-table th, .items-table td { padding: 3px 4px !important; font-size: 8.5px !important; line-height: 1.15; }
-    .items-table th { text-transform: none; letter-spacing: 0; }
-    .items-table td:nth-child(2) div { font-size: 8.5px !important; }
-    .items-table td:nth-child(2) div + div { display: none; }
-    .row > .col-lg-8, .row > .col-lg-4 { width: 100% !important; }
-    .row > .col-lg-4 .meta-block { display: none; }
-    .items-table { page-break-inside: avoid; }
+    @page { size: A4 portrait; margin: 10mm; }
+    body { background: #fff !important; color: #111827 !important; }
+    .screen-document, .wh-sidebar, .wh-topbar, .mobile-drawer-overlay { display: none !important; }
+    .stockout-print-sheet { display: block; width: 100%; font: 10px/1.35 Arial, sans-serif; color: #111827; }
+    .print-company { display: grid; grid-template-columns: 24% 52% 24%; align-items: start; border-bottom: 1px solid #111827; padding-bottom: 6px; }
+    .print-logo { max-width: 34mm; max-height: 16mm; object-fit: contain; }
+    .print-company-name { font-size: 12px; font-weight: 800; text-transform: uppercase; }
+    .print-company-info { font-size: 8.5px; line-height: 1.35; }
+    .print-title { text-align: center; font-size: 18px; font-weight: 800; margin: 4px 0 0; text-transform: uppercase; color: #1f4e79; }
+    .print-subtitle { text-align: center; font-size: 9px; font-style: italic; margin-bottom: 6px; color: #1f4e79; }
+    .print-info { display: grid; grid-template-columns: 1fr 1fr 1fr; border: 1px solid #6b7280; margin-bottom: 7px; }
+    .print-info div { padding: 3px 5px; min-height: 18px; border-bottom: 1px solid #d1d5db; }
+    .print-info div:nth-child(3n+1), .print-info div:nth-child(3n+2) { border-right: 1px solid #d1d5db; }
+    .print-info div:nth-last-child(-n+3) { border-bottom: 0; }
+    .print-label { font-weight: 700; }
+    .print-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 8px; }
+    .print-table th, .print-table td { border: 1px solid #4b5563; padding: 4px 3px; vertical-align: middle; }
+    .print-table th { background: #e8eef5; text-align: center; font-weight: 700; color: #1f4e79; }
+    .print-table .center { text-align: center; }
+    .print-table .right { text-align: right; }
+    .print-table .actual-cell { height: 28px; border-bottom: 1px dotted #374151; }
+    .print-total { width: 45%; margin-left: auto; border-collapse: collapse; margin-bottom: 16px; }
+    .print-total td { padding: 3px 5px; border-bottom: 1px solid #d1d5db; }
+    .print-total td:last-child { text-align: right; font-weight: 700; }
+    .print-signatures { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; margin-top: 24px; page-break-inside: avoid; }
+    .print-signature { min-height: 86px; font-weight: 700; }
+    .print-signature small { display: block; font-weight: 400; font-style: italic; margin-top: 2px; }
+    .print-sign-space { height: 52px; }
 }
 </style>
 @endpush
@@ -76,6 +90,7 @@
         ->keyBy('id');
 @endphp
 
+<div class="screen-document">
 {{-- Back --}}
 <div class="mb-3">
     <a href="{{ route($backRoute) }}" class="btn btn-outline-secondary btn-sm">
@@ -331,5 +346,83 @@
     </div>
 </div>
 @endif
+
+</div>
+
+@php
+    $companyName = \App\Models\Setting::get('company_legal_name', \App\Models\Setting::get('brand_name', 'CÔNG TY CỔ PHẦN THỰC PHẨM HOÀNG LONG TNT'));
+    $companyAddress = \App\Models\Setting::get('company_address', \App\Models\Setting::get('address', ''));
+    $companyPhone = \App\Models\Setting::get('company_phone', \App\Models\Setting::get('phone', ''));
+    $companyTax = \App\Models\Setting::get('company_tax_code', '');
+    $companyLogo = \App\Models\Setting::get('logo', '');
+@endphp
+<div class="stockout-print-sheet">
+    <div class="print-company">
+        <div>
+            @if($companyLogo)<img class="print-logo" src="{{ \Illuminate\Support\Facades\Storage::url($companyLogo) }}" alt="Logo">@endif
+            <div class="print-company-name">{{ $companyName }}</div>
+            @if($companyTax)<div class="print-company-info">MST: {{ $companyTax }}</div>@endif
+            @if($companyAddress)<div class="print-company-info">Địa chỉ: {{ $companyAddress }}</div>@endif
+            @if($companyPhone)<div class="print-company-info">Điện thoại: {{ $companyPhone }}</div>@endif
+        </div>
+        <div class="print-company-info" style="text-align:right;">Kho xuất: <strong>{{ $document->warehouse?->name ?? '—' }}</strong><br>Ngày phiếu: <strong>{{ $document->document_date->format('d/m/Y') }}</strong></div>
+    </div>
+    <div class="print-title">{{ $isImport ? 'PHIẾU NHẬP KHO' : 'PHIẾU GIAO HÀNG' }}</div>
+    <div class="print-subtitle">Số chứng từ: <strong>{{ $document->document_number ?? '#'.$document->id }}</strong></div>
+
+    <div class="print-info">
+        <div><span class="print-label">Khách hàng:</span> {{ $customer?->name ?? '—' }}</div>
+        <div><span class="print-label">Mã đơn:</span> {{ $linkedOrder?->code ?? '—' }}</div>
+        <div><span class="print-label">Người lập:</span> {{ $document->user?->name ?? '—' }}</div>
+        <div><span class="print-label">Địa chỉ giao:</span> {{ $linkedOrder?->recipient_address ?: $customer?->address ?: '—' }}</div>
+        <div><span class="print-label">Điện thoại:</span> {{ $linkedOrder?->recipient_phone ?: $customer?->phone ?: '—' }}</div>
+        <div><span class="print-label">Tài xế:</span> {{ $linkedOrder?->shipper?->name ?? '—' }}</div>
+        <div><span class="print-label">SĐT tài xế:</span> {{ $linkedOrder?->shipper?->phone ?? '—' }}</div>
+        <div><span class="print-label">Ghi chú:</span> {{ $document->notes ?: '—' }}</div>
+    </div>
+
+    <table class="print-table">
+        <thead><tr>
+            <th style="width:5%">STT</th><th style="width:10%">Mã hàng</th><th style="width:25%">Tên sản phẩm</th>
+            <th style="width:8%">ĐVT</th><th style="width:8%">Số lượng</th><th style="width:12%">KL dự kiến</th>
+            @if(!$isImport)<th style="width:12%">Thực giao</th>@endif
+            <th style="width:10%">Đơn giá</th><th style="width:10%">Thành tiền</th>
+        </tr></thead>
+        <tbody>
+        @forelse($document->items as $i => $item)
+            @php
+                $unitLabel = $item->productVariant?->product?->unit_label ?? 'Cái';
+                $lineWeight = (float) (($item->productVariant?->size ?? 0) * ($item->quantity ?? 0));
+            @endphp
+            <tr>
+                <td class="center">{{ $i + 1 }}</td>
+                <td class="center">{{ $item->productVariant?->sku ?? '—' }}</td>
+                <td><strong>{{ $item->productVariant?->product?->name ?? '—' }}</strong><br>{{ $item->productVariant?->name }}</td>
+                <td class="center">{{ $unitLabel }}</td>
+                <td class="center">{{ number_format($item->quantity) }}</td>
+                <td class="center">{{ format_kg($lineWeight) }}</td>
+                @if(!$isImport)<td class="actual-cell"></td>@endif
+                <td class="right">{{ number_format($item->unit_cost, 0, ',', '.') }}đ</td>
+                <td class="right">{{ number_format($item->quantity * $item->unit_cost, 0, ',', '.') }}đ</td>
+            </tr>
+        @empty
+            <tr><td colspan="{{ $isImport ? 8 : 9 }}" class="center">Không có hàng hóa.</td></tr>
+        @endforelse
+        </tbody>
+    </table>
+
+    <table class="print-total">
+        <tr><td>Tổng số lượng</td><td>{{ number_format($document->items->sum('quantity')) }}</td></tr>
+        <tr><td>Phí vận chuyển</td><td>{{ number_format($shippingFee, 0, ',', '.') }}đ</td></tr>
+        <tr><td>Tổng cộng</td><td>{{ number_format($grandTotal, 0, ',', '.') }}đ</td></tr>
+    </table>
+
+    <div class="print-signatures">
+        <div class="print-signature">NGƯỜI LẬP PHIẾU<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div>{{ $document->user?->name }}</div>
+        <div class="print-signature">NGƯỜI GIAO HÀNG<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div></div>
+        <div class="print-signature">NGƯỜI NHẬN HÀNG<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div></div>
+        <div class="print-signature">THỦ KHO<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div></div>
+    </div>
+</div>
 
 @endsection
