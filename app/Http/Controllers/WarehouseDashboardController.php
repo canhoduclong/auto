@@ -2334,6 +2334,20 @@ class WarehouseDashboardController extends Controller
         return $message;
     }
 
+    public function mobilePackingContext(Order $order, ?int $warehouseId): array
+    {
+        if (!in_array($order->status, array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]), true)) {
+            return ['size_options' => [], 'stock_guard' => [], 'can_edit' => false];
+        }
+        $date = ($order->accounting_sales_import_batch_id ? $order->delivery_date : $order->created_at)?->toDateString();
+        $guard = $this->evaluateSingleOrderStock($order, $warehouseId, $date);
+        return [
+            'stock_guard' => $guard,
+            'can_edit' => $this->canProcessOrderOnCurrentRun($order),
+            'size_options' => $this->buildPackingSizeOptions(collect([$order]), [$order->id => $guard], $warehouseId),
+        ];
+    }
+
     private function buildPackingSizeOptions(Collection $orders, array $stockGuards, ?int $warehouseId): array
     {
         $eligibleItems = $orders->flatMap(function (Order $order) use ($stockGuards) {
@@ -3059,10 +3073,10 @@ class WarehouseDashboardController extends Controller
         $this->authorizePackingOrderAccess($order);
 
         if (! $this->canProcessOrderOnCurrentRun($order)) {
-            return back()->with('error', 'Chỉ được bổ sung cơ cấu size cho đơn của ngày hôm nay.');
+            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Chỉ được bổ sung cơ cấu size cho đơn của ngày hôm nay.']);
         }
         if (! in_array($order->status, array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]), true)) {
-            return back()->with('error', 'Chỉ được bổ sung size khi đơn đang chờ hoặc đang đóng hàng.');
+            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Chỉ được bổ sung size khi đơn đang chờ hoặc đang đóng hàng.']);
         }
 
         $validated = $request->validate([
@@ -3074,10 +3088,10 @@ class WarehouseDashboardController extends Controller
         $item = $order->items->firstWhere('id', (int) $validated['order_item_id']);
         $mainSize = (float) ($item?->variant?->size ?? 0);
         if (! $item || $mainSize <= 0) {
-            return back()->withErrors(['allocations' => 'Dòng hàng không có size hợp lệ để chọn size liền kề.']);
+            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Dòng hàng không có size hợp lệ để chọn size liền kề.']);
         }
         if (!($item->variant->product?->allow_adjacent_packing_sizes ?? true)) {
-            return back()->withErrors(['allocations' => 'Sản phẩm này đã tắt chức năng chọn size liền kề khi đóng hàng.']);
+            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Sản phẩm này đã tắt chức năng chọn size liền kề khi đóng hàng.']);
         }
         $mainSizeLabel = rtrim(rtrim(number_format($mainSize, 2, '.', ''), '0'), '.');
 
@@ -3091,18 +3105,18 @@ class WarehouseDashboardController extends Controller
             ->keyBy('id');
         if ($variants->count() !== $allocationInput->count()
             || $variants->contains(fn (ProductVariant $variant) => (float) $variant->size <= 0)) {
-            return back()->withErrors(['allocations' => 'Chỉ được dùng size chính '.$mainSizeLabel.' hoặc size khác của cùng sản phẩm.']);
+            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Chỉ được dùng size chính '.$mainSizeLabel.' hoặc size khác của cùng sản phẩm.']);
         }
 
         $orderedQuantity = (int) $item->quantity;
         if ((int) $allocationInput->sum() !== $orderedQuantity) {
-            return back()->withErrors(['allocations' => "Tổng số lượng đóng phải bằng {$orderedQuantity} sản phẩm của đơn."]);
+            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => "Tổng số lượng đóng phải bằng {$orderedQuantity} sản phẩm của đơn."]);
         }
         $mainSizeQuantity = (int) $allocationInput
             ->map(fn (int $quantity, int $variantId) => abs((float) $variants[$variantId]->size - $mainSize) < 0.0001 ? $quantity : 0)
             ->sum();
         if ($orderedQuantity <= 0) {
-            return back()->withErrors(['allocations' => 'Tổng số lượng đóng phải lớn hơn 0.']);
+            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Tổng số lượng đóng phải lớn hơn 0.']);
         }
         $weightedAverage = (float) $allocationInput
             ->map(fn (int $quantity, int $variantId) => $quantity * (float) $variants[$variantId]->size)
@@ -3110,7 +3124,7 @@ class WarehouseDashboardController extends Controller
 
         $warehouseId = (int) ($request->user()?->warehouse_id ?: $order->warehouse_id ?: 0);
         if ($warehouseId <= 0) {
-            return back()->withErrors(['allocations' => 'Không xác định được kho đang đóng hàng.']);
+            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Không xác định được kho đang đóng hàng.']);
         }
 
         try {
@@ -3162,7 +3176,7 @@ class WarehouseDashboardController extends Controller
                 }
             });
         } catch (\RuntimeException $exception) {
-            return back()->withErrors(['allocations' => $exception->getMessage()]);
+            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => $exception->getMessage()]);
         }
 
         OrderHistory::create([
@@ -3176,6 +3190,10 @@ class WarehouseDashboardController extends Controller
                 fn (int $quantity, int $variantId) => $variants[$variantId]->size.' × '.$quantity
             )->join(', ').' · Bình quân '.number_format($weightedAverage, 3, '.', '').' kg.',
         ]);
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true, 'message' => 'Đã lưu cơ cấu size thực đóng.']);
+        }
 
         return back()->with('success', 'Đã lưu cơ cấu size thực đóng; size chính '.$mainSizeLabel.' chiếm '.number_format($mainSizeQuantity * 100 / $orderedQuantity, 1).'% và bình quân '.number_format($weightedAverage, 3).' kg.');
     }

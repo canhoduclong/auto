@@ -317,6 +317,30 @@ class WarehousePackingSizeAllocationTest extends TestCase
         ])->assertUnprocessable();
     }
 
+    public function test_mobile_lists_note_and_size_options_and_validates_saved_mix(): void
+    {
+        [$user, $order, $item, $variants, $inventories] = $this->fixture(10);
+        $order->update(['note' => "Đóng kỹ\nGiao buổi sáng"]);
+        $inventories['2.5']->update(['quantity' => 3]);
+        $this->withoutMiddleware(\App\Http\Middleware\AuthenticateMobileApiToken::class);
+        $this->actingAs($user)->getJson('/api/mobile/warehouse/orders?date=2026-08-31')
+            ->assertOk()->assertJsonPath('data.0.note', "Đóng kỹ\nGiao buổi sáng")
+            ->assertJsonPath('data.0.stock_guard.has_shortage', true)
+            ->assertJsonCount(3, 'data.0.items.0.packing_size_options');
+        $url = '/api/mobile/warehouse/orders/'.$order->id.'/packing-size-allocation';
+        $this->postJson($url, ['order_item_id' => $item->id, 'allocations' => [$variants['2.5']->id => 10]])
+            ->assertUnprocessable();
+        $this->assertDatabaseCount('order_item_packing_size_allocations', 0);
+        $this->postJson($url, ['order_item_id' => $item->id, 'allocations' => [$variants['2.6']->id => 10]])
+            ->assertOk()->assertJsonPath('success', true);
+        $this->assertDatabaseHas('order_item_packing_size_allocations', [
+            'order_item_id' => $item->id, 'product_variant_id' => $variants['2.6']->id, 'quantity' => 10,
+        ]);
+        $variants['2.5']->product->update(['allow_adjacent_packing_sizes' => false]);
+        $this->getJson('/api/mobile/warehouse/orders?date=2026-08-31')->assertOk()
+            ->assertJsonCount(0, 'data.0.items.0.packing_size_options');
+    }
+
     private function fixture(int $quantity, float $mainSize = 2.5): array
     {
         $warehouse = Warehouse::query()->create(['name' => 'Kho size mix', 'status' => true]);

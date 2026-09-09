@@ -256,8 +256,8 @@ class WarehouseApiController extends BaseApiController
                 'customer:id,name,phone,address,delivery_time',
                 'warehouse:id,name',
                 'histories:id,order_id,action,user_id',
-                'items.product:id,name,unit,product_type',
-                'items.variant' => fn ($q) => $q->withAvailableStock()->with('product:id,name,unit,product_type'),
+                'items.product:id,name,unit,product_type,allow_adjacent_packing_sizes',
+                'items.variant' => fn ($q) => $q->withAvailableStock()->with('product:id,name,unit,product_type,allow_adjacent_packing_sizes'),
             ])
             ->where(function ($q) {
                 $q->whereNull('is_return_order')->orWhere('is_return_order', false);
@@ -287,7 +287,7 @@ class WarehouseApiController extends BaseApiController
             ->paginate(50);
 
         $this->attachCustomerFeedbackContext($orders->getCollection());
-        $orders->getCollection()->transform(fn (Order $order) => $this->warehouseOrderPayload($order));
+        $orders->getCollection()->transform(fn (Order $order) => $this->warehouseOrderPayload($order, $warehouseId));
 
         return $this->paginated($orders);
     }
@@ -318,6 +318,12 @@ class WarehouseApiController extends BaseApiController
         $this->ensurePackingRole($request);
 
         return $this->callWebWarehouseAction($request, fn () => app(WarehouseDashboardController::class)->updateLogistics($request, $order));
+    }
+
+    public function updatePackingSizeAllocation(Request $request, Order $order): JsonResponse
+    {
+        $this->ensurePackingRole($request);
+        return $this->callWebWarehouseAction($request, fn () => app(WarehouseDashboardController::class)->updatePackingSizeAllocation($request, $order));
     }
 
     public function requestAdjustment(Request $request, Order $order): JsonResponse
@@ -423,7 +429,7 @@ class WarehouseApiController extends BaseApiController
             return $this->fail('Đơn không thuộc kho bạn quản lý.', 403);
         }
 
-        $order->loadMissing(['customer:id,name,phone,address', 'items.product:id,name,unit,product_type', 'items.variant' => fn ($q) => $q->withAvailableStock()->with('product:id,name,unit,product_type')]);
+        $order->loadMissing(['customer:id,name,phone,address', 'items.product:id,name,unit,product_type,allow_adjacent_packing_sizes', 'items.variant' => fn ($q) => $q->withAvailableStock()->with('product:id,name,unit,product_type,allow_adjacent_packing_sizes')]);
         $variant->loadMissing('product');
         if ($variant->product?->product_type !== \App\Models\Product::TYPE_CUT) {
             return $this->fail('Sản phẩm không phải hàng pha lóc.', 422);
@@ -446,7 +452,7 @@ class WarehouseApiController extends BaseApiController
         $plan = $service->planForDemand($variant, $warehouseId, $demand);
 
         return $this->ok([
-            'order' => $this->warehouseOrderPayload($order),
+            'order' => $this->warehouseOrderPayload($order, $warehouseId),
             'target_item' => [
                 'variant_id' => (int) $variant->id,
                 'name' => trim(($variant->product?->name ?? '').' '.($variant->name ?? '')),
@@ -788,10 +794,16 @@ class WarehouseApiController extends BaseApiController
         return 'done';
     }
 
-    private function warehouseOrderPayload(Order $order): array
+    private function warehouseOrderPayload(Order $order, ?int $warehouseId = null): array
     {
         $statusMeta = $this->warehouseStatusMeta((string) $order->status);
-        $items = $order->items->map(fn ($item) => $this->warehouseOrderItemPayload($item))->values();
+        $context = app(WarehouseDashboardController::class)->mobilePackingContext(
+            $order, $warehouseId ?: $order->warehouse_id
+        );
+        $items = $order->items->map(fn ($item) => array_merge($this->warehouseOrderItemPayload($item), [
+            'packing_size_options' => $context['size_options'][$item->id] ?? [],
+            'can_edit_packing_sizes' => $context['can_edit'],
+        ]))->values();
         $activePackingHistory = $order->histories
             ->where('action', 'start_packing')
             ->sortByDesc('id')
@@ -822,6 +834,8 @@ class WarehouseApiController extends BaseApiController
             'charge_shipping_fee' => (bool) ($order->charge_shipping_fee ?? true),
             'charge_foam_box_fee' => (bool) ($order->charge_foam_box_fee ?? false),
             'warehouse_adjustment_status' => (string) ($order->warehouse_adjustment_status ?? Order::WAREHOUSE_ADJUSTMENT_STATUS_NONE),
+            'note' => (string) ($order->note ?? ''),
+            'stock_guard' => $context['stock_guard'],
             'warehouse_adjustment_note' => (string) ($order->warehouse_adjustment_note ?? ''),
             'warehouse_adjustment_rejected_reason' => (string) ($order->warehouse_adjustment_rejected_reason ?? ''),
             'warehouse_adjustment_changes' => $order->warehouse_adjustment_changes ?? [],
