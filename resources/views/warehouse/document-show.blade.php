@@ -354,12 +354,14 @@
     $companyAddress = \App\Models\Setting::get('company_address', \App\Models\Setting::get('address', ''));
     $companyPhone = \App\Models\Setting::get('company_phone', \App\Models\Setting::get('phone', ''));
     $companyTax = \App\Models\Setting::get('company_tax_code', '');
-    $companyLogo = \App\Models\Setting::get('logo', '');
+    $companyLogo = \App\Models\Setting::get('logo', 'https://hoanglongtnt.com/storage/media/1XrclAQJcTDneyC1SUTth1Qk976G0W20LO0e51oO.png');
 @endphp
 <div class="stockout-print-sheet">
     <div class="print-company">
         <div>
-            @if($companyLogo)<img class="print-logo" src="{{ \Illuminate\Support\Facades\Storage::url($companyLogo) }}" alt="Logo">@endif
+            @if($companyLogo)
+                <img class="print-logo" src="{{ str_starts_with((string) $companyLogo, 'http') ? $companyLogo : \Illuminate\Support\Facades\Storage::url($companyLogo) }}" alt="Logo công ty">
+            @endif
             <div class="print-company-name">{{ $companyName }}</div>
             @if($companyTax)<div class="print-company-info">MST: {{ $companyTax }}</div>@endif
             @if($companyAddress)<div class="print-company-info">Địa chỉ: {{ $companyAddress }}</div>@endif
@@ -384,7 +386,7 @@
     <table class="print-table">
         <thead><tr>
             <th style="width:5%">STT</th><th style="width:10%">Mã hàng</th><th style="width:25%">Tên sản phẩm</th>
-            <th style="width:8%">ĐVT</th><th style="width:8%">Số lượng</th><th style="width:12%">KL dự kiến</th>
+            <th style="width:8%">ĐVT</th><th style="width:8%">Số lượng</th><th style="width:12%">Khối lượng</th>
             @if(!$isImport)<th style="width:12%">Thực giao</th>@endif
             <th style="width:10%">Đơn giá</th><th style="width:10%">Thành tiền</th>
         </tr></thead>
@@ -400,7 +402,7 @@
                 <td><strong>{{ $item->productVariant?->product?->name ?? '—' }}</strong><br>{{ $item->productVariant?->name }}</td>
                 <td class="center">{{ $unitLabel }}</td>
                 <td class="center">{{ number_format($item->quantity) }}</td>
-                <td class="center">{{ format_kg($lineWeight) }}</td>
+                <td class="center">{{ strtolower((string) $unitLabel) === 'kg' ? format_kg($lineWeight) : '-' }}</td>
                 @if(!$isImport)<td class="actual-cell"></td>@endif
                 <td class="right">{{ number_format($item->unit_cost, 0, ',', '.') }}đ</td>
                 <td class="right">{{ number_format($item->quantity * $item->unit_cost, 0, ',', '.') }}đ</td>
