@@ -42,6 +42,65 @@ class TextOrderImportController extends Controller
         return $this->draftIndex(null, $request);
     }
 
+    public function exportDailyOrders(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $validated = $request->validate([
+            'date' => ['required', 'date'],
+        ]);
+        $date = Carbon::parse($validated['date'])->toDateString();
+        $orders = Order::query()
+            ->with([
+                'user:id,name,zalo_name',
+                'customer:id,name,phone,address',
+                'items.product:id,name',
+                'items.variant:id,product_id,name,sku,size',
+            ])
+            ->forWorkflowDate($date)
+            ->orderBy('user_id')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+
+        $lines = [];
+        $messageDate = Carbon::parse($date)->subDay()->format('d/m/Y');
+        foreach ($orders as $order) {
+            $sender = trim((string) ($order->user?->zalo_name ?: $order->user?->name)) ?: 'Admin';
+            $lines[] = '['.$messageDate.' 00:00:00] '.$sender.': Tên KH: '.($order->customer?->name ?: $order->recipient_name ?: 'Khách hàng');
+            if ($order->customer?->phone || $order->recipient_phone) {
+                $lines[] = 'SĐT: '.($order->recipient_phone ?: $order->customer?->phone);
+            }
+            if ($order->recipient_address || $order->customer?->address) {
+                $lines[] = 'ĐC: '.($order->recipient_address ?: $order->customer?->address);
+            }
+            foreach ($order->items as $item) {
+                $product = $item->product?->name ?: $item->variant?->name ?: $item->variant?->sku ?: 'Sản phẩm';
+                $size = (float) ($item->unit_weight ?? $item->variant?->kg ?? 0);
+                $price = (float) ($item->price ?? 0);
+                $description = $product;
+                if ($item->variant?->size) {
+                    $description .= ' '.$item->variant->size;
+                }
+                $lines[] = (int) $item->quantity.' con '.$description
+                    .($size > 0 ? ' size: '.rtrim(rtrim(number_format($size, 3, '.', ''), '0'), '.') : '')
+                    .($price > 0 ? ' giá: '.rtrim(rtrim(number_format($price, 2, '.', ''), '0'), '.') : '');
+            }
+            if ($order->delivery_time) {
+                $lines[] = 'Giao hàng: '.$order->delivery_time;
+            }
+            if ($order->note) {
+                $lines[] = 'Ghi chú: '.$order->note;
+            }
+            $lines[] = '';
+        }
+
+        $content = implode("\n", $lines);
+        $filename = 'don-hang-'.$date.'.txt';
+
+        return response()->streamDownload(function () use ($content): void {
+            echo "\xEF\xBB\xBF".$content;
+        }, $filename, ['Content-Type' => 'text/plain; charset=UTF-8']);
+    }
+
     public function saleIndex(Request $request)
     {
         return $this->draftIndex((int) $request->user()->id, $request);

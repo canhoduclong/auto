@@ -338,6 +338,12 @@
 								<span>Phiếu xuất kho tổng</span>
 							</a>
 						</li>
+						<li class="nav-item">
+								<a href="{{ route('admin.order-activity.index') }}" class="nav-link{{ request()->routeIs('admin.order-activity.*') ? ' active' : '' }}">
+									<i class="ph-clock-counter-clockwise"></i>
+									<span>Hoạt động đơn hàng</span>
+								</a>
+							</li>
 						@if(auth()->user()?->isAdmin())
 						<li class="nav-item">
 							<a href="{{ route('admin.google-sheet-inventory-reset.index') }}" class="nav-link{{ request()->routeIs('admin.google-sheet-inventory-reset.*') ? ' active' : '' }}">

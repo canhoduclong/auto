@@ -56,8 +56,8 @@ class ZaloOrderTextParser
 
     private function looksLikeOrder(string $body): bool
     {
-        return preg_match('/(?:khách hàng|tên kh|\bkh\s*:|số lượng|\bsl\s*:|sản phẩm|\bsp\s*:|\b\d+\s*(?:con|c)\s+vịt)/iu', $body)
-            && preg_match('/(?:\b0\d[\d\s.]{7,12}\b|\b\d+\s*(?:con|c)\b)/iu', $body);
+        return preg_match('/(?:khách hàng|tên kh|\bkh\s*:|số lượng|\bsl\s*:|sản phẩm|\bsp\s*:|\b\d+\s*(?:con|c|bộ)\b)/iu', $body)
+            && preg_match('/(?:\b0\d[\d\s.]{7,12}\b|\b\d+\s*(?:con|c|bộ)\b|số lượng\s*[:\-]?\s*\d+)/iu', $body);
     }
 
     private function parseOrder(string $messageDate, string $zaloName, string $body): array
@@ -142,7 +142,7 @@ class ZaloOrderTextParser
                 continue;
             }
             $description = trim($match[2]);
-            if ($description === '' || !preg_match('/(?:vịt|lòng|lóc|quay|móc)/iu', $description)) {
+            if ($description === '') {
                 continue;
             }
             $sizeText = $this->match('/\bsize\s*[:\-]?\s*(\d+(?:[.,]\d+|kg\d+)?)/iu', $description);

@@ -9,7 +9,15 @@
             <h3 class="mb-1">{{ $saleMode ?? false ? 'Đơn nháp của tôi' : 'Nhập đơn text từ Zalo' }}</h3>
             <div class="text-muted">Dán nội dung Zalo, kiểm tra bản nháp rồi xác nhận tạo đơn chính.</div>
         </div>
-        @unless($saleMode ?? false)<a href="{{ route('users.index') }}" class="btn btn-outline-secondary">Cập nhật tên Zalo sale</a>@endunless
+        @unless($saleMode ?? false)
+            <div class="d-flex gap-2 flex-wrap">
+                <form method="GET" action="{{ route('admin.text-order-import.export-daily') }}" class="d-flex gap-2 align-items-center">
+                    <input type="date" name="date" value="{{ request('delivery_date', now('Asia/Bangkok')->toDateString()) }}" class="form-control form-control-sm" required aria-label="Ngày export đơn">
+                    <button class="btn btn-outline-success btn-sm" type="submit"><i class="ph-download-simple me-1"></i>Export đơn trong ngày</button>
+                </form>
+                <a href="{{ route('users.index') }}" class="btn btn-outline-secondary btn-sm">Cập nhật tên Zalo sale</a>
+            </div>
+        @endunless
     </div>
 
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
@@ -54,7 +62,11 @@
             <form method="POST" action="{{ $parseRoute ?? route('admin.text-order-import.parse') }}">
                 @csrf
                 <label class="form-label fw-semibold">Nhập tự động theo tên và ngày trong nội dung Zalo</label>
-                <textarea name="text" rows="12" class="form-control" required placeholder="[14/06/2026 10:45:10] Tên Zalo sale: KH: ...">{{ old('text') }}</textarea>
+                <div class="input-group mb-2">
+                    <input type="file" id="admin-import-text-file" class="form-control" accept=".txt,text/plain">
+                    <label class="input-group-text" for="admin-import-text-file"><i class="ph-upload-simple me-1"></i>Chọn file .txt</label>
+                </div>
+                <textarea name="text" id="admin-import-text" rows="12" class="form-control" required placeholder="Dán nội dung Zalo hoặc chọn file .txt vừa export...">{{ old('text') }}</textarea>
                 <div class="d-flex justify-content-between align-items-center mt-3">
                     <small class="text-muted">Tin nhắn ghi chú cùng sale sẽ được nối vào đơn gần nhất. Danh thiếp, hình ảnh và tin thu hồi được bỏ qua.</small>
                     <button class="btn btn-primary"><i class="ph-magic-wand me-1"></i>Phân tích thành bản nháp</button>
@@ -188,6 +200,17 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const importFile = document.getElementById('admin-import-text-file');
+    const importText = document.getElementById('admin-import-text');
+    if (importFile && importText) {
+        importFile.addEventListener('change', function () {
+            const file = importFile.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function () { importText.value = String(reader.result || '').replace(/^\uFEFF/, ''); };
+            reader.readAsText(file, 'UTF-8');
+        });
+    }
     const csrf = document.querySelector('meta[name="csrf-token"]').content;
     const fields = ['sale_id','customer_name','phone','address','truck_brand_id','truck_station_id','truck_brand_name','truck_station_address','delivery_date','delivery_time','note'];
     const notify = (message, error = false) => {

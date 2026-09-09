@@ -314,51 +314,46 @@
         <nav class="mt-1 flex-grow-1 overflow-auto">
             <div class="wh-nav-section">Tổng quan</div>
             <a href="{{ route('warehouse.dashboard') }}" class="wh-nav-link {{ request()->routeIs('warehouse.dashboard') ? 'active' : '' }}">
-                <i class="bi bi-speedometer2"></i><span class="wh-nav-label">Bảng điều khiển</span>
+                <i class="bi bi-speedometer2"></i><span class="wh-nav-label">Dashboard</span>
             </a>
             <a href="{{ route('warehouse.production-dashboard') }}" class="wh-nav-link {{ request()->routeIs('warehouse.production-dashboard') ? 'active' : '' }}">
-                <i class="bi bi-bar-chart-line-fill"></i><span class="wh-nav-label">Bảng điều khiển sản xuất</span>
+                <i class="bi bi-bar-chart-line-fill"></i><span class="wh-nav-label">Bảng điều khiển</span>
             </a>
-            <a href="{{ route('department-notifications.index', ['layout' => 'warehouse']) }}" class="wh-nav-link {{ request()->routeIs('department-notifications.*') && request('layout') === 'warehouse' ? 'active' : '' }}">
+            <!--a href="{{ route('department-notifications.index', ['layout' => 'warehouse']) }}" class="wh-nav-link {{ request()->routeIs('department-notifications.*') && request('layout') === 'warehouse' ? 'active' : '' }}">
                 <i class="bi bi-megaphone"></i><span class="wh-nav-label">Tạo thông báo</span>
-            </a>
+            </a-->
+
+            <div class="wh-nav-section">Xuất kho</div>
             <a href="{{ route('warehouse.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.orders') ? 'active' : '' }}">
-                <i class="bi bi-box2-fill"></i><span class="wh-nav-label">Đơn cần đóng gói</span>
+                <i class="bi bi-box2-fill"></i><span class="wh-nav-label">Đơn cần đóng</span>
             </a>
-            <a href="{{ route('warehouse.order-adjustments.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.order-adjustments.*') ? 'active' : '' }}">
-                <i class="bi bi-clipboard2-check-fill"></i><span class="wh-nav-label">Duyệt điều chỉnh sản lượng</span>
-                @if(($warehouseAdjustmentQueueCount ?? 0) > 0)
-                    <span class="badge rounded-pill bg-danger ms-auto">{{ $warehouseAdjustmentQueueCount }}</span>
-                @endif
+            <a href="{{ route('warehouse.transfers.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.transfers.index', 'warehouse.dispatch-slips.*', 'warehouse.order-transfers', 'warehouse.order-transfers.*', 'warehouse.inventory-transfers.index', 'warehouse.inventory-transfers.edit') ? 'active' : '' }}">
+                <i class="bi bi-arrow-left-right"></i><span class="wh-nav-label">Điều chuyển</span>
             </a>
-            <a href="{{ route('admin.imported-sales-orders.index') }}" class="wh-nav-link {{ request()->routeIs('admin.imported-sales-orders.*') ? 'active' : '' }}">
-                <i class="bi bi-clipboard-check"></i><span class="wh-nav-label">Hoàn chỉnh đơn lịch sử</span>
+            <a href="{{ route('warehouse.stock-out.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-out.orders') ? 'active' : '' }}">
+                <i class="bi bi-receipt-cutoff"></i><span class="wh-nav-label">Đơn Xuất Kho</span>
             </a>
+            <a href="{{ route('warehouse.stock-out') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-out') ? 'active' : '' }}">
+                <i class="bi bi-box-arrow-right"></i><span class="wh-nav-label">Xuất Kho</span>
+            </a>
+
+            <div class="wh-nav-section">Tiếp nhận</div>
             <a href="{{ route('warehouse.transfers.incoming') }}" class="wh-nav-link {{ request()->routeIs('warehouse.transfers.incoming') ? 'active' : '' }}">
                 <i class="bi bi-arrow-left-right"></i><span class="wh-nav-label">Tiếp nhận Đơn</span>
             </a>
             <a href="{{ route('warehouse.inventory-transfers.incoming') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory-transfers.incoming') ? 'active' : '' }}">
                 <i class="bi bi-box-arrow-in-down"></i><span class="wh-nav-label">Tiếp nhận hàng</span>
             </a>
-            <a href="{{ route('warehouse.procurement-receipts.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.procurement-receipts.*') ? 'active' : '' }}">
-                <i class="bi bi-basket2-fill"></i><span class="wh-nav-label">Nhập kho từ thu mua</span>
+            <a href="{{ route('warehouse.returns') }}" class="wh-nav-link {{ request()->routeIs('warehouse.returns') ? 'active' : '' }}">
+                <i class="bi bi-arrow-return-left"></i><span class="wh-nav-label">Đơn trả về</span>
             </a>
-
-            <div class="wh-nav-section">Quản lý kho</div>
             <a href="{{ route('warehouse.stock-in') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-in') ? 'active' : '' }}">
                 <i class="bi bi-box-seam"></i><span class="wh-nav-label">Nhập Kho</span>
             </a>
-            <a href="{{ route('warehouse.supplier-prices.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.supplier-prices.*') ? 'active' : '' }}">
-                <i class="bi bi-cash-coin"></i><span class="wh-nav-label">Bảng giá thu mua</span>
-            </a>
-            <a href="{{ route('warehouse.stock-out') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-out') ? 'active' : '' }}">
-                <i class="bi bi-box-arrow-right"></i><span class="wh-nav-label">Xuất Kho</span>
-            </a>
-            <a href="{{ route('warehouse.stock-out.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-out.orders') ? 'active' : '' }}">
-                <i class="bi bi-receipt-cutoff"></i><span class="wh-nav-label">Đơn Xuất Kho</span>
-            </a>
-            <a href="{{ route('warehouse.transfers.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.transfers.index', 'warehouse.dispatch-slips.*', 'warehouse.order-transfers', 'warehouse.order-transfers.*', 'warehouse.inventory-transfers.index', 'warehouse.inventory-transfers.edit') ? 'active' : '' }}">
-                <i class="bi bi-arrow-left-right"></i><span class="wh-nav-label">Điều chuyển</span>
+
+            <div class="wh-nav-section">Tồn kho</div>
+            <a href="{{ route('warehouse.inventory-daily') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory-daily') ? 'active' : '' }}">
+                <i class="bi bi-calendar3"></i><span class="wh-nav-label">Tồn kho Daily</span>
             </a>
             <a href="{{ route('warehouse.inventory') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory') ? 'active' : '' }}">
                 <i class="bi bi-stack"></i><span class="wh-nav-label">Tồn Kho</span>
@@ -366,11 +361,23 @@
             <a href="{{ route('warehouse.stocktakes.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stocktakes.*') ? 'active' : '' }}">
                 <i class="bi bi-clipboard2-check"></i><span class="wh-nav-label">Kiểm Kê Tồn Đầu</span>
             </a>
-            <a href="{{ route('warehouse.inventory-daily') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory-daily') ? 'active' : '' }}">
-                <i class="bi bi-calendar3"></i><span class="wh-nav-label">Tồn kho Daily</span>
+            
+            <a href="{{ route('warehouse.procurement-receipts.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.procurement-receipts.*') ? 'active' : '' }}">
+                <i class="bi bi-basket2-fill"></i><span class="wh-nav-label">Nhập thu mua</span>
             </a>
-            <a href="{{ route('warehouse.products') }}" class="wh-nav-link {{ request()->routeIs('warehouse.products') ? 'active' : '' }}">
-                <i class="bi bi-box"></i><span class="wh-nav-label">Sản Phẩm</span>
+            <a href="{{ route('warehouse.supplier-prices.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.supplier-prices.*') ? 'active' : '' }}">
+                <i class="bi bi-cash-coin"></i><span class="wh-nav-label">Giá thu mua</span>
+            </a>
+
+            <div class="wh-nav-section">Kiểm soát đơn</div>
+            <a href="{{ route('warehouse.order-adjustments.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.order-adjustments.*') ? 'active' : '' }}">
+                <i class="bi bi-clipboard2-check-fill"></i><span class="wh-nav-label">Chỉnh sản lượng</span>
+                @if(($warehouseAdjustmentQueueCount ?? 0) > 0)
+                    <span class="badge rounded-pill bg-danger ms-auto">{{ $warehouseAdjustmentQueueCount }}</span>
+                @endif
+            </a>
+            <!--a href="{{ route('admin.imported-sales-orders.index') }}" class="wh-nav-link {{ request()->routeIs('admin.imported-sales-orders.*') ? 'active' : '' }}">
+                <i class="bi bi-clipboard-check"></i><span class="wh-nav-label">Hoàn chỉnh đơn lịch sử</span>
             </a>
 
             <div class="wh-nav-section">Tài chính</div>
@@ -384,11 +391,7 @@
             </a>
             <a href="{{ route('task-assignments.in-progress') }}" class="wh-nav-link {{ request()->routeIs('task-assignments.in-progress') || request()->routeIs('task-assignments.complete-form') ? 'active' : '' }}">
                 <i class="bi bi-check2-circle"></i><span class="wh-nav-label">Thực hiện</span>
-            </a>
-            <a href="{{ route('warehouse.returns') }}" class="wh-nav-link {{ request()->routeIs('warehouse.returns') ? 'active' : '' }}">
-                <i class="bi bi-arrow-return-left"></i><span class="wh-nav-label">Đơn trả về</span>
-            </a>
-
+            </a-->
             <div class="wh-nav-section">Báo cáo</div>
             <a href="{{ route('warehouse.reports') }}" class="wh-nav-link {{ request()->routeIs('warehouse.reports') ? 'active' : '' }}">
                 <i class="bi bi-graph-up"></i><span class="wh-nav-label">Thống Kê</span>

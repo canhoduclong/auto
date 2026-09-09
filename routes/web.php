@@ -740,6 +740,12 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('admin/order-schedule-runs/run-now', [OrderScheduleRunController::class, 'runNow'])->name('admin.order-schedule-runs.run-now')->middleware('role:admin');
     Route::post('admin/order-schedule-runs/run-daily-rules-now', [OrderScheduleRunController::class, 'runDailyRulesNow'])->name('admin.order-schedule-runs.run-daily-rules-now')->middleware('role:admin');
     Route::get('admin/text-order-import', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'index'])->name('admin.text-order-import.index')->middleware('role:admin');
+    Route::get('admin/text-order-import/export-daily', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'exportDailyOrders'])->name('admin.text-order-import.export-daily')->middleware('role:admin');
+    Route::get('admin/order-activity', [\App\Http\Controllers\Admin\OrderActivityController::class, 'index'])->name('admin.order-activity.index')->middleware('role:admin');
+    Route::get('admin/order-activity/export', [\App\Http\Controllers\Admin\OrderActivityController::class, 'export'])->name('admin.order-activity.export')->middleware('role:admin');
+    Route::post('admin/order-activity/import', [\App\Http\Controllers\Admin\OrderActivityController::class, 'import'])->name('admin.order-activity.import')->middleware('role:admin');
+    Route::get('admin/order-activity/export-full', [\App\Http\Controllers\Admin\OrderActivityController::class, 'exportFull'])->name('admin.order-activity.export-full')->middleware('role:admin');
+    Route::post('admin/order-activity/import-full', [\App\Http\Controllers\Admin\OrderActivityController::class, 'importFull'])->name('admin.order-activity.import-full')->middleware('role:admin');
     Route::post('admin/text-order-import/parse', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'parse'])->name('admin.text-order-import.parse')->middleware('role:admin');
     Route::post('admin/text-order-import/parse-for-sale', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'parseForSale'])->name('admin.text-order-import.parse-for-sale')->middleware('role:admin');
     Route::post('admin/text-order-import/bulk-confirm', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'bulkConfirm'])->name('admin.text-order-import.bulk-confirm')->middleware('role:admin');
