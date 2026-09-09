@@ -17,6 +17,60 @@ class WarehouseOrderTransferWeightTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_copied_orders_do_not_inherit_transfer_and_legacy_links_can_be_removed(): void
+    {
+        $role = Role::create(['name' => 'warehouse']);
+        $source = Warehouse::factory()->create();
+        $target = Warehouse::factory()->create();
+        $user = User::factory()->create(['warehouse_id' => $source->id]);
+        $user->roles()->attach($role);
+        $shipper = User::factory()->create();
+        $customer = Customer::create(['name' => 'Khách sao chép', 'status' => 'active']);
+        $transfer = OrderTransfer::create(['shipper_id' => $shipper->id, 'warehouse_id' => $target->id]);
+        $original = Order::create([
+            'customer_id' => $customer->id, 'user_id' => $user->id,
+            'warehouse_id' => $source->id, 'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $original->forceFill(['order_transfer_id' => $transfer->id])->save();
+        $transport = WarehouseTransfer::create([
+            'order_id' => $original->id, 'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id, 'shipper_id' => $shipper->id,
+            'status' => WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+        ]);
+        $copy = $original->load('orderTransfer', 'warehouseTransfers')->replicate();
+        $copy->code = 'NEW-COPY';
+        $copy->save();
+        $this->assertNull($copy->fresh()->order_transfer_id);
+        $this->assertFalse($copy->warehouseTransfers()->exists());
+        $this->assertEquals($transfer->id, $original->fresh()->order_transfer_id);
+
+        // Reproduce an existing copied order created before the fix.
+        $copy->forceFill(['order_transfer_id' => $transfer->id])->save();
+        $url = route('warehouse.order-transfers.orders.detach', [$transfer, $copy]);
+        $this->actingAs($user)->get(route('warehouse.order-transfers'))
+            ->assertOk()->assertSee($url, false)->assertSee('Gỡ đơn khỏi phiếu cũ');
+        $outsider = User::factory()->create(['warehouse_id' => $target->id]);
+        $outsider->roles()->attach($role);
+        $this->actingAs($outsider)->post($url)->assertForbidden();
+        $this->assertEquals($transfer->id, $copy->fresh()->order_transfer_id);
+        $this->actingAs($user)->post($url)->assertSessionHas('success');
+        $this->assertNull($copy->fresh()->order_transfer_id);
+        $this->assertEquals(Order::STATUS_READY_TO_SHIP, $copy->fresh()->status);
+        $this->assertEquals(WarehouseTransfer::STATUS_RECEIVED_COMPLETED, $transport->fresh()->status);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $copy->id, 'action' => 'warehouse_transfer_detached_without_transport',
+        ]);
+        $this->get(route('warehouse.order-transfers'))->assertOk()
+            ->assertViewHas('orders', fn ($orders) => $orders->contains('id', $copy->id));
+        $this->post(route('warehouse.order-transfers.orders.detach', [$transfer, $original]))
+            ->assertSessionHas('error');
+        $this->assertEquals($transfer->id, $original->fresh()->order_transfer_id);
+        $this->post(route('warehouse.order-transfers.store'), [
+            'shipper_id' => $shipper->id, 'warehouse_id' => $target->id, 'order_ids' => (string) $copy->id,
+        ])->assertSessionHas('success');
+        $this->assertNotEquals($transfer->id, $copy->fresh()->order_transfer_id);
+    }
+
     public function test_old_orders_packed_in_selected_range_are_listed_only_for_their_warehouse(): void
     {
         $role = Role::create(['name' => 'warehouse']);

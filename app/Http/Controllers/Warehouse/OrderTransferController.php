@@ -72,10 +72,11 @@ class OrderTransferController extends Controller
             'warehouse',
             'dispatchEntry.slip',
         ])
-            ->when($warehouseId, fn ($query) => $query->whereHas(
+            ->when($warehouseId, fn ($query) => $query->where(fn ($query) => $query->whereHas(
                 'orders.warehouseTransfers',
                 fn ($warehouseTransferQuery) => $warehouseTransferQuery->where('source_warehouse_id', $warehouseId)
-            ))
+            )->orWhereHas('orders', fn ($orders) => $orders
+                ->where('warehouse_id', $warehouseId)->whereDoesntHave('warehouseTransfers'))))
             ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
             ->when($search !== '', function ($query) use ($search) {
                 $query->whereHas('orders', function ($orderQuery) use ($search) {
@@ -151,6 +152,10 @@ class OrderTransferController extends Controller
 
     public function detachWaitingTransfer(OrderTransfer $transfer, Order $order)
     {
+        if (!$order->warehouseTransfers()->exists()) {
+            return $this->detachWithoutTransport($transfer, $order);
+        }
+
         $transfer->loadMissing('dispatchEntry.slip');
         if ($transfer->dispatchEntry) {
             return back()->with('error', 'Không thể gỡ đơn vì nhóm đã thuộc phiếu xuất kho tổng '.($transfer->dispatchEntry->slip?->code ?: '').'.');
@@ -256,6 +261,37 @@ class OrderTransferController extends Controller
         }
 
         return back()->with('success', 'Đã gỡ phiếu điều chuyển khỏi đơn. Đơn hàng được giữ nguyên và có thể chọn shipper khác.');
+    }
+
+    private function detachWithoutTransport(OrderTransfer $transfer, Order $order)
+    {
+        DB::transaction(function () use ($transfer, $order): void {
+            $transfer = OrderTransfer::query()->lockForUpdate()->findOrFail($transfer->id);
+            $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+            $warehouseId = Auth::user()?->warehouse_id;
+            if ($warehouseId && (int) $order->warehouse_id !== (int) $warehouseId) {
+                abort(403, 'Đơn hàng không thuộc kho bạn quản lý.');
+            }
+            if ((int) $order->order_transfer_id !== (int) $transfer->id
+                || $order->warehouseTransfers()->exists()) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'order' => 'Đơn đã thay đổi phiếu hoặc đã tạo vận chuyển. Vui lòng tải lại trang.',
+                ]);
+            }
+
+            $order->forceFill(['order_transfer_id' => null])->save();
+            OrderHistory::create([
+                'order_id' => $order->id,
+                'action' => 'warehouse_transfer_detached_without_transport',
+                'user_id' => Auth::id(),
+                'role' => 'warehouse',
+                'status_before' => $order->status,
+                'status_after' => $order->status,
+                'note' => 'Gỡ đơn chưa tạo vận chuyển khỏi phiếu điều chuyển #'.$transfer->id.'.',
+            ]);
+        });
+
+        return back()->with('success', 'Đã gỡ đơn chưa tạo vận chuyển khỏi phiếu cũ. Đơn đủ điều kiện có thể được chọn để tạo phiếu mới.');
     }
 
     public function store(Request $request)

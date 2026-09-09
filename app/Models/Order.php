@@ -93,6 +93,13 @@ class Order extends Model
 
     protected static function booted(): void
     {
+        // A copied order must be explicitly selected for a new transfer.
+        static::replicating(function (Order $order): void {
+            $order->order_transfer_id = null;
+            $order->unsetRelation('orderTransfer');
+            $order->unsetRelation('warehouseTransfers');
+        });
+
         static::creating(function (Order $order): void {
             $order->delivery_date ??= now()->addDay()->toDateString();
             $order->shipper_id ??= $order->resolveDefaultShipperId();

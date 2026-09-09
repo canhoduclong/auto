@@ -200,7 +200,7 @@
                                         </div>
                                         <div class="text-end">
                                             <span class="badge {{ $orderCompleted ? 'bg-success' : 'bg-light text-dark border' }}">{{ $orderStatusLabel }}</span>
-                                            @if(in_array($orderStatus, [
+                                            @if((!$latestTransfer && (!auth()->user()->warehouse_id || (int) $order->warehouse_id === (int) auth()->user()->warehouse_id)) || in_array($orderStatus, [
                                                 \App\Models\WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
                                                 \App\Models\WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
                                             ], true))
@@ -216,7 +216,7 @@
                                                     }}');">
                                                     @csrf
                                                     <button type="submit" class="btn btn-outline-warning btn-sm">
-                                                        Gỡ phiếu điều chuyển
+                                                        {{ !$latestTransfer ? 'Gỡ đơn khỏi phiếu cũ' : 'Gỡ phiếu điều chuyển' }}
                                                     </button>
                                                 </form>
                                             @endif
