@@ -354,13 +354,13 @@
     $companyAddress = \App\Models\Setting::get('company_address', \App\Models\Setting::get('address', ''));
     $companyPhone = \App\Models\Setting::get('company_phone', \App\Models\Setting::get('phone', ''));
     $companyTax = \App\Models\Setting::get('company_tax_code', '');
-    $companyLogo = \App\Models\Setting::get('logo', 'https://hoanglongtnt.com/storage/media/1XrclAQJcTDneyC1SUTth1Qk976G0W20LO0e51oO.png');
+    $companyLogo = 'https://hoanglongtnt.com/storage/media/1XrclAQJcTDneyC1SUTth1Qk976G0W20LO0e51oO.png';
 @endphp
 <div class="stockout-print-sheet">
     <div class="print-company">
         <div>
             @if($companyLogo)
-                <img class="print-logo" src="{{ str_starts_with((string) $companyLogo, 'http') ? $companyLogo : \Illuminate\Support\Facades\Storage::url($companyLogo) }}" alt="Logo công ty">
+                <img class="print-logo" src="{{ $companyLogo }}" alt="Logo công ty">
             @endif
             <div class="print-company-name">{{ $companyName }}</div>
             @if($companyTax)<div class="print-company-info">MST: {{ $companyTax }}</div>@endif
