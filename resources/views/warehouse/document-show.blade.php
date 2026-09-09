@@ -75,9 +75,9 @@
     $backLabel = $isImport ? 'Danh sách Nhập Kho' : 'Danh sách Xuất Kho';
     $packedOrderService = app(\App\Services\WarehousePackedOrderService::class);
     $packedOrder = !$isImport ? $linkedOrder : null;
-    $documentLines = $document->items->mapWithKeys(fn ($line) => [$line->id => $packedOrderService->documentLine($line, $packedOrder)]);
+    $documentLines = $document->items->mapWithKeys(fn ($line) => [$line->id => $packedOrderService->documentLine($line, $packedOrder, (float) $document->items->where('product_variant_id', $line->product_variant_id)->sum('quantity'))]);
     $itemsSubtotal = $documentLines->sum('total');
-    $packedSummary = $packedOrder ? $packedOrderService->summary($packedOrder) : null;
+    $packedSummary = $packedOrder ? $packedOrderService->summary($packedOrder, useActualWeight: true) : null;
     $shippingFee = $packedSummary ? $packedSummary['shipping_fee'] : (float) ($document->shipping_fee ?? 0);
     $orderAdjustment = $packedSummary['extra_discount_total'] ?? 0;
     $vatAmount = $packedOrder ? $packedOrder->resolvedVatAmount(max(0, $itemsSubtotal - $orderAdjustment)) : 0;
@@ -245,7 +245,7 @@
             </div>
             @endif
             @if($packedOrder)
-                <div class="summary-row"><span>Khối lượng thực đóng</span><strong>{{ $documentPackedWeight !== null ? format_kg($documentPackedWeight) : '—' }}</strong></div>
+                <div class="summary-row"><span>Khối lượng thực tế</span><strong>{{ $documentPackedWeight !== null ? format_kg($documentPackedWeight) : '—' }}</strong></div>
                 @if($orderAdjustment != 0)<div class="summary-row"><span>Điều chỉnh đơn</span><strong>{{ number_format(-$orderAdjustment) }}đ</strong></div>@endif
                 @if($vatAmount > 0)<div class="summary-row"><span>VAT</span><strong>{{ number_format($vatAmount) }}đ</strong></div>@endif
                 @if($foamBoxFee > 0)<div class="summary-row"><span>Phí thùng xốp</span><strong>{{ number_format($foamBoxFee) }}đ</strong></div>@endif
@@ -430,7 +430,7 @@
     <table class="print-total">
         <tr><td>Tổng số lượng</td><td>{{ number_format($document->items->sum('quantity')) }}</td></tr>
         @if($packedOrder)
-            <tr><td>Khối lượng thực đóng</td><td>{{ $documentPackedWeight !== null ? format_kg($documentPackedWeight) : '—' }}</td></tr>
+            <tr><td>Khối lượng thực tế</td><td>{{ $documentPackedWeight !== null ? format_kg($documentPackedWeight) : '—' }}</td></tr>
             @if($orderAdjustment != 0)<tr><td>Điều chỉnh đơn</td><td>{{ number_format(-$orderAdjustment, 0, ',', '.') }}đ</td></tr>@endif
             @if($vatAmount > 0)<tr><td>VAT</td><td>{{ number_format($vatAmount, 0, ',', '.') }}đ</td></tr>@endif
             @if($foamBoxFee > 0)<tr><td>Phí thùng xốp</td><td>{{ number_format($foamBoxFee, 0, ',', '.') }}đ</td></tr>@endif

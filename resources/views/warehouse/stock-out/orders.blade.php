@@ -211,7 +211,7 @@
                                             $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
                                                 ? (string) $variantSize
                                                 : '-';
-                                            $itemWeight = $item->warehouse_packed_weight;
+                                            $itemWeight = $item->export_actual_weight;
                                             $imagePath = $variant?->avatar?->media?->file_path
                                                 ?? $item->product?->avatar?->media?->file_path
                                                 ?? null;
@@ -235,7 +235,7 @@
                                                 </div>
                                                 <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
                                                 <div class="wh-item-cell"><strong>{{ number_format($orderedQty) }}</strong></div>
-                                                <div class="wh-item-cell"><strong>{{ $item->display_total_label ?? '—' }}</strong></div>
+                                                <div class="wh-item-cell"><strong>{{ $item->effective_priced_by_kg ? ($itemWeight !== null ? format_kg($itemWeight) : '—') : $item->display_total_label }}</strong></div>
                                                 <div class="wh-item-cell text-end"><strong>{{ $itemWeight !== null ? format_kg($itemWeight) : '—' }}</strong></div>
                                             </div>
                                         </li>
@@ -245,10 +245,10 @@
                         </div>
                     </div>
 
-                    @php $packedSummary = app(\App\Services\WarehousePackedOrderService::class)->summary($order); @endphp
+                    @php $packedSummary = app(\App\Services\WarehousePackedOrderService::class)->summary($order, useActualWeight: true); @endphp
                     <div class="px-3 py-2 border-top d-flex justify-content-between">
-                        <span>Khối lượng thực đóng: <strong>{{ $packedSummary['packed_weight'] !== null ? format_kg($packedSummary['packed_weight']) : '—' }}</strong></span>
-                        <span>Giá trị đơn theo thực đóng: <strong>{{ number_format($packedSummary['total']) }}đ</strong></span>
+                        <span>Khối lượng thực tế: <strong>{{ $packedSummary['packed_weight'] !== null ? format_kg($packedSummary['packed_weight']) : '—' }}</strong></span>
+                        <span>Giá trị đơn theo kg thực tế: <strong>{{ number_format($packedSummary['total']) }}đ</strong></span>
                     </div>
                     <div class="card-footer bg-white border-top d-flex justify-content-between align-items-center gap-2">
                         <div style="font-size:.8rem;" class="text-muted">

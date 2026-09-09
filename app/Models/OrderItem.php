@@ -69,6 +69,12 @@ class OrderItem extends Model
         return 1.0;
     }
 
+    public function getExportActualWeightAttribute(): ?float
+    {
+        $weight = $this->actual_weight ?? $this->packed_weight;
+        return $weight === null ? null : max(0, (float) $weight);
+    }
+
     public function getWarehousePackedWeightAttribute(): ?float
     {
         $weight = $this->packed_weight ?? $this->actual_weight;

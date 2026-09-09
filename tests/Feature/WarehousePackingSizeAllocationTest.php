@@ -374,7 +374,7 @@ class WarehousePackingSizeAllocationTest extends TestCase
         $this->assertDatabaseCount('order_item_packing_size_allocations', 0);
     }
 
-    public function test_latest_packed_weight_reprices_order_and_is_used_on_export_and_print_after_delivery(): void
+    public function test_latest_actual_weight_is_used_on_export_and_print_while_warehouse_keeps_packed_weight(): void
     {
         [$user, $order, $item, $variants] = $this->fixture(10);
         $order->update(['status' => Order::STATUS_PACKING, 'code' => 'ORD-PACKED-WEIGHT']);
@@ -398,12 +398,12 @@ class WarehousePackingSizeAllocationTest extends TestCase
         ]);
         $document->items()->create(['product_variant_id' => $variants['2.5']->id, 'quantity' => 10, 'unit_cost' => 70000]);
         $document->items()->create(['product_variant_id' => $boxVariant->id, 'quantity' => 1, 'unit_cost' => 70000]);
-        // Customer delivery weight must not replace the warehouse measurement on export documents.
+        // Export documents use the latest actual weight; the packing screen retains the warehouse measurement.
         $item->fresh()->update(['actual_weight' => 27]);
         $order->update(['status' => Order::STATUS_DELIVERED, 'actual_weight' => 27]);
-        $this->get(route('warehouse.stock-out.orders'))->assertOk()->assertSee('26kg')->assertSee('1,890,000');
+        $this->get(route('warehouse.stock-out.orders'))->assertOk()->assertSee('27kg')->assertSee('1,960,000')->assertDontSee('26kg');
         $this->get(route('warehouse.stock-out.show', $document))->assertOk()
-            ->assertSee('26kg')->assertSee('1.820.000')->assertSee('1.890.000');
+            ->assertSee('27kg')->assertSee('1.890.000')->assertSee('1.960.000')->assertDontSee('26kg');
         $this->get(route('warehouse.orders', ['date' => now()->toDateString()]))->assertOk()
             ->assertSee('26 kg')->assertSee('1,890,000');
 

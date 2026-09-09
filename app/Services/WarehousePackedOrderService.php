@@ -6,14 +6,15 @@ use App\Models\Order;
 
 class WarehousePackedOrderService
 {
-    public function summary(Order $order): array
+    public function summary(Order $order, bool $useActualWeight = false): array
     {
         $order->loadMissing('items.variant.product');
+        $weightAttribute = $useActualWeight ? 'export_actual_weight' : 'warehouse_packed_weight';
         $subtotal = 0;
         $baseSubtotal = 0;
         foreach ($order->items as $item) {
             $factor = $item->effective_priced_by_kg
-                ? ($item->warehouse_packed_weight ?? $item->display_total_value)
+                ? ($item->$weightAttribute ?? $item->display_total_value)
                 : (float) $item->quantity;
             $subtotal += round($factor * (float) $item->price, 2);
             $baseSubtotal += round($factor * (float) ($item->base_price ?? $item->price), 2);
@@ -26,7 +27,7 @@ class WarehousePackedOrderService
         $shipping = $order->charge_shipping_fee ? max(0, (float) $order->shipping_fee) : 0;
         $customerShipping = $order->collect_customer_shipping_fee ? max(0, (float) $order->customer_shipping_fee) : 0;
         $foamBox = $order->charge_foam_box_fee ? max(0, (float) $order->foam_box_price) : 0;
-        $measuredItems = $order->items->filter(fn ($item) => $item->warehouse_packed_weight !== null);
+        $measuredItems = $order->items->filter(fn ($item) => $item->$weightAttribute !== null);
 
         return [
             'items_subtotal' => round($subtotal, 2),
@@ -36,22 +37,22 @@ class WarehousePackedOrderService
             'vat_amount' => $vat,
             'shipping_fee' => $shipping + $customerShipping,
             'foam_box_fee' => $foamBox,
-            'packed_weight' => $measuredItems->isEmpty() ? null : round($measuredItems->sum('warehouse_packed_weight'), 3),
+            'packed_weight' => $measuredItems->isEmpty() ? null : round($measuredItems->sum($weightAttribute), 3),
             'total' => round(max(0, $subtotal - $adjustment) + $vat + $shipping + $customerShipping + $foamBox, 2),
         ];
     }
 
-    public function documentLine(\App\Models\InventoryDocumentItem $line, ?Order $order): array
+    public function documentLine(\App\Models\InventoryDocumentItem $line, ?Order $order, ?float $documentVariantQuantity = null): array
     {
         $matched = $order?->items->where('product_variant_id', $line->product_variant_id) ?? collect();
         $price = (float) $line->unit_cost;
         if ($matched->isEmpty()) {
             return ['weight' => null, 'price' => $price, 'total' => round($line->quantity * $price, 2)];
         }
-        $quantity = (float) $matched->sum(fn ($item) => $item->packed_quantity ?? $item->quantity);
+        $quantity = $documentVariantQuantity ?? (float) $matched->sum('quantity');
         $ratio = $quantity > 0 ? (float) $line->quantity / $quantity : 0;
-        $measured = $matched->every(fn ($item) => $item->warehouse_packed_weight !== null);
-        $weight = $measured ? round($matched->sum('warehouse_packed_weight') * $ratio, 3) : null;
+        $measured = $matched->every(fn ($item) => $item->export_actual_weight !== null);
+        $weight = $measured ? round($matched->sum('export_actual_weight') * $ratio, 3) : null;
         $factor = $matched->first()->effective_priced_by_kg
             ? ($weight ?? $matched->sum('display_total_value') * $ratio)
             : (float) $line->quantity;

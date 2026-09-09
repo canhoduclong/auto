@@ -43,6 +43,19 @@ class OrderItemStageDisplayTest extends TestCase
         $this->assertSame(840000.0, $item->lineTotalForStage(Order::STATUS_COMPLETED));
     }
 
+    public function test_export_uses_actual_weight_including_zero_and_falls_back_to_packed_weight(): void
+    {
+        $item = $this->weightedItem(['packed_weight' => 9.75, 'actual_weight' => 8.4]);
+        $this->assertSame(8.4, $item->export_actual_weight);
+        $this->assertSame(9.75, $item->warehouse_packed_weight);
+        $item->actual_weight = 0;
+        $this->assertSame(0.0, $item->export_actual_weight);
+        $item->actual_weight = null;
+        $this->assertSame(9.75, $item->export_actual_weight);
+        $item->packed_weight = null;
+        $this->assertNull($item->export_actual_weight);
+    }
+
     private function weightedItem(array $attributes = []): OrderItem
     {
         return new OrderItem(array_merge([
