@@ -27,7 +27,8 @@ class WarehousePackedOrderService
         $shipping = $order->charge_shipping_fee ? max(0, (float) $order->shipping_fee) : 0;
         $customerShipping = $order->collect_customer_shipping_fee ? max(0, (float) $order->customer_shipping_fee) : 0;
         $foamBox = $order->charge_foam_box_fee ? max(0, (float) $order->foam_box_price) : 0;
-        $measuredItems = $order->items->filter(fn ($item) => $item->$weightAttribute !== null);
+        $measuredItems = $order->items->filter(fn ($item) => $item->$weightAttribute !== null
+            && (!$useActualWeight || !$item->usesPieceUnit()));
 
         return [
             'items_subtotal' => round($subtotal, 2),
@@ -57,7 +58,7 @@ class WarehousePackedOrderService
             ? ($weight ?? $matched->sum('display_total_value') * $ratio)
             : (float) $line->quantity;
 
-        return ['weight' => $weight, 'price' => $price, 'total' => round($factor * $price, 2)];
+        return ['weight' => $matched->first()->usesPieceUnit() ? null : $weight, 'price' => $price, 'total' => round($factor * $price, 2)];
     }
 
     public function recalculate(Order $order): void

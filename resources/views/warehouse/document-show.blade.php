@@ -197,6 +197,7 @@
                             ? 'Kg'
                             : $unitLabel;
                         $lineWeight = $packedOrder ? $documentLines[$item->id]['weight'] : (float) (($item->productVariant?->size ?? 0) * ($item->quantity ?? 0));
+                        if ($unitLabel === 'Cái') { $lineWeight = null; }
                     @endphp
                     <tr>
                         <td class="text-muted small">{{ $i + 1 }}</td>
@@ -409,6 +410,7 @@
             @php
                 $unitLabel = $item->productVariant?->product?->unit_label ?? 'Cái';
                 $lineWeight = $packedOrder ? $documentLines[$item->id]['weight'] : (float) (($item->productVariant?->size ?? 0) * ($item->quantity ?? 0));
+                        if ($unitLabel === 'Cái') { $lineWeight = null; }
             @endphp
             <tr>
                 <td class="center">{{ $i + 1 }}</td>

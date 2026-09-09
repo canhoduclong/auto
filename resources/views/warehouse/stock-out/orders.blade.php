@@ -211,7 +211,8 @@
                                             $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
                                                 ? (string) $variantSize
                                                 : '-';
-                                            $itemWeight = $item->export_actual_weight;
+                                            $isPieceUnit = $item->usesPieceUnit();
+                                            $itemWeight = $isPieceUnit ? null : $item->export_actual_weight;
                                             $imagePath = $variant?->avatar?->media?->file_path
                                                 ?? $item->product?->avatar?->media?->file_path
                                                 ?? null;
@@ -235,7 +236,7 @@
                                                 </div>
                                                 <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
                                                 <div class="wh-item-cell"><strong>{{ number_format($orderedQty) }}</strong></div>
-                                                <div class="wh-item-cell"><strong>{{ $item->effective_priced_by_kg ? ($itemWeight !== null ? format_kg($itemWeight) : '—') : $item->display_total_label }}</strong></div>
+                                                <div class="wh-item-cell"><strong>{{ $isPieceUnit ? number_format($orderedQty).' Cái' : ($item->effective_priced_by_kg ? ($itemWeight !== null ? format_kg($itemWeight) : '—') : $item->display_total_label) }}</strong></div>
                                                 <div class="wh-item-cell text-end"><strong>{{ $itemWeight !== null ? format_kg($itemWeight) : '—' }}</strong></div>
                                             </div>
                                         </li>

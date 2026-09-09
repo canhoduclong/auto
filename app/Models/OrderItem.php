@@ -69,6 +69,11 @@ class OrderItem extends Model
         return 1.0;
     }
 
+    public function usesPieceUnit(): bool
+    {
+        return ($this->variant?->product?->unit_label ?? $this->product?->unit_label) === 'Cái';
+    }
+
     public function getExportActualWeightAttribute(): ?float
     {
         $weight = $this->actual_weight ?? $this->packed_weight;
