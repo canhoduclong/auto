@@ -29,14 +29,15 @@ class AutoCancelOverdueOrdersTest extends TestCase
         $this->assertSame('packing', $order->fresh()->status);
     }
 
-    public function test_order_is_cancelled_only_after_six_hours_from_end_of_delivery_window(): void
+    public function test_order_is_marked_overdue_only_after_six_hours_from_end_of_delivery_window(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-22 16:01:00', 'Asia/Bangkok'));
         $order = $this->createOrder('2026-08-22', '8h-10h', '2026-08-21 09:00:00');
 
         $this->artisan('orders:auto-cancel-overdue')->assertSuccessful();
 
-        $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->status);
+        $this->assertSame(Order::STATUS_OVERDUE_DELIVERY, $order->fresh()->status);
+        $this->assertFalse($order->fresh()->canBeCancelled());
     }
 
     public function test_customer_delivery_time_is_used_when_order_delivery_time_is_empty(): void
@@ -46,7 +47,7 @@ class AutoCancelOverdueOrdersTest extends TestCase
 
         $this->artisan('orders:auto-cancel-overdue')->assertSuccessful();
 
-        $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->status);
+        $this->assertSame(Order::STATUS_OVERDUE_DELIVERY, $order->fresh()->status);
     }
 
     public function test_missing_delivery_time_uses_end_of_delivery_day_to_avoid_early_cancellation(): void
@@ -59,14 +60,14 @@ class AutoCancelOverdueOrdersTest extends TestCase
         $this->assertSame('packing', $order->fresh()->status);
     }
 
-    public function test_order_without_delivery_time_is_cancelled_after_end_of_day_grace_period(): void
+    public function test_order_without_delivery_time_is_marked_overdue_after_end_of_day_grace_period(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-23 06:01:00', 'Asia/Bangkok'));
         $order = $this->createOrder('2026-08-22', null, '2026-08-21 09:00:00');
 
         $this->artisan('orders:auto-cancel-overdue')->assertSuccessful();
 
-        $this->assertSame(Order::STATUS_CANCELLED, $order->fresh()->status);
+        $this->assertSame(Order::STATUS_OVERDUE_DELIVERY, $order->fresh()->status);
     }
 
     private function createOrder(

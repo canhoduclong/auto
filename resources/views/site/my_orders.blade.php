@@ -492,6 +492,7 @@
     .status-pending { background: #fff7ed; color: #c2410c; }
     .status-progress { background: #eff6ff; color: #1d4ed8; }
     .status-success { background: #ecfdf5; color: #047857; }
+    .status-overdue { background: #c2410c; color: #fff; }
     .status-danger { background: #fef2f2; color: #b91c1c; }
     .status-muted { background: #f1f5f9; color: #475569; }
     .orders-total {
@@ -735,6 +736,7 @@
         \App\Models\Order::STATUS_RETURNED_COMPLETED => 'status-muted',
         \App\Models\Order::STATUS_RETURNED => 'status-danger',
         \App\Models\Order::STATUS_CANCELLED => 'status-danger',
+        \App\Models\Order::STATUS_OVERDUE_DELIVERY => 'status-overdue',
         'shipping' => 'status-progress',
         'picked_up' => 'status-progress',
     ];

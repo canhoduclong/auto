@@ -2,8 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Inventory;
-use App\Models\InventoryReservation;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use Carbon\Carbon;
@@ -13,13 +11,13 @@ use Illuminate\Support\Facades\DB;
 class AutoCancelOverdueOrders extends Command
 {
     protected $signature   = 'orders:auto-cancel-overdue';
-    protected $description = 'Hủy các đơn đã quá giờ giao 6 tiếng và trả lại tồn kho';
+    protected $description = 'Đánh dấu Giao trễ các đơn đã quá giờ giao 6 tiếng';
 
     private const BUSINESS_TIMEZONE = 'Asia/Bangkok';
     private const CANCELLATION_GRACE_HOURS = 6;
 
     /**
-     * Statuses eligible for auto-cancellation when the delivery deadline has passed.
+    * Statuses eligible for overdue marking when the delivery deadline has passed.
      *
      * Group 1 – pre-packing (never reached the warehouse packing stage):
      *   pending, pending_leader_approval, pending_manager_approval,
@@ -43,7 +41,7 @@ class AutoCancelOverdueOrders extends Command
     public function handle(): int
     {
         $now       = now(self::BUSINESS_TIMEZONE);
-        $cancelled = 0;
+        $overdue = 0;
 
         $orders = Order::with(['items', 'customer:id,delivery_time'])
             ->whereIn('status', self::CANCELLABLE_STATUSES)
@@ -67,33 +65,28 @@ class AutoCancelOverdueOrders extends Command
                 DB::transaction(function () use ($order) {
                     $statusBefore = (string) $order->status;
 
-                    // Release reserved stock for this order
-                    $this->releaseReservedStock($order);
-
-                    $order->status = Order::STATUS_CANCELLED;
-                    $order->cancelled_at = now();
-                    $order->cancel_reason = 'Hệ thống tự hủy do quá hạn giao hàng 6 tiếng (hạn giao được tính sớm nhất vào ngày sau ngày lên đơn).';
+                    $order->status = Order::STATUS_OVERDUE_DELIVERY;
                     $order->save();
 
                     OrderHistory::create([
                         'order_id'      => $order->id,
-                        'action'        => 'auto_cancel_overdue',
+                        'action'        => 'mark_overdue_delivery',
                         'user_id'       => null,
                         'role'          => 'system',
                         'status_before' => $statusBefore,
-                        'status_after'  => Order::STATUS_CANCELLED,
-                        'note'          => $order->cancel_reason,
+                        'status_after'  => Order::STATUS_OVERDUE_DELIVERY,
+                        'note'          => 'Hệ thống đánh dấu Giao trễ do quá giờ giao 6 tiếng (hạn giao được tính sớm nhất vào ngày sau ngày lên đơn).',
                     ]);
                 });
 
-                $cancelled++;
-                $this->line("  Đã hủy đơn #{$order->code} (trạng thái trước: {$order->getOriginal('status')})");
+                $overdue++;
+                $this->line("  Đã đánh dấu Giao trễ đơn #{$order->code} (trạng thái trước: {$order->getOriginal('status')})");
             } catch (\Throwable $e) {
-                $this->error("  Lỗi khi hủy đơn #{$order->code}: " . $e->getMessage());
+                $this->error("  Lỗi khi đánh dấu Giao trễ đơn #{$order->code}: " . $e->getMessage());
             }
         }
 
-        $this->info("Hoàn tất: đã hủy {$cancelled} đơn quá hạn.");
+        $this->info("Hoàn tất: đã đánh dấu Giao trễ {$overdue} đơn quá hạn.");
 
         return self::SUCCESS;
     }
@@ -111,7 +104,7 @@ class AutoCancelOverdueOrders extends Command
 
         $deliveryAt = Carbon::parse($deliveryDate, self::BUSINESS_TIMEZONE);
         if ($time === null) {
-            // Free-form or missing delivery times must never make an order cancel early.
+            // Free-form or missing delivery times must never make an order overdue early.
             $deliveryAt->endOfDay();
         } else {
             $deliveryAt->setTime($time['hour'], $time['minute']);
@@ -161,31 +154,4 @@ class AutoCancelOverdueOrders extends Command
         return ['hour' => $hour, 'minute' => $minute];
     }
 
-    private function releaseReservedStock(Order $order): void
-    {
-        // Collect all inventory IDs affected by this order's reservations
-        $affectedInventoryIds = collect();
-
-        foreach ($order->items as $item) {
-            $reservations = InventoryReservation::where('order_item_id', $item->id)->lockForUpdate()->get();
-            foreach ($reservations as $reservation) {
-                $affectedInventoryIds->push($reservation->inventory_id);
-            }
-            InventoryReservation::where('order_item_id', $item->id)->delete();
-        }
-
-        // Reconcile reserved_quantity for each affected inventory from the source of truth
-        // (sum of remaining active reservations in the table) rather than just subtracting,
-        // which prevents drift accumulation from prior inconsistencies.
-        foreach ($affectedInventoryIds->unique() as $inventoryId) {
-            $inventory = Inventory::lockForUpdate()->find($inventoryId);
-            if (!$inventory) {
-                continue;
-            }
-
-            $actualReserved = (int) InventoryReservation::where('inventory_id', $inventoryId)->sum('quantity');
-            $inventory->reserved_quantity = max(0, $actualReserved);
-            $inventory->save();
-        }
-    }
 }

@@ -6003,19 +6003,19 @@ class WarehouseDashboardController extends Controller
     }
 
     /**
-     * Manually trigger auto-cancel of overdue orders to restore accurate stock.
+     * Manually mark overdue orders without cancelling or releasing stock.
      */
     public function cancelOverdueOrders(Request $request)
     {
         \Artisan::call('orders:auto-cancel-overdue');
         $output = trim(\Artisan::output());
 
-        // Parse how many orders were cancelled from command output
-        preg_match('/đã hủy (\d+) đơn/u', $output, $matches);
+        // Parse how many orders were marked overdue from command output
+        preg_match('/đã đánh dấu Giao trễ (\d+) đơn/u', $output, $matches);
         $count = (int) ($matches[1] ?? 0);
 
         if ($count > 0) {
-            return back()->with('success', "Đã hủy {$count} đơn quá hạn và trả lại tồn kho.");
+            return back()->with('success', "Đã đánh dấu Giao trễ {$count} đơn quá hạn.");
         }
 
         return back()->with('info', 'Không có đơn nào quá hạn cần xử lý.');

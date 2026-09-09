@@ -28,6 +28,7 @@ enum OrderStatus: string {
     case PickedUp = 'picked_up';
     case Delivering = 'delivering';
     case Delivered = 'delivered';
+    case OverdueDelivery = 'overdue_delivery';
 
     case Unpaid = 'unpaid';
     case Completed = 'completed';

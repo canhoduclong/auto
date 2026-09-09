@@ -305,6 +305,7 @@ class Order extends Model
     const STATUS_COMPLETED = 'completed';
     const STATUS_RETURNED = 'returned';
     const STATUS_CANCELLED = 'cancelled';
+    const STATUS_OVERDUE_DELIVERY = 'overdue_delivery';
 
     public static function statusOptions()
     {
@@ -317,6 +318,7 @@ class Order extends Model
             self::STATUS_COMPLETED => 'Hoàn thành',
             self::STATUS_RETURNED => 'Hoàn trả',
             self::STATUS_CANCELLED => 'Đã hủy',
+            self::STATUS_OVERDUE_DELIVERY => 'Giao trễ',
         ];
     }
     

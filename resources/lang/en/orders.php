@@ -107,6 +107,7 @@ return [
         'rejected' => 'Rejected',
         'returned' => 'Returned',
         'cancelled' => 'Cancelled',
+        'overdue_delivery' => 'Overdue delivery',
         'leader_confirmed' => 'Leader Confirmed',
         'accounting_planned' => 'Accounting Planned',
         'manager_confirmed' => 'Manager Confirmed',

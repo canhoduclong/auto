@@ -12,6 +12,7 @@
         'completed', 'delivered' => 'success',
         'shipping', 'packed', 'packing' => 'info',
         'cancelled', 'rejected' => 'danger',
+        'overdue_delivery' => 'overdue',
         default => 'warning',
     };
 
@@ -257,6 +258,7 @@
 
     .status-success { background: #ecfdf5; color: #047857; }
     .status-warning { background: #fff7ed; color: #c2410c; }
+    .status-overdue { background: #c2410c; color: #fff; }
     .status-info { background: #eff6ff; color: #1d4ed8; }
     .status-danger { background: #fef2f2; color: #b91c1c; }
     .status-secondary { background: #f1f5f9; color: #475569; }

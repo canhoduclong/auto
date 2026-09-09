@@ -107,6 +107,7 @@ return [
         'rejected' => 'Tu choi',
         'returned' => 'Hoan tra',
         'cancelled' => 'Da huy',
+        'overdue_delivery' => 'Giao tre',
         'leader_confirmed' => 'Truong nhom da xac nhan',
         'accounting_planned' => 'Ke toan da lap ke hoach',
         'manager_confirmed' => 'Quan ly da xac nhan',

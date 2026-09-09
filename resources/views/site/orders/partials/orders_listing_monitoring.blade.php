@@ -33,11 +33,13 @@
     .monitor-my-order { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 14px; align-items: start; }
     .monitor-my-order-card { min-width: 0; padding: 14px 16px; border: 1px solid #dce6f1; border-radius: 7px; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .06); }
     .monitor-my-order-card.is-cancelled { border-color: #fecaca; background: #fffafa; }
+    .monitor-my-order-card.is-overdue { border-color: #c2410c; background: #fff7ed; }
     .monitor-my-order-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; }
     .monitor-my-order-name { color: #0f172a; font-size: .82rem; font-weight: 900; text-transform: uppercase; }
     .monitor-my-order-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 3px; color: #64748b; font-size: .68rem; }
     .monitor-my-order-status { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 999px; background: #fff1f2; color: #be123c; font-size: .68rem; font-weight: 800; white-space: nowrap; }
     .monitor-my-order-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .monitor-my-order-status.is-overdue { background: #ffedd5; color: #c2410c; }
     .monitor-my-order-delivery { padding: 9px 0; border-bottom: 1px dashed #dce6f1; }
     .monitor-my-order-section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; color: #334155; font-size: .67rem; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
     .monitor-my-order-section-title button { border: 0; background: transparent; color: #1d4ed8; font-size: .65rem; font-weight: 900; text-transform: uppercase; }
@@ -120,6 +122,7 @@
         @foreach($orders as $order)
             @php
                 $isCancelled = $order->status === \App\Models\Order::STATUS_CANCELLED;
+                $isOverdue = $order->status === \App\Models\Order::STATUS_OVERDUE_DELIVERY;
                 $isWaitingWarehouse = (int) ($order->stock_sufficient ?? 1) === 0 && $order->created_at?->isToday();
                 $statusLabel = $isWaitingWarehouse ? 'Chờ Kho Ráp Hàng' : ($statusLabels[$order->status] ?? str_replace('_', ' ', $order->status));
                 $canEdit = !$isTrashView && (int) $order->user_id === (int) $user->id && $order->canBeDirectlyEditedByOwner();
@@ -154,7 +157,7 @@
                 ];
             @endphp
             <article class="monitor-my-order" id="my-order-card-{{ $order->id }}">
-                <div class="monitor-my-order-card {{ $isCancelled ? 'is-cancelled' : '' }}">
+                <div class="monitor-my-order-card {{ $isCancelled ? 'is-cancelled' : ($isOverdue ? 'is-overdue' : '') }}">
                     <div class="monitor-my-order-head">
                         <div>
                             <div class="monitor-my-order-name">{{ $order->customer?->name ?? 'Khách hàng' }}</div>
@@ -164,7 +167,7 @@
                                 <span>{{ $order->code ?: ('#' . $order->id) }}</span>
                             </div>
                         </div>
-                        <span class="monitor-my-order-status">{{ $statusLabel }}</span>
+                        <span class="monitor-my-order-status {{ $isOverdue ? 'is-overdue' : '' }}">{{ $statusLabel }}</span>
                     </div>
 
                     <div class="monitor-my-order-delivery">

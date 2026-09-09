@@ -241,6 +241,7 @@
         \App\Models\Order::STATUS_RETURNED_COMPLETED => 'muted',
         \App\Models\Order::STATUS_RETURNED => 'danger',
         \App\Models\Order::STATUS_CANCELLED => 'danger',
+        \App\Models\Order::STATUS_OVERDUE_DELIVERY => 'overdue',
         'shipping' => 'progress',
         'picked_up' => 'progress',
     ];

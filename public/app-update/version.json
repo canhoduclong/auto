@@ -1,8 +1,8 @@
 {
-  "version": "1.0.41",
-  "version_code": 42,
+  "version": "1.0.42",
+  "version_code": 43,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.41: bổ sung ghi chú đơn hàng và chọn tỷ lệ size theo tồn khả dụng trong màn hình đóng hàng của kho."
+  "message": "Bản cập nhật 1.0.42: bỏ nhãn tổng hợp trên màn hình đóng hàng, mở rộng nút số ưu tiên và cố định thanh điều hướng để dễ chọn đơn."
 }

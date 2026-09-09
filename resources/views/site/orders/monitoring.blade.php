@@ -266,6 +266,7 @@
     .monitor-order.status-transit { --monitor-state-color: #d97706; --monitor-state-soft: #fffbeb; }
     .monitor-order.status-delivered { --monitor-state-color: #8b5e3c; --monitor-state-soft: #faf5f0; }
     .monitor-order.status-accounted { --monitor-state-color: #581c87; --monitor-state-soft: #faf5ff; }
+    .monitor-order.status-overdue { --monitor-state-color: #c2410c; --monitor-state-soft: #fff7ed; }
     .monitor-order.is-cancelled .monitor-order-main {
         border-color: #ef4444;
         background: #fef2f2;
@@ -1011,6 +1012,7 @@
         'delivered' => 'Đã giao hàng',
         'accounted' => 'Kế toán đã xác nhận và tính doanh số',
         'cancelled' => 'Đã hủy',
+        'overdue' => 'Đơn giao trễ, vẫn giữ booking tồn kho',
     ];
     $monitorStateLegendDescriptions = [
         'pending' => 'Đơn mới tạo, đang chờ bước duyệt.',
@@ -1024,6 +1026,10 @@
     $monitorStateForOrder = static function ($order): string {
         if ($order->status === \App\Models\Order::STATUS_CANCELLED) {
             return 'cancelled';
+        }
+
+        if ($order->status === \App\Models\Order::STATUS_OVERDUE_DELIVERY) {
+            return 'overdue';
         }
 
         if ($order->accountingReconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED) {
