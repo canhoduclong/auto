@@ -24,6 +24,18 @@ class MonitoringApprovalScopeTest extends TestCase
         $this->assertFalse($method->invoke($controller, $this->userWithRole('sale')));
     }
 
+    public function test_admin_is_treated_as_both_leader_and_manager_for_approval_scope(): void
+    {
+        $controller = (new ReflectionClass(PageController::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(PageController::class, 'normalizedRoleNames');
+
+        $roles = $method->invoke($controller, $this->userWithRole('admin'));
+
+        $this->assertTrue($roles->contains('leader'));
+        $this->assertTrue($roles->contains('manager'));
+        $this->assertTrue($roles->contains('director'));
+    }
+
     public function test_only_leader_roles_can_approve_managed_sales_from_monitoring(): void
     {
         $controller = (new ReflectionClass(PageController::class))->newInstanceWithoutConstructor();

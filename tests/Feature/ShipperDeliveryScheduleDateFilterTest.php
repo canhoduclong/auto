@@ -78,4 +78,40 @@ class ShipperDeliveryScheduleDateFilterTest extends TestCase
             ->assertOk()->assertViewHas('selectedDate', '2026-09-05')->assertViewHas('orders', fn ($orders) => $orders->isEmpty());
     }
 
+    public function test_published_route_keeps_order_created_on_another_date_visible(): void
+    {
+        Carbon::setTestNow('2026-09-09 10:00:00');
+        $shipper = User::factory()->create();
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
+        $customer = Customer::create(['name' => 'Khách lệch ngày', 'status' => 'active']);
+        $order = Order::create([
+            'user_id' => $shipper->id,
+            'shipper_id' => $shipper->id,
+            'customer_id' => $customer->id,
+            'code' => 'ROUTE-CROSS-DATE',
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $order->forceFill(['created_at' => '2026-09-08 08:00:00'])->saveQuietly();
+
+        ShipperDispatchHistory::create([
+            'schedule_date' => '2026-09-09',
+            'published_at' => now(),
+            'version' => 1,
+            'created_by' => $shipper->id,
+            'route_plan' => [[
+                'shipper_id' => $shipper->id,
+                'routes' => [[
+                    'name' => 'Lộ trình lệch ngày',
+                    'orders' => [['order_id' => $order->id]],
+                ]],
+            ]],
+        ]);
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.delivery-schedules', ['date' => '2026-09-09']))
+            ->assertOk()
+            ->assertSee('Lộ trình lệch ngày')
+            ->assertSee('ROUTE-CROSS-DATE');
+    }
+
 }

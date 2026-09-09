@@ -3152,9 +3152,18 @@ class PageController extends Controller
 
     private function normalizedRoleNames(User $user)
     {
-        return $user->roles->pluck('name')
+        $roleNames = $user->roles->pluck('name')
             ->map(fn ($role) => strtolower((string) $role))
             ->values();
+
+        if ($roleNames->contains('admin')) {
+            $roleNames = $roleNames
+                ->merge(['leader', 'leader_sale', 'sale_manager', 'manager_sale', 'manager', 'director'])
+                ->unique()
+                ->values();
+        }
+
+        return $roleNames;
     }
 
     private function applyApprovalDateRange(Builder $query, string $fromDate, string $toDate): Builder

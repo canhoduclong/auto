@@ -2330,8 +2330,7 @@ class ShipperDashboardController extends Controller
                 $dateQuery->forWorkflowDate($selectedDate);
                 if ($plannedExceptionOrderIds !== []) {
                     $dateQuery->orWhere(function ($exceptionQuery) use ($plannedExceptionOrderIds): void {
-                        $exceptionQuery->where('skip_auto_cancel', true)
-                            ->whereIn('id', $plannedExceptionOrderIds);
+                        $exceptionQuery->whereIn('id', $plannedExceptionOrderIds);
                     });
                 }
             })

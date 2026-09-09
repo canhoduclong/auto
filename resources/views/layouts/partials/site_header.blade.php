@@ -380,12 +380,6 @@
                     @if($offcanvasCanViewMonitoring)
                         <li><a href="{{ route('pages.my_orders.monitoring') }}" class="d-block py-1"><i class="bi bi-activity me-1"></i> Theo dõi đơn hàng</a></li>
                     @endif
-                    @if($offcanvasCanApproveTeamOrders)
-                        <li><a href="{{ route('pages.my_team_orders') }}" class="d-block py-1"><i class="bi bi-check-circle me-1"></i> Duyệt đơn của Team</a></li>
-                    @endif
-                    @if($offcanvasCanApproveDepartmentOrders)
-                        <li><a href="{{ route('pages.all_team_orders') }}" class="d-block py-1"><i class="bi bi-check2-all me-1"></i> Duyệt đơn PKD</a></li>
-                    @endif
                     @if($offcanvasFinanceRequestRoute)
                         <li><a href="{{ route($offcanvasFinanceRequestRoute) }}" class="d-block py-1"><i class="bi bi-file-earmark-text me-1"></i> Phiếu yêu cầu</a></li>
                     @endif
@@ -709,18 +703,6 @@
                                             </a>
                                         @endif
                                         @include('layouts.partials.role_switcher', ['roleSwitcherVariant' => 'items'])
-                                        @if($canApproveTeamOrders)
-                                            <div class="dropdown-divider my-0"></div>
-                                            <a class="dropdown-item" href="{{ route('pages.my_team_orders') }}">
-                                                <i class="bi bi-check-circle"></i> Duyệt đơn của Team
-                                            </a>
-                                        @endif
-                                        @if($canApproveDepartmentOrders)
-                                            <div class="dropdown-divider my-0"></div>
-                                            <a class="dropdown-item" href="{{ route('pages.all_team_orders') }}">
-                                                <i class="bi bi-check-circle"></i> Duyệt Đơn PKD
-                                            </a>
-                                        @endif
                                         <div class="dropdown-divider my-0"></div>
                                         <a class="dropdown-item hdr-account-logout"
                                             href="{{ route('logout') }}"
