@@ -775,6 +775,11 @@ class WarehouseDispatchSlipController extends Controller
                             'size' => $item->size ?? $variant?->size,
                             'quantity' => (int) $item->quantity,
                             'weight' => (float) ($item->weight ?? $item->packed_weight ?? $item->total_weight ?? 0),
+                            'price' => (float) ($item->price ?? $liveItem?->price ?? 0),
+                            'priced_by_kg' => (bool) ($item->is_priced_by_kg ?? $liveItem?->effective_priced_by_kg ?? true),
+                            'amount' => round((bool) ($item->is_priced_by_kg ?? $liveItem?->effective_priced_by_kg ?? true)
+                                ? (float) ($item->weight ?? $item->packed_weight ?? $item->total_weight ?? 0) * (float) ($item->price ?? $liveItem?->price ?? 0)
+                                : (int) $item->quantity * (float) ($item->price ?? $liveItem?->price ?? 0), 0),
                             'received_quantity' => $movement?->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED ? (int) $item->quantity : null,
                             'received_weight' => $movement?->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED
                                 ? (float) ($receivedWeights->get($item->id ?? 0)['received_weight'] ?? 0) : null,
@@ -822,6 +827,11 @@ class WarehouseDispatchSlipController extends Controller
                         'size' => $item->size ?? $variant?->size,
                         'quantity' => (int) $item->quantity,
                         'weight' => (float) ($item->weight ?? $item->packed_weight ?? $item->total_weight ?? 0),
+                        'price' => (float) ($item->price ?? $liveItem?->price ?? 0),
+                        'priced_by_kg' => (bool) ($item->is_priced_by_kg ?? $liveItem?->effective_priced_by_kg ?? true),
+                        'amount' => round((bool) ($item->is_priced_by_kg ?? $liveItem?->effective_priced_by_kg ?? true)
+                            ? (float) ($item->weight ?? $item->packed_weight ?? $item->total_weight ?? 0) * (float) ($item->price ?? $liveItem?->price ?? 0)
+                            : (int) $item->quantity * (float) ($item->price ?? $liveItem?->price ?? 0), 0),
                         'received_quantity' => $movement->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED ? (int) $item->quantity : null,
                         'received_weight' => $movement->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED
                             ? (float) ($receivedWeights->get($item->id ?? 0)['received_weight'] ?? 0) : null,
@@ -853,12 +863,23 @@ class WarehouseDispatchSlipController extends Controller
                         'size' => $item->size ?? $variant?->size,
                         'quantity' => (int) $item->quantity,
                         'weight' => (float) $item->weight_kg,
+                        'price' => 0,
+                        'priced_by_kg' => false,
+                        'amount' => 0,
                         'received_quantity' => $received ? (int) $item->quantity : null,
                         'received_weight' => $received ? (float) $item->weight_kg : null,
                     ]);
                 }
             }
         }
+
+        $orderRows = $orderRows->map(function (array $row) use ($itemRows): array {
+            $row['product_amount'] = (float) $itemRows
+                ->where('source', 'Đơn '.$row['code'])
+                ->sum('amount');
+
+            return $row;
+        });
 
         $summaryRows = $itemRows->groupBy('variant_id')->map(function (Collection $rows): array {
             $first = $rows->first();
@@ -870,6 +891,11 @@ class WarehouseDispatchSlipController extends Controller
                 'size' => $first['size'],
                 'quantity' => (int) $rows->sum('quantity'),
                 'weight' => round((float) $rows->sum('weight'), 3),
+                'price' => (float) $first['price'],
+                'priced_by_kg' => (bool) $first['priced_by_kg'],
+                'amount' => round((float) $rows->sum(fn (array $row): float =>
+                    $row['priced_by_kg'] ? $row['weight'] * $row['price'] : $row['quantity'] * $row['price']
+                ), 0),
                 'received_quantity' => $receivedRows->isEmpty() ? null : (int) $receivedRows->sum('received_quantity'),
                 'received_weight' => $receivedRows->isEmpty() ? null : round((float) $receivedRows->sum('received_weight'), 3),
             ];
@@ -924,6 +950,8 @@ class WarehouseDispatchSlipController extends Controller
                             'size' => $item->variant?->size,
                             'quantity' => (int) $item->quantity,
                             'weight' => (float) ($item->packed_weight ?? $item->total_weight ?? 0),
+                            'price' => (float) ($item->price ?? 0),
+                            'is_priced_by_kg' => (bool) $item->effective_priced_by_kg,
                         ])->values()->all(),
                     ];
                 })->values()->all(),
@@ -958,6 +986,8 @@ class WarehouseDispatchSlipController extends Controller
                         'size' => $item->variant?->size,
                         'quantity' => (int) $item->quantity,
                         'weight' => (float) ($item->packed_weight ?? $item->actual_weight ?? $item->total_weight ?? 0),
+                        'price' => (float) ($item->price ?? 0),
+                        'is_priced_by_kg' => (bool) $item->effective_priced_by_kg,
                     ])->values()->all(),
                 ],
             ];

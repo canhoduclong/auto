@@ -34,4 +34,16 @@ class ShipperDeliverySchedulesViewTest extends TestCase
         $this->assertStringContainsString('Danh sách đã giao', $template);
         $this->assertStringContainsString('không được đưa vào xác nhận lộ trình', $template);
     }
+
+    public function test_schedule_page_has_route_search_and_status_filters(): void
+    {
+        $template = file_get_contents(resource_path('views/shipper/delivery-schedules.blade.php'));
+
+        $this->assertStringContainsString('name="q"', $template);
+        $this->assertStringContainsString('id="route-date"', $template);
+        $this->assertStringContainsString('name="route_status"', $template);
+        $this->assertStringContainsString('name="completion_status"', $template);
+        $this->assertStringContainsString("links('pagination::bootstrap-5')", $template);
+        $this->assertStringContainsString('Xem chi tiết', $template);
+    }
 }

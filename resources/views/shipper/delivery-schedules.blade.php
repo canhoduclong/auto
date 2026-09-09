@@ -21,6 +21,7 @@
     .ds-order-index { width: 34px; height: 34px; border-radius: 50%; background: #ecfdf5; color: #047857; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; flex: 0 0 auto; }
     .ds-product-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .75rem; padding: .45rem 0; border-top: 1px dashed #e2e8f0; font-size: .86rem; }
     .ds-action-bar { background: #f8fafc; border-top: 1px solid #e2e8f0; }
+    .ds-filter-card { border: 0; border-radius: 16px; box-shadow: 0 4px 18px rgba(15, 23, 42, .06); }
     @media (max-width: 991.98px) { .ds-layout { grid-template-columns: 1fr; } .ds-route-list { position: static; } }
     @media (max-width: 575.98px) { .ds-summary-actions, .ds-summary-actions form { width: 100%; } .ds-summary-actions .form-control { flex: 1; max-width: none !important; } .ds-route-detail .card-body { padding: .75rem; } .ds-order-card { padding: .8rem; } .ds-action-bar .btn { width: 100%; } }
 </style>
@@ -32,12 +33,12 @@
         <div>
             <div class="fw-bold text-dark fs-5">Danh sách lộ trình</div>
             <div class="text-muted small">
-                {{ count($deliveryRoutes) }} lộ trình · Đang thực hiện: <strong>{{ $orders->count() }}</strong> đơn
+                {{ $deliveryRouteTotal }} lộ trình · Đang thực hiện: <strong>{{ $orders->count() }}</strong> đơn
                 · Đã giao: <strong>{{ $deliveredOrders->count() }}</strong> đơn
             </div>
         </div>
         <div class="ds-summary-actions">
-            <form method="GET" action="{{ route('shipper.delivery-schedules') }}" class="d-flex gap-2 align-items-center">
+            <form method="GET" action="{{ route('shipper.delivery-schedules') }}" class="d-flex gap-2 align-items-center flex-wrap">
                 <input type="date" name="date" value="{{ $selectedDate }}" class="form-control form-control-sm" style="max-width: 160px" aria-label="Ngày giao hàng">
                 <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-search me-1"></i>Xem</button>
                 <a href="{{ route('shipper.delivery-schedules') }}" class="btn btn-sm btn-outline-secondary" title="Hiển thị tất cả lộ trình">Tất cả</a>
@@ -46,17 +47,55 @@
     </div>
 </div>
 
-@if(empty($deliveryRoutes))
+<div class="card ds-filter-card mb-4">
+    <div class="card-body">
+        <form method="GET" action="{{ route('shipper.delivery-schedules') }}" class="row g-2 align-items-end">
+            <div class="col-12 col-lg-5">
+                <label class="form-label small fw-semibold mb-1" for="route-search">Tìm lộ trình</label>
+                <input id="route-search" type="search" name="q" value="{{ $routeSearch }}" class="form-control form-control-sm" placeholder="Tên route, mã đơn, tên khách hàng">
+            </div>
+            <div class="col-12 col-md-4 col-lg-2">
+                <label class="form-label small fw-semibold mb-1" for="route-date">Ngày giao</label>
+                <input id="route-date" type="date" name="date" value="{{ $selectedDate }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-12 col-md-4 col-lg-2">
+                <label class="form-label small fw-semibold mb-1" for="route-status">Xác nhận</label>
+                <select id="route-status" name="route_status" class="form-select form-select-sm">
+                    <option value="all" @selected($routeStatusFilter === 'all')>Tất cả</option>
+                    <option value="waiting" @selected($routeStatusFilter === 'waiting')>Chờ xác nhận</option>
+                    <option value="confirmed" @selected($routeStatusFilter === 'confirmed')>Đã xác nhận</option>
+                    <option value="rejected" @selected($routeStatusFilter === 'rejected')>Đã từ chối</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-4 col-lg-3">
+                <label class="form-label small fw-semibold mb-1" for="route-completion">Tiến độ giao hàng</label>
+                <select id="route-completion" name="completion_status" class="form-select form-select-sm">
+                    <option value="all" @selected($routeCompletionFilter === 'all')>Tất cả</option>
+                    <option value="not_started" @selected($routeCompletionFilter === 'not_started')>Chưa giao</option>
+                    <option value="in_progress" @selected($routeCompletionFilter === 'in_progress')>Đang giao</option>
+                    <option value="completed" @selected($routeCompletionFilter === 'completed')>Đã hoàn thành</option>
+                </select>
+            </div>
+            <div class="col-12 col-md-4 col-lg-1 d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-primary flex-fill"><i class="bi bi-funnel me-1"></i>Lọc</button>
+                <a href="{{ route('shipper.delivery-schedules', $selectedDate ? ['date' => $selectedDate] : []) }}" class="btn btn-sm btn-outline-secondary" title="Xóa bộ lọc"><i class="bi bi-arrow-counterclockwise"></i></a>
+            </div>
+        </form>
+    </div>
+</div>
+
+@if($deliveryRoutes->isEmpty())
     <div class="card ds-route-detail">
         <div class="card-body text-center py-5">
             <i class="bi bi-signpost-split fs-1 text-muted"></i>
-            <p class="mt-3 mb-0 text-muted">{{ $selectedDate ? 'Không có lộ trình giao hàng nào cho ngày này.' : 'Chưa có lộ trình giao hàng.' }}</p>
+            <p class="mt-3 mb-0 text-muted">{{ ($routeSearch !== '' || $routeStatusFilter !== 'all' || $routeCompletionFilter !== 'all') ? 'Không tìm thấy lộ trình phù hợp với bộ lọc.' : ($selectedDate ? 'Không có lộ trình giao hàng nào cho ngày này.' : 'Chưa có lộ trình giao hàng.') }}</p>
         </div>
     </div>
 @else
     @php
         $requestedRoute = (string) request('route', '');
-        $initialRouteKey = collect($deliveryRoutes)->contains(fn ($route) => $route['key'] === $requestedRoute) ? $requestedRoute : $deliveryRoutes[0]['key'];
+        $routePageItems = $deliveryRoutes->getCollection();
+        $initialRouteKey = $routePageItems->contains(fn ($route) => $route['key'] === $requestedRoute) ? $requestedRoute : $routePageItems->first()['key'];
     @endphp
     <div class="ds-layout" data-route-browser data-initial-route="{{ $initialRouteKey }}">
         <aside class="card ds-route-list" aria-label="Danh sách lộ trình">
@@ -72,11 +111,12 @@
                     @endphp
                     <button type="button" class="ds-route-option {{ $deliveryRoute['key'] === $initialRouteKey ? 'active' : '' }}" data-route-select="{{ $deliveryRoute['key'] }}" aria-controls="{{ $deliveryRoute['key'] }}-panel" aria-selected="{{ $deliveryRoute['key'] === $initialRouteKey ? 'true' : 'false' }}">
                         <span class="d-flex gap-2 align-items-start">
-                            <span class="ds-route-number">{{ $routeIndex + 1 }}</span>
+                            <span class="ds-route-number">{{ $deliveryRoutes->firstItem() + $routeIndex }}</span>
                             <span class="flex-fill min-w-0">
-                                <span class="d-flex align-items-start justify-content-between gap-2"><span class="fw-bold text-dark">{{ $deliveryRoute['name'] }}</span><i class="bi bi-chevron-right text-muted"></i></span>
+                                <span class="d-flex align-items-start justify-content-between gap-2"><span class="fw-bold text-dark">{{ $deliveryRoute['name'] }}</span><span class="small text-primary">Xem chi tiết <i class="bi bi-chevron-right"></i></span></span>
                                 <span class="d-block text-muted small mt-1"><i class="bi bi-calendar3 me-1"></i>Ngày giao: {{ \Carbon\Carbon::parse($deliveryRoute['date'])->format('d/m/Y') }}</span>
                                 <span class="d-flex align-items-center justify-content-between mt-2 gap-2"><span class="text-muted small">{{ $deliveryRoute['orders']->count() }} đơn · {{ $deliveryRoute['quantity'] }} sp</span><span class="badge {{ $routeStatusClass }}">{{ $routeStatusLabel }}</span></span>
+                                <span class="d-block small text-muted mt-1">Phí nhận: {{ number_format($deliveryRoute['total_fee'], 0, ',', '.') }}đ · {{ $deliveryRoute['completed_orders'] }}/{{ $deliveryRoute['orders']->count() }} đã giao</span>
                             </span>
                         </span>
                     </button>
@@ -89,7 +129,7 @@
                 <section id="{{ $deliveryRoute['key'] }}-panel" class="card ds-route-detail ds-route-panel" data-route-panel="{{ $deliveryRoute['key'] }}" @if($deliveryRoute['key'] !== $initialRouteKey) hidden @endif>
                     <div class="card-header ds-detail-header border-0 p-3">
                         <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
-                            <div><div class="small opacity-75">LỘ TRÌNH {{ $routeIndex + 1 }} · Ngày giao: {{ \Carbon\Carbon::parse($deliveryRoute['date'])->format('d/m/Y') }}</div><h5 class="mb-1 fw-bold">{{ $deliveryRoute['name'] }}</h5><div class="small opacity-75">Kiểm tra các đơn bên dưới trước khi xác nhận nhận lộ trình.</div></div>
+                            <div><div class="small opacity-75">LỘ TRÌNH {{ $routeIndex + 1 }} · Ngày giao: {{ \Carbon\Carbon::parse($deliveryRoute['date'])->format('d/m/Y') }}</div><h5 class="mb-1 fw-bold">{{ $deliveryRoute['name'] }}</h5><div class="small opacity-75">Phí nhận: {{ number_format($deliveryRoute['total_fee'], 0, ',', '.') }}đ · {{ $deliveryRoute['completed_orders'] }}/{{ $deliveryRoute['orders']->count() }} đơn đã giao</div></div>
                             <span class="badge bg-white text-dark fs-6">{{ $deliveryRoute['orders']->count() }} đơn</span>
                         </div>
                     </div>
@@ -99,7 +139,7 @@
                         <input type="hidden" name="date" value="{{ $deliveryRoute['date'] }}">
                         <div class="card-body d-flex flex-column gap-3">
                             @foreach($deliveryRoute['orders'] as $orderIndex => $order)
-                                <input type="hidden" name="order_ids[]" value="{{ $order->id }}">
+                                @if($deliveryRoute['actionable_orders']->contains('id', $order->id))<input type="hidden" name="order_ids[]" value="{{ $order->id }}">@endif
                                 <article class="ds-order-card">
                                     <div class="d-flex align-items-start gap-3">
                                         <span class="ds-order-index">{{ $orderIndex + 1 }}</span>
@@ -127,14 +167,22 @@
                                 </article>
                             @endforeach
                         </div>
-                        <div class="ds-action-bar p-3 d-flex justify-content-end gap-2 flex-wrap">
+                        <div class="ds-action-bar p-3 d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                            <span class="small {{ $deliveryRoute['completion_status'] === 'completed' ? 'text-success' : 'text-muted' }}"><i class="bi bi-{{ $deliveryRoute['completion_status'] === 'completed' ? 'check-circle' : 'clock' }} me-1"></i>{{ $deliveryRoute['completion_status'] === 'completed' ? 'Đã hoàn thành giao hàng' : 'Chưa hoàn thành giao hàng' }}</span>
+                            <div class="d-flex justify-content-end gap-2 flex-wrap">
+                            @if($deliveryRoute['actionable_orders']->isNotEmpty())
                             <button type="submit" class="btn btn-outline-danger" formaction="{{ route('shipper.reject-delivery-schedule', ['schedule' => 'bulk']) }}"><i class="bi bi-x-circle me-1"></i>Từ chối lộ trình</button>
                             <button type="submit" class="btn {{ $deliveryRoute['status'] === 'confirmed' ? 'btn-secondary' : 'btn-primary' }}" @disabled($deliveryRoute['status'] === 'confirmed')><i class="bi bi-check2-circle me-1"></i>{{ $deliveryRoute['status'] === 'confirmed' ? 'Đã xác nhận lộ trình' : 'Xác nhận lộ trình & nhận đơn' }}</button>
+                            @endif
+                            </div>
                         </div>
                     </form>
                 </section>
             @endforeach
         </main>
+    </div>
+    <div class="mt-3 d-flex justify-content-center">
+        {{ $deliveryRoutes->links('pagination::bootstrap-5') }}
     </div>
 @endif
 

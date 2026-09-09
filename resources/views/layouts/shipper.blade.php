@@ -245,20 +245,15 @@
                 <i class="bi bi-collection"></i> Đơn có thể nhận
             </a>
 
-            <div class="sp-nav-section">Lịch trình</div>
+            <div class="sp-nav-section">Vận hành giao hàng</div>
             <a href="{{ route('shipper.delivery-schedules') }}" class="sp-nav-link {{ request()->routeIs('shipper.delivery-schedules') ? 'active' : '' }}">
                 <i class="bi bi-calendar-event"></i> Lộ trình giao hàng
-            </a>
-
-            <div class="sp-nav-section">Đang giao</div>
-            <a href="{{ route('shipper.my-orders') }}" class="sp-nav-link {{ request()->routeIs('shipper.my-orders') ? 'active' : '' }}">
-                <i class="bi bi-truck"></i> Đơn giao của tôi
             </a>
             <a href="{{ route('shipper.warehouse-transfers') }}" class="sp-nav-link {{ request()->routeIs('shipper.warehouse-transfers', 'shipper.warehouse-transfers.show') ? 'active' : '' }}">
                 <i class="bi bi-arrow-left-right"></i> Điều chuyển
             </a>
 
-            <div class="sp-nav-section">Lịch sử</div>
+            <div class="sp-nav-section">Theo dõi giao hàng</div>
             <a href="{{ route('shipper.history') }}" class="sp-nav-link {{ request()->routeIs('shipper.history') ? 'active' : '' }}">
                 <i class="bi bi-clock-history"></i> Lịch sử giao hàng
             </a>

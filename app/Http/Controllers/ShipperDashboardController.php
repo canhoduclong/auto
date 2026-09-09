@@ -24,6 +24,7 @@ use App\Models\WarehouseTransfer;
 use App\Services\ShipperAssignmentService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -315,7 +316,6 @@ class ShipperDashboardController extends Controller
         $eligibleOrders = Order::query()->where(function ($query): void {
             $query->where(fn ($readyQuery) => $this->constrainAvailableReadyOrder($readyQuery))
                 ->orWhere(function ($acceptedQuery): void {
-                    $acceptedQuery->where('status', Order::STATUS_DELIVERING)->where('shipper_id', Auth::id());
                     $this->constrainNoActiveWarehouseTransfer($acceptedQuery);
                 });
         })->get(['id', 'created_at']);
@@ -2323,7 +2323,14 @@ class ShipperDashboardController extends Controller
     {
         $plannedExceptionOrderIds = $this->archivedPlannedOrderIdsForShipperOnDate($shipperId, $selectedDate);
 
-        return Order::with(['customer', 'user:id,name', 'items.variant'])
+        return Order::with([
+            'customer',
+            'user:id,name',
+            'items.variant',
+            'histories' => fn ($historyQuery) => $historyQuery
+                ->whereIn('action', $this->customerDeliveryCompletionActions())
+                ->latest('id'),
+        ])
             ->where('shipper_id', $shipperId)
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
             ->where(function ($dateQuery) use ($selectedDate, $plannedExceptionOrderIds): void {
@@ -2432,6 +2439,17 @@ class ShipperDashboardController extends Controller
                 ? 'confirmed'
                 : ($actions->isNotEmpty() && $actions->every(fn ($action) => $action === 'schedule_rejected') ? 'rejected' : 'waiting');
             $route['quantity'] = $route['orders']->sum(fn (Order $order) => $order->items->sum('quantity'));
+            $route['total_fee'] = $route['orders']->sum(fn (Order $order) =>
+                ($order->charge_shipping_fee ?? true) ? (float) ($order->shipping_fee ?? 0) : 0
+            );
+            $route['completed_orders'] = $route['orders']->filter(fn (Order $order) =>
+                in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_RETURNED_COMPLETED], true)
+                || $order->histories?->isNotEmpty()
+            )->count();
+            $route['completion_status'] = $route['completed_orders'] === $route['orders']->count()
+                ? 'completed'
+                : ($route['completed_orders'] > 0 ? 'in_progress' : 'not_started');
+            $route['actionable_orders'] = $route['orders']->filter(fn (Order $order) => $this->isAssignmentEligible($order))->values();
 
             return $route;
         })->all();
@@ -3006,8 +3024,16 @@ class ShipperDashboardController extends Controller
     public function deliverySchedules(Request $request)
     {
         $userId = Auth::id();
-        $validated = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
+        $validated = $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'q' => ['nullable', 'string', 'max:100'],
+            'route_status' => ['nullable', 'in:all,waiting,confirmed,rejected'],
+            'completion_status' => ['nullable', 'in:all,not_started,in_progress,completed'],
+        ]);
         $selectedDate = $validated['date'] ?? null;
+        $routeSearch = trim((string) ($validated['q'] ?? ''));
+        $routeStatusFilter = $validated['route_status'] ?? 'all';
+        $routeCompletionFilter = $validated['completion_status'] ?? 'all';
         $dates = $selectedDate ? collect([$selectedDate]) : ShipperDispatchHistory::query()
             ->select('schedule_date')->distinct()->pluck('schedule_date')
             ->map(fn ($date) => Carbon::parse($date)->toDateString())
@@ -3039,13 +3065,76 @@ class ShipperDashboardController extends Controller
                     || in_array($date, $publishedDatesByOrder[$order->id], true))->values();
             }
             $orders = $orders->merge($dayOrders);
-            foreach ($this->deliveryRoutesForShipper($userId, $date, $dayOrders) as $route) {
+            $shipperPlan = collect($this->latestDispatchForDate($date)?->route_plan ?? [])
+                ->first(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $userId);
+            $routeOrderIds = collect($shipperPlan['routes'] ?? [])
+                ->flatMap(fn ($route) => $route['orders'] ?? [])
+                ->pluck('order_id')
+                ->filter()
+                ->map(fn ($orderId) => (int) $orderId)
+                ->unique()
+                ->values();
+            $historicalRouteOrders = $routeOrderIds->isEmpty()
+                ? collect()
+                : Order::with([
+                    'customer',
+                    'user:id,name',
+                    'items.variant',
+                    'histories' => fn ($historyQuery) => $historyQuery
+                        ->whereIn('action', $this->customerDeliveryCompletionActions())
+                        ->latest('id'),
+                ])
+                    ->where('shipper_id', $userId)
+                    ->whereIn('id', $routeOrderIds)
+                    ->get();
+            $routeOrders = $dayOrders->merge($historicalRouteOrders)->unique('id')->values();
+
+            foreach ($this->deliveryRoutesForShipper($userId, $date, $routeOrders) as $route) {
                 $route['date'] = $date;
                 $route['key'] = $date.'-'.$route['key'];
                 $deliveryRoutes[] = $route;
             }
         }
         $orders = $orders->unique('id')->values();
+
+        if ($routeSearch !== '' || $routeStatusFilter !== 'all' || $routeCompletionFilter !== 'all') {
+            $deliveryRoutes = array_values(array_filter($deliveryRoutes, function (array $route) use ($routeSearch, $routeStatusFilter, $routeCompletionFilter): bool {
+                if ($routeStatusFilter !== 'all' && $route['status'] !== $routeStatusFilter) {
+                    return false;
+                }
+
+                if ($routeCompletionFilter !== 'all' && $route['completion_status'] !== $routeCompletionFilter) {
+                    return false;
+                }
+
+                if ($routeSearch === '') {
+                    return true;
+                }
+
+                $searchableText = $route['name'].' '.$route['orders']->map(fn (Order $order) => implode(' ', [
+                    $order->code,
+                    $order->customer?->name,
+                    $order->recipient_name,
+                ]))->implode(' ');
+
+                return stripos($searchableText, $routeSearch) !== false;
+            }));
+        }
+
+        $deliveryRouteTotal = count($deliveryRoutes);
+        $routesPerPage = 10;
+        $currentRoutePage = LengthAwarePaginator::resolveCurrentPage('page');
+        $deliveryRoutes = new LengthAwarePaginator(
+            array_slice($deliveryRoutes, ($currentRoutePage - 1) * $routesPerPage, $routesPerPage),
+            $deliveryRouteTotal,
+            $routesPerPage,
+            $currentRoutePage,
+            [
+                'path' => $request->url(),
+                'pageName' => 'page',
+            ]
+        );
+        $deliveryRoutes->appends($request->except('page'));
 
         $deliveredOrders = Order::with([
             'customer:id,name,address',
@@ -3075,8 +3164,12 @@ class ShipperDashboardController extends Controller
         return view('shipper.delivery-schedules', compact(
             'orders',
             'deliveryRoutes',
+            'deliveryRouteTotal',
             'deliveredOrders',
-            'selectedDate'
+            'selectedDate',
+            'routeSearch',
+            'routeStatusFilter',
+            'routeCompletionFilter'
         ));
     }
 

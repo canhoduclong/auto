@@ -76,7 +76,7 @@ class MonitoringNavigationTest extends TestCase
         $accountedOrder = Order::query()->create([
             'customer_id' => $customer->id,
             'user_id' => $sale->id,
-            'code' => 'MONITOR-COLOR-6',
+            'code' => 'MONITOR-COLOR-ACCOUNTED',
             'status' => Order::STATUS_COMPLETED,
             'daily_sequence' => 6,
         ]);
