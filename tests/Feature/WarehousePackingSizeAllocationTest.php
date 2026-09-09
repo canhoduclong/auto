@@ -341,6 +341,99 @@ class WarehousePackingSizeAllocationTest extends TestCase
             ->assertJsonCount(0, 'data.0.items.0.packing_size_options');
     }
 
+    public function test_sale_selected_size_is_visible_without_shortage_and_other_sizes_are_rejected(): void
+    {
+        [$user, $order, $item, $variants] = $this->fixture(10);
+        $order->update(['warehouse_allowed_sizes' => ['2.6']]);
+        $this->actingAs($user)->get(route('warehouse.orders', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('name="allocations['.$variants['2.6']->id.']"', false)
+            ->assertDontSee('name="allocations['.$variants['2.5']->id.']"', false);
+        $this->post(route('warehouse.orders.start-packing', $order))->assertSessionHasErrors('allocations');
+        $url = route('warehouse.orders.packing-size-allocation', $order);
+        $this->post($url, ['order_item_id' => $item->id, 'allocations' => [$variants['2.5']->id => 10]])
+            ->assertSessionHasErrors('allocations');
+        $this->post($url, ['order_item_id' => $item->id, 'allocations' => [$variants['2.6']->id => 10]])
+            ->assertSessionHas('success');
+        $order->update(['status' => Order::STATUS_PACKING]);
+        $this->postJson(route('warehouse.orders.logistics', $order), [
+            'item_id' => $item->id, 'item_actual_weight' => 28,
+        ])->assertOk();
+    }
+
+    public function test_empty_sale_size_selection_hides_mix_and_rejects_allocations(): void
+    {
+        [$user, $order, $item, $variants, $inventories] = $this->fixture(10);
+        $order->update(['warehouse_allowed_sizes' => []]);
+        $inventories['2.5']->update(['quantity' => 0]);
+        $this->actingAs($user)->get(route('warehouse.orders', ['date' => now()->toDateString()]))
+            ->assertOk()->assertDontSee('name="allocations[', false);
+        $this->post(route('warehouse.orders.packing-size-allocation', $order), [
+            'order_item_id' => $item->id, 'allocations' => [$variants['2.6']->id => 10],
+        ])->assertSessionHasErrors('allocations');
+        $this->assertDatabaseCount('order_item_packing_size_allocations', 0);
+    }
+
+    public function test_latest_packed_weight_reprices_order_and_is_used_on_export_and_print_after_delivery(): void
+    {
+        [$user, $order, $item, $variants] = $this->fixture(10);
+        $order->update(['status' => Order::STATUS_PACKING, 'code' => 'ORD-PACKED-WEIGHT']);
+        $boxProduct = Product::create(['user_id' => $user->id, 'name' => 'Thùng xốp', 'unit' => 'cai', 'is_priced_by_kg' => false]);
+        $boxVariant = ProductVariant::create(['product_id' => $boxProduct->id, 'name' => 'Thùng', 'sku' => 'BOX']);
+        $order->items()->create([
+            'product_id' => $boxProduct->id, 'product_variant_id' => $boxVariant->id,
+            'quantity' => 1, 'is_priced_by_kg' => false, 'price' => 70000, 'total' => 70000,
+        ]);
+        $url = route('warehouse.orders.logistics', $order);
+        $this->actingAs($user)->postJson($url, ['item_id' => $item->id, 'item_actual_weight' => 24])->assertOk();
+        $this->postJson($url, ['item_id' => $item->id, 'item_actual_weight' => 26])->assertOk();
+        $this->assertSame(26.0, (float) $item->fresh()->packed_weight);
+        $this->assertSame(1820000.0, (float) $item->fresh()->total);
+        $this->assertSame(1890000.0, (float) $order->fresh()->total);
+
+        $document = \App\Models\InventoryDocument::create([
+            'type' => 'export', 'document_date' => now()->toDateString(),
+            'warehouse_id' => $order->warehouse_id, 'user_id' => $user->id,
+            'notes' => 'Xuất kho cho đơn #'.$order->code,
+        ]);
+        $document->items()->create(['product_variant_id' => $variants['2.5']->id, 'quantity' => 10, 'unit_cost' => 70000]);
+        $document->items()->create(['product_variant_id' => $boxVariant->id, 'quantity' => 1, 'unit_cost' => 70000]);
+        // Customer delivery weight must not replace the warehouse measurement on export documents.
+        $item->fresh()->update(['actual_weight' => 27]);
+        $order->update(['status' => Order::STATUS_DELIVERED, 'actual_weight' => 27]);
+        $this->get(route('warehouse.stock-out.orders'))->assertOk()->assertSee('26kg')->assertSee('1,890,000');
+        $this->get(route('warehouse.stock-out.show', $document))->assertOk()
+            ->assertSee('26kg')->assertSee('1.820.000')->assertSee('1.890.000');
+        $this->get(route('warehouse.orders', ['date' => now()->toDateString()]))->assertOk()
+            ->assertSee('26 kg')->assertSee('1,890,000');
+
+        $order->update(['status' => Order::STATUS_PACKING]);
+        $this->postJson($url, ['item_id' => $item->id, 'clear_item_weight' => true])->assertOk();
+        $this->assertNull($item->fresh()->packed_weight);
+        $this->assertSame(1820000.0, (float) $order->fresh()->total);
+    }
+
+    public function test_packed_weight_repricing_preserves_vat_discounts_and_customer_fees(): void
+    {
+        [$user, $order, $item] = $this->fixture(10);
+        $item->update(['base_price' => 75000]);
+        $order->update([
+            'status' => Order::STATUS_PACKING, 'order_discount' => 10000, 'order_discount_type' => 'decrease',
+            'charge_vat' => true, 'vat_percent' => 10,
+            'charge_shipping_fee' => true, 'shipping_fee' => 20000,
+            'collect_customer_shipping_fee' => true, 'customer_shipping_fee' => 15000,
+            'charge_foam_box_fee' => true, 'foam_box_price' => 30000,
+        ]);
+        $this->actingAs($user)->postJson(route('warehouse.orders.logistics', $order), [
+            'item_id' => $item->id, 'item_actual_weight' => 26,
+        ])->assertOk();
+        $order->refresh();
+        $this->assertSame(1950000.0, (float) $order->subtotal_amount);
+        $this->assertSame(130000.0, (float) $order->item_discount_total);
+        $this->assertSame(181000.0, (float) $order->vat_amount);
+        $this->assertSame(2056000.0, (float) $order->total);
+    }
+
     private function fixture(int $quantity, float $mainSize = 2.5): array
     {
         $warehouse = Warehouse::query()->create(['name' => 'Kho size mix', 'status' => true]);

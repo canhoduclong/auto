@@ -1766,7 +1766,7 @@
                             weightInput?.select();
                         } else if (amountCell) {
                             if (!Number.isNaN(actualWeight)) {
-                                const lineTotal = Math.round(unitPrice * actualWeight);
+                                const lineTotal = payload.item_total !== undefined ? Number(payload.item_total) : Math.round(unitPrice * actualWeight);
                                 amountCell.textContent = new Intl.NumberFormat('vi-VN').format(lineTotal) + 'đ';
                             } else {
                                 amountCell.textContent = '---';
@@ -1873,6 +1873,10 @@
                     total += qty;
                     weighted += qty * size;
                     if (Math.abs(size - mainSize) < 0.001) main += qty;
+                });
+                inputs.forEach(function (input) {
+                    const ratioLabel = input.parentElement.querySelector('.js-packing-size-ratio');
+                    if (ratioLabel) ratioLabel.textContent = `Tỷ lệ: ${formatCompactDecimal(total > 0 ? Number(input.value || 0) * 100 / total : 0)}%`;
                 });
                 const ratio = total > 0 ? main * 100 / total : 0;
                 const average = total > 0 ? weighted / total : 0;

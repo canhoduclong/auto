@@ -18,7 +18,7 @@ class Order extends Model
         'customer_id', 'user_id', 'shipper_id', 'supplier_id', 'code', 'total', 'status',
         'commission_percent_snapshot', 'commission_amount_snapshot', 'commission_created_at',
         'copied_from_order_id', 'order_type', 'workflow_code', 'is_return_order', 'parent_order_id',
-        'warehouse_id', 'warehouse_can_adjust', 'return_warehouse_id',
+        'warehouse_id', 'warehouse_can_adjust', 'warehouse_allowed_sizes', 'return_warehouse_id',
         'recipient_name', 'recipient_phone', 'recipient_email', 'recipient_address', 'note',
         'subtotal_amount', 'item_discount_total', 'extra_discount_total',
         'total_discount', 'order_discount', 'order_discount_type', 'total_weight', 'actual_weight', 'charge_shipping_fee', 'shipping_fee', 'shipping_fee_transaction_id',
@@ -57,6 +57,7 @@ class Order extends Model
         'actual_weight' => 'decimal:3',
         'charge_shipping_fee' => 'boolean',
         'warehouse_can_adjust' => 'boolean',
+        'warehouse_allowed_sizes' => 'array',
         'shipping_fee' => 'decimal:2',
         'charge_vat' => 'boolean',
         'vat_percent' => 'decimal:2',
@@ -80,6 +81,18 @@ class Order extends Model
         'needs_operational_completion' => 'boolean',
         'operational_completed_at' => 'datetime',
     ];
+
+    public function allowsPackingSize(float $size): bool
+    {
+        // Existing orders retain their original packing policy until Sale edits it.
+        if ($this->warehouse_allowed_sizes === null) {
+            return true;
+        }
+
+        return collect($this->warehouse_allowed_sizes)->contains(
+            fn ($allowed) => abs((float) $allowed - $size) < 0.0001
+        );
+    }
 
     public function truckStation()
     {

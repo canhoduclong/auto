@@ -125,6 +125,37 @@ class MyOrderPriceEditTest extends TestCase
         $this->postJson(route('site.order-adjustments.store', $order), $payload)->assertForbidden();
     }
 
+    public function test_sale_can_save_and_clear_packing_permissions(): void
+    {
+        [$sale, $customer, $order, $variant] = $this->makeEditableOrder();
+        $payload = [
+            'customer_id' => $customer->id,
+            'recipient_name' => 'Khach hang',
+            'recipient_phone' => '0900000000',
+            'recipient_address' => 'Dia chi giao hang',
+            'items' => [['variant_id' => $variant->id, 'quantity' => 1]],
+        ];
+        $this->actingAs($sale)->withSession(['active_role' => 'sale']);
+        $this->put(route('site.orders.update', $order), $payload + [
+            'warehouse_can_adjust' => 1, 'warehouse_allowed_sizes' => ['2.0', '2.2'],
+        ])->assertSessionHasNoErrors();
+        $this->assertTrue($order->fresh()->warehouse_can_adjust);
+        $this->assertSame(['2.0', '2.2'], $order->fresh()->warehouse_allowed_sizes);
+        $this->put(route('site.orders.update', $order), $payload + [
+            'warehouse_can_adjust' => 0, 'warehouse_allowed_sizes' => '',
+        ])->assertSessionHasNoErrors();
+        $this->assertFalse($order->fresh()->warehouse_can_adjust);
+        $this->assertSame([], $order->fresh()->warehouse_allowed_sizes);
+
+        $this->post(route('my_customer.order.store', $customer), $payload + [
+            'warehouse_can_adjust' => 1, 'warehouse_allowed_sizes' => ['2.1'],
+        ])->assertSessionHasNoErrors()->assertSessionMissing('error');
+        $created = Order::query()->latest('id')->firstOrFail();
+        $this->assertNotSame($order->id, $created->id);
+        $this->assertTrue($created->warehouse_can_adjust);
+        $this->assertSame(['2.1'], $created->warehouse_allowed_sizes);
+    }
+
     private function makeEditableOrder(): array
     {
         $saleRole = Role::query()->create(['name' => 'sale']);

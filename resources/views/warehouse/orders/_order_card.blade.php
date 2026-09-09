@@ -459,7 +459,7 @@
                                             $unitLabel = $variant?->product?->unit_label ?? '--'; 
                                             $pricedByKg = (bool) $item->effective_priced_by_kg;
                                             $weightUnitLabel = $pricedByKg ? 'Kg' : $unitLabel;
-                                            $itemActualWeight = is_null($item->actual_weight) ? null : (float) $item->actual_weight;
+                                            $itemActualWeight = $item->warehouse_packed_weight;
                                             $lineTotal = $pricedByKg
                                                 ? (!is_null($itemActualWeight) ? ($itemActualWeight * $unitPrice) : null)
                                                 : ($orderedQty * $unitPrice);
@@ -472,10 +472,9 @@
                                                     ? $formatKg((float) $itemActualWeight)
                                                     : '---';
                                             } else {
-                                                $nonKgVal = (!is_null($itemActualWeight) && (float) $itemActualWeight > 0)
-                                                    ? (float) $itemActualWeight
-                                                    : round((float) $item->effective_unit_weight * $orderedQty, 3);
-                                                $displayActualWeight = $formatCompactDecimal($nonKgVal) . ' ' . $unitLabel;
+                                                $displayActualWeight = $itemActualWeight !== null
+                                                    ? $formatKg($itemActualWeight)
+                                                    : '—';
                                             }
                                             $imagePath = $variant?->avatar?->media?->file_path
                                                 ?? $item->product?->avatar?->media?->file_path
@@ -506,9 +505,9 @@
                                                 @if(!$isPackedReadonly && $canProcessThisOrder)
                                                     @php
                                                         $defaultComputedWeight = round((float) $item->effective_unit_weight * $orderedQty, 3);
-                                                        $itemWeightDefault = is_null($item->actual_weight)
+                                                        $itemWeightDefault = is_null($item->warehouse_packed_weight)
                                                             ? ($defaultComputedWeight > 0 ? number_format($defaultComputedWeight, 3, '.', '') : '')
-                                                            : number_format((float) $item->actual_weight, 3, '.', '');
+                                                            : number_format((float) $item->warehouse_packed_weight, 3, '.', '');
                                                     @endphp
                                                     @if($pricedByKg)
                                                         @php
@@ -529,7 +528,7 @@
                                                                     min="0" step="0.001" required
                                                                     inputmode="decimal"
                                                                     data-qty="{{ $orderedQty }}"
-                                                                    data-size="{{ !$isCutPackingItem && is_numeric($variantSize) && (float)$variantSize > 0 ? (float)$variantSize : 0 }}">
+                                                                    data-size="{{ !$isCutPackingItem ? $item->packingAverageSize() : 0 }}">
                                                                 <button class="btn btn-sm {{ $isItemLogisticsSaved ? 'btn-secondary' : 'btn-success' }} js-logistics-submit-btn" type="submit">{{ $isItemLogisticsSaved ? 'Đã lưu' : 'Lưu' }}</button>
                                                                 <button class="btn btn-sm btn-outline-danger js-clear-item-weight {{ $isItemLogisticsSaved ? '' : 'd-none' }}"
                                                                         type="submit" formnovalidate title="Gỡ kg đã lưu nhầm">
@@ -558,8 +557,8 @@
                                                 <div class="mx-2 mb-2 mt-1 rounded border border-warning-subtle bg-warning-subtle p-2">
                                                     <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
                                                         <div>
-                                                            <strong><i class="bi bi-boxes me-1"></i>Không đủ tồn size {{ $formattedVariantSize }} — chọn size khác</strong>
-                                                            <div class="small text-muted">Tổng phải đủ {{ number_format($orderedQty) }} con; không bắt buộc dùng size chính {{ $formattedVariantSize }} (cho phép 0%). Được chọn các size khác theo tồn khả dụng.</div>
+                                                            <strong><i class="bi bi-boxes me-1"></i>{{ $order->warehouse_allowed_sizes !== null ? 'Cơ cấu đóng hàng theo size Sale cho phép' : 'Không đủ tồn size '.$formattedVariantSize.' — chọn size khác' }}</strong>
+                                                            <div class="small text-muted">Tổng phải đủ {{ number_format($orderedQty) }} con; không bắt buộc dùng size chính {{ $formattedVariantSize }} (cho phép 0%). Chỉ chọn các size được phép bên dưới theo tồn khả dụng.</div>
                                                         </div>
                                                     </div>
                                                     <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.packing-size-allocation', $order) }}"
@@ -571,6 +570,7 @@
                                                                 <div class="col-6 col-md-2">
                                                                     <label class="form-label small mb-1 fw-semibold">
                                                                         Size {{ $formatCompactDecimal((float)$sizeOption['size']) }}
+                                                                        <span class="d-block text-primary fw-normal js-packing-size-ratio">Tỷ lệ: 0%</span>
                                                                         <span class="d-block text-muted fw-normal">Khả dụng: {{ number_format((int)$sizeOption['available']) }}</span>
                                                                     </label>
                                                                     <input type="number" min="0" step="1"
@@ -646,8 +646,11 @@
                                 <div class="wh-logistics-title">Thông tin đơn hàng hoàn chỉnh</div>
                                 <div class="row g-2">
                                     <div class="col-6">
-                                        <div class="wh-meta-label">Kg thực tế</div>
-                                        <div class="wh-meta-value text-primary">{{ $order->actual_weight !== null ? $formatKg((float) $order->actual_weight) : '—' }}</div>
+                                        @php $packedSummary = app(\App\Services\WarehousePackedOrderService::class)->summary($order); @endphp
+                                        <div class="wh-meta-label">Kg thực đóng</div>
+                                        <div class="wh-meta-value text-primary">{{ $packedSummary['packed_weight'] !== null ? $formatKg($packedSummary['packed_weight']) : '—' }}</div>
+                                        <div class="wh-meta-label mt-1">Giá trị đơn theo thực đóng</div>
+                                        <div class="wh-meta-value">{{ number_format($packedSummary['total']) }}đ</div>
                                     </div>
                                     <div class="col-6">
                                         <div class="wh-meta-label">Trạng thái</div>

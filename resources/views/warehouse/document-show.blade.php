@@ -73,9 +73,17 @@
     $isImport = $document->type === 'import';
     $backRoute = $isImport ? 'warehouse.stock-in' : 'warehouse.stock-out';
     $backLabel = $isImport ? 'Danh sách Nhập Kho' : 'Danh sách Xuất Kho';
-    $itemsSubtotal = $document->items->sum(fn($i) => $i->quantity * $i->unit_cost);
-    $shippingFee   = (float) ($document->shipping_fee ?? 0);
-    $grandTotal    = $itemsSubtotal + $shippingFee;
+    $packedOrderService = app(\App\Services\WarehousePackedOrderService::class);
+    $packedOrder = !$isImport ? $linkedOrder : null;
+    $documentLines = $document->items->mapWithKeys(fn ($line) => [$line->id => $packedOrderService->documentLine($line, $packedOrder)]);
+    $itemsSubtotal = $documentLines->sum('total');
+    $packedSummary = $packedOrder ? $packedOrderService->summary($packedOrder) : null;
+    $shippingFee = $packedSummary ? $packedSummary['shipping_fee'] : (float) ($document->shipping_fee ?? 0);
+    $orderAdjustment = $packedSummary['extra_discount_total'] ?? 0;
+    $vatAmount = $packedOrder ? $packedOrder->resolvedVatAmount(max(0, $itemsSubtotal - $orderAdjustment)) : 0;
+    $foamBoxFee = $packedSummary['foam_box_fee'] ?? 0;
+    $grandTotal = max(0, $itemsSubtotal - $orderAdjustment) + $vatAmount + $shippingFee + $foamBoxFee;
+    $documentPackedWeight = $documentLines->whereNotNull('weight')->isNotEmpty() ? $documentLines->sum('weight') : null;
     $customer = $linkedOrder?->customer;
     $editVariantIds = collect($document->edits)
         ->flatMap(fn($edit) => collect($edit->changes ?? [])->pluck('variant_id'))
@@ -188,7 +196,7 @@
                         $weightUnitLabel = in_array((string) ($item->productVariant?->product?->unit ?? 'cai'), ['con', 'cai'], true)
                             ? 'Kg'
                             : $unitLabel;
-                        $lineWeight = (float) (($item->productVariant?->size ?? 0) * ($item->quantity ?? 0));
+                        $lineWeight = $packedOrder ? $documentLines[$item->id]['weight'] : (float) (($item->productVariant?->size ?? 0) * ($item->quantity ?? 0));
                     @endphp
                     <tr>
                         <td class="text-muted small">{{ $i + 1 }}</td>
@@ -201,10 +209,10 @@
                             {{ number_format($item->quantity) }}
                         </td>
                         <td class="text-center">{{ $unitLabel }}</td>
-                        <td class="text-center">{{ format_kg($lineWeight) }}</td>
+                        <td class="text-center">{{ $lineWeight !== null ? format_kg($lineWeight) : '—' }}</td>
                         @if(!$isImport)<td class="text-center" style="min-width:72px;height:28px;border-bottom:1px dotted #64748b;"></td>@endif
                         <td class="text-end">{{ number_format($item->unit_cost) }}đ</td>
-                        <td class="text-end fw-700">{{ number_format($item->quantity * $item->unit_cost) }}đ</td>
+                        <td class="text-end fw-700">{{ number_format($documentLines[$item->id]['total']) }}đ</td>
                     </tr>
                     @endforeach
                 </tbody>
@@ -235,6 +243,12 @@
                 <span>Phí vận chuyển</span>
                 <strong>{{ number_format($shippingFee) }}đ</strong>
             </div>
+            @endif
+            @if($packedOrder)
+                <div class="summary-row"><span>Khối lượng thực đóng</span><strong>{{ $documentPackedWeight !== null ? format_kg($documentPackedWeight) : '—' }}</strong></div>
+                @if($orderAdjustment != 0)<div class="summary-row"><span>Điều chỉnh đơn</span><strong>{{ number_format(-$orderAdjustment) }}đ</strong></div>@endif
+                @if($vatAmount > 0)<div class="summary-row"><span>VAT</span><strong>{{ number_format($vatAmount) }}đ</strong></div>@endif
+                @if($foamBoxFee > 0)<div class="summary-row"><span>Phí thùng xốp</span><strong>{{ number_format($foamBoxFee) }}đ</strong></div>@endif
             @endif
             <div class="summary-row total">
                 <span>Tổng cộng</span>
@@ -394,7 +408,7 @@
         @forelse($document->items as $i => $item)
             @php
                 $unitLabel = $item->productVariant?->product?->unit_label ?? 'Cái';
-                $lineWeight = (float) (($item->productVariant?->size ?? 0) * ($item->quantity ?? 0));
+                $lineWeight = $packedOrder ? $documentLines[$item->id]['weight'] : (float) (($item->productVariant?->size ?? 0) * ($item->quantity ?? 0));
             @endphp
             <tr>
                 <td class="center">{{ $i + 1 }}</td>
@@ -402,10 +416,10 @@
                 <td><strong>{{ $item->productVariant?->product?->name ?? '—' }}</strong><br>{{ $item->productVariant?->name }}</td>
                 <td class="center">{{ $unitLabel }}</td>
                 <td class="center">{{ number_format($item->quantity) }}</td>
-                <td class="center">{{ strtolower((string) $unitLabel) === 'kg' ? format_kg($lineWeight) : '-' }}</td>
+                <td class="center">{{ $lineWeight !== null && ($packedOrder || strtolower((string) $unitLabel) === 'kg') ? format_kg($lineWeight) : '—' }}</td>
                 @if(!$isImport)<td class="actual-cell"></td>@endif
                 <td class="right">{{ number_format($item->unit_cost, 0, ',', '.') }}đ</td>
-                <td class="right">{{ number_format($item->quantity * $item->unit_cost, 0, ',', '.') }}đ</td>
+                <td class="right">{{ number_format($documentLines[$item->id]['total'], 0, ',', '.') }}đ</td>
             </tr>
         @empty
             <tr><td colspan="{{ $isImport ? 8 : 9 }}" class="center">Không có hàng hóa.</td></tr>
@@ -415,6 +429,12 @@
 
     <table class="print-total">
         <tr><td>Tổng số lượng</td><td>{{ number_format($document->items->sum('quantity')) }}</td></tr>
+        @if($packedOrder)
+            <tr><td>Khối lượng thực đóng</td><td>{{ $documentPackedWeight !== null ? format_kg($documentPackedWeight) : '—' }}</td></tr>
+            @if($orderAdjustment != 0)<tr><td>Điều chỉnh đơn</td><td>{{ number_format(-$orderAdjustment, 0, ',', '.') }}đ</td></tr>@endif
+            @if($vatAmount > 0)<tr><td>VAT</td><td>{{ number_format($vatAmount, 0, ',', '.') }}đ</td></tr>@endif
+            @if($foamBoxFee > 0)<tr><td>Phí thùng xốp</td><td>{{ number_format($foamBoxFee, 0, ',', '.') }}đ</td></tr>@endif
+        @endif
         <tr><td>Phí vận chuyển</td><td>{{ number_format($shippingFee, 0, ',', '.') }}đ</td></tr>
         <tr><td>Tổng cộng</td><td>{{ number_format($grandTotal, 0, ',', '.') }}đ</td></tr>
     </table>

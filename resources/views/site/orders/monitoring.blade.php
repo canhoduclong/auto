@@ -2098,13 +2098,7 @@
                                                     <textarea class="form-control form-control-sm" id="monitorEditNote{{ $order->id }}" name="note" rows="3">{{ $order->note }}</textarea>
                                                 </div>
                                                 <div class="is-wide">
-                                                    <input type="hidden" name="warehouse_can_adjust" value="0">
-                                                    <div class="form-check">
-                                                        <input class="form-check-input" type="checkbox" name="warehouse_can_adjust" value="1"
-                                                               id="monitorEditWarehouseCanAdjust{{ $order->id }}" @checked($order->warehouse_can_adjust)>
-                                                        <label class="form-check-label" for="monitorEditWarehouseCanAdjust{{ $order->id }}">Cho phép kho thay đổi số lượng sản phẩm</label>
-                                                    </div>
-                                                    <div class="form-text">Kho có thể thay đổi số lượng sản phẩm mà không cần sale xác nhận.</div>
+                                                    @include('site.orders.partials.warehouse-packing-permissions', ['packingOrder' => $order])
                                                 </div>
                                             </div>
 

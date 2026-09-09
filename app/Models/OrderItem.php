@@ -69,6 +69,12 @@ class OrderItem extends Model
         return 1.0;
     }
 
+    public function getWarehousePackedWeightAttribute(): ?float
+    {
+        $weight = $this->packed_weight ?? $this->actual_weight;
+        return $weight === null ? null : max(0, (float) $weight);
+    }
+
     public function getDisplayTotalValueAttribute(): float
     {
         $quantity = (float) ($this->quantity ?? 0);
@@ -209,5 +215,16 @@ class OrderItem extends Model
     public function product() { return $this->belongsTo(Product::class); }
     public function variant() { return $this->belongsTo(ProductVariant::class, 'product_variant_id'); }
     public function reservations() { return $this->hasMany(InventoryReservation::class); }
+    public function packingAverageSize(): float
+    {
+        $allocations = $this->packingSizeAllocations;
+        if ($allocations->isNotEmpty() && (int) $allocations->sum('quantity') === (int) $this->quantity) {
+            return (float) $allocations->sum(fn ($allocation) => $allocation->quantity * (float) $allocation->variant?->size)
+                / max(1, (int) $this->quantity);
+        }
+
+        return (float) ($this->variant?->size ?? 0);
+    }
+
     public function packingSizeAllocations() { return $this->hasMany(OrderItemPackingSizeAllocation::class); }
 }

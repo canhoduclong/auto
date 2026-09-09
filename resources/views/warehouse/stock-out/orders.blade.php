@@ -211,7 +211,7 @@
                                             $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
                                                 ? (string) $variantSize
                                                 : '-';
-                                            $itemWeight = (float) ($item->packed_weight ?? $item->total_weight ?? 0);
+                                            $itemWeight = $item->warehouse_packed_weight;
                                             $imagePath = $variant?->avatar?->media?->file_path
                                                 ?? $item->product?->avatar?->media?->file_path
                                                 ?? null;
@@ -236,7 +236,7 @@
                                                 <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
                                                 <div class="wh-item-cell"><strong>{{ number_format($orderedQty) }}</strong></div>
                                                 <div class="wh-item-cell"><strong>{{ $item->display_total_label ?? '—' }}</strong></div>
-                                                <div class="wh-item-cell text-end"><strong>{{ format_kg($itemWeight) }}</strong></div>
+                                                <div class="wh-item-cell text-end"><strong>{{ $itemWeight !== null ? format_kg($itemWeight) : '—' }}</strong></div>
                                             </div>
                                         </li>
                                     @endforeach
@@ -245,6 +245,11 @@
                         </div>
                     </div>
 
+                    @php $packedSummary = app(\App\Services\WarehousePackedOrderService::class)->summary($order); @endphp
+                    <div class="px-3 py-2 border-top d-flex justify-content-between">
+                        <span>Khối lượng thực đóng: <strong>{{ $packedSummary['packed_weight'] !== null ? format_kg($packedSummary['packed_weight']) : '—' }}</strong></span>
+                        <span>Giá trị đơn theo thực đóng: <strong>{{ number_format($packedSummary['total']) }}đ</strong></span>
+                    </div>
                     <div class="card-footer bg-white border-top d-flex justify-content-between align-items-center gap-2">
                         <div style="font-size:.8rem;" class="text-muted">
                             Kho xuất: <strong>{{ $document->warehouse?->name ?? '—' }}</strong>

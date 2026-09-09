@@ -2092,6 +2092,21 @@ class WarehouseDashboardController extends Controller
     {
         $this->authorizePackingOrderAccess($order);
 
+        if (!empty($order->warehouse_allowed_sizes)) {
+            $order->loadMissing('items.variant', 'items.packingSizeAllocations.variant');
+            foreach ($order->items as $item) {
+                $mix = $item->packingSizeAllocations;
+                $hasValidMix = $mix->isNotEmpty()
+                    && (int) $mix->sum('quantity') === (int) $item->quantity
+                    && $mix->every(fn ($allocation) => $order->allowsPackingSize((float) $allocation->variant?->size));
+                if ((float) $item->variant?->size > 0 && !$order->allowsPackingSize((float) $item->variant->size) && !$hasValidMix) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'allocations' => 'Vui lòng lưu cơ cấu theo size Sale cho phép trước khi bắt đầu đóng hàng.',
+                    ]);
+                }
+            }
+        }
+
         $validated = $request->validate([
             'packing_date' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
         ]);
@@ -2427,10 +2442,11 @@ class WarehouseDashboardController extends Controller
                 ->pluck('order_item_id')
                 ->map(fn ($id) => (int) $id);
 
-            return $order->items->filter(function ($item) use ($shortItemIds) {
+            return $order->items->filter(function ($item) use ($shortItemIds, $order) {
+                $item->setRelation('order', $order);
                 return ($item->variant?->product?->allow_adjacent_packing_sizes ?? true)
                     && (float) ($item->variant?->size ?? 0) > 0
-                    && ($shortItemIds->contains((int) $item->id) || $item->packingSizeAllocations->isNotEmpty());
+                    && ($order->warehouse_allowed_sizes !== null || $shortItemIds->contains((int) $item->id) || $item->packingSizeAllocations->isNotEmpty());
             });
         })->values();
 
@@ -2462,7 +2478,7 @@ class WarehouseDashboardController extends Controller
             $saved = $item->packingSizeAllocations->pluck('quantity', 'product_variant_id');
             $mainSize = (float) $item->variant->size;
             $options = collect($variantsByProduct->get((int) $item->variant->product_id, collect()))
-                ->filter(fn (ProductVariant $variant) => (float) $variant->size > 0)
+                ->filter(fn (ProductVariant $variant) => (float) $variant->size > 0 && $item->order->allowsPackingSize((float) $variant->size))
                 ->map(function (ProductVariant $variant) use ($item, $saved, $reservationByItemAndInventory, $reservedByInventory, $fifoAvailable) {
                     $inventories = $variant->inventories;
                     $available = (int) $inventories->sum(function (Inventory $inventory) use ($item, $reservationByItemAndInventory, $reservedByInventory) {
@@ -2483,7 +2499,7 @@ class WarehouseDashboardController extends Controller
                 ->sortBy('size')
                 ->values();
 
-            return $options->count() > 1 ? [(int) $item->id => $options] : [];
+            return $options->isNotEmpty() ? [(int) $item->id => $options] : [];
         })->all();
     }
 
@@ -3180,6 +3196,10 @@ class WarehouseDashboardController extends Controller
             throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Chỉ được dùng size chính '.$mainSizeLabel.' hoặc size khác của cùng sản phẩm.']);
         }
 
+        if ($variants->contains(fn (ProductVariant $variant) => !$order->allowsPackingSize((float) $variant->size))) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Chỉ được đóng các size Sale đã cho phép trong đơn hàng.']);
+        }
+
         $orderedQuantity = (int) $item->quantity;
         if ((int) $allocationInput->sum() !== $orderedQuantity) {
             throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => "Tổng số lượng đóng phải bằng {$orderedQuantity} sản phẩm của đơn."]);
@@ -3393,6 +3413,8 @@ class WarehouseDashboardController extends Controller
                             : round((float) $order->items()->sum('total_weight'), 3),
                     ]);
 
+                    app(\App\Services\WarehousePackedOrderService::class)->recalculate($order);
+
                     OrderHistory::create([
                         'order_id' => $order->id,
                         'action' => 'warehouse_clear_item_weight',
@@ -3410,7 +3432,8 @@ class WarehouseDashboardController extends Controller
                             'ok' => true,
                             'cleared' => true,
                             'message' => $message,
-                            'order' => ['id' => $order->id, 'actual_weight' => $order->actual_weight],
+                            'order' => ['id' => $order->id, 'actual_weight' => $order->actual_weight, 'total' => (float) $order->total],
+                            'item_total' => (float) $item->fresh()->total,
                         ]);
                     }
 
@@ -3429,7 +3452,7 @@ class WarehouseDashboardController extends Controller
                     }
                     $item->packed_quantity = (int) $validated['item_packed_quantity'];
                 }
-                $itemSize = (float) ($item->variant?->size ?? 0);
+                $itemSize = $item->packingAverageSize();
                 if (!$isCutProduct && $itemSize > 0 && (int) $item->quantity > 0) {
                     $averageWeight = $newWeight / (int) $item->quantity;
                     $averageMin = max(0, $itemSize - 0.25);
@@ -3447,10 +3470,8 @@ class WarehouseDashboardController extends Controller
                     }
                 }
                 $item->actual_weight = $newWeight;
-                // Giữ lại KL kho cân lần đầu để đối chiếu hao hụt sau này
-                if ($item->packed_weight === null) {
-                    $item->packed_weight = $newWeight;
-                }
+                // Warehouse corrections replace the packed measurement; delivery uses actual_weight separately.
+                $item->packed_weight = $newWeight;
                 $item->save();
             }
         }
@@ -3462,6 +3483,8 @@ class WarehouseDashboardController extends Controller
             // Keep total_weight aligned with real measured package weight in warehouse flow.
             'total_weight' => $actualWeight,
         ]);
+
+        app(\App\Services\WarehousePackedOrderService::class)->recalculate($order);
 
         OrderHistory::create([
             'order_id' => $order->id,
@@ -3485,7 +3508,9 @@ class WarehouseDashboardController extends Controller
                     'order' => [
                         'id' => $order->id,
                         'actual_weight' => (float) $actualWeight,
+                        'total' => (float) $order->total,
                     ],
+                    'item_total' => (float) $item->fresh()->total,
                 ]);
             }
 
@@ -3936,6 +3961,8 @@ class WarehouseDashboardController extends Controller
 
             return back()->with('error', $message);
         }
+
+        app(\App\Services\WarehousePackedOrderService::class)->recalculate($order);
 
         $order->update([
             'status' => Order::STATUS_READY_TO_SHIP,
@@ -5549,7 +5576,7 @@ class WarehouseDashboardController extends Controller
         $linkedOrder = null;
         if (preg_match('/(?:đơn|don)\s*#\s*([A-Za-z0-9\-]+)/iu', (string) $document->notes, $matches)) {
             $linkedOrder = Order::query()
-                ->with(['customer:id,name,phone,address', 'shipper:id,name,phone'])
+                ->with(['customer:id,name,phone,address', 'shipper:id,name,phone', 'items.variant.product'])
                 ->whereRaw('UPPER(code) = ?', [strtoupper(trim((string) ($matches[1] ?? '')))])
                 ->first();
         }

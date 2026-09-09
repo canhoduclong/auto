@@ -146,7 +146,8 @@ class OrderObserver
             'collect_customer_shipping_fee' => 'Thu phí ship khách',
             'charge_foam_box_fee' => 'Tính phí thùng xốp',
             'charge_vat' => 'Tính VAT',
-            'warehouse_can_adjust' => 'Kho được điều chỉnh',
+            'warehouse_can_adjust' => 'Kho được điều chỉnh số lượng',
+            'warehouse_allowed_sizes' => 'Size kho được đóng',
             'warehouse_id' => 'Kho xử lý',
             'return_warehouse_id' => 'Kho trả hàng',
             'daily_sequence' => 'Số thứ tự ngày',
@@ -157,6 +158,11 @@ class OrderObserver
     {
         if ($value === null || $value === '') {
             return 'Trống';
+        }
+
+        if ($field === 'warehouse_allowed_sizes') {
+            $sizes = is_array($value) ? $value : (json_decode((string) $value, true) ?? []);
+            return $sizes ? implode(', ', $sizes) : 'Đúng size đặt hàng';
         }
 
         if ($field === 'status') {
