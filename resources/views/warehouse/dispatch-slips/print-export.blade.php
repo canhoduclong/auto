@@ -24,9 +24,7 @@
 </tbody></table>
 
 <h3>C. BẢNG TỔNG HỢP HÀNG HÓA</h3>
-<table class="summary-table"><thead><tr><th class="center">STT</th><th>Sản phẩm</th><th>SKU</th><th>Size</th><th class="num">Số lượng</th><th class="num">KL thực tế đóng</th><th class="num">Giá</th><th class="num">Thành tiền</th></tr></thead><tbody>
-@foreach($summaryRows as $row)<tr><td class="center">{{ $loop->iteration }}</td><td>{{ $row['product_name'] }}</td><td>{{ $row['sku'] ?: '—' }}</td><td>{{ $row['size'] ?: '—' }}</td><td class="num">{{ number_format($row['quantity']) }}</td><td class="num">{{ $formatKg($row['weight']) }}</td><td class="num">{{ $formatMoney($row['price']) }}/{{ $row['priced_by_kg'] ? 'kg' : 'đv' }}</td><td class="num"><strong>{{ $formatMoney($row['amount']) }}</strong></td></tr>@endforeach
-</tbody><tfoot><tr><th colspan="4">Tổng cộng</th><th class="num">{{ number_format($summaryRows->sum('quantity')) }}</th><th class="num">{{ $formatKg($summaryRows->sum('weight')) }}</th><th></th><th class="num">{{ $formatMoney($summaryRows->sum('amount')) }}</th></tr></tfoot></table>
+@include('warehouse.dispatch-slips._export_products', ['rows' => $exportSummaryRows])
 
 <h3>D. GHI CHÚ BÀN GIAO</h3>
 <div class="box handover-note">@if(filled($slip->notes)){{ $slip->notes }}@else<div class="write-line"></div><div class="write-line"></div>@endif</div>

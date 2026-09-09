@@ -10,6 +10,7 @@
 <body>
 @php
     $formatKg = static fn ($value): string => rtrim(rtrim(number_format((float) $value, 3, ',', '.'), '0'), ',').' kg';
+    $formatMoney = static fn ($value): string => number_format((float) $value, 0, ',', '.').'đ';
     $totalOrders = $documents->sum(fn ($document) => $document['orderRows']->count());
     $totalQuantity = $documents->sum(fn ($document) => $document['summaryRows']->sum('quantity'));
     $totalWeight = $documents->sum(fn ($document) => $document['summaryRows']->sum('weight'));
@@ -60,9 +61,7 @@
         </tbody></table>
 
         <h2>C. TỔNG HỢP HÀNG HÓA</h2>
-        <table><thead><tr><th class="center" style="width:6%">STT</th><th>Sản phẩm</th><th style="width:17%">SKU</th><th style="width:12%">Size</th><th class="num" style="width:14%">Số lượng</th><th class="num" style="width:17%">Khối lượng</th></tr></thead><tbody>
-        @forelse($document['summaryRows'] as $row)<tr><td class="center">{{ $loop->iteration }}</td><td>{{ $row['product_name'] }}</td><td>{{ $row['sku'] ?: '—' }}</td><td>{{ $row['size'] ?: '—' }}</td><td class="num">{{ number_format($row['quantity']) }}</td><td class="num">{{ $formatKg($row['weight']) }}</td></tr>@empty<tr><td colspan="6" class="center">Không có dữ liệu hàng hóa.</td></tr>@endforelse
-        </tbody><tfoot><tr class="summary"><td colspan="4">TỔNG CỘNG</td><td class="num">{{ number_format($document['summaryRows']->sum('quantity')) }}</td><td class="num">{{ $formatKg($document['summaryRows']->sum('weight')) }}</td></tr></tfoot></table>
+        @include('warehouse.dispatch-slips._export_products', ['rows' => $document['exportSummaryRows']])
 
         <h2>D. GHI CHÚ BÀN GIAO</h2><div class="note">{{ filled($slip->notes) ? $slip->notes : '' }}</div>
         <div class="sign"><div><strong>NGƯỜI LẬP PHIẾU</strong><div class="muted">(Ký, ghi rõ họ tên)</div><div class="sign-space"></div>{{ $slip->creator?->name }}</div><div><strong>THỦ KHO XUẤT</strong><div class="muted">(Ký, ghi rõ họ tên)</div><div class="sign-space"></div></div><div><strong>TÀI XẾ NHẬN HÀNG</strong><div class="muted">(Ký, ghi rõ họ tên)</div><div class="sign-space"></div>{{ $slip->shipper?->name }}</div></div>

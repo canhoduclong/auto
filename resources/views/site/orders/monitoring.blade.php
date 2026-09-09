@@ -2431,6 +2431,10 @@ document.addEventListener('click', async event => {
     const selectedBusinessDate = @json($createBusinessDate);
     const selectedItems = new Map();
     let selectedCustomer = null;
+    let creationToken = null;
+    let submittingOrder = false;
+    const newCreationToken = () => '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, c =>
+        (Number(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(c) / 4).toString(16));
     let variantsLoaded = false;
     let customersLoaded = false;
 
@@ -2587,6 +2591,11 @@ document.addEventListener('click', async event => {
     }
 
     openButton.addEventListener('click', () => {
+        if (submittingOrder) return;
+        creationToken = newCreationToken();
+        const submitButton = document.getElementById('monitorSubmitOrder');
+        submitButton.disabled = false;
+        submitButton.innerHTML = '<i class="bi bi-check2 me-1"></i>Tạo đơn';
         createPanel.hidden = false;
         setStep(1);
         if (!variantsLoaded) loadVariants();
@@ -2771,6 +2780,7 @@ document.addEventListener('click', async event => {
     });
 
     document.getElementById('monitorSubmitOrder').addEventListener('click', async event => {
+        if (submittingOrder) return;
         const button = event.currentTarget;
         const chargeVat = document.getElementById('monitorChargeVat').checked;
         const vatPercent = selectedVatPercent();
@@ -2787,6 +2797,8 @@ document.addEventListener('click', async event => {
             return;
         }
         button.disabled = true;
+        submittingOrder = true;
+        creationToken ||= newCreationToken();
         button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang tạo...';
         try {
             const response = await fetch(storeEndpoint, {
@@ -2798,6 +2810,7 @@ document.addEventListener('click', async event => {
                     'X-CSRF-TOKEN': csrfToken
                 },
                 body: JSON.stringify({
+                    creation_token: creationToken,
                     customer_id: selectedCustomer.id,
                     items: Array.from(selectedItems.values()).map(item => ({
                         variant_id: item.id,
@@ -2835,6 +2848,8 @@ document.addEventListener('click', async event => {
             notify(error.message || 'Không thể kết nối máy chủ.');
             button.disabled = false;
             button.innerHTML = '<i class="bi bi-check2 me-1"></i>Tạo đơn';
+        } finally {
+            submittingOrder = false;
         }
     });
 

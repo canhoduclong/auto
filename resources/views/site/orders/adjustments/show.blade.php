@@ -131,7 +131,7 @@
                 </div>
                 <div class="d-flex flex-wrap align-items-center justify-content-end gap-2">
                     <span class="adjustment-status status-{{ $statusMeta['class'] }}"><i class="bi {{ $statusMeta['icon'] }}"></i>{{ $statusMeta['label'] }}</span>
-                    <a href="{{ route('site.orders.show', $adjustment->order_id) }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-box-arrow-up-right me-1"></i>Xem đơn gốc</a>
+                    <a href="{{ route('site.orders.show', $adjustment->order_id) }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-box-arrow-up-right me-1"></i>Xem đơn hàng hiện tại</a>
                 </div>
             </div>
             <div class="adjustment-summary">
@@ -144,6 +144,9 @@
 
         <div class="adjustment-layout">
             <main class="adjustment-main">
+                @if($order && in_array($adjustment->status, ['approved', 'completed'], true))
+                    @include('site.orders.adjustments._confirmed_order')
+                @endif
                 <section class="adjustment-card">
                     <div class="adjustment-card-head"><h2 class="adjustment-card-title"><i class="bi bi-chat-left-text"></i>Nội dung yêu cầu</h2></div>
                     <div class="adjustment-card-body"><div class="adjustment-note">{{ $adjustment->adjustment_note ?: 'Không có ghi chú bổ sung.' }}</div></div>

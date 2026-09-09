@@ -20,6 +20,9 @@ class OrderAutoApprovalService
 
         for ($iteration = 0; $iteration < 5; $iteration++) {
             $order->refresh();
+            if (!in_array($order->status, ['pending', 'pending_leader_approval', 'pending_manager_approval'], true)) {
+                break;
+            }
             $currentStep = $this->approvalService->getCurrentPendingStep($order);
             if (!$currentStep?->step) {
                 break;
@@ -28,10 +31,11 @@ class OrderAutoApprovalService
             $rule = $this->findRuleForStep(
                 OrderAutoApprovalRule::TYPE_NEW_ORDER,
                 (string) $currentStep->step->role_slug,
-                $order
+                $order,
+                fn ($candidate) => $this->orderMatchesRule($order, $candidate)
             );
 
-            if (!$rule || !$this->orderMatchesRule($order, $rule)) {
+            if (!$rule) {
                 break;
             }
 
@@ -73,10 +77,11 @@ class OrderAutoApprovalService
             $rule = $this->findRuleForStep(
                 OrderAutoApprovalRule::TYPE_ORDER_ADJUSTMENT,
                 (string) $currentStep->step->role_slug,
-                $adjustment->order
+                $adjustment->order,
+                fn ($candidate) => $this->adjustmentMatchesRule($adjustment, $candidate)
             );
 
-            if (!$rule || !$this->adjustmentMatchesRule($adjustment, $rule)) {
+            if (!$rule) {
                 break;
             }
 
@@ -146,7 +151,7 @@ class OrderAutoApprovalService
         return compact('orderSteps', 'adjustmentSteps', 'completedAdjustments');
     }
 
-    private function findRuleForStep(string $type, string $roleSlug, ?Order $order): ?OrderAutoApprovalRule
+    private function findRuleForStep(string $type, string $roleSlug, ?Order $order, callable $matches): ?OrderAutoApprovalRule
     {
         if (!$order) {
             return null;
@@ -161,8 +166,8 @@ class OrderAutoApprovalService
             ->with('user.roles')
             ->orderBy('id')
             ->get()
-            ->first(function (OrderAutoApprovalRule $rule) use ($order, $normalizedRole): bool {
-                if (!$rule->user || !$this->approvalService->canApproveCurrentRole($rule->user, $normalizedRole)) {
+            ->first(function (OrderAutoApprovalRule $rule) use ($order, $normalizedRole, $matches): bool {
+                if (!$rule->user || !$this->approvalService->canApproveCurrentRole($rule->user, $normalizedRole) || !$matches($rule)) {
                     return false;
                 }
 

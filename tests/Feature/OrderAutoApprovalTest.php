@@ -163,6 +163,64 @@ class OrderAutoApprovalTest extends TestCase
         $this->assertSame(Order::STATUS_APPROVED, $order->fresh()->status);
     }
 
+    public function test_later_matching_rule_is_not_hidden_by_an_earlier_stricter_rule(): void
+    {
+        [$sale, $leader] = $this->salesUsers();
+        $secondLeader = User::factory()->create(['team_id' => $sale->team_id]);
+        $secondLeader->roles()->attach($leader->roles->first());
+        $variant = ProductVariant::factory()->create();
+        ProductPriceRule::create(['product_variant_id' => $variant->id, 'price' => 85000, 'min_price' => 80000]);
+        foreach ([$leader, $secondLeader] as $index => $approver) {
+            OrderAutoApprovalRule::create([
+                'user_id' => $approver->id, 'order_type' => 'new_order', 'enabled' => true,
+                'require_min_price' => true, 'allow_bulk_below_min' => $index === 1,
+                'bulk_min_quantity' => 100, 'bulk_below_min_amount' => 2000,
+            ]);
+        }
+        $order = $this->orderWithItem($sale, $variant, 100, 78000);
+        app(ApprovalService::class)->initOrderApproval($order);
+        $this->assertSame('approved', $order->fresh()->status);
+        $this->assertDatabaseHas('approval_orders', ['order_id' => $order->id, 'approved_by' => $secondLeader->id]);
+    }
+
+    public function test_cancelled_order_is_not_auto_approved_and_new_orders_for_same_customer_are_independent(): void
+    {
+        [$sale, $leader] = $this->salesUsers();
+        $variant = ProductVariant::factory()->create(['kg' => 1, 'is_priced_by_kg' => false]);
+        ProductPriceRule::create(['product_variant_id' => $variant->id, 'price' => 85000, 'min_price' => 80000]);
+        $cancelled = $this->orderWithItem($sale, $variant, 1, 85000);
+        app(ApprovalService::class)->initOrderApproval($cancelled);
+        $this->actingAs($sale)->post(route('site.orders.cancel', $cancelled))->assertSessionHas('success');
+        OrderAutoApprovalRule::create([
+            'user_id' => $leader->id, 'order_type' => 'new_order', 'enabled' => true, 'require_min_price' => true,
+        ]);
+        $this->assertSame(0, app(\App\Services\OrderAutoApprovalService::class)->processOrder($cancelled));
+        $this->assertSame('cancelled', $cancelled->fresh()->status);
+        app(\App\Services\CustomerPriorityService::class)->attachSale($cancelled->customer, $sale->id, 1, 'test');
+        $payload = [
+            'creation_token' => (string) \Illuminate\Support\Str::uuid(),
+            'customer_id' => $cancelled->customer_id,
+            'items' => [['variant_id' => $variant->id, 'quantity' => 1]],
+        ];
+        $route = route('pages.my_orders.monitoring.store');
+        $first = $this->postJson($route, $payload)->assertCreated()->json('order.id');
+        $this->assertSame('approved', Order::findOrFail($first)->status);
+        $this->postJson($route, $payload)->assertCreated()->assertJsonPath('order.id', $first);
+        $changed = $payload;
+        $changed['items'][0]['quantity'] = 2;
+        $this->postJson($route, $changed)->assertStatus(422);
+        $this->post(route('site.orders.cancel', $first))->assertSessionHas('success');
+        $payload['creation_token'] = (string) \Illuminate\Support\Str::uuid();
+        $second = $this->postJson($route, $payload)->assertCreated()->json('order.id');
+        $payload['creation_token'] = (string) \Illuminate\Support\Str::uuid();
+        $third = $this->postJson($route, $payload)->assertCreated()->json('order.id');
+        $this->assertNotSame($first, $second);
+        $this->assertNotSame($second, $third);
+        $this->assertSame('approved', Order::findOrFail($second)->status);
+        $this->assertSame('approved', Order::findOrFail($third)->status);
+        $this->assertSame(4, Order::where('customer_id', $cancelled->customer_id)->count());
+    }
+
     private function salesUsers(): array
     {
         $team = Team::query()->create(['name' => 'Phòng kinh doanh kiểm thử']);

@@ -854,7 +854,8 @@ class WarehouseDispatchSlipController extends Controller
                 ]);
                 foreach ($expectedItems as $item) {
                     $received = $transfer->status === WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED;
-                    $variant = $transfer->items->firstWhere('product_variant_id', $item->product_variant_id)?->variant;
+                    $liveItem = $transfer->items->firstWhere('product_variant_id', $item->product_variant_id);
+                    $variant = $liveItem?->variant;
                     $itemRows->push([
                         'source' => 'Hàng '.($inventorySnapshot['code'] ?? ($transfer->transfer_code ?: '#'.$transfer->id)),
                         'variant_id' => (int) $item->product_variant_id,
@@ -863,9 +864,9 @@ class WarehouseDispatchSlipController extends Controller
                         'size' => $item->size ?? $variant?->size,
                         'quantity' => (int) $item->quantity,
                         'weight' => (float) $item->weight_kg,
-                        'price' => 0,
+                        'price' => (float) ($item->unit_cost ?? $liveItem?->unit_cost ?? 0),
                         'priced_by_kg' => false,
-                        'amount' => 0,
+                        'amount' => round((int) $item->quantity * (float) ($item->unit_cost ?? $liveItem?->unit_cost ?? 0), 0),
                         'received_quantity' => $received ? (int) $item->quantity : null,
                         'received_weight' => $received ? (float) $item->weight_kg : null,
                     ]);
@@ -881,7 +882,7 @@ class WarehouseDispatchSlipController extends Controller
             return $row;
         });
 
-        $summaryRows = $itemRows->groupBy('variant_id')->map(function (Collection $rows): array {
+        $summarizeRows = function (Collection $rows): array {
             $first = $rows->first();
             $receivedRows = $rows->whereNotNull('received_quantity');
 
@@ -899,9 +900,13 @@ class WarehouseDispatchSlipController extends Controller
                 'received_quantity' => $receivedRows->isEmpty() ? null : (int) $receivedRows->sum('received_quantity'),
                 'received_weight' => $receivedRows->isEmpty() ? null : round((float) $receivedRows->sum('received_weight'), 3),
             ];
-        })->values();
+        };
+        $summaryRows = $itemRows->groupBy('variant_id')->map($summarizeRows)->values();
+        $exportSummaryRows = $itemRows->groupBy(fn (array $row) => json_encode([
+            $row['variant_id'], number_format($row['price'], 2, '.', ''), $row['priced_by_kg'],
+        ]))->map($summarizeRows)->values();
 
-        return compact('orderRows', 'itemRows', 'summaryRows', 'inventoryTransferRows');
+        return compact('orderRows', 'itemRows', 'summaryRows', 'exportSummaryRows', 'inventoryTransferRows');
     }
 
     private function orderSizes(Order $order, array $snapshot = []): string
@@ -1008,6 +1013,7 @@ class WarehouseDispatchSlipController extends Controller
                     'size' => $item->variant?->size,
                     'quantity' => (int) $item->quantity,
                     'weight_kg' => (float) $item->weight_kg,
+                    'unit_cost' => (float) $item->unit_cost,
                 ])->values()->all() ?? [],
             ],
         ];

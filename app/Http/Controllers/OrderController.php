@@ -687,6 +687,7 @@ class OrderController extends Controller
     public function storeFromMonitoring(Request $request, ApprovalService $approvalService)
     {
         $validated = $request->validate([
+            'creation_token' => ['nullable', 'uuid'],
             'customer_id' => ['required', 'integer', 'exists:customers,id'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.variant_id' => ['required', 'integer', 'distinct', 'exists:product_variants,id'],
@@ -747,6 +748,8 @@ class OrderController extends Controller
             $order = $this->createOrderWithUnifiedStockFlow(
                 items: $items,
                 orderData: [
+                    'creation_token' => $validated['creation_token'] ?? null,
+                    'creation_payload_hash' => hash('sha256', json_encode($validated)),
                     'customer_id' => (int) $customer->id,
                     'user_id' => auth()->id(),
                     'recipient_name' => $customer->name,
@@ -1822,6 +1825,21 @@ class OrderController extends Controller
         $actorUser = $actorUserId > 0 ? User::query()->find($actorUserId) : null;
 
         return DB::transaction(function () use ($items, $orderData, $approvalService, $allowBackorder, $actorUserId, $actorUser) {
+            if (!empty($orderData['creation_token'])) {
+                // Serialize retries for this sale; distinct tokens remain distinct orders.
+                User::query()->whereKey($actorUserId)->lockForUpdate()->firstOrFail();
+                $existing = Order::query()
+                    ->where('user_id', $actorUserId)
+                    ->where('creation_token', $orderData['creation_token'])
+                    ->first();
+                if ($existing) {
+                    if ($existing->creation_payload_hash !== $orderData['creation_payload_hash']) {
+                        throw new \RuntimeException('Lần gửi này đã tạo đơn với nội dung khác. Vui lòng mở form tạo đơn mới.');
+                    }
+                    return $existing;
+                }
+            }
+
             $customer = null;
             $customerId = (int) ($orderData['customer_id'] ?? 0);
             if ($customerId > 0) {
@@ -1962,6 +1980,8 @@ class OrderController extends Controller
             $isBusinessDateException = isset($orderData['created_at'])
                 && Order::isNonCurrentBusinessDate($orderData['created_at']);
             $orderInsert = $this->filterExistingColumns('orders', [
+                'creation_token' => $orderData['creation_token'] ?? null,
+                'creation_payload_hash' => $orderData['creation_payload_hash'] ?? null,
                 'customer_id' => $orderData['customer_id'] ?? null,
                 'user_id' => $orderData['user_id'] ?? auth()->id(),
                 'shipper_id' => $orderData['shipper_id'] ?? $customer?->default_shipper_id,

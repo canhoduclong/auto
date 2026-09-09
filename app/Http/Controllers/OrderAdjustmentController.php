@@ -368,8 +368,11 @@ class OrderAdjustmentController extends Controller
         $this->authorizeView($orderAdjustment);
 
         $orderAdjustment->load([
-            'order.customer',
+            'order.customer.addresses',
             'order.user',
+            'order.items.product',
+            'order.items.variant.product',
+            'order.additionalFees',
             'items.variant.product',
             'items.orderItem',
             'requester',
@@ -701,12 +704,12 @@ class OrderAdjustmentController extends Controller
 
     private function canApprove(User $user, OrderAdjustment $adjustment): bool
     {
-        if ($user->hasRole('admin')) {
-            return true;
-        }
-
         if ($adjustment->status !== OrderAdjustment::STATUS_PENDING_APPROVAL) {
             return false;
+        }
+
+        if ($user->hasRole('admin')) {
+            return true;
         }
 
         $approvalService = app(ApprovalService::class);

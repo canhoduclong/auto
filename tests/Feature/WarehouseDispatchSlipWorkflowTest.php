@@ -21,6 +21,37 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_export_summary_separates_prices_and_pricing_units(): void
+    {
+        $controller = app(\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class);
+        $slip = new WarehouseDispatchSlip();
+        $entries = collect();
+        foreach ([[10000, true], [20000, true], [10000, false]] as $index => [$price, $byKg]) {
+            $order = new Order(['code' => 'PRICE-'.$index]);
+            $order->setRelation('customer', null);
+            $order->setRelation('user', null);
+            $order->setRelation('items', collect());
+            $movement = new WarehouseTransfer(['status' => WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP]);
+            $movement->setRelation('order', $order);
+            $entry = new WarehouseDispatchSlipEntry(['snapshot' => ['order' => [
+                'code' => $order->code,
+                'items' => [['id' => $index + 1, 'product_variant_id' => 1, 'product_name' => 'Test',
+                    'quantity' => 2, 'weight' => 5, 'price' => $price, 'is_priced_by_kg' => $byKg]],
+            ]]]);
+            $entry->setRelation('orderTransfer', null);
+            $entry->setRelation('inventoryTransfer', null);
+            $entry->setRelation('warehouseTransfer', $movement);
+            $entries->push($entry);
+        }
+        $slip->setRelation('entries', $entries);
+        $data = (new \ReflectionMethod($controller, 'documentData'))->invoke($controller, $slip);
+        $this->assertCount(1, $data['summaryRows']);
+        $this->assertCount(3, $data['exportSummaryRows']);
+        $this->assertEquals([50000, 100000, 20000], $data['exportSummaryRows']->pluck('amount')->all());
+        $this->assertEquals(6, $data['exportSummaryRows']->sum('quantity'));
+        $this->assertEquals(170000, $data['exportSummaryRows']->sum('amount'));
+    }
+
     public function test_shipper_uses_the_current_group_slip_instead_of_a_stale_direct_slip(): void
     {
         $warehouseRole = Role::create(['name' => 'warehouse']);
@@ -194,6 +225,7 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             ->assertSessionHas('success');
         $this->assertSame(WarehouseDispatchSlip::STATUS_FINALIZED, $slip->fresh()->status);
         $this->assertTrue($slip->fresh()->entries->every(fn ($entry) => ! empty($entry->snapshot)));
+        $inventoryTransfer->items()->update(['unit_cost' => 99000]);
 
         $this->actingAs($warehouseUser)
             ->get(route('warehouse.dispatch-slips.print-export', $slip))
@@ -211,7 +243,13 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             ->assertSee('B. PHIẾU ĐIỀU CHUYỂN HÀNG')
             ->assertSee('Ghi chú điều chuyển')
             ->assertSee('Hàng điều chuyển cần bảo quản lạnh')
-            ->assertSee('D. GHI CHÚ BÀN GIAO');
+            ->assertSee('D. GHI CHÚ BÀN GIAO')
+            ->assertSee('54.000đ/đv')
+            ->assertSee('648.000đ');
+
+        $this->post(route('warehouse.dispatch-slips.print-selected'), ['dispatch_slip_ids' => [$slip->id]])
+            ->assertOk()->assertSee('Đơn giá')->assertSee('Thành tiền')
+            ->assertSee('54.000đ/đv')->assertSee('648.000đ');
     }
 
     public function test_destination_warehouse_can_view_and_print_linked_receipt_summary(): void
