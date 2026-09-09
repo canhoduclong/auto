@@ -138,7 +138,7 @@
                                     <input type="hidden" name="items[{{ $index }}][product_variant_id]" class="variant-input" value="{{ $vid }}">
                                 </td>
                                 <td class="text-center">
-                                    <span class="badge bg-light text-dark border available-badge" data-available="{{ $variant['available'] }}">{{ number_format($variant['available']) }}</span>
+                                    <span class="badge bg-light text-dark border available-badge" data-available="{{ $variant['available'] }}">{{ number_format($variant['available'], $variant['available'] == floor($variant['available']) ? 0 : 3, ',', '.') }}</span>
                                 </td>
                                 <td>
                                     <input type="number" min="1" max="{{ max(1, $variant['available']) }}" name="items[{{ $index }}][quantity]" class="form-control text-center qty-input" value="{{ $item['quantity'] ?? 1 }}" required>
@@ -293,7 +293,7 @@
                                         @if($group['product']['sku'])<span class="text-muted small ms-2">[{{ $group['product']['sku'] }}]</span>@endif
                                         @if($group['product']['category'])<span class="badge bg-secondary ms-2">{{ $group['product']['category'] }}</span>@endif
                                         <span class="badge bg-info ms-2">{{ $group['variants']->count() }} biến thể</span>
-                                        <span class="badge bg-success ms-2">Tổng tồn: {{ number_format($totalAvailable) }}</span>
+                                        <span class="badge bg-success ms-2">Tổng tồn: {{ number_format($totalAvailable, $totalAvailable == floor($totalAvailable) ? 0 : 3, ',', '.') }}</span>
                                     </td>
                                 </tr>
                                 @foreach($group['variants'] as $variant)
@@ -305,7 +305,7 @@
                                         </td>
                                         <td class="text-center">{{ $variant['unit_label'] }}</td>
                                         <td class="text-center">
-                                            <span class="badge bg-primary rounded-pill">{{ number_format($variant['available']) }}</span>
+                                            <span class="badge bg-primary rounded-pill">{{ number_format($variant['available'], $variant['available'] == floor($variant['available']) ? 0 : 3, ',', '.') }}</span>
                                         </td>
                                         <td class="text-end pe-3">
                                             <button type="button" class="btn btn-sm btn-outline-success js-select-product" 
@@ -386,7 +386,7 @@
         btn.addEventListener('click', function () {
             const variantId = this.getAttribute('data-id');
             const label = this.getAttribute('data-label');
-            const available = parseInt(this.getAttribute('data-available') || '0', 10);
+            const available = parseFloat(this.getAttribute('data-available') || '0');
             const unitWeight = parseFloat(this.getAttribute('data-unit-weight') || '1') || 1;
             // Check if already in table
             let exists = false;
@@ -459,7 +459,7 @@
             const badge = row.querySelector('.available-badge');
             const variantId = input ? String(input.value || '') : '';
             const qtyValue = qty ? parseInt(qty.value || '0', 10) : 0;
-            const available = badge ? parseInt(badge.getAttribute('data-available') || '0', 10) : 0;
+            const available = badge ? parseFloat(badge.getAttribute('data-available') || '0') : 0;
             if (!variantId) continue;
             if (selected.has(variantId)) {
                 event.preventDefault();

@@ -248,6 +248,8 @@ class WarehouseStocktakeController extends Controller
                         'updated_at' => $countedAt,
                     ])->save();
                 }
+                $true_value = $inventory->product_variant_id->weight_kg ? round((float) $inventory->product_variant_id->weight_kg * (float) $inventory->quantity, 3) : 0;
+
 
                 // A past stocktake must restate the present balance only by its
                 // historical difference. Replacing the current balance with the

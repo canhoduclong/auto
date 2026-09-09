@@ -4967,16 +4967,12 @@ class WarehouseDashboardController extends Controller
             ? $editingTransfer->items->pluck('quantity', 'product_variant_id')->map(fn ($quantity) => (int) $quantity)
             : collect();
 
+        // The cached reserved_quantity can drift after reservations are deleted.
+        // Use reservation rows for both the picker and the transfer stock checks.
         $availableVariants = Inventory::query()
             ->with(['productVariant.product', 'productVariant.values.attribute'])
+            ->withSum('reservations', 'quantity')
             ->where('warehouse_id', $managedWarehouseId)
-            ->when($editingQuantities->isNotEmpty(), function ($query) use ($editingQuantities) {
-                $query->where(function ($scope) use ($editingQuantities) {
-                    $scope->whereRaw('(quantity - reserved_quantity) > 0')
-                        ->orWhereIn('product_variant_id', $editingQuantities->keys());
-                });
-            }, fn ($query) => $query->whereRaw('(quantity - reserved_quantity) > 0'))
-            ->orderByRaw('(quantity - reserved_quantity) DESC')
             ->get()
             ->map(function (Inventory $inventory) use ($editingQuantities) {
                 $variant = $inventory->productVariant;
@@ -4988,7 +4984,7 @@ class WarehouseDashboardController extends Controller
                     return $val->attribute->name.': '.$val->value;
                 })->implode(', ');
 
-                $available = max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity)
+                $available = max(0, (float) $inventory->quantity - (float) $inventory->reservations_sum_quantity)
                     + (int) $editingQuantities->get($variant->id, 0);
 
                 return [
@@ -5007,7 +5003,9 @@ class WarehouseDashboardController extends Controller
                     'attributes' => $attributes,
                 ];
             })
-            ->filter()
+            ->filter(fn ($variant) => $variant && ($variant['available'] > 0
+                || $editingQuantities->has($variant['variant_id'])))
+            ->sortByDesc('available')
             ->values();
 
         $availableVariantsGrouped = $availableVariants->groupBy('product_id')->map(function ($variants, $productId) {
@@ -5146,7 +5144,7 @@ class WarehouseDashboardController extends Controller
                     ])->lockForUpdate()->first();
 
                     $available = $inventory
-                        ? max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity)
+                        ? max(0, (float) $inventory->quantity - (float) $inventory->reservations()->sum('quantity'))
                         : 0;
 
                     if ($available < $qty) {
@@ -5302,7 +5300,7 @@ class WarehouseDashboardController extends Controller
                             ->lockForUpdate()
                             ->first();
                         $available = $inventory
-                            ? max(0, (int) $inventory->quantity - (int) $inventory->reserved_quantity)
+                            ? max(0, (float) $inventory->quantity - (float) $inventory->reservations()->sum('quantity'))
                             : 0;
 
                         if ($inventoryDelta < 0 && $available < abs($inventoryDelta)) {
