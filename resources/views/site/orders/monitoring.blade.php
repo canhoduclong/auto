@@ -1022,6 +1022,7 @@
         'delivered' => 'Đã giao hàng hoặc đã hoàn tất đơn.',
         'accounted' => 'Kế toán đã xác nhận và ghi nhận doanh số.',
         'cancelled' => 'Đơn đã hủy, không tiếp tục xử lý.',
+        'overdue' => 'Đơn giao trễ nhưng vẫn giữ booking tồn kho.',
     ];
     $monitorStateForOrder = static function ($order): string {
         if ($order->status === \App\Models\Order::STATUS_CANCELLED) {

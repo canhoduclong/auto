@@ -58,6 +58,7 @@ class MonitoringNavigationTest extends TestCase
             Order::STATUS_PACKED => 'packed',
             Order::STATUS_DELIVERING => 'transit',
             Order::STATUS_DELIVERED => 'delivered',
+            Order::STATUS_OVERDUE_DELIVERY => 'overdue',
         ];
 
         $sequence = 0;
