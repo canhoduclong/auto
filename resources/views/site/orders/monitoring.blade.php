@@ -899,7 +899,7 @@
         .monitor-order { grid-template-columns: minmax(0, 1fr) 180px; }
     }
     @media (min-width: 992px) {
-        .monitor-sidebar {
+        .monitor-customer-filter-panel {
             position: sticky;
             top: 12px;
             align-self: start;
@@ -1142,7 +1142,7 @@
                     </div>
                 </div>
 
-                <div class="monitor-panel monitor-filter-block">
+                <div class="monitor-panel monitor-filter-block monitor-customer-filter-panel">
                     <div class="monitor-filter-title">Khách hàng</div>
                     <div class="monitor-filter-list">
                         <a class="monitor-filter-link {{ $selectedCustomerId === 0 ? 'active' : '' }}" href="{{ route('pages.my_orders.monitoring', $customerFilterQuery) }}">
