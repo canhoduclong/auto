@@ -484,11 +484,14 @@ class ShipperDashboardController extends Controller
                 }
 
                 $inventoryBusinessDate = $this->inventoryBusinessDateForOrder($fresh);
-                $isPackedHistoricalException = (bool) $fresh->skip_auto_cancel
+                $isHistoricalReceivedTransfer = $latestReceivedTransfer?->received_at
+                    && $latestReceivedTransfer->received_at->lt(Carbon::today());
+                $isPackedHistoricalException = ((bool) $fresh->skip_auto_cancel || $isHistoricalReceivedTransfer)
                     && Carbon::parse($inventoryBusinessDate)->startOfDay()->lt(Carbon::today());
 
                 // The warehouse already validated and packed an explicitly
-                // restored order against its historical business-day stock.
+                // restored order, or received a completed transfer, against
+                // its historical business-day stock.
                 // Shipper acceptance only starts delivery; checking/deducting
                 // today's stock again would incorrectly block the old order.
                 if ($isPackedHistoricalException) {

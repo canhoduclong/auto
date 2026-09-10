@@ -291,7 +291,8 @@ class ShipperAcceptOrderTest extends TestCase
         ]);
     }
 
-    public function test_packed_historical_exception_is_accepted_without_rechecking_current_stock(): void
+    #[\PHPUnit\Framework\Attributes\DataProvider('historicalPickupCases')]
+    public function test_packed_historical_exception_is_accepted_without_rechecking_current_stock(bool $restored): void
     {
         Carbon::setTestNow(Carbon::parse('2026-08-24 10:00:00', 'Asia/Bangkok'));
         $shipper = User::factory()->create();
@@ -348,9 +349,23 @@ class ShipperAcceptOrderTest extends TestCase
             'code' => 'PAST-DATE-EXCEPTION',
             'status' => Order::STATUS_READY_TO_SHIP,
             'delivery_date' => '2026-08-23',
-            'skip_auto_cancel' => true,
+            'skip_auto_cancel' => $restored,
         ]);
         $order->forceFill(['created_at' => '2026-08-23 09:00:00'])->saveQuietly();
+        if (! $restored) {
+            \App\Models\WarehouseTransfer::create([
+                'order_id' => $order->id,
+                'source_warehouse_id' => Warehouse::factory()->create()->id,
+                'target_warehouse_id' => $warehouse->id,
+                'shipper_id' => $shipper->id,
+                'status' => \App\Models\WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+                'received_at' => '2026-08-23 16:00:00',
+            ]);
+            $order->histories()->create([
+                'action' => 'schedule_confirmed', 'user_id' => $shipper->id,
+                'role' => 'shipper', 'status_after' => Order::STATUS_READY_TO_SHIP,
+            ]);
+        }
         $item = $order->items()->create([
             'product_id' => $product->id,
             'product_variant_id' => $variant->id,
@@ -378,5 +393,17 @@ class ShipperAcceptOrderTest extends TestCase
         $this->assertDatabaseMissing('inventory_documents', [
             'notes' => 'Xuất kho cho đơn #'.$order->code,
         ]);
+        $this->postJson(route('shipper.accept', $order))->assertStatus(409);
+    }
+
+    public static function historicalPickupCases(): array
+    {
+        return ['restored order' => [true], 'received transfer without exception flag' => [false]];
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 }
