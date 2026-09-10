@@ -134,6 +134,62 @@ class ShipperApiController extends BaseApiController
         ]);
     }
 
+    public function deliveryScheduleList(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $shipperId = (int) $request->user()->id;
+        $fromDate = Carbon::today()->subDays(90)->toDateString();
+        $toDate = Carbon::today()->addDays(30)->toDateString();
+
+        $orders = Order::query()
+            ->where('shipper_id', $shipperId)
+            ->whereNotIn('status', ['cancelled', 'canceled'])
+            ->whereBetween(DB::raw('DATE(created_at)'), [$fromDate, $toDate])
+            ->orderByDesc('created_at')
+            ->get(['id', 'shipper_id', 'status', 'total', 'charge_shipping_fee', 'shipping_fee', 'created_at']);
+
+        $historyByDate = OrderHistory::query()
+            ->join('orders', 'orders.id', '=', 'order_histories.order_id')
+            ->where('orders.shipper_id', $shipperId)
+            ->whereBetween(DB::raw('DATE(orders.created_at)'), [$fromDate, $toDate])
+            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
+            ->orderByDesc('order_histories.created_at')
+            ->orderByDesc('order_histories.id')
+            ->select('order_histories.*', DB::raw('DATE(orders.created_at) as schedule_date'))
+            ->get()
+            ->groupBy('schedule_date')
+            ->map(fn ($items) => $items->first());
+
+        $routes = $orders->groupBy(fn (Order $order) => $order->created_at->toDateString())
+            ->map(function ($dateOrders, string $date) use ($historyByDate): array {
+                $history = $historyByDate->get($date);
+                $orderIds = $dateOrders->pluck('id')->map(fn ($id) => (int) $id)->values();
+                $completedStatuses = ['delivered', 'completed', 'returned_completed'];
+
+                return [
+                    'date' => $date,
+                    'id' => $history?->id,
+                    'code' => $this->deliveryScheduleCode((int) $dateOrders->first()->shipper_id, $date, $history),
+                    'status' => match ($history?->action) {
+                        'schedule_confirmed' => 'confirmed',
+                        'schedule_rejected' => 'rejected',
+                        'schedule_created' => 'waiting',
+                        default => 'none',
+                    },
+                    'orders_count' => $dateOrders->count(),
+                    'order_ids' => $orderIds,
+                    'is_completed' => $dateOrders->every(fn (Order $order) => in_array($order->status, $completedStatuses, true)),
+                    'amount_earned' => (float) $dateOrders
+                        ->filter(fn (Order $order) => (bool) ($order->charge_shipping_fee ?? true))
+                        ->sum('shipping_fee'),
+                ];
+            })
+            ->sortKeysDesc()
+            ->values();
+
+        return $this->ok($routes);
+    }
+
     public function confirmDeliverySchedule(Request $request): JsonResponse
     {
         return $this->recordDeliveryScheduleDecision($request, 'schedule_confirmed', 'Da xac nhan lo trinh giao hang');

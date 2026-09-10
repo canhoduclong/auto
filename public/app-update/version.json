@@ -1,8 +1,8 @@
 {
-  "version": "1.0.42",
-  "version_code": 43,
+  "version": "1.0.43",
+  "version_code": 44,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.42: bỏ nhãn tổng hợp trên màn hình đóng hàng, mở rộng nút số ưu tiên và cố định thanh điều hướng để dễ chọn đơn."
+  "message": "Bản cập nhật 1.0.43: đồng bộ lên đơn Sale, quyền linh động đóng hàng và thao tác kho trên app."
 }

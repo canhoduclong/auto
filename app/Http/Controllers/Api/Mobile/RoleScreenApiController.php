@@ -698,13 +698,14 @@ class RoleScreenApiController extends BaseApiController
     {
         $user = $request->user();
         $transfers = WarehouseTransfer::query()
-            ->with(['order.customer', 'sourceWarehouse', 'targetWarehouse', 'shipper'])
+            ->with(['order.customer', 'order.items', 'sourceWarehouse', 'targetWarehouse', 'shipper', 'dispatchEntry.slip'])
             ->when(!$user->hasRole('admin') && !$user->hasRole('manager_shipper'), fn ($q) => $q->where('shipper_id', $user->id))
             ->whereIn('status', [
                 WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
                 WarehouseTransfer::STATUS_IN_TRANSIT,
                 WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
                 WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+                WarehouseTransfer::STATUS_CANCELLED,
             ])
             ->whereHas('order', fn ($q) => $q->forDeliveryDate($date))
             ->latest('id')
@@ -719,6 +720,10 @@ class RoleScreenApiController extends BaseApiController
     {
         $items = $transfers->values()->map(function (WarehouseTransfer $transfer, int $index) {
             $deliveryTime = $transfer->order?->delivery_time ?: $transfer->order?->customer?->delivery_time;
+            $dispatchEntry = $transfer->dispatchEntry;
+            $dispatchSlip = $dispatchEntry?->slip;
+            $dispatchItems = collect($dispatchEntry?->snapshot['items'] ?? []);
+            $quantity = (int) ($dispatchItems->sum('quantity') ?: $transfer->order?->items?->sum('quantity'));
 
             return [
                 'id' => (int) $transfer->id,
@@ -730,6 +735,12 @@ class RoleScreenApiController extends BaseApiController
                 'delivery_hour' => $this->extractDeliveryHour($deliveryTime),
                 'order_code' => (string) ($transfer->order?->code ?? ''),
                 'shipper_name' => (string) ($transfer->shipper?->name ?? ''),
+                'transfer_code' => (string) ($dispatchSlip?->code ?? ('DC-'.str_pad((string) $transfer->id, 6, '0', STR_PAD_LEFT))),
+                'quantity' => $quantity,
+                'weight' => (float) ($transfer->packed_total_weight ?? 0),
+                'can_pickup' => $transfer->status === WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                'can_deliver' => $transfer->status === WarehouseTransfer::STATUS_IN_TRANSIT,
+                'can_rollback' => $transfer->status === WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
                 'updated_at' => optional($transfer->updated_at)->toIso8601String(),
             ];
         });

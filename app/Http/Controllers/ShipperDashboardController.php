@@ -1040,7 +1040,15 @@ class ShipperDashboardController extends Controller
             ]);
         }
 
-        return back()->with('success', 'Đã hoàn lại phiếu điều chuyển trước khi kho nhận xác nhận.');
+        $message = 'Đã hoàn lại phiếu điều chuyển trước khi kho nhận xác nhận.';
+
+        return $request->expectsJson()
+            ? response()->json([
+                'message' => $message,
+                'transfer_id' => $transfer->id,
+                'status' => WarehouseTransfer::STATUS_CANCELLED,
+            ])
+            : back()->with('success', $message);
     }
 
     public function deliverWarehouseTransfer(Request $request, WarehouseTransfer $transfer)

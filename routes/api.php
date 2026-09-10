@@ -33,6 +33,7 @@ Route::prefix('mobile')->group(function () {
 
         Route::prefix('shipper')->group(function () {
             Route::get('/dashboard', [ShipperApiController::class, 'dashboard']);
+            Route::get('/delivery-schedules/list', [ShipperApiController::class, 'deliveryScheduleList']);
             Route::get('/delivery-schedules', [ShipperApiController::class, 'deliverySchedules']);
             Route::post('/delivery-schedules/confirm', [ShipperApiController::class, 'confirmDeliverySchedule']);
             Route::post('/delivery-schedules/reject', [ShipperApiController::class, 'rejectDeliverySchedule']);
@@ -54,6 +55,9 @@ Route::prefix('mobile')->group(function () {
             Route::post('/orders/{order}/upload-proof', [ShipperApiController::class, 'uploadProof']);
             Route::post('/location', [ShipperApiController::class, 'updateLocation']);
             Route::get('/notifications', [ShipperApiController::class, 'notifications']);
+            Route::post('/warehouse-transfers/{transfer}/pickup', [\App\Http\Controllers\ShipperDashboardController::class, 'pickupWarehouseTransfer']);
+            Route::post('/warehouse-transfers/{transfer}/deliver', [\App\Http\Controllers\ShipperDashboardController::class, 'deliverWarehouseTransfer']);
+            Route::post('/warehouse-transfers/{transfer}/rollback', [\App\Http\Controllers\ShipperDashboardController::class, 'rollbackWarehouseTransfer']);
         });
 
         Route::prefix('warehouse')->group(function () {

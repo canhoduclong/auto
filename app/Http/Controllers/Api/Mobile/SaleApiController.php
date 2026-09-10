@@ -362,6 +362,7 @@ class SaleApiController extends BaseApiController
 
                 return [
                     'id' => (int) $variant->id,
+                    'product_id' => (int) $product->id,
                     'name' => trim($product->name.' - '.$variantLabel, ' -'),
                     'variant_name' => (string) ($variant->name ?? ''),
                     'sku' => (string) ($variant->sku ?? ''),
