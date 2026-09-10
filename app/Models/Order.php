@@ -344,6 +344,7 @@ class Order extends Model
     const STATUS_RETURNED_COMPLETED = 'returned_completed';
 
     public const CANCELLABLE_STATUSES = [
+        self::STATUS_OVERDUE_DELIVERY,
         'draft',
         'pending',
         self::STATUS_PENDING_LEADER_APPROVAL,

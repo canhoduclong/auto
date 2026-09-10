@@ -126,7 +126,7 @@
                 $isWaitingWarehouse = (int) ($order->stock_sufficient ?? 1) === 0 && $order->created_at?->isToday();
                 $statusLabel = $isWaitingWarehouse ? 'Chờ Kho Ráp Hàng' : ($statusLabels[$order->status] ?? str_replace('_', ' ', $order->status));
                 $canEdit = !$isTrashView && (int) $order->user_id === (int) $user->id && $order->canBeDirectlyEditedByOwner();
-                $canCancel = !$isTrashView && (int) $order->user_id === (int) $user->id && $order->canBeCancelled();
+                $canCancel = !$isTrashView && ($user->hasRole('admin') || (int) $order->user_id === (int) $user->id) && $order->canBeCancelled();
                 $canRequestAdjustment = !$isTrashView
                     && (int) $order->user_id === (int) $user->id
                     && $order->status === \App\Models\Order::STATUS_COMPLETED

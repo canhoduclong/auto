@@ -142,6 +142,9 @@
                 <span class="ma-priority-circle" title="Số thứ tự ưu tiên">{{ $priorityNumber }}</span>
                 <div class="min-w-0">
                     <div class="fw-semibold text-dark">{{ $customerName }}</div>
+                    @if($order->status === \App\Models\Order::STATUS_OVERDUE_DELIVERY)
+                        <span class="badge bg-warning text-dark">Giao trễ — chờ điều phối tiếp</span>
+                    @endif
                     <div class="text-muted small">{{ $address ? mb_substr($address, 0, 60) . (mb_strlen($address) > 60 ? '...' : '') : 'Chưa cập nhật' }}</div>
                 </div>
             </div>

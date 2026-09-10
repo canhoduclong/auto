@@ -273,6 +273,6 @@ class ShipperDispatchHistoryTest extends TestCase
             ->get(route('shipper.delivery-schedules', ['date' => '2026-08-21']))
             ->assertOk()
             ->assertSee($order->code)
-            ->assertSee('Xác nhận lịch trình & nhận đơn');
+            ->assertSee('Xác nhận lộ trình & nhận đơn');
     }
 }

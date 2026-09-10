@@ -3422,6 +3422,7 @@ class ShipperDashboardController extends Controller
     private function assignmentStatuses(): array
     {
         return [
+            Order::STATUS_OVERDUE_DELIVERY,
             Order::STATUS_APPROVED,
             Order::STATUS_READY_TO_PACK,
             Order::STATUS_PACKING,

@@ -1511,7 +1511,10 @@ class OrderController extends Controller
             $imagePaths[] = $file->store('orders/cancel', 'public');
         }
 
-        DB::transaction(function () use ($order, $user, $reason, $imagePaths) {
+        DB::transaction(function () use ($order, $user, $reason, $imagePaths, &$statusBefore) {
+            $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+            $this->assertValidTransition($order, Order::CANCELLABLE_STATUSES, Order::STATUS_CANCELLED);
+            $statusBefore = (string) $order->status;
             $this->releaseReservedStockForOrder($order);
             $order->update([
                 'status' => 'cancelled',

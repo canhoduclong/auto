@@ -671,6 +671,9 @@
                                         <td class="fw-bold text-success">{{ $deliveryTime ?: '-' }}</td>
                                         <td>
                                             <div class="fw-bold text-dark">{{ $customerName }}</div>
+                                            @if($order->status === \App\Models\Order::STATUS_OVERDUE_DELIVERY)
+                                                <span class="badge bg-warning text-dark">Giao trễ — chờ điều phối tiếp</span>
+                                            @endif
                                             <div class="text-muted small">#{{ $order->code ?: $order->id }}</div>
                                             <div class="order-meta-line">
                                                 <span><i class="bi bi-person-badge me-1"></i>{{ $saleName }}</span>
@@ -869,6 +872,9 @@
                                                             <td class="trip-order-time">{{ $deliveryTime ?: 'Chưa hẹn giờ' }}</td>
                                                             <td class="trip-order-main">
                                                                 <span class="trip-order-customer">{{ $customerName }}</span>
+                                                                @if($order->status === \App\Models\Order::STATUS_OVERDUE_DELIVERY)
+                                                                    <span class="badge bg-warning text-dark">Giao trễ — chờ điều phối tiếp</span>
+                                                                @endif
                                                                 <div class="trip-order-subline">
                                                                     <span class="trip-products-cell">{{ $productSummary ?: ($order->code ?: ('ORD-' . $order->id)) }}</span>
                                                                 </div>

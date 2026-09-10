@@ -8,12 +8,14 @@ use App\Models\User;
 use App\Models\WarehouseTransfer;
 use App\Notifications\ShipperDeliveryScheduleUpdated;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class ShipperAssignmentService
 {
     public function assignmentStatuses(): array
     {
         return [
+            Order::STATUS_OVERDUE_DELIVERY,
             Order::STATUS_APPROVED,
             Order::STATUS_READY_TO_PACK,
             Order::STATUS_PACKING,
@@ -109,6 +111,19 @@ class ShipperAssignmentService
         ?string $notes = null,
         array $routePlan = [],
     ): bool {
+        return DB::transaction(fn () => $this->publishLockedDailySchedule(
+            $shipperId, $date, $actorId, $actorRole, $notes, $routePlan
+        ));
+    }
+
+    private function publishLockedDailySchedule(
+        int $shipperId,
+        Carbon|string|null $date = null,
+        ?int $actorId = null,
+        string $actorRole = 'system',
+        ?string $notes = null,
+        array $routePlan = [],
+    ): bool {
         $dateString = $date instanceof Carbon
             ? $date->toDateString()
             : Carbon::parse($date ?: now())->toDateString();
@@ -143,6 +158,34 @@ class ShipperAssignmentService
 
         if ($plannedOrderIds !== [] && $orders->count() !== count($plannedOrderIds)) {
             return false;
+        }
+
+        foreach ($orders as $order) {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+            if ($lockedOrder->status === Order::STATUS_CANCELLED) {
+                abort(422, 'Đơn đã bị hủy. Vui lòng tải lại điều phối.');
+            }
+            if ($lockedOrder->status !== Order::STATUS_OVERDUE_DELIVERY) {
+                continue;
+            }
+
+            $previousStatus = $lockedOrder->histories()
+                ->where('action', 'mark_overdue_delivery')->latest('id')->value('status_before');
+            // Resume the recorded warehouse/approval stage; never assume an
+            // overdue order was packed merely because it is being scheduled.
+            if (! in_array($previousStatus, Order::RESTORABLE_AFTER_CANCEL_STATUSES, true)) {
+                abort(422, 'Không xác định được công đoạn trước khi giao trễ của đơn #'.$lockedOrder->code.'.');
+            }
+            $lockedOrder->update(['status' => $previousStatus, 'skip_auto_cancel' => true]);
+            $lockedOrder->histories()->create([
+                'action' => 'resume_overdue_delivery',
+                'user_id' => $actorId,
+                'role' => $actorRole,
+                'status_before' => Order::STATUS_OVERDUE_DELIVERY,
+                'status_after' => $previousStatus,
+                'note' => 'Tiếp tục xử lý đơn giao trễ khi gửi lại lịch giao hàng.',
+            ]);
+            $order->refresh();
         }
 
         $shipperRoutePlan = collect($routePlan)
