@@ -898,6 +898,16 @@
         .monitor-layout { grid-template-columns: 220px minmax(0, 1fr); gap: 14px; }
         .monitor-order { grid-template-columns: minmax(0, 1fr) 180px; }
     }
+    @media (min-width: 992px) {
+        .monitor-sidebar {
+            position: sticky;
+            top: 12px;
+            align-self: start;
+            max-height: calc(100vh - 24px);
+            overflow-y: auto;
+            scrollbar-gutter: stable;
+        }
+    }
     @media (max-width: 991.98px) {
         .monitor-layout { grid-template-columns: 1fr; }
         .monitor-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); }

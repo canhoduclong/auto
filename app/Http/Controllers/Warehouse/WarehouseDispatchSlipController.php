@@ -656,7 +656,29 @@ class WarehouseDispatchSlipController extends Controller
             return ['slip' => $slip] + $this->documentData($slip);
         });
 
-        return view('warehouse.dispatch-slips.print-selected', compact('documents'));
+        $totalExportSummaryRows = $documents
+            ->flatMap(fn (array $document) => $document['exportSummaryRows'])
+            ->groupBy(fn (array $row): string => json_encode([
+                $row['variant_id'] ?? null,
+                number_format((float) $row['price'], 2, '.', ''),
+                (bool) $row['priced_by_kg'],
+            ]))
+            ->map(function (Collection $rows): array {
+                $first = $rows->first();
+
+                return [
+                    'product_name' => $first['product_name'],
+                    'sku' => $first['sku'],
+                    'size' => $first['size'],
+                    'quantity' => (int) $rows->sum('quantity'),
+                    'weight' => round((float) $rows->sum('weight'), 3),
+                    'price' => (float) $first['price'],
+                    'priced_by_kg' => (bool) $first['priced_by_kg'],
+                    'amount' => round((float) $rows->sum('amount'), 0),
+                ];
+            })->values();
+
+        return view('warehouse.dispatch-slips.print-selected', compact('documents', 'totalExportSummaryRows'));
     }
 
     public function printImport(WarehouseDispatchSlip $dispatchSlip)
@@ -887,6 +909,7 @@ class WarehouseDispatchSlipController extends Controller
             $receivedRows = $rows->whereNotNull('received_quantity');
 
             return [
+                'variant_id' => $first['variant_id'],
                 'product_name' => $first['product_name'],
                 'sku' => $first['sku'],
                 'size' => $first['size'],

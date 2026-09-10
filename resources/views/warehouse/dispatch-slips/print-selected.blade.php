@@ -12,15 +12,15 @@
     $formatKg = static fn ($value): string => rtrim(rtrim(number_format((float) $value, 3, ',', '.'), '0'), ',').' kg';
     $formatMoney = static fn ($value): string => number_format((float) $value, 0, ',', '.').'đ';
     $totalOrders = $documents->sum(fn ($document) => $document['orderRows']->count());
-    $totalQuantity = $documents->sum(fn ($document) => $document['summaryRows']->sum('quantity'));
-    $totalWeight = $documents->sum(fn ($document) => $document['summaryRows']->sum('weight'));
+    $totalQuantity = $totalExportSummaryRows->sum('quantity');
+    $totalWeight = $totalExportSummaryRows->sum('weight');
 @endphp
-<button class="no-print" onclick="window.print()">In toàn bộ</button>
+<button class="no-print" onclick="window.print()">In phiếu tổng</button>
 
 <main class="sheet">
     <div class="muted">HOÀNG LONG TNT</div>
     <h1>PHIẾU XUẤT KHO TỔNG</h1>
-    <div class="sub">Ngày in {{ now()->format('d/m/Y H:i') }} · {{ $documents->count() }} phiếu theo tài xế</div>
+    <div class="sub">Ngày in {{ now()->format('d/m/Y H:i') }} · {{ $documents->count() }} phiếu đã chọn</div>
     <div class="meta">
         <div>Tổng tài xế/phiếu: <strong>{{ number_format($documents->count()) }}</strong></div>
         <div>Tổng đơn hàng: <strong>{{ number_format($totalOrders) }}</strong></div>
@@ -38,34 +38,9 @@
         </tbody>
         <tfoot><tr class="summary"><td colspan="4">TỔNG CỘNG</td><td class="num">{{ number_format($totalOrders) }}</td><td class="num">{{ number_format($totalQuantity) }}</td><td class="num">{{ $formatKg($totalWeight) }}</td></tr></tfoot>
     </table>
+    <h2>TỔNG HỢP HÀNG HÓA</h2>
+    @include('warehouse.dispatch-slips._export_products', ['rows' => $totalExportSummaryRows])
     <div class="sign"><div><strong>NGƯỜI LẬP PHIẾU</strong><div class="muted">(Ký, ghi rõ họ tên)</div><div class="sign-space"></div></div><div><strong>THỦ KHO XUẤT</strong><div class="muted">(Ký, ghi rõ họ tên)</div><div class="sign-space"></div></div><div><strong>NGƯỜI DUYỆT</strong><div class="muted">(Ký, ghi rõ họ tên)</div><div class="sign-space"></div></div></div>
 </main>
-
-@foreach($documents as $document)
-    @php($slip = $document['slip'])
-    <main class="sheet">
-        <div class="muted">HOÀNG LONG TNT</div>
-        <h1>PHIẾU XUẤT KHO THEO TÀI XẾ</h1>
-        <div class="sub"><strong>{{ $slip->code }}</strong> · Ngày {{ $slip->business_date->format('d/m/Y') }}</div>
-        @if($slip->status === 'draft')<div class="draft">BẢN NHÁP — PHIẾU CHƯA CHỐT</div>@endif
-        <div class="meta"><div>Kho xuất: <strong>{{ $slip->sourceWarehouse?->name }}</strong></div><div>Kho nhận: <strong>{{ $slip->targetWarehouse?->name }}</strong></div><div>Tài xế: <strong>{{ $slip->shipper?->name }}</strong></div><div>Điện thoại: {{ $slip->shipper?->phone ?: '—' }}</div></div>
-
-        <h2>A. ĐƠN HÀNG BÀN GIAO</h2>
-        <table><thead><tr><th class="center" style="width:6%">STT</th><th style="width:20%">Mã đơn</th><th>Khách hàng</th><th class="num" style="width:14%">Số lượng</th><th class="num" style="width:16%">Khối lượng</th></tr></thead><tbody>
-        @forelse($document['orderRows'] as $row)<tr><td class="center">{{ $loop->iteration }}</td><td><strong>{{ $row['code'] }}</strong></td><td>{{ $row['customer_name'] ?: 'Không rõ khách hàng' }}</td><td class="num">{{ number_format($row['item_quantity']) }}</td><td class="num">{{ $formatKg($row['packed_weight']) }}</td></tr>@empty<tr><td colspan="5" class="center">Không có đơn hàng.</td></tr>@endforelse
-        </tbody></table>
-
-        <h2>B. PHIẾU ĐIỀU CHUYỂN HÀNG</h2>
-        <table><thead><tr><th class="center" style="width:6%">STT</th><th>Mã phiếu</th><th class="num" style="width:16%">Mặt hàng</th><th class="num" style="width:16%">Số lượng</th><th class="num" style="width:18%">Khối lượng</th></tr></thead><tbody>
-        @forelse($document['inventoryTransferRows'] as $row)<tr><td class="center">{{ $loop->iteration }}</td><td><strong>{{ $row['code'] }}</strong></td><td class="num">{{ number_format($row['item_count']) }}</td><td class="num">{{ number_format($row['quantity']) }}</td><td class="num">{{ $formatKg($row['weight']) }}</td></tr>@empty<tr><td colspan="5" class="center">Không có hàng điều chuyển.</td></tr>@endforelse
-        </tbody></table>
-
-        <h2>C. TỔNG HỢP HÀNG HÓA</h2>
-        @include('warehouse.dispatch-slips._export_products', ['rows' => $document['exportSummaryRows']])
-
-        <h2>D. GHI CHÚ BÀN GIAO</h2><div class="note">{{ filled($slip->notes) ? $slip->notes : '' }}</div>
-        <div class="sign"><div><strong>NGƯỜI LẬP PHIẾU</strong><div class="muted">(Ký, ghi rõ họ tên)</div><div class="sign-space"></div>{{ $slip->creator?->name }}</div><div><strong>THỦ KHO XUẤT</strong><div class="muted">(Ký, ghi rõ họ tên)</div><div class="sign-space"></div></div><div><strong>TÀI XẾ NHẬN HÀNG</strong><div class="muted">(Ký, ghi rõ họ tên)</div><div class="sign-space"></div>{{ $slip->shipper?->name }}</div></div>
-    </main>
-@endforeach
 </body>
 </html>
