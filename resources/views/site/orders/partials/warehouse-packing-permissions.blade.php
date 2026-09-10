@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
             products.forEach(productId => {
                 const variants = catalog.filter(v => v.product_id === productId);
                 const sizes = [...new Set(variants.map(v => v.size).filter(s => s > 0))].sort((a,b) => a-b);
-                state[productId] ||= {quantity: storedPolicy === null && box.dataset.legacyQuantity === '1', sizes: storedPolicy === null ? (legacySizes ?? sizes) : []};
+                state[productId] ||= {quantity: storedPolicy === null && box.dataset.legacyQuantity === '1', sizes: storedPolicy === null ? (legacySizes ?? []) : []};
                 const policy = state[productId];
                 const section = document.createElement('div');
                 section.className = 'mb-3';
