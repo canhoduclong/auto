@@ -3,6 +3,7 @@
                 $isTodaySelected = \Illuminate\Support\Carbon::parse($selectedDate ?? now()->toDateString())->isToday();
                 $canProcessThisOrder = !$orderCardReadonly && (
                     $order->accounting_sales_import_batch_id !== null
+                    || $order->status === \App\Models\Order::STATUS_PACKING
                     || (bool) $order->skip_auto_cancel
                     || $order->hasCompletedAdjustment()
                     || ($isTodaySelected && $order->created_at->isToday())

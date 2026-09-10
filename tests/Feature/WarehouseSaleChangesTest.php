@@ -33,7 +33,7 @@ class WarehouseSaleChangesTest extends TestCase
         $order->update(['note' => 'Đóng 4 túi']);
         $firstId = $order->histories()->where('action', WarehouseSaleChangeService::CHANGED)->sole()->id;
         $this->actingAs($operator)->get(route('warehouse.orders'))
-            ->assertOk()->assertSee('Thay đổi từ sale — chờ xác nhận')->assertSee('Đóng 2 túi → Đóng 4 túi')
+            ->assertOk()->assertSee('Đơn điều chỉnh từ sale — chờ xác nhận')->assertSee('Đóng 2 túi → Đóng 4 túi')
             ->assertSee('Xác Nhận')->assertSee('sale-change-pending', false);
 
         // A second edit arrives after the operator loaded the first edit.
@@ -62,6 +62,42 @@ class WarehouseSaleChangesTest extends TestCase
 
         $operator->update(['warehouse_id' => Warehouse::create(['name' => 'Kho khác', 'status' => true])->id]);
         $this->actingAs($operator)->postJson(route('warehouse.orders.confirm-sale-changes', $order), ['through_id' => $latestId])->assertForbidden();
+    }
+
+    public function test_previous_day_packing_can_be_completed_after_confirming_sale_changes(): void
+    {
+        Carbon::setTestNow('2026-09-09 12:00:00');
+        $warehouse = Warehouse::create(['name' => 'Kho đóng tiếp', 'status' => true]);
+        $operator = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $operator->roles()->attach(Role::create(['name' => 'warehouse']));
+        $sale = User::factory()->create();
+        $sale->roles()->attach(Role::create(['name' => 'sale']));
+        $customer = Customer::create(['name' => 'Khách đóng tiếp', 'status' => 'active']);
+        $order = Order::create([
+            'user_id' => $sale->id, 'customer_id' => $customer->id, 'warehouse_id' => $warehouse->id,
+            'status' => Order::STATUS_PACKING, 'note' => 'Đóng 2 túi',
+        ]);
+        $this->actingAs($sale);
+        $order->update(['note' => 'Đóng 4 túi']);
+        $changeId = $order->histories()->where('action', WarehouseSaleChangeService::CHANGED)->sole()->id;
+
+        Carbon::setTestNow('2026-09-10 12:00:00');
+        $this->actingAs($operator)
+            ->post(route('warehouse.orders.confirm-sale-changes', $order), ['through_id' => $changeId])
+            ->assertRedirect()->assertSessionHas('success');
+        $this->get(route('warehouse.orders', ['date' => '2026-09-09']))
+            ->assertOk()->assertSee('Đã xác nhận thay đổi từ sale')
+            ->assertSee('Hoàn thành đóng gói ngày 09/09')
+            ->assertSee(route('warehouse.orders.complete-packing', $order), false);
+        $this->postJson(route('warehouse.orders.complete-packing', $order), ['packing_date' => '2026-09-09'])
+            ->assertOk()->assertJsonPath('ok', true);
+        $this->assertSame(Order::STATUS_READY_TO_SHIP, $order->fresh()->status);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     public function test_edits_before_packing_and_warehouse_edits_do_not_create_sale_alerts(): void

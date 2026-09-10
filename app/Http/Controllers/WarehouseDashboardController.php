@@ -6391,6 +6391,7 @@ class WarehouseDashboardController extends Controller
     private function canProcessOrderOnCurrentRun(Order $order): bool
     {
         return $order->accounting_sales_import_batch_id !== null
+            || $order->status === Order::STATUS_PACKING
             || (bool) $order->skip_auto_cancel
             || $order->hasCompletedAdjustment()
             || ($order->created_at && $order->created_at->isToday());

@@ -53,6 +53,28 @@ class RestoredOrderLateProcessingTest extends TestCase
         }
     }
 
+    public function test_old_order_already_in_packing_can_continue_processing(): void
+    {
+        Carbon::setTestNow('2026-09-10 10:00:00');
+
+        try {
+            $order = new Order();
+            $order->setRawAttributes([
+                'created_at' => Carbon::parse('2026-09-09 12:47:00'),
+                'status' => Order::STATUS_PACKING,
+                'skip_auto_cancel' => 0,
+                'accounting_sales_import_batch_id' => null,
+            ], true);
+            $order->setRelation('adjustments', collect());
+
+            $method = new ReflectionMethod(WarehouseDashboardController::class, 'canProcessOrderOnCurrentRun');
+
+            $this->assertTrue($method->invoke(new WarehouseDashboardController(), $order));
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
     public function test_old_order_with_completed_adjustment_can_continue_warehouse_processing(): void
     {
         Carbon::setTestNow('2026-08-25 11:00:00');
