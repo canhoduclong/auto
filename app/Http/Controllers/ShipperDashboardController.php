@@ -1823,15 +1823,25 @@ class ShipperDashboardController extends Controller
             ->get();
 
         foreach ($reservations as $reservation) {
-            if ($remaining <= 0) {
-                break;
-            }
-
             $inventory = Inventory::query()->lockForUpdate()->find($reservation->inventory_id);
             if (! $inventory) {
                 continue;
             }
 
+            // A received transfer makes the pickup warehouse authoritative.
+            // Legacy reservations at the source must not export source stock again.
+            if ((int) $inventory->warehouse_id !== $warehouseId) {
+                $reservation->delete();
+                $inventory->reserved_quantity = $inventory->reservations()->sum('quantity');
+                $inventory->save();
+                continue;
+            }
+
+            if ($remaining <= 0) {
+                continue;
+            }
+
+            $inventory->reserved_quantity = $inventory->reservations()->sum('quantity');
             $deductQty = min($remaining, (int) $reservation->quantity);
             if ($deductQty <= 0) {
                 continue;
@@ -1877,7 +1887,8 @@ class ShipperDashboardController extends Controller
                     break;
                 }
 
-                $available = (int) $inventory->quantity - (int) ($inventory->reserved_quantity ?? 0);
+                $inventory->reserved_quantity = $inventory->reservations()->sum('quantity');
+                $available = (int) $inventory->quantity - (int) $inventory->reserved_quantity;
                 if ($available <= 0) {
                     continue;
                 }

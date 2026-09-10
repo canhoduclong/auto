@@ -20,6 +20,93 @@ class ShipperAcceptOrderTest extends TestCase
 {
     use RefreshDatabase;
 
+    #[\PHPUnit\Framework\Attributes\DataProvider('transferredPickupCases')]
+    public function test_transferred_pickup_uses_target_stock_and_actual_reservations(bool $sourceReservation, int $targetQuantity, int $otherReserved, bool $succeeds): void
+    {
+        $shipper = User::factory()->create();
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
+        $source = Warehouse::factory()->create();
+        $target = Warehouse::factory()->create();
+        $customer = Customer::create(['name' => 'Khách chuyển tiếp', 'status' => 'active']);
+        $variant = \App\Models\ProductVariant::factory()->create();
+        $order = Order::create([
+            'customer_id' => $customer->id, 'user_id' => $shipper->id,
+            'shipper_id' => $shipper->id, 'warehouse_id' => $target->id,
+            'status' => Order::STATUS_READY_TO_SHIP, 'code' => 'TRANSFERRED-PICKUP',
+        ]);
+        $item = $order->items()->create([
+            'product_id' => $variant->product_id, 'product_variant_id' => $variant->id,
+            'quantity' => 2, 'price' => 10000, 'total' => 20000,
+        ]);
+        $sourceStock = Inventory::create([
+            'warehouse_id' => $source->id, 'product_variant_id' => $variant->id,
+            'quantity' => 0, 'reserved_quantity' => $sourceReservation ? 2 : 0,
+        ]);
+        $targetStock = Inventory::create([
+            'warehouse_id' => $target->id, 'product_variant_id' => $variant->id,
+            'quantity' => $targetQuantity, 'reserved_quantity' => 0,
+        ]);
+        InventoryReservation::create([
+            'order_item_id' => $item->id,
+            'inventory_id' => $sourceReservation ? $sourceStock->id : $targetStock->id,
+            'quantity' => 2,
+        ]);
+        if ($otherReserved > 0) {
+            $otherOrder = Order::create([
+                'customer_id' => $customer->id, 'user_id' => $shipper->id,
+                'warehouse_id' => $target->id, 'status' => Order::STATUS_PACKING,
+            ]);
+            $otherItem = $otherOrder->items()->create([
+                'product_id' => $variant->product_id, 'product_variant_id' => $variant->id,
+                'quantity' => $otherReserved, 'price' => 10000, 'total' => $otherReserved * 10000,
+            ]);
+            InventoryReservation::create([
+                'order_item_id' => $otherItem->id, 'inventory_id' => $targetStock->id, 'quantity' => $otherReserved,
+            ]);
+        }
+        \App\Models\WarehouseTransfer::create([
+            'order_id' => $order->id, 'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id, 'shipper_id' => $shipper->id,
+            'status' => \App\Models\WarehouseTransfer::STATUS_RECEIVED_COMPLETED, 'received_at' => now(),
+        ]);
+        $order->histories()->create([
+            'action' => 'schedule_confirmed', 'user_id' => $shipper->id,
+            'role' => 'shipper', 'status_after' => Order::STATUS_READY_TO_SHIP,
+        ]);
+
+        $response = $this->actingAs($shipper)->postJson(route('shipper.accept', $order));
+        if ($succeeds) {
+            $response->assertOk();
+            $this->assertSame(Order::STATUS_DELIVERING, $order->fresh()->status);
+            $this->assertEquals($targetQuantity - 2, $targetStock->fresh()->quantity);
+            $this->assertEquals($otherReserved, $targetStock->fresh()->reserved_quantity);
+            $this->assertDatabaseMissing('inventory_reservations', ['order_item_id' => $item->id]);
+            $document = InventoryDocument::where('notes', 'Xuất kho cho đơn #'.$order->code)->sole();
+            $this->assertEquals($target->id, $document->warehouse_id);
+            $this->assertEquals(-2, InventoryMovement::where('reference_id', $document->id)
+                ->where('reference_type', InventoryDocument::class)->where('inventory_id', $targetStock->id)->sum('quantity'));
+            $this->postJson(route('shipper.accept', $order))->assertStatus(409);
+            $this->assertEquals($targetQuantity - 2, $targetStock->fresh()->quantity);
+        } else {
+            $response->assertStatus(422);
+            $this->assertSame(Order::STATUS_READY_TO_SHIP, $order->fresh()->status);
+            $this->assertEquals($targetQuantity, $targetStock->fresh()->quantity);
+            $this->assertDatabaseHas('inventory_reservations', ['order_item_id' => $item->id, 'quantity' => 2]);
+            $this->assertDatabaseMissing('inventory_documents', ['notes' => 'Xuất kho cho đơn #'.$order->code]);
+        }
+        $this->assertEquals(0, $sourceStock->fresh()->quantity);
+    }
+
+    public static function transferredPickupCases(): array
+    {
+        return [
+            'stale target reserved total' => [false, 5, 1, true],
+            'legacy reservation at source' => [true, 5, 1, true],
+            'insufficient physical stock' => [false, 1, 0, false],
+            'target stock reserved for another order' => [true, 2, 2, false],
+        ];
+    }
+
     public function test_shipper_can_rollback_an_accepted_order_and_restore_exported_stock(): void
     {
         $shipper = User::factory()->create();
