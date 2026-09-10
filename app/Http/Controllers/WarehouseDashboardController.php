@@ -2092,14 +2092,14 @@ class WarehouseDashboardController extends Controller
     {
         $this->authorizePackingOrderAccess($order);
 
-        if (!empty($order->warehouse_allowed_sizes)) {
+        if (!empty($order->warehouse_allowed_sizes) || $order->warehouse_product_permissions !== null) {
             $order->loadMissing('items.variant', 'items.packingSizeAllocations.variant');
             foreach ($order->items as $item) {
                 $mix = $item->packingSizeAllocations;
                 $hasValidMix = $mix->isNotEmpty()
                     && (int) $mix->sum('quantity') === (int) $item->quantity
-                    && $mix->every(fn ($allocation) => $order->allowsPackingSize((float) $allocation->variant?->size));
-                if ((float) $item->variant?->size > 0 && !$order->allowsPackingSize((float) $item->variant->size) && !$hasValidMix) {
+                    && $mix->every(fn ($allocation) => $order->allowsPackingSize((float) $allocation->variant?->size, (int) $item->product_id));
+                if (!empty($order->packingSizesForProduct((int) $item->product_id)) && (float) $item->variant?->size > 0 && !$order->allowsPackingSize((float) $item->variant->size, (int) $item->product_id) && !$hasValidMix) {
                     throw \Illuminate\Validation\ValidationException::withMessages([
                         'allocations' => 'Vui lòng lưu cơ cấu theo size Sale cho phép trước khi bắt đầu đóng hàng.',
                     ]);
@@ -2446,7 +2446,7 @@ class WarehouseDashboardController extends Controller
                 $item->setRelation('order', $order);
                 return ($item->variant?->product?->allow_adjacent_packing_sizes ?? true)
                     && (float) ($item->variant?->size ?? 0) > 0
-                    && ($order->warehouse_allowed_sizes !== null || $shortItemIds->contains((int) $item->id) || $item->packingSizeAllocations->isNotEmpty());
+                    && ($order->packingSizesForProduct((int) $item->product_id) !== null || $shortItemIds->contains((int) $item->id) || $item->packingSizeAllocations->isNotEmpty());
             });
         })->values();
 
@@ -2478,7 +2478,7 @@ class WarehouseDashboardController extends Controller
             $saved = $item->packingSizeAllocations->pluck('quantity', 'product_variant_id');
             $mainSize = (float) $item->variant->size;
             $options = collect($variantsByProduct->get((int) $item->variant->product_id, collect()))
-                ->filter(fn (ProductVariant $variant) => (float) $variant->size > 0 && $item->order->allowsPackingSize((float) $variant->size))
+                ->filter(fn (ProductVariant $variant) => (float) $variant->size > 0 && $item->order->allowsPackingSize((float) $variant->size, (int) $item->product_id))
                 ->map(function (ProductVariant $variant) use ($item, $saved, $reservationByItemAndInventory, $reservedByInventory, $fifoAvailable) {
                     $inventories = $variant->inventories;
                     $available = (int) $inventories->sum(function (Inventory $inventory) use ($item, $reservationByItemAndInventory, $reservedByInventory) {
@@ -3196,7 +3196,7 @@ class WarehouseDashboardController extends Controller
             throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Chỉ được dùng size chính '.$mainSizeLabel.' hoặc size khác của cùng sản phẩm.']);
         }
 
-        if ($variants->contains(fn (ProductVariant $variant) => !$order->allowsPackingSize((float) $variant->size))) {
+        if ($variants->contains(fn (ProductVariant $variant) => !$order->allowsPackingSize((float) $variant->size, (int) $item->product_id))) {
             throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Chỉ được đóng các size Sale đã cho phép trong đơn hàng.']);
         }
 
@@ -3531,6 +3531,43 @@ class WarehouseDashboardController extends Controller
         return back()->with('success', 'Đã cập nhật Kg thực tế cho đơn #'.$order->code);
     }
 
+    private function refreshChangedItemReservations(Order $order, $item): void
+    {
+        $reservations = InventoryReservation::where('order_item_id', $item->id)->lockForUpdate()->get();
+        foreach ($reservations as $reservation) {
+            $inventory = Inventory::query()->lockForUpdate()->find($reservation->inventory_id);
+            $reservation->delete();
+            if ($inventory) {
+                $inventory->reserved_quantity = $inventory->reservations()->sum('quantity');
+                $inventory->save();
+            }
+        }
+        if ($order->status !== Order::STATUS_PACKING || !$item->product_variant_id) {
+            return;
+        }
+        $packingDate = $order->accounting_sales_import_batch_id && $order->delivery_date
+            ? $order->delivery_date : $order->created_at;
+        if (!$packingDate->isToday()) {
+            return;
+        }
+        $remaining = (int) $item->quantity;
+        $inventories = Inventory::where('warehouse_id', $order->warehouse_id ?: Auth::user()?->warehouse_id)
+            ->where('product_variant_id', $item->product_variant_id)->orderBy('id')->lockForUpdate()->get();
+        foreach ($inventories as $inventory) {
+            $reserved = (int) $inventory->reservations()->sum('quantity');
+            $quantity = min($remaining, max(0, (int) $inventory->quantity - $reserved));
+            if ($quantity <= 0) continue;
+            InventoryReservation::create(['order_item_id' => $item->id, 'inventory_id' => $inventory->id,
+                'quantity' => $quantity, 'reserved_at' => now()]);
+            $inventory->update(['reserved_quantity' => $reserved + $quantity]);
+            $remaining -= $quantity;
+            if ($remaining === 0) break;
+        }
+        if ($remaining > 0) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['items' => 'Không đủ tồn kho cho số lượng mới. Vui lòng bổ sung hàng trước khi tăng số lượng.']);
+        }
+    }
+
     public function requestAdjustment(Request $request, Order $order)
     {
         $this->authorizePackingOrderAccess($order);
@@ -3543,20 +3580,16 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Chỉ được điều chỉnh đơn có ngày hôm nay.');
         }
 
-        if ($order->status === Order::STATUS_PACKING) {
-            if ($request->expectsJson()) {
-                return response()->json(['ok' => false, 'message' => 'Đơn đang đóng hàng. Hãy đưa đơn về Chờ đóng gói trước khi gửi điều chỉnh.'], 422);
-            }
-
-            return back()->with('error', 'Đơn đang đóng hàng. Hãy đưa đơn về Chờ đóng gói trước khi gửi điều chỉnh.');
-        }
-
         if (in_array($order->status, self::PACKED_STATUSES, true)) {
             if ($request->expectsJson()) {
                 return response()->json(['ok' => false, 'message' => 'Đơn đã đóng gói xong, không thể điều chỉnh lại sản phẩm.'], 422);
             }
 
             return back()->with('error', 'Đơn đã đóng gói xong, không thể điều chỉnh lại sản phẩm.');
+        }
+
+        if ($order->warehouse_adjustment_status === Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['items' => 'Đơn đang chờ Sale xác nhận điều chỉnh trước đó.']);
         }
 
         $validated = $request->validate([
@@ -3669,9 +3702,41 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', 'Không có thay đổi nào về số lượng sản phẩm.');
         }
 
-        if ($order->warehouse_can_adjust) {
+        $canDirectAdjust = collect($changes)->every(function ($change) use ($order, $orderItemsById, $variantsById) {
+            $productId = $orderItemsById->get($change['order_item_id'])?->product_id
+                ?? $variantsById->get($change['product_variant_id'])?->product_id;
+            return $order->allowsWarehouseQuantityChange((int) $productId);
+        });
+        if ($order->status === Order::STATUS_PACKING && !$canDirectAdjust) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['items' => 'Sale chưa cho phép kho đổi số lượng sản phẩm này khi đang đóng hàng.']);
+        }
+        if ($canDirectAdjust) {
             DB::transaction(function () use ($order, $changes, $validated): void {
+                $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+                if (!in_array($order->status, [Order::STATUS_APPROVED, Order::STATUS_READY_TO_PACK, Order::STATUS_PACKING], true)
+                    || $order->warehouse_adjustment_status === Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['items' => 'Trạng thái đơn đã thay đổi. Vui lòng tải lại trang.']);
+                }
+                foreach ($changes as $change) {
+                    $currentItem = $order->items()->find($change['order_item_id']);
+                    $productId = $currentItem?->product_id ?? ProductVariant::find($change['product_variant_id'])?->product_id;
+                    if (!$order->allowsWarehouseQuantityChange((int) $productId)
+                        || ($currentItem && (int) $currentItem->quantity !== (int) $change['old_quantity'])) {
+                        throw \Illuminate\Validation\ValidationException::withMessages(['items' => 'Quyền hoặc số lượng đã thay đổi. Vui lòng tải lại trang.']);
+                    }
+                }
                 app(WarehouseOrderAdjustmentService::class)->apply($order, collect($changes));
+                foreach ($changes as $change) {
+                    $changedItem = $order->items()->find($change['order_item_id']);
+                    if ($changedItem) {
+                        $changedItem->packingSizeAllocations()->delete();
+                        $changedItem->update(['actual_weight' => null, 'packed_weight' => null, 'packed_quantity' => null]);
+                        $this->refreshChangedItemReservations($order, $changedItem);
+                    }
+                }
+                app(\App\Services\WarehousePackedOrderService::class)->recalculate($order);
+                $order->amount_due = max(0, (float) $order->total - (float) $order->amount_paid);
+                $order->actual_weight = $order->items()->sum('actual_weight') ?: null;
                 $order->clearWarehouseAdjustmentState()->save();
 
                 OrderHistory::create([

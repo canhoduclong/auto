@@ -148,6 +148,7 @@ class OrderObserver
             'charge_vat' => 'Tính VAT',
             'warehouse_can_adjust' => 'Kho được điều chỉnh số lượng',
             'warehouse_allowed_sizes' => 'Size kho được đóng',
+            'warehouse_product_permissions' => 'Quyền đóng hàng theo sản phẩm',
             'warehouse_id' => 'Kho xử lý',
             'return_warehouse_id' => 'Kho trả hàng',
             'daily_sequence' => 'Số thứ tự ngày',
@@ -158,6 +159,10 @@ class OrderObserver
     {
         if ($value === null || $value === '') {
             return 'Trống';
+        }
+
+        if ($field === 'warehouse_product_permissions') {
+            return json_encode(is_array($value) ? $value : json_decode((string) $value, true), JSON_UNESCAPED_UNICODE);
         }
 
         if ($field === 'warehouse_allowed_sizes') {

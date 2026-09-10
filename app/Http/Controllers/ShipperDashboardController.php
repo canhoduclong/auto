@@ -2238,6 +2238,14 @@ class ShipperDashboardController extends Controller
         $selectedHistory ??= $versions->first();
         $routePlan = $selectedHistory?->route_plan ?? [];
 
+        if ($request->input('download') === 'excel') {
+            abort_unless($selectedHistory, 404, 'Ngày này chưa có bản điều phối.');
+            return \Maatwebsite\Excel\Facades\Excel::download(
+                new \App\Exports\DispatchHistoryExport($selectedHistory),
+                'dieu-phoi-tong-'.$selectedDate.'-lan-'.$selectedHistory->version.'.xlsx'
+            );
+        }
+
         return view('shipper.manage-assignments-review', [
             'selectedDate' => $selectedDate,
             'notes' => $selectedHistory?->notes ?? '',

@@ -18,7 +18,7 @@ class Order extends Model
         'customer_id', 'user_id', 'shipper_id', 'supplier_id', 'code', 'total', 'status',
         'commission_percent_snapshot', 'commission_amount_snapshot', 'commission_created_at',
         'copied_from_order_id', 'order_type', 'workflow_code', 'is_return_order', 'parent_order_id',
-        'warehouse_id', 'warehouse_can_adjust', 'warehouse_allowed_sizes', 'return_warehouse_id',
+        'warehouse_id', 'warehouse_product_permissions', 'warehouse_can_adjust', 'warehouse_allowed_sizes', 'return_warehouse_id',
         'recipient_name', 'recipient_phone', 'recipient_email', 'recipient_address', 'note',
         'subtotal_amount', 'item_discount_total', 'extra_discount_total',
         'total_discount', 'order_discount', 'order_discount_type', 'total_weight', 'actual_weight', 'charge_shipping_fee', 'shipping_fee', 'shipping_fee_transaction_id',
@@ -58,6 +58,7 @@ class Order extends Model
         'charge_shipping_fee' => 'boolean',
         'warehouse_can_adjust' => 'boolean',
         'warehouse_allowed_sizes' => 'array',
+        'warehouse_product_permissions' => 'array',
         'shipping_fee' => 'decimal:2',
         'charge_vat' => 'boolean',
         'vat_percent' => 'decimal:2',
@@ -82,14 +83,29 @@ class Order extends Model
         'operational_completed_at' => 'datetime',
     ];
 
-    public function allowsPackingSize(float $size): bool
+    public function allowsWarehouseQuantityChange(int $productId): bool
+    {
+        return $this->warehouse_product_permissions !== null
+            ? (bool) ($this->warehouse_product_permissions[$productId]['quantity'] ?? false)
+            : (bool) $this->warehouse_can_adjust;
+    }
+
+    public function packingSizesForProduct(int $productId): ?array
+    {
+        return $this->warehouse_product_permissions !== null
+            ? ($this->warehouse_product_permissions[$productId]['sizes'] ?? [])
+            : $this->warehouse_allowed_sizes;
+    }
+
+    public function allowsPackingSize(float $size, ?int $productId = null): bool
     {
         // Existing orders retain their original packing policy until Sale edits it.
-        if ($this->warehouse_allowed_sizes === null) {
+        $sizes = $productId !== null ? $this->packingSizesForProduct($productId) : $this->warehouse_allowed_sizes;
+        if ($sizes === null) {
             return true;
         }
 
-        return collect($this->warehouse_allowed_sizes)->contains(
+        return collect($sizes)->contains(
             fn ($allowed) => abs((float) $allowed - $size) < 0.0001
         );
     }

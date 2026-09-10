@@ -234,6 +234,9 @@
             </div>
         @endif
         <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>Xem lịch sử</button>
+        @if($selectedHistory)
+            <a class="btn btn-success btn-sm" href="{{ route('shipper.manage-assignments.history', ['date' => $selectedDate, 'history_id' => $selectedHistory->id, 'download' => 'excel']) }}">Tải Excel điều phối tổng</a>
+        @endif
         <a href="{{ route('shipper.manage-assignments', ['date' => $selectedDate]) }}" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i>Về trang điều phối
         </a>

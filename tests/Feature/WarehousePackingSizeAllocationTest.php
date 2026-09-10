@@ -31,6 +31,35 @@ class WarehousePackingSizeAllocationTest extends TestCase
         parent::tearDown();
     }
 
+    public function test_product_permissions_allow_quantity_changes_while_packing_and_keep_other_products_locked(): void
+    {
+        [$user, $order, $item, $variants, $inventories] = $this->fixture(10);
+        $otherProduct = Product::factory()->create();
+        $otherVariant = ProductVariant::factory()->create(['product_id' => $otherProduct->id]);
+        $otherItem = $order->items()->create(['product_id' => $otherProduct->id, 'product_variant_id' => $otherVariant->id,
+            'quantity' => 1, 'price' => 70000, 'total' => 70000]);
+        $order->update(['status' => Order::STATUS_PACKING, 'warehouse_product_permissions' => [
+            $item->product_id => ['quantity' => true, 'sizes' => ['2.6']],
+            $otherProduct->id => ['quantity' => false, 'sizes' => []],
+        ]]);
+        $this->assertTrue($order->allowsPackingSize(2.6, $item->product_id));
+        $this->assertFalse($order->allowsPackingSize(2.6, $otherProduct->id));
+        $this->actingAs($user)->get(route('warehouse.orders'))->assertOk()->assertSee('Lưu SL');
+        $url = route('warehouse.orders.request-adjustment', $order);
+        $this->postJson($url, ['reason' => 'Đóng linh động', 'items' => [['order_item_id' => $item->id, 'quantity' => 8]]])
+            ->assertOk()->assertJsonPath('ok', true);
+        $this->assertEquals(8, $item->fresh()->quantity);
+        $this->assertSame(Order::STATUS_PACKING, $order->fresh()->status);
+        $this->assertEquals(8, InventoryReservation::where('order_item_id', $item->id)->sum('quantity'));
+        $this->postJson($url, ['reason' => 'Không được phép', 'items' => [['order_item_id' => $otherItem->id, 'quantity' => 2]]])
+            ->assertUnprocessable();
+        $this->assertEquals(1, $otherItem->fresh()->quantity);
+        $this->postJson($url, ['reason' => 'Thiếu hàng', 'items' => [['order_item_id' => $item->id, 'quantity' => 100000]]])
+            ->assertUnprocessable();
+        $this->assertEquals(8, $item->fresh()->quantity);
+        $this->assertEquals(8, InventoryReservation::where('order_item_id', $item->id)->sum('quantity'));
+    }
+
     public function test_authorized_warehouse_quantity_edit_updates_order_without_sale_confirmation(): void
     {
         [$user, $order, $item] = $this->fixture(100);

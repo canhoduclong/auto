@@ -425,6 +425,10 @@ class OrderController extends Controller
             'warehouse_can_adjust' => 'nullable|boolean',
             'warehouse_allowed_sizes' => 'nullable|array',
             'warehouse_allowed_sizes.*' => 'required|numeric|gt:0',
+            'warehouse_product_permissions' => ['nullable', 'array'],
+            'warehouse_product_permissions.*.quantity' => ['required', 'boolean'],
+            'warehouse_product_permissions.*.sizes' => ['nullable', 'array'],
+            'warehouse_product_permissions.*.sizes.*' => ['numeric', 'gt:0'],
         ]);
 
         $customerId = (int) $request->input('customer_id');
@@ -460,6 +464,7 @@ class OrderController extends Controller
                     'allow_backorder' => $request->boolean('allow_backorder'),
                     'order_discount' => max(0, (float) $request->input('order_discount', 0)),
                     'order_discount_type' => $this->normalizeDiscountType($request->input('order_discount_type')),
+                    'warehouse_product_permissions' => $request->input('warehouse_product_permissions'),
                     'warehouse_can_adjust' => $request->boolean('warehouse_can_adjust'),
                     'warehouse_allowed_sizes' => ($request->input('warehouse_allowed_sizes') ?: []),
                 ],
@@ -1988,6 +1993,7 @@ class OrderController extends Controller
                 'customer_id' => $orderData['customer_id'] ?? null,
                 'user_id' => $orderData['user_id'] ?? auth()->id(),
                 'shipper_id' => $orderData['shipper_id'] ?? $customer?->default_shipper_id,
+                'warehouse_product_permissions' => $orderData['warehouse_product_permissions'] ?? null,
                 'warehouse_can_adjust' => (bool) ($orderData['warehouse_can_adjust'] ?? false),
                 'warehouse_allowed_sizes' => $orderData['warehouse_allowed_sizes'] ?? null,
                 'recipient_name' => $orderData['recipient_name'] ?? null,

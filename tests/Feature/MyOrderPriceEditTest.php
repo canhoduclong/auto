@@ -156,6 +156,23 @@ class MyOrderPriceEditTest extends TestCase
         $this->assertSame(['2.1'], $created->warehouse_allowed_sizes);
     }
 
+    public function test_sale_saves_product_packing_permissions_on_create_and_edit(): void
+    {
+        [$sale, $customer, $order, $variant] = $this->makeEditableOrder();
+        $policy = [$variant->product_id => ['quantity' => '1', 'sizes' => ['2.2']]];
+        $payload = ['customer_id' => $customer->id, 'recipient_name' => 'Khách', 'recipient_phone' => '0900000000',
+            'recipient_address' => 'Địa chỉ', 'items' => [['variant_id' => $variant->id, 'quantity' => 1]],
+            'warehouse_product_permissions' => $policy];
+        $this->actingAs($sale)->withSession(['active_role' => 'sale']);
+        $this->put(route('site.orders.update', $order), $payload)->assertSessionHasNoErrors();
+        $this->assertEquals($policy, $order->fresh()->warehouse_product_permissions);
+        $this->get(route('site.orders.edit', $order))->assertOk()->assertSee('Cho phép kho linh động điều chỉnh');
+        $this->post(route('my_customer.order.store', $customer), $payload)->assertSessionHasNoErrors()->assertSessionMissing('error');
+        $created = Order::latest('id')->firstOrFail();
+        $this->assertNotEquals($order->id, $created->id);
+        $this->assertEquals($policy, $created->warehouse_product_permissions);
+    }
+
     private function makeEditableOrder(): array
     {
         $saleRole = Role::query()->create(['name' => 'sale']);

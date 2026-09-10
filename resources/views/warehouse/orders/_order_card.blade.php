@@ -499,7 +499,19 @@
                                                     @endif
                                                 </div>
                                                 <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
-                                                <div class="wh-item-cell"><strong>{{ number_format($orderedQty) }}</strong>@if($isCutPackingItem && $item->packed_quantity !== null)<small class="d-block text-success">Đóng: {{ $item->packed_quantity }}</small>@endif</div>
+                                                <div class="wh-item-cell">
+                                                    <strong>{{ number_format($orderedQty) }}</strong>
+                                                    @if($canProcessThisOrder && !$isPackedReadonly && !$isPendingSaleConfirmation && $order->allowsWarehouseQuantityChange((int) $item->product_id))
+                                                        <form method="POST" action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.request-adjustment', $order) }}" class="mt-1">
+                                                            @csrf
+                                                            <input type="hidden" name="reason" value="Kho điều chỉnh số lượng theo quyền Sale cho phép">
+                                                            <input type="hidden" name="items[0][order_item_id]" value="{{ $item->id }}">
+                                                            <input type="number" name="items[0][quantity]" value="{{ (int) $orderedQty }}" min="1" max="100000" required class="form-control form-control-sm" aria-label="Số lượng sản phẩm được phép điều chỉnh" style="width:80px">
+                                                            <button class="btn btn-sm btn-success mt-1">Lưu SL</button>
+                                                        </form>
+                                                    @endif
+                                                    @if($isCutPackingItem && $item->packed_quantity !== null)<small class="d-block text-success">Đóng: {{ $item->packed_quantity }}</small>@endif
+                                                </div>
                                                 <div class="wh-item-cell"><strong>{{ $item->display_total_label }}</strong></div>
                                                 
                                                
