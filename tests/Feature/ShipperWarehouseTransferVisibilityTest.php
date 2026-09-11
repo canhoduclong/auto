@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Customer;
+use App\Models\MobileApiToken;
 use App\Models\Order;
 use App\Models\Role;
 use App\Models\User;
@@ -60,6 +61,18 @@ class ShipperWarehouseTransferVisibilityTest extends TestCase
             'warehouse_transfer_id' => $transfer->id,
             'snapshot' => ['type' => 'warehouse_transfer'],
         ]);
+
+        $mobileToken = MobileApiToken::generatePlainTextToken();
+        MobileApiToken::create([
+            'user_id' => $shipper->id,
+            'name' => 'Shipper Android',
+            'token_hash' => MobileApiToken::hashToken($mobileToken),
+        ]);
+
+        $this->withHeader('Authorization', 'Bearer '.$mobileToken)
+            ->getJson('/api/mobile/shipper/warehouse-transfers')
+            ->assertOk()
+            ->assertJsonPath('data.0.code', $slip->code);
 
         $this->actingAs($shipper)
             ->get(route('shipper.warehouse-transfers', ['date' => now()->toDateString()]))

@@ -141,4 +141,35 @@ class ShipperDeliveryScheduleDateFilterTest extends TestCase
         $this->assertSame('Khách mobile lộ trình', $payload['data'][0]['orders'][0]['customer']['name']);
     }
 
+    public function test_mobile_available_orders_use_the_confirmed_schedule_workflow_date(): void
+    {
+        Carbon::setTestNow('2026-09-09 10:00:00');
+        $shipper = User::factory()->create();
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
+        $customer = Customer::create(['name' => 'Khách nhận đơn mobile', 'status' => 'active']);
+        $order = Order::create([
+            'user_id' => $shipper->id,
+            'shipper_id' => $shipper->id,
+            'customer_id' => $customer->id,
+            'code' => 'MOBILE-AVAILABLE-ORDER',
+            'status' => Order::STATUS_READY_TO_SHIP,
+            'delivery_date' => '2026-09-12',
+        ]);
+        $order->forceFill(['created_at' => '2026-09-09 08:00:00'])->saveQuietly();
+        $order->histories()->create([
+            'action' => 'schedule_confirmed',
+            'user_id' => $shipper->id,
+            'role' => 'shipper',
+            'status_before' => Order::STATUS_READY_TO_SHIP,
+            'status_after' => Order::STATUS_READY_TO_SHIP,
+        ]);
+
+        $request = Request::create('/api/mobile/shipper/available-orders', 'GET');
+        $request->setUserResolver(fn () => $shipper->load('roles'));
+        $payload = app(ShipperApiController::class)->availableOrders($request)->getData(true);
+
+        $this->assertTrue($payload['success']);
+        $this->assertSame('MOBILE-AVAILABLE-ORDER', $payload['data'][0]['code']);
+    }
+
 }

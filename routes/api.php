@@ -55,11 +55,11 @@ Route::prefix('mobile')->group(function () {
             Route::post('/orders/{order}/upload-proof', [ShipperApiController::class, 'uploadProof']);
             Route::post('/location', [ShipperApiController::class, 'updateLocation']);
             Route::get('/notifications', [ShipperApiController::class, 'notifications']);
-            Route::get('/warehouse-transfers', [\App\Http\Controllers\ShipperDashboardController::class, 'apiWarehouseTransfers']);
-            Route::get('/warehouse-transfers/{dispatchSlip}', [\App\Http\Controllers\ShipperDashboardController::class, 'apiWarehouseTransferShow']);
-            Route::post('/warehouse-transfers/{transfer}/pickup', [\App\Http\Controllers\ShipperDashboardController::class, 'pickupWarehouseTransfer']);
-            Route::post('/warehouse-transfers/{transfer}/deliver', [\App\Http\Controllers\ShipperDashboardController::class, 'deliverWarehouseTransfer']);
-            Route::post('/warehouse-transfers/{transfer}/rollback', [\App\Http\Controllers\ShipperDashboardController::class, 'rollbackWarehouseTransfer']);
+            Route::get('/warehouse-transfers', [ShipperApiController::class, 'warehouseTransfers']);
+            Route::get('/warehouse-transfers/{dispatchSlip}', [ShipperApiController::class, 'warehouseTransferDetail']);
+            Route::post('/warehouse-transfers/{transfer}/pickup', [ShipperApiController::class, 'pickupWarehouseTransfer']);
+            Route::post('/warehouse-transfers/{transfer}/deliver', [ShipperApiController::class, 'deliverWarehouseTransfer']);
+            Route::post('/warehouse-transfers/{transfer}/rollback', [ShipperApiController::class, 'rollbackWarehouseTransfer']);
         });
 
         Route::prefix('warehouse')->group(function () {

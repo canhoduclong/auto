@@ -12,6 +12,7 @@ use App\Models\OrderReturn;
 use App\Models\ReturnItem;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Models\WarehouseDispatchSlip;
 use App\Models\WarehouseTransfer;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -70,7 +71,7 @@ class ShipperApiController extends BaseApiController
             ->where(function ($query) {
                 $this->constrainConfirmedDeliverySchedule($query);
             })
-            ->forDeliveryDate($selectedDate)
+            ->forWorkflowDate($selectedDate)
             ->tap(function ($query) {
                 $this->constrainNoActiveWarehouseTransfer($query);
             })
@@ -215,6 +216,41 @@ class ShipperApiController extends BaseApiController
         }
 
         return $this->ok($payload['order'] ?? null, (string) ($payload['message'] ?? 'Nhan don thanh cong'));
+    }
+
+    public function warehouseTransfers(Request $request): JsonResponse
+    {
+        $this->bindWebAuth($request);
+
+        return app(ShipperDashboardController::class)->apiWarehouseTransfers($request);
+    }
+
+    public function warehouseTransferDetail(Request $request, WarehouseDispatchSlip $dispatchSlip): JsonResponse
+    {
+        $this->bindWebAuth($request);
+
+        return app(ShipperDashboardController::class)->apiWarehouseTransferShow($request, $dispatchSlip);
+    }
+
+    public function pickupWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
+    {
+        $this->bindWebAuth($request);
+
+        return app(ShipperDashboardController::class)->pickupWarehouseTransfer($request, $transfer);
+    }
+
+    public function deliverWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
+    {
+        $this->bindWebAuth($request);
+
+        return app(ShipperDashboardController::class)->deliverWarehouseTransfer($request, $transfer);
+    }
+
+    public function rollbackWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
+    {
+        $this->bindWebAuth($request);
+
+        return app(ShipperDashboardController::class)->rollbackWarehouseTransfer($request, $transfer);
     }
 
     public function warehouses(Request $request): JsonResponse
@@ -686,6 +722,16 @@ class ShipperApiController extends BaseApiController
         if (!$user || !($user->hasRole('shipper') || $user->hasRole('ship') || $user->hasRole('manager_shipper') || $user->hasRole('admin'))) {
             abort(403, 'Role khong duoc phep truy cap API shipper');
         }
+    }
+
+    private function bindWebAuth(Request $request): void
+    {
+        $user = $request->user();
+        Auth::setUser($user);
+        Auth::guard('web')->setUser($user);
+        $request->setUserResolver(fn () => $user);
+        $request->headers->set('Accept', 'application/json');
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
     }
 
     private function ensureManagerShipperRole(Request $request): void
