@@ -77,15 +77,50 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 checkbox('1. Sản lượng', hidden.name, policy.quantity === true || policy.quantity === 1 || policy.quantity === '1', input => policy.quantity = input.checked);
                 const sizeInputs = [];
-                const all = checkbox('2. Size All', '', false, input => {sizeInputs.forEach(i => i.checked = input.checked); policy.sizes = input.checked ? sizes : [];});
-                all.parentElement.classList.add('js-packing-size-label');
-                section.append(document.createElement('br'));
-                function syncAll() {all.checked = false; all.indeterminate = false;}
-                sizes.forEach(size => {
-                    const input = checkbox(`Size ${size.toFixed(1)}`, `warehouse_product_permissions[${productId}][sizes][]`, (policy.sizes || []).map(Number).includes(size), () => {policy.sizes = sizeInputs.filter(i => i.checked).map(i => Number(i.value)); syncAll();});
-                    input.parentElement.classList.add('js-packing-size-label');
-                    input.value = String(size); sizeInputs.push(input);
-                });
+                const readable = sizes.length === 1;
+                const lockedSize = readable ? sizes[0] : null;
+                if (readable && !(policy.sizes || []).map(Number).includes(lockedSize)) {
+                    policy.sizes = [lockedSize];
+                }
+                if (!readable) {
+                    const all = checkbox('2. Size All', '', false, input => {sizeInputs.forEach(i => i.checked = input.checked); policy.sizes = input.checked ? sizes : [];});
+                    all.parentElement.classList.add('js-packing-size-label');
+                    section.append(document.createElement('br'));
+                    function syncAll() {all.checked = false; all.indeterminate = false;}
+                    sizes.forEach(size => {
+                        const input = checkbox(`Size ${size.toFixed(1)}`, `warehouse_product_permissions[${productId}][sizes][]`, (policy.sizes || []).map(Number).includes(size), () => {policy.sizes = sizeInputs.filter(i => i.checked).map(i => Number(i.value)); syncAll();});
+                        input.parentElement.classList.add('js-packing-size-label');
+                        input.value = String(size); sizeInputs.push(input);
+                    });
+                } else {
+                    const lockedInput = checkbox(`Size ${lockedSize.toFixed(1)}`, `warehouse_product_permissions[${productId}][sizes][]`, true, () => {});
+                    lockedInput.checked = true;
+                    lockedInput.disabled = true;
+                    lockedInput.parentElement.classList.add('js-packing-size-label');
+                    lockedInput.value = String(lockedSize);
+                    sizeInputs.push(lockedInput);
+                    section.append(document.createElement('br'));
+                    sizes.filter(size => Math.abs(size - lockedSize) > 0.0001).forEach(size => {
+                        const input = checkbox(`Size ${size.toFixed(1)}`, `warehouse_product_permissions[${productId}][sizes][]`, (policy.sizes || []).map(Number).includes(size), () => {
+                            const selected = sizeInputs.filter(i => i.checked && !i.disabled).map(i => Number(i.value));
+                            const fixed = sizeInputs.filter(i => i.disabled).map(i => Number(i.value));
+                            if (selected.length > 1) {
+                                const lastSelected = input.value;
+                                sizeInputs.forEach(candidate => {
+                                    if (candidate !== input && !candidate.disabled) {
+                                        candidate.checked = false;
+                                    }
+                                });
+                                policy.sizes = [...fixed, Number(lastSelected)];
+                                return;
+                            }
+                            policy.sizes = [...fixed, ...selected];
+                        });
+                        input.parentElement.classList.add('js-packing-size-label');
+                        input.value = String(size); sizeInputs.push(input);
+                    });
+                    policy.sizes = [lockedSize];
+                }
                 container.append(section);
             });
             if (!products.length) container.textContent = 'Chọn sản phẩm để cấu hình quyền đóng hàng.';
