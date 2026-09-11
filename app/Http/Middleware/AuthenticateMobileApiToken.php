@@ -14,13 +14,16 @@ class AuthenticateMobileApiToken
     public function handle(Request $request, Closure $next): Response
     {
         $header = (string) $request->header('Authorization', '');
-        if (!preg_match('/^Bearer\s+(\S+)$/i', $header, $matches)) {
+        $plainTextToken = preg_match('/^Bearer\s+(\S+)$/i', $header, $matches)
+            ? $matches[1]
+            : trim((string) $request->header('X-Mobile-Token', ''));
+        if ($plainTextToken === '') {
             return response()->json([
                 'message' => 'Unauthorized. Missing bearer token.',
             ], 401);
         }
 
-        $tokenHash = MobileApiToken::hashToken($matches[1]);
+        $tokenHash = MobileApiToken::hashToken($plainTextToken);
 
         $mobileToken = MobileApiToken::query()
             ->with('user.roles')
