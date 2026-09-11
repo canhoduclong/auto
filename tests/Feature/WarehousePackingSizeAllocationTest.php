@@ -44,7 +44,11 @@ class WarehousePackingSizeAllocationTest extends TestCase
         ]]);
         $this->assertTrue($order->allowsPackingSize(2.6, $item->product_id));
         $this->assertFalse($order->allowsPackingSize(2.6, $otherProduct->id));
-        $this->actingAs($user)->get(route('warehouse.orders'))->assertOk()->assertSee('Lưu SL');
+        $this->actingAs($user)->get(route('warehouse.orders'))
+            ->assertOk()
+            ->assertSee('Kho được sửa')
+            ->assertSee('Cơ cấu đóng hàng theo size Sale cho phép')
+            ->assertSee('Lưu SL');
         $url = route('warehouse.orders.request-adjustment', $order);
         $this->postJson($url, ['reason' => 'Đóng linh động', 'items' => [['order_item_id' => $item->id, 'quantity' => 8]]])
             ->assertOk()->assertJsonPath('ok', true);

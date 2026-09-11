@@ -55,6 +55,8 @@ Route::prefix('mobile')->group(function () {
             Route::post('/orders/{order}/upload-proof', [ShipperApiController::class, 'uploadProof']);
             Route::post('/location', [ShipperApiController::class, 'updateLocation']);
             Route::get('/notifications', [ShipperApiController::class, 'notifications']);
+            Route::get('/warehouse-transfers', [\App\Http\Controllers\ShipperDashboardController::class, 'apiWarehouseTransfers']);
+            Route::get('/warehouse-transfers/{dispatchSlip}', [\App\Http\Controllers\ShipperDashboardController::class, 'apiWarehouseTransferShow']);
             Route::post('/warehouse-transfers/{transfer}/pickup', [\App\Http\Controllers\ShipperDashboardController::class, 'pickupWarehouseTransfer']);
             Route::post('/warehouse-transfers/{transfer}/deliver', [\App\Http\Controllers\ShipperDashboardController::class, 'deliverWarehouseTransfer']);
             Route::post('/warehouse-transfers/{transfer}/rollback', [\App\Http\Controllers\ShipperDashboardController::class, 'rollbackWarehouseTransfer']);
@@ -103,6 +105,7 @@ Route::prefix('mobile')->group(function () {
             Route::post('/products/{variant}/preference', [SaleApiController::class, 'updateProductPreference']);
             Route::get('/draft-orders', [SaleApiController::class, 'draftOrders']);
             Route::post('/draft-orders/parse', [SaleApiController::class, 'parseDraftOrders']);
+            Route::post('/draft-orders/confirm-for-date', [SaleApiController::class, 'confirmDraftOrdersForDate']);
             Route::post('/draft-orders/{draft}/copy', [SaleApiController::class, 'copyDraftOrder']);
             Route::post('/draft-orders/{draft}/copy-confirm', [SaleApiController::class, 'copyConfirmDraftOrder']);
             Route::post('/draft-orders/{draft}/confirm', [SaleApiController::class, 'confirmDraftOrder']);

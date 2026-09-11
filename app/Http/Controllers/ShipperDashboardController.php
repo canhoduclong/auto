@@ -793,6 +793,132 @@ class ShipperDashboardController extends Controller
         return view('shipper.warehouse-transfer-detail', compact('dispatchSlip', 'transfers', 'today'));
     }
 
+    public function apiWarehouseTransfers(Request $request)
+    {
+        $user = Auth::user();
+        $validated = $request->validate([
+            'date' => ['nullable', 'date'],
+        ]);
+        $selectedDate = ! empty($validated['date'])
+            ? Carbon::parse($validated['date'])->toDateString()
+            : null;
+
+        $dispatchSlips = WarehouseDispatchSlip::query()
+            ->with([
+                'sourceWarehouse:id,name', 'targetWarehouse:id,name', 'shipper:id,name,short_name',
+                'viewers' => fn ($query) => $query->where('users.id', $user->id),
+            ])
+            ->withCount('entries')
+            ->whereHas('entries', fn ($query) => $query
+                ->whereNotNull('warehouse_transfer_id')
+                ->orWhereNotNull('order_transfer_id'))
+            ->when(! $user->hasRole('admin') && ! $user->hasRole('manager_shipper'), fn ($query) => $query
+                ->where('shipper_id', $user->id))
+            ->when($selectedDate, fn ($query) => $query->whereDate('business_date', $selectedDate))
+            ->orderByDesc('business_date')
+            ->orderByDesc('id')
+            ->paginate(50);
+
+        $items = collect($dispatchSlips->items())->map(function (WarehouseDispatchSlip $slip): array {
+            $progress = $slip->transportProgress();
+
+            return [
+                'id' => $slip->id,
+                'code' => $slip->code,
+                'business_date' => $slip->business_date->toDateString(),
+                'source_warehouse' => $slip->sourceWarehouse?->name,
+                'target_warehouse' => $slip->targetWarehouse?->name,
+                'shipper' => $slip->shipper?->short_name ?: $slip->shipper?->name,
+                'entries_count' => $slip->entries_count,
+                'status' => $slip->status,
+                'status_label' => $slip->status === 'finalized' ? 'Phiếu đã chốt' : ($slip->status === 'cancelled' ? 'Đã hủy' : 'Đang mở'),
+                'progress_key' => $progress['key'],
+                'progress_label' => $progress['label'],
+                'progress_completed' => $progress['completed'],
+                'progress_total' => $progress['total'],
+                'viewed' => $slip->viewers->isNotEmpty(),
+            ];
+        })->values();
+
+        return response()->json([
+            'data' => $items,
+            'meta' => [
+                'current_page' => $dispatchSlips->currentPage(),
+                'last_page' => $dispatchSlips->lastPage(),
+                'total' => $dispatchSlips->total(),
+            ],
+        ]);
+    }
+
+    public function apiWarehouseTransferShow(Request $request, WarehouseDispatchSlip $dispatchSlip)
+    {
+        $user = Auth::user();
+        if (! $user->hasRole('admin')
+            && ! $user->hasRole('manager_shipper')
+            && (int) $dispatchSlip->shipper_id !== (int) $user->id) {
+            abort(403);
+        }
+
+        $dispatchSlip->load([
+            'sourceWarehouse:id,name',
+            'targetWarehouse:id,name',
+            'shipper:id,name,short_name',
+        ])->loadCount('entries');
+
+        $transfers = $this->warehouseTransfersForDispatchSlip($dispatchSlip, $user);
+
+        DB::table('warehouse_dispatch_slip_views')->updateOrInsert(
+            ['warehouse_dispatch_slip_id' => $dispatchSlip->id, 'user_id' => $user->id],
+            ['viewed_at' => now()]
+        );
+
+        $statusMap = [
+            'pending_shipper_pickup' => 'pending',
+            'in_transit' => 'transit',
+            'delivered_waiting_receive' => 'waiting',
+            'received_completed' => 'completed',
+            'cancelled' => 'cancelled',
+        ];
+
+        $transferItems = $transfers->map(function (WarehouseTransfer $transfer) use ($statusMap): array {
+            $order = $transfer->order;
+
+            return [
+                'id' => $transfer->id,
+                'sequence_number' => $transfer->sequence_number,
+                'status' => $transfer->status,
+                'status_key' => $statusMap[$transfer->status] ?? 'other',
+                'order_id' => $transfer->order_id,
+                'order_code' => $order?->code,
+                'customer_name' => $order?->customer?->name,
+                'sale_name' => $order?->user?->name ?: $order?->customer?->currentOwner?->name,
+                'source_warehouse' => $transfer->sourceWarehouse?->name,
+                'target_warehouse' => $transfer->targetWarehouse?->name,
+                'delivery_time' => $order?->delivery_time ?: $order?->customer?->delivery_time,
+                'delivery_date' => optional($order?->delivery_date)->format('Y-m-d'),
+                'transfer_date' => $transfer->dispatch_business_date,
+                'items' => $transfer->dispatch_items,
+                'total_quantity' => $transfer->dispatch_total_quantity,
+                'total_weight' => $transfer->dispatch_total_weight,
+                'delivery_proof_image' => $transfer->delivery_proof_image ? asset('storage/'.$transfer->delivery_proof_image) : null,
+            ];
+        })->values();
+
+        return response()->json([
+            'slip' => [
+                'id' => $dispatchSlip->id,
+                'code' => $dispatchSlip->code,
+                'business_date' => $dispatchSlip->business_date->toDateString(),
+                'source_warehouse' => $dispatchSlip->sourceWarehouse?->name,
+                'target_warehouse' => $dispatchSlip->targetWarehouse?->name,
+                'shipper' => $dispatchSlip->shipper?->short_name ?: $dispatchSlip->shipper?->name,
+                'status' => $dispatchSlip->status,
+                'entries_count' => $dispatchSlip->entries_count,
+            ],
+            'transfers' => $transferItems,
+        ]);
+    }
+
     private function warehouseTransfersForDispatchSlip(WarehouseDispatchSlip $dispatchSlip, User $user)
     {
         $selectedSlipId = (int) $dispatchSlip->id;

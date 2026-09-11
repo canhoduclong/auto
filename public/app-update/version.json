@@ -1,8 +1,8 @@
 {
-  "version": "1.0.43",
-  "version_code": 44,
+  "version": "1.1.2",
+  "version_code": 45,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.0.43: đồng bộ lên đơn Sale, quyền linh động đóng hàng và thao tác kho trên app."
+  "message": "Bản cập nhật 1.1.2: Đơn hàng Mẫu trên app hỗ trợ chọn ngày và lên đơn hàng loạt."
 }

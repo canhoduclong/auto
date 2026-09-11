@@ -423,13 +423,26 @@ class SaleApiController extends BaseApiController
     public function draftOrders(Request $request): JsonResponse
     {
         $this->ensureSaleRole($request);
+        $validated = $request->validate([
+            'draft_date' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+        $draftDate = $validated['draft_date'] ?? now()->toDateString();
         $drafts = TextOrderDraft::query()
-            ->with(['customer:id,name,phone,address', 'sale:id,name', 'order:id,code'])
+            ->with([
+                'customer:id,name,phone,address',
+                'sale:id,name',
+                'order:id,code',
+                'automatedSchedules' => fn ($query) => $query
+                    ->select(['id', 'text_order_draft_id', 'schedule_date', 'generated_order_id'])
+                    ->whereDate('schedule_date', $draftDate),
+            ])
             ->where('draft_scope', TextOrderDraft::SCOPE_SALE_PRIVATE)
             ->where('sale_id', (int) $request->user()->id)
             ->latest()
             ->paginate(min(50, max(10, (int) $request->query('per_page', 20))));
-        $drafts->getCollection()->transform(fn (TextOrderDraft $draft) => $this->draftPayload($draft));
+        $drafts->getCollection()->transform(
+            fn (TextOrderDraft $draft) => $this->draftPayload($draft, $draftDate)
+        );
 
         return $this->salePaginated($drafts);
     }
@@ -455,6 +468,37 @@ class SaleApiController extends BaseApiController
     {
         $this->bindWebAuth($request);
         return app(TextOrderImportController::class)->saleConfirm($request, $draft, $approvalService);
+    }
+
+    public function confirmDraftOrdersForDate(Request $request, ApprovalService $approvalService): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $validated = $request->validate([
+            'delivery_date' => ['required', 'date_format:Y-m-d'],
+        ]);
+        $deliveryDate = $validated['delivery_date'];
+        $saleId = (int) $request->user()->id;
+        $draftIds = TextOrderDraft::query()
+            ->where('draft_scope', TextOrderDraft::SCOPE_SALE_PRIVATE)
+            ->where('sale_id', $saleId)
+            ->whereDoesntHave('automatedSchedules', fn ($query) => $query
+                ->whereDate('schedule_date', $deliveryDate)
+                ->whereNotNull('generated_order_id'))
+            ->pluck('id')
+            ->all();
+
+        if ($draftIds === []) {
+            return $this->ok(['confirmed' => 0, 'skipped' => 0], 'Tất cả đơn mẫu đã được lên đơn trong ngày đã chọn.');
+        }
+
+        $this->bindWebAuth($request);
+        $request->merge([
+            'sale_id' => $saleId,
+            'delivery_date' => $deliveryDate,
+            'draft_ids' => $draftIds,
+        ]);
+
+        return app(TextOrderImportController::class)->saleBulkConfirm($request, $approvalService);
     }
 
     public function copyDraftOrder(Request $request, TextOrderDraft $draft): JsonResponse
@@ -917,7 +961,7 @@ class SaleApiController extends BaseApiController
         return $payload;
     }
 
-    private function draftPayload(TextOrderDraft $draft): array
+    private function draftPayload(TextOrderDraft $draft, ?string $selectedDate = null): array
     {
         $items = collect($draft->parsed_items ?: [[
             'product_text' => $draft->product_text,
@@ -944,6 +988,11 @@ class SaleApiController extends BaseApiController
             'items' => $items,
             'total' => $items->sum(fn ($item) => $item['quantity'] * $item['price']),
             'delivery_date' => optional($draft->delivery_date)->toDateString(),
+            'generated_for_selected_date' => $selectedDate !== null
+                && $draft->automatedSchedules->contains(
+                    fn ($schedule) => $schedule->generated_order_id !== null
+                        && optional($schedule->schedule_date)->toDateString() === $selectedDate
+                ),
             'created_at' => optional($draft->created_at)->toIso8601String(),
             'note' => (string) ($draft->note ?? ''),
             'truck_brand_name' => (string) ($draft->truck_brand_name ?? ''),
