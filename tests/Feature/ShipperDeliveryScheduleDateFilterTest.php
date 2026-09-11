@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Http\Controllers\Api\Mobile\ShipperApiController;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Role;
@@ -9,6 +10,7 @@ use App\Models\ShipperDispatchHistory;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Tests\TestCase;
 
 class ShipperDeliveryScheduleDateFilterTest extends TestCase
@@ -112,6 +114,31 @@ class ShipperDeliveryScheduleDateFilterTest extends TestCase
             ->assertOk()
             ->assertSee('Lộ trình lệch ngày')
             ->assertSee('ROUTE-CROSS-DATE');
+    }
+
+    public function test_mobile_route_list_includes_orders_for_each_route(): void
+    {
+        Carbon::setTestNow('2026-09-09 10:00:00');
+        $shipper = User::factory()->create();
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
+        $customer = Customer::create(['name' => 'Khách mobile lộ trình', 'status' => 'active']);
+        $order = Order::create([
+            'user_id' => $shipper->id,
+            'shipper_id' => $shipper->id,
+            'customer_id' => $customer->id,
+            'code' => 'MOBILE-ROUTE-ORDER',
+            'status' => Order::STATUS_READY_TO_SHIP,
+            'total' => 125000,
+        ]);
+
+        $request = Request::create('/api/mobile/shipper/delivery-schedules/list', 'GET');
+        $request->setUserResolver(fn () => $shipper->load('roles'));
+        $payload = app(ShipperApiController::class)->deliveryScheduleList($request)->getData(true);
+
+        $this->assertTrue($payload['success']);
+        $this->assertSame($order->id, $payload['data'][0]['order_ids'][0]);
+        $this->assertSame('MOBILE-ROUTE-ORDER', $payload['data'][0]['orders'][0]['code']);
+        $this->assertSame('Khách mobile lộ trình', $payload['data'][0]['orders'][0]['customer']['name']);
     }
 
 }

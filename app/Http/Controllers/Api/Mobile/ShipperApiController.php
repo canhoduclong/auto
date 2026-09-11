@@ -142,11 +142,12 @@ class ShipperApiController extends BaseApiController
         $toDate = Carbon::today()->addDays(30)->toDateString();
 
         $orders = Order::query()
+            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
             ->where('shipper_id', $shipperId)
             ->whereNotIn('status', ['cancelled', 'canceled'])
             ->whereBetween(DB::raw('DATE(created_at)'), [$fromDate, $toDate])
             ->orderByDesc('created_at')
-            ->get(['id', 'shipper_id', 'status', 'total', 'charge_shipping_fee', 'shipping_fee', 'created_at']);
+            ->get();
 
         $historyByDate = OrderHistory::query()
             ->join('orders', 'orders.id', '=', 'order_histories.order_id')
@@ -178,6 +179,7 @@ class ShipperApiController extends BaseApiController
                     },
                     'orders_count' => $dateOrders->count(),
                     'order_ids' => $orderIds,
+                    'orders' => $dateOrders->values(),
                     'is_completed' => $dateOrders->every(fn (Order $order) => in_array($order->status, $completedStatuses, true)),
                     'amount_earned' => (float) $dateOrders
                         ->filter(fn (Order $order) => (bool) ($order->charge_shipping_fee ?? true))
