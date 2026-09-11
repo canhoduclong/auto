@@ -678,7 +678,13 @@ class WarehouseDispatchSlipController extends Controller
                 ];
             })->values();
 
-        return view('warehouse.dispatch-slips.print-selected', compact('documents', 'totalExportSummaryRows'));
+        $totalOrderRows = $documents
+            ->flatMap(fn (array $document) => $document['orderRows'])
+            ->values();
+
+        return view('warehouse.dispatch-slips.print-selected', compact(
+            'documents', 'totalExportSummaryRows', 'totalOrderRows'
+        ));
     }
 
     public function printImport(WarehouseDispatchSlip $dispatchSlip)

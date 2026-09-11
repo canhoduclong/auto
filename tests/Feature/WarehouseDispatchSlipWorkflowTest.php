@@ -249,6 +249,9 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
 
         $this->post(route('warehouse.dispatch-slips.print-selected'), ['dispatch_slip_ids' => [$slip->id]])
             ->assertOk()->assertSee('Đơn giá')->assertSee('Thành tiền')
+            ->assertSee('DANH SÁCH ĐƠN HÀNG GỘP')
+            ->assertSee('Ghi chú đơn')
+            ->assertDontSee('Bọc / Phí')
             ->assertSee('54.000đ/đv')->assertSee('648.000đ');
     }
 
