@@ -107,8 +107,8 @@
                             <div>
                                 <div class="fw-semibold fs-5 mb-0 pb-0">{{ $order->customer?->name ?? '—' }} </div>
                                 <div class="text-muted card-desript">
-                                    #{{ $order->daily_sequence ?? '—' }}, lên đơn {{ $order->created_at->format('d/m/Y H:i') }},
-                                    giao {{ optional($order->delivery_date)->format('d/m/Y') ?: 'chưa cập nhật' }}, {{ $order->code }},
+                                    #{{ $order->daily_sequence ?? '—' }} · Ngày lên đơn {{ $order->created_at->format('d/m/Y H:i') }} ·
+                                    Ngày giao {{ optional($order->delivery_date)->format('d/m/Y') ?: 'chưa cập nhật' }} · {{ $order->code }} ·
                                     Sale: {{ $order->user?->name ?? 'Chưa xác định' }}
                                 </div>
                             </div> 

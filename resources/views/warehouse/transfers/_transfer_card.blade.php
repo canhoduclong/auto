@@ -17,7 +17,11 @@
             @endif
             <div>
                 <div class="fw-semibold">{{ $order?->customer?->name ?? 'Khách hàng' }}</div>
-                <div class="small text-muted">{{ $order?->code ?? ('#' . $transfer->order_id) }} · Lên đơn {{ optional($order?->created_at)->format('d/m/Y') ?: '—' }} · Giao {{ optional($order?->delivery_date)->format('d/m/Y') ?: '—' }}</div>
+                <div class="small text-muted">
+                    {{ $order?->code ?? ('#' . $transfer->order_id) }} ·
+                    Ngày lên đơn {{ optional($order?->created_at)->format('d/m/Y') ?: '—' }} ·
+                    Ngày giao {{ optional($order?->delivery_date)->format('d/m/Y') ?: '—' }}
+                </div>
                 @if($dispatchSlip)
                     <a class="small text-decoration-none" href="{{ route('warehouse.dispatch-slips.show', $dispatchSlip) }}"><i class="bi bi-file-earmark-spreadsheet me-1"></i>{{ $dispatchSlip->code }}</a>
                 @endif

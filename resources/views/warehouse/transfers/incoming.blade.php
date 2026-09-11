@@ -202,10 +202,16 @@
     $timelineHours = $timelineTransfers->keys();
 @endphp
 
+@php
+    $firstOrder = $transfers->first()?->order;
+    $orderCreationDate = optional($firstOrder?->created_at)->format('d/m/Y') ?: '—';
+    $orderDeliveryDate = optional($firstOrder?->delivery_date)->format('d/m/Y') ?: '—';
+@endphp
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 alert alert-info py-2 mb-3">
     <span>
         <i class="bi bi-calendar-event me-1"></i>
-        Ngày giao <strong>{{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</strong>
+        Ngày xem <strong>{{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</strong>
+        · Lọc theo ngày giao; ngày lên đơn được hiển thị riêng ở từng đơn.
     </span>
     <form method="GET" class="d-flex gap-2">
         <input type="date" name="date" value="{{ $selectedDate }}" class="form-control form-control-sm">

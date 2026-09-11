@@ -297,10 +297,10 @@ function renderRow(idx, data = {}) {
 
     const qty = data.quantity ?? 1;
     const price = data.unit_cost ?? data.latest_price ?? 0;
-    const lineTotal = (qty * price).toLocaleString('vi-VN');
     const selectedVariant = findVariant(data.product_variant_id);
     const weightPerUnit = data.weight_per_unit ?? (selectedVariant ? variantWeightPerUnit(selectedVariant) : 1);
     const totalWeight = toNumber(data.weight, qty * weightPerUnit);
+    const lineTotal = (totalWeight * price).toLocaleString('vi-VN');
     return `
     <tr class="item-row" data-item-row data-idx="${idx}">
         <td class="stt text-center align-middle">${idx + 1}</td>
@@ -393,7 +393,11 @@ function reindexRows() {
 function updateLineTotal(row) {
     const qty = parseFloat(row.querySelector('input[name*="[quantity]"]').value) || 0;
     const price = parseFloat(row.querySelector('input[name*="[unit_cost]"]').value) || 0;
-    row.querySelector('.line-total').textContent = (qty * price).toLocaleString('vi-VN');
+    const select = row.querySelector('.variant-select');
+    const selected = select?.selectedOptions?.[0];
+    const weightPerUnit = toNumber(selected?.getAttribute('data-weight-per-unit'), 1);
+    const totalWeight = qty * weightPerUnit;
+    row.querySelector('.line-total').textContent = (totalWeight * price).toLocaleString('vi-VN');
 }
 
 function updateRowWeight(row) {
