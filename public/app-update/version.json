@@ -1,8 +1,8 @@
 {
-  "version": "1.1.2",
-  "version_code": 45,
+  "version": "1.1.5",
+  "version_code": 48,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.1.2: Đơn hàng Mẫu trên app hỗ trợ chọn ngày và lên đơn hàng loạt."
+  "message": "Bản cập nhật 1.1.5: Kho tiếp nhận hiển thị đầy đủ các đơn điều chuyển cần nhận."
 }

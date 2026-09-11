@@ -470,6 +470,13 @@ class SaleApiController extends BaseApiController
         return app(TextOrderImportController::class)->saleConfirm($request, $draft, $approvalService);
     }
 
+    public function updateDraftOrder(Request $request, TextOrderDraft $draft): JsonResponse
+    {
+        $this->bindWebAuth($request);
+
+        return app(TextOrderImportController::class)->saleUpdate($request, $draft);
+    }
+
     public function confirmDraftOrdersForDate(Request $request, ApprovalService $approvalService): JsonResponse
     {
         $this->ensureSaleRole($request);
@@ -702,10 +709,10 @@ class SaleApiController extends BaseApiController
         }
         $this->applyOrderFilters($request, $query);
         $orders = $query->paginate(20);
-        $orders->getCollection()->transform(function (Order $order) use ($roles) {
+        $orders->getCollection()->transform(function (Order $order) use ($user) {
             $payload = $this->orderPayload($order, true);
             $current = $order->approvals->where('status', 'pending')->sortBy(fn ($approval) => $approval->step?->step_order ?? PHP_INT_MAX)->first();
-            $payload['can_approve'] = $current?->step ? $roles->contains(strtolower((string) $current->step->role_slug)) : false;
+            $payload['can_approve'] = app(ApprovalService::class)->canApproveCurrentStep($order, $user);
             $payload['current_approval_step'] = $current?->step?->name ?? $current?->step?->role_slug;
             return $payload;
         });
@@ -928,6 +935,8 @@ class SaleApiController extends BaseApiController
             'created_at' => optional($order->created_at)->toIso8601String(),
             'updated_at' => optional($order->updated_at)->toIso8601String(),
             'can_edit' => $this->isEditableOrder($order),
+            'warehouse_can_adjust' => (bool) ($order->warehouse_can_adjust ?? false),
+            'warehouse_product_permissions' => $order->warehouse_product_permissions,
             'can_cancel' => $order->created_at?->isToday() === true
                 && in_array((string) $order->status, ['pending_leader_approval', 'pending_manager_approval', 'approved', 'packing', 'pending', 'confirmed', 'picking', Order::STATUS_ORDER_PLACED], true),
             'can_trash' => in_array((string) $order->status, [Order::STATUS_REJECTED, Order::STATUS_CANCELLED], true)
@@ -957,30 +966,46 @@ class SaleApiController extends BaseApiController
             $payload['shipper_note'] = (string) ($order->shipper_note ?? '');
             $payload['order_discount'] = (float) ($order->order_discount ?? 0);
             $payload['order_discount_type'] = (string) ($order->order_discount_type ?? 'decrease');
+            $payload['warehouse_allowed_sizes'] = $order->warehouse_allowed_sizes;
         }
         return $payload;
     }
 
     private function draftPayload(TextOrderDraft $draft, ?string $selectedDate = null): array
     {
-        $items = collect($draft->parsed_items ?: [[
+        $draftItems = collect($draft->parsed_items ?: [[
             'product_text' => $draft->product_text,
+            'product_variant_id' => $draft->product_variant_id,
             'quantity' => $draft->quantity,
             'size_kg' => $draft->size_kg,
             'unit_price' => $draft->unit_price,
-        ]])->map(fn ($item) => [
-            'name' => (string) ($item['product_text'] ?? 'Sản phẩm'),
-            'size' => (string) ($item['size_kg'] ?? ''),
-            'quantity' => (int) ($item['quantity'] ?? 0),
-            'size_kg' => (float) ($item['size_kg'] ?? 0),
-            'price' => (float) ($item['unit_price'] ?? 0),
-        ])->values();
+        ]]);
+        $variants = ProductVariant::query()
+            ->with('product:id,name')
+            ->whereIn('id', $draftItems->pluck('product_variant_id')->filter()->unique()->all())
+            ->get()
+            ->keyBy('id');
+        $items = $draftItems->map(function ($item) use ($variants) {
+            $variant = $variants->get((int) ($item['product_variant_id'] ?? 0));
+
+            return [
+                'product_variant_id' => (int) ($item['product_variant_id'] ?? 0),
+                'product_id' => (int) ($variant?->product_id ?? 0),
+                'product_name' => (string) ($variant?->product?->name ?? ''),
+                'name' => (string) ($item['product_text'] ?? $variant?->name ?? 'Sản phẩm'),
+                'size' => (float) ($variant?->size ?? $item['size_kg'] ?? 0),
+                'quantity' => (int) ($item['quantity'] ?? 0),
+                'size_kg' => (float) ($item['size_kg'] ?? 0),
+                'price' => (float) ($item['unit_price'] ?? 0),
+            ];
+        })->values();
 
         return [
             'id' => (int) $draft->id,
             'code' => 'Nháp #' . $draft->id,
             'status' => (string) $draft->status,
             'customer' => [
+                'id' => (int) ($draft->customer_id ?? 0),
                 'name' => (string) ($draft->customer_name ?: $draft->customer?->name ?: 'Khách hàng'),
                 'phone' => (string) ($draft->phone ?: $draft->customer?->phone ?: ''),
                 'address' => (string) ($draft->address ?: $draft->customer?->address ?: ''),
@@ -988,6 +1013,13 @@ class SaleApiController extends BaseApiController
             'items' => $items,
             'total' => $items->sum(fn ($item) => $item['quantity'] * $item['price']),
             'delivery_date' => optional($draft->delivery_date)->toDateString(),
+            'customer_id' => (int) ($draft->customer_id ?? 0),
+            'recipient_name' => (string) ($draft->customer_name ?: $draft->customer?->name ?: ''),
+            'recipient_phone' => (string) ($draft->phone ?: $draft->customer?->phone ?: ''),
+            'recipient_address' => (string) ($draft->address ?: $draft->customer?->address ?: ''),
+            'delivery_time' => (string) ($draft->delivery_time ?? ''),
+            'shipper_note' => '',
+            'warehouse_product_permissions' => null,
             'generated_for_selected_date' => $selectedDate !== null
                 && $draft->automatedSchedules->contains(
                     fn ($schedule) => $schedule->generated_order_id !== null

@@ -103,7 +103,7 @@ class RoleScreenApiController extends BaseApiController
                 Order::STATUS_READY_TO_SHIP,
             ], $warehouseId, $date),
             'supplier_prices' => $this->supplierPrices(),
-            'incoming_transfers' => $this->incomingOrderTransfers($warehouseId, $date),
+            'incoming_transfers' => $this->incomingOrderTransfers($warehouseId),
             'incoming_inventory_transfers' => $this->incomingInventoryTransfers($warehouseId),
             'procurement_receipts' => $this->procurementReceipts($warehouseId),
             'stock_in_create' => $this->documents('import', $warehouseId),
@@ -681,17 +681,17 @@ class RoleScreenApiController extends BaseApiController
         return $this->paginated($items);
     }
 
-    private function incomingOrderTransfers(?int $warehouseId, string $date): JsonResponse
+    private function incomingOrderTransfers(?int $warehouseId): JsonResponse
     {
         $transfers = WarehouseTransfer::query()
             ->with(['order.customer', 'sourceWarehouse', 'targetWarehouse', 'shipper'])
             ->when($warehouseId, fn ($q) => $q->where('target_warehouse_id', $warehouseId))
-            ->whereHas('order', fn ($q) => $q->forDeliveryDate($date))
             ->whereIn('status', [WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE, WarehouseTransfer::STATUS_RECEIVED_COMPLETED])
+            ->orderByRaw("CASE WHEN status = 'delivered_waiting_receive' THEN 0 ELSE 1 END")
             ->latest('delivered_at')
             ->get();
 
-        return $this->transferScreenResponse($transfers, $date);
+        return $this->transferScreenResponse($transfers, now()->toDateString());
     }
 
     private function shipperWarehouseTransfers(Request $request, string $date): JsonResponse

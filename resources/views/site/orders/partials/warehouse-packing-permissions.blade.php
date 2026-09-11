@@ -75,18 +75,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     input.checked = checked; input.value = '1'; input.addEventListener('change', () => change(input));
                     label.append(input, document.createTextNode(labelText)); section.append(label); return input;
                 }
-                checkbox('1. Số lượng', hidden.name, policy.quantity === true || policy.quantity === 1 || policy.quantity === '1', input => policy.quantity = input.checked);
+                checkbox('1. Sản lượng', hidden.name, policy.quantity === true || policy.quantity === 1 || policy.quantity === '1', input => policy.quantity = input.checked);
                 const sizeInputs = [];
-                const all = checkbox('2. Chọn tất cả size', '', false, input => {sizeInputs.forEach(i => i.checked = input.checked); policy.sizes = input.checked ? sizes : [];});
+                const all = checkbox('2. Size All', '', false, input => {sizeInputs.forEach(i => i.checked = input.checked); policy.sizes = input.checked ? sizes : [];});
                 all.parentElement.classList.add('js-packing-size-label');
                 section.append(document.createElement('br'));
-                function syncAll() {all.checked = sizeInputs.length > 0 && sizeInputs.every(i => i.checked); all.indeterminate = sizeInputs.some(i => i.checked) && !all.checked;}
+                function syncAll() {all.checked = false; all.indeterminate = false;}
                 sizes.forEach(size => {
                     const input = checkbox(`Size ${size.toFixed(1)}`, `warehouse_product_permissions[${productId}][sizes][]`, (policy.sizes || []).map(Number).includes(size), () => {policy.sizes = sizeInputs.filter(i => i.checked).map(i => Number(i.value)); syncAll();});
                     input.parentElement.classList.add('js-packing-size-label');
                     input.value = String(size); sizeInputs.push(input);
                 });
-                syncAll(); container.append(section);
+                container.append(section);
             });
             if (!products.length) container.textContent = 'Chọn sản phẩm để cấu hình quyền đóng hàng.';
         }
