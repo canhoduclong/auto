@@ -1,8 +1,8 @@
 {
-  "version": "1.1.7",
-  "version_code": 50,
+  "version": "1.1.8",
+  "version_code": 51,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.1.7: Sửa lỗi xác nhận lộ trình Shipper bị thiếu token xác thực."
+  "message": "Bản cập nhật 1.1.8: Sửa triệt để lỗi xác nhận lộ trình Shipper bị thiếu token."
 }

@@ -16,7 +16,7 @@ class AuthenticateMobileApiToken
         $header = (string) $request->header('Authorization', '');
         $plainTextToken = preg_match('/^Bearer\s+(\S+)$/i', $header, $matches)
             ? $matches[1]
-            : trim((string) $request->header('X-Mobile-Token', ''));
+            : trim((string) ($request->header('X-Mobile-Token', '') ?: $request->input('mobile_token', '')));
         if ($plainTextToken === '') {
             return response()->json([
                 'message' => 'Unauthorized. Missing bearer token.',
