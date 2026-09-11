@@ -353,6 +353,9 @@ class ShipperDashboardController extends Controller
                     $acceptedQuery->where('status', Order::STATUS_DELIVERING)
                         ->where('shipper_id', Auth::id());
                     $this->constrainNoActiveWarehouseTransfer($acceptedQuery);
+                })->orWhere(function ($deliveredQuery) {
+                    $deliveredQuery->where('status', Order::STATUS_DELIVERED)
+                        ->where('shipper_id', Auth::id());
                 });
             })
             ->whereDate('created_at', '>=', $startDate)
@@ -382,16 +385,21 @@ class ShipperDashboardController extends Controller
                     $acceptedQuery->where('status', Order::STATUS_DELIVERING)
                         ->where('shipper_id', Auth::id());
                     $this->constrainNoActiveWarehouseTransfer($acceptedQuery);
+                })->orWhere(function ($deliveredQuery) {
+                    $deliveredQuery->where('status', Order::STATUS_DELIVERED)
+                        ->where('shipper_id', Auth::id());
                 });
             })
             ->where(function ($dateQuery) use ($selectedDate, $plannedExceptionOrderIds): void {
                 $dateQuery->forWorkflowDate($selectedDate);
+                $dateQuery->orWhereDate('delivered_at', $selectedDate);
                 if ($plannedExceptionOrderIds !== []) {
                     $dateQuery->orWhere(function ($exceptionQuery) use ($plannedExceptionOrderIds): void {
                         $exceptionQuery->whereIn('id', $plannedExceptionOrderIds);
                     });
                 }
             })
+            ->orderByRaw("CASE WHEN status = 'delivered' THEN 1 ELSE 0 END")
             ->orderBy('created_at', 'asc')
             ->get();
 

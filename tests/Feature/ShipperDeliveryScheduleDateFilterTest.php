@@ -172,4 +172,45 @@ class ShipperDeliveryScheduleDateFilterTest extends TestCase
         $this->assertSame('MOBILE-AVAILABLE-ORDER', $payload['data'][0]['code']);
     }
 
+    public function test_available_page_keeps_delivered_orders_at_the_bottom_for_the_selected_date(): void
+    {
+        Carbon::setTestNow('2026-09-10 10:00:00');
+        $shipper = User::factory()->create();
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
+        $customer = Customer::create(['name' => 'Khách trang nhận đơn', 'status' => 'active']);
+        $readyOrder = Order::create([
+            'user_id' => $shipper->id,
+            'shipper_id' => $shipper->id,
+            'customer_id' => $customer->id,
+            'code' => 'AVAILABLE-FIRST',
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $readyOrder->forceFill(['created_at' => '2026-09-10 08:00:00'])->saveQuietly();
+        $readyOrder->histories()->create([
+            'action' => 'schedule_confirmed',
+            'user_id' => $shipper->id,
+            'role' => 'shipper',
+            'status_before' => Order::STATUS_READY_TO_SHIP,
+            'status_after' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $deliveredOrder = Order::create([
+            'user_id' => $shipper->id,
+            'shipper_id' => $shipper->id,
+            'customer_id' => $customer->id,
+            'code' => 'DELIVERED-LAST',
+            'status' => Order::STATUS_DELIVERED,
+            'delivered_at' => '2026-09-10 09:00:00',
+        ]);
+        $deliveredOrder->forceFill(['created_at' => '2026-09-09 08:00:00'])->saveQuietly();
+
+        $response = $this->actingAs($shipper)
+            ->get(route('shipper.available', ['date' => '2026-09-10']));
+
+        $response->assertOk()->assertSee('AVAILABLE-FIRST')->assertSee('DELIVERED-LAST');
+        $response->assertViewHas('orders', fn ($orders) => $orders->pluck('id')->all() === [
+            $readyOrder->id,
+            $deliveredOrder->id,
+        ]);
+    }
+
 }

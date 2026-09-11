@@ -473,13 +473,12 @@
 @php
     $readyStatus = \App\Models\Order::STATUS_READY_TO_SHIP;
     $acceptedStatus = \App\Models\Order::STATUS_DELIVERING;
+    $deliveredStatus = \App\Models\Order::STATUS_DELIVERED;
     $availableOrders = $orders
         ->where('status', $readyStatus)
-        ->sortBy('daily_sequence')
         ->values();
     $acceptedOrders = $orders
-        ->where('status', $acceptedStatus)
-        ->sortBy('daily_sequence')
+        ->whereIn('status', [$acceptedStatus, $deliveredStatus])
         ->values();
     $orderGroups = [
         [
@@ -519,7 +518,7 @@
             <span class="fw-bold text-muted me-1 sp-av-order-nav-label"><i class="bi bi-list-ol me-1"></i>Điều hướng nhanh:</span>
             @foreach($orders->sortBy('daily_sequence') as $navOrder)
                 @php
-                    $isAcceptedNav = (string) $navOrder->status === $acceptedStatus;
+                    $isAcceptedNav = in_array((string) $navOrder->status, [$acceptedStatus, $deliveredStatus], true);
                     $sequenceNumber = $navOrder->daily_sequence ?? $loop->iteration;
                 @endphp
                 <a href="javascript:void(0);"
@@ -565,6 +564,7 @@
                     @foreach($group['orders'] as $order)
                         @php
                             $isAccepted = (string) $order->status === $acceptedStatus;
+                            $isDelivered = (string) $order->status === $deliveredStatus;
                             $recipientName = $order->recipient_name ?: ($order->customer?->name ?? '—');
                             $deliveryAddress = $order->recipient_address ?: ($order->customer?->address ?? null);
                             $customerDeliveryTime = $order->delivery_time ?: $order->customer?->delivery_time;
@@ -596,10 +596,10 @@
                              data-delivery-url="{{ $isReturnOrder ? route('shipper.return-form', $order) : route('shipper.delivered-form', $order) }}"
                              data-rollback-url="{{ route('shipper.accept.rollback', $order) }}"
                              data-is-return-order="{{ $isReturnOrder ? '1' : '0' }}"
-                             data-order-group="{{ $isAccepted ? 'accepted' : 'available' }}"
+                                      data-order-group="{{ $isAccepted || $isDelivered ? 'accepted' : 'available' }}"
                              data-order-sequence="{{ $order->daily_sequence ?? $loop->iteration }}">
                             <div class="d-flex">
-                                <div class="time-block p-3 {{ $isAccepted ? 'is-accepted' : 'is-available' }}">
+                                          <div class="time-block p-3 {{ $isAccepted || $isDelivered ? 'is-accepted' : 'is-available' }}">
                                     <h2 class="fw-bold mb-0 text-dark" style="font-size: 2.2rem;">{{ $order->daily_sequence }}</h2>
                                     <div class="order-time">{{ $customerDeliveryTime ?: '—' }}</div>
                                 </div>
@@ -624,7 +624,11 @@
                                     </div>
                                     <div class="d-flex justify-content-between align-items-center gap-2 py-2 mt-2 border-0 flex-wrap">
                                         <div data-accept-action>
-                                            @if($isAccepted)
+                                            @if($isDelivered)
+                                                <span class="badge rounded-pill bg-success px-2 py-1" style="font-size: 0.72rem;">
+                                                    <i class="bi bi-check2-all me-1"></i>Đã giao
+                                                </span>
+                                            @elseif($isAccepted)
                                                 <div class="d-flex gap-2 flex-wrap align-items-center">
                                                     <span class="badge rounded-pill bg-warning text-dark border px-2 py-1" style="font-size: 0.72rem;">
                                                         <i class="bi bi-check2-circle me-1"></i>Đã nhận
@@ -649,8 +653,8 @@
                                             @endif
                                         </div>
 
-                                        <span class="badge rounded-pill {{ $isAccepted ? 'bg-warning text-dark' : 'bg-secondary bg-opacity-10 text-secondary' }} border px-2 py-1 js-order-state-badge" style="font-size: 0.72rem;">
-                                            <i class="bi {{ $isAccepted ? 'bi-check2-circle' : 'bi-clock' }} me-1"></i>{{ $isAccepted ? 'Đã nhận' : 'Đang chờ' }}
+                                        <span class="badge rounded-pill {{ $isDelivered ? 'bg-success' : ($isAccepted ? 'bg-warning text-dark' : 'bg-secondary bg-opacity-10 text-secondary') }} border px-2 py-1 js-order-state-badge" style="font-size: 0.72rem;">
+                                            <i class="bi {{ $isDelivered ? 'bi-check2-all' : ($isAccepted ? 'bi-check2-circle' : 'bi-clock') }} me-1"></i>{{ $isDelivered ? 'Đã giao' : ($isAccepted ? 'Đã nhận' : 'Đang chờ') }}
                                         </span>
                                         <a href="#collapseOrder{{ $order->id }}" class="toggle-link" data-bs-toggle="collapse" role="button" aria-expanded="false" aria-controls="collapseOrder{{ $order->id }}">
                                             + Xem chi tiết
