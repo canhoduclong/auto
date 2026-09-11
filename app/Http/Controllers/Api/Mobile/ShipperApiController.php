@@ -457,7 +457,13 @@ class ShipperApiController extends BaseApiController
         $orders = Order::query()
             ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
             ->where('shipper_id', $userId)
-            ->whereIn('status', [Order::STATUS_DELIVERING, 'delivered', Order::STATUS_RETURNING, 'completed'])
+            ->where(function ($query) {
+                $query->whereIn('status', [Order::STATUS_DELIVERING, 'delivered', Order::STATUS_RETURNING, 'completed'])
+                    ->orWhere(function ($readyQuery) {
+                        $readyQuery->where('status', Order::STATUS_READY_TO_SHIP);
+                        $this->constrainConfirmedDeliverySchedule($readyQuery);
+                    });
+            })
             ->latest('updated_at')
             ->paginate(20);
 
