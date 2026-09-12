@@ -74,7 +74,7 @@ class SaleApiController extends BaseApiController
             ->values();
 
         $ordersQuery = Order::query()
-            ->with(['user:id,name,team_id', 'customer:id,name,phone,address', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'histories.user:id,name'])
+            ->with(['user:id,name,team_id', 'customer:id,name,phone,address', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'histories.user:id,name', 'accountingReconciliation'])
             ->when(Schema::hasColumn('orders', 'trash_at'), fn ($query) => $query->whereNull('trash_at'));
         $this->applySaleOrderVisibility($request, $ordersQuery);
 
@@ -130,6 +130,33 @@ class SaleApiController extends BaseApiController
         app(MyDashboardController::class)->rejectWarehouseAdjustment($request, $order);
 
         return $this->ok(null, 'Đã từ chối yêu cầu điều chỉnh và thông báo cho kho.');
+    }
+
+    public function requestAdjustment(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $this->bindWebAuth($request);
+
+        $user = $request->user();
+        abort_unless((int) $order->user_id === (int) $user->id || $user->hasRole('admin'), 403);
+        abort_unless($order->canRequestAdjustment(), 422, 'Đơn chưa được kế toán xác nhận hoặc chưa hoàn tất giao hàng.');
+
+        $order->load('items');
+        $request->merge([
+            'action' => 'submit',
+            'items' => $order->items->map(fn ($item): array => [
+                'order_item_id' => (int) $item->id,
+                'adjusted_quantity' => (int) $item->quantity,
+                'adjusted_price' => (float) $item->price,
+                'adjusted_weight' => $item->actual_weight ?? $item->total_weight,
+            ])->values()->all(),
+        ]);
+
+        $response = app(\App\Http\Controllers\OrderAdjustmentController::class)->store($request, $order);
+
+        return $response instanceof JsonResponse
+            ? $response
+            : $this->ok(null, 'Đã gửi yêu cầu điều chỉnh đơn hàng.');
     }
 
     public function customers(Request $request): JsonResponse
@@ -546,7 +573,7 @@ class SaleApiController extends BaseApiController
         $this->ensureSaleRole($request);
         $trash = $request->boolean('trash');
         $query = Order::query()
-            ->with(['user:id,name,team_id', 'customer:id,name,phone,address', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'histories.user:id,name']);
+            ->with(['user:id,name,team_id', 'customer:id,name,phone,address', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'histories.user:id,name', 'accountingReconciliation']);
         $this->applySaleOrderVisibility($request, $query);
         if (Schema::hasColumn('orders', 'trash_at')) {
             $trash ? $query->whereNotNull('trash_at') : $query->whereNull('trash_at');
@@ -935,6 +962,8 @@ class SaleApiController extends BaseApiController
             'created_at' => optional($order->created_at)->toIso8601String(),
             'updated_at' => optional($order->updated_at)->toIso8601String(),
             'can_edit' => $this->isEditableOrder($order),
+            'can_request_adjustment' => (int) ($order->user_id ?? 0) === (int) request()->user()?->id
+                && $order->canRequestAdjustment(),
             'warehouse_can_adjust' => (bool) ($order->warehouse_can_adjust ?? false),
             'warehouse_product_permissions' => $order->warehouse_product_permissions,
             'can_cancel' => $order->created_at?->isToday() === true

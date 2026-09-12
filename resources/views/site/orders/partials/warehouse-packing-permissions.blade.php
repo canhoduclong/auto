@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
             products.forEach(productId => {
                 const variants = catalog.filter(v => v.product_id === productId);
                 const sizes = [...new Set(variants.map(v => v.size).filter(s => s > 0))].sort((a,b) => a-b);
+                const orderedSizes = [...new Set(variants.filter(v => ids.includes(v.id)).map(v => v.size).filter(s => s > 0))];
                 state[productId] ||= {quantity: storedPolicy === null && box.dataset.legacyQuantity === '1', sizes: storedPolicy === null ? (legacySizes ?? []) : []};
                 const policy = state[productId];
                 const section = document.createElement('div');
@@ -75,9 +76,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     input.checked = checked; input.value = '1'; input.addEventListener('change', () => change(input));
                     label.append(input, document.createTextNode(labelText)); section.append(label); return input;
                 }
+                function lockSize(input, size) {
+                    input.checked = true;
+                    input.disabled = true;
+                    const hiddenSize = document.createElement('input');
+                    hiddenSize.type = 'hidden';
+                    hiddenSize.name = `warehouse_product_permissions[${productId}][sizes][]`;
+                    hiddenSize.value = String(size);
+                    section.append(hiddenSize);
+                    input.parentElement.classList.add('js-packing-size-locked');
+                }
                 checkbox('1. Sản lượng', hidden.name, policy.quantity === true || policy.quantity === 1 || policy.quantity === '1', input => policy.quantity = input.checked);
                 const sizeInputs = [];
                 const readable = sizes.length === 1;
+                const lockedSizes = readable ? [sizes[0]] : orderedSizes;
+                policy.sizes = [...new Set([...(policy.sizes || []).map(Number), ...lockedSizes])];
                 const lockedSize = readable ? sizes[0] : null;
                 if (readable && !(policy.sizes || []).map(Number).includes(lockedSize)) {
                     policy.sizes = [lockedSize];
@@ -88,14 +101,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     section.append(document.createElement('br'));
                     function syncAll() {all.checked = false; all.indeterminate = false;}
                     sizes.forEach(size => {
+                        const isLocked = lockedSizes.some(locked => Math.abs(locked - size) < 0.0001);
                         const input = checkbox(`Size ${size.toFixed(1)}`, `warehouse_product_permissions[${productId}][sizes][]`, (policy.sizes || []).map(Number).includes(size), () => {policy.sizes = sizeInputs.filter(i => i.checked).map(i => Number(i.value)); syncAll();});
                         input.parentElement.classList.add('js-packing-size-label');
                         input.value = String(size); sizeInputs.push(input);
+                        if (isLocked) lockSize(input, size);
                     });
                 } else {
                     const lockedInput = checkbox(`Size ${lockedSize.toFixed(1)}`, `warehouse_product_permissions[${productId}][sizes][]`, true, () => {});
-                    lockedInput.checked = true;
-                    lockedInput.disabled = true;
+                    lockSize(lockedInput, lockedSize);
                     lockedInput.parentElement.classList.add('js-packing-size-label');
                     lockedInput.value = String(lockedSize);
                     sizeInputs.push(lockedInput);
@@ -118,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                         input.parentElement.classList.add('js-packing-size-label');
                         input.value = String(size); sizeInputs.push(input);
+                        if (lockedSizes.some(locked => Math.abs(locked - size) < 0.0001)) lockSize(input, size);
                     });
                     policy.sizes = [lockedSize];
                 }
