@@ -984,6 +984,21 @@ class SaleApiController extends BaseApiController
         ];
         if ($details) {
             $payload['items'] = $order->items;
+            $productIds = $order->items->pluck('product_id')->filter()->unique()->values();
+            $payload['warehouse_variant_options'] = ProductVariant::query()
+                ->whereIn('product_id', $productIds)
+                ->orderBy('product_id')
+                ->orderByRaw('CAST(COALESCE(size, 0) AS DECIMAL(12, 3))')
+                ->get(['id', 'product_id', 'name', 'sku', 'size'])
+                ->groupBy('product_id')
+                ->map(fn ($variants) => $variants->map(fn (ProductVariant $variant) => [
+                    'id' => (int) $variant->id,
+                    'product_id' => (int) $variant->product_id,
+                    'name' => (string) ($variant->name ?: $variant->sku),
+                    'sku' => (string) ($variant->sku ?? ''),
+                    'size' => (float) ($variant->size ?? 0),
+                ])->values())
+                ->all();
             $payload['approvals'] = $order->approvals;
             $payload['histories'] = $order->histories;
             $payload['recipient_name'] = (string) ($order->recipient_name ?? $order->customer?->name ?? '');

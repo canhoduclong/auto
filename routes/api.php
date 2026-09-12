@@ -126,5 +126,9 @@ Route::prefix('mobile')->group(function () {
             Route::post('/approvals/{order}/approve', [SaleApiController::class, 'approve']);
             Route::post('/approvals/{order}/reject', [SaleApiController::class, 'reject']);
         });
+
+        Route::prefix('accounting')->group(function () {
+            Route::post('/orders/{order}/confirm', [RoleScreenApiController::class, 'confirmAccountingOrder']);
+        });
     });
 });

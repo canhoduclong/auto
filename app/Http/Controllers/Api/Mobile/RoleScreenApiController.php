@@ -20,6 +20,7 @@ use App\Models\ProcurementPurchase;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -214,9 +215,41 @@ class RoleScreenApiController extends BaseApiController
 
     private function accounting(Request $request, string $key): JsonResponse
     {
-        if ($key !== 'dashboard') {
-            return $this->fail('Man hinh accounting khong duoc ho tro.', 404);
+        if ($key === 'orders') {
+            $query = Order::query()
+                ->with(['customer:id,name,phone,address', 'user:id,name', 'accountingReconciliation', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id'])
+                ->when($request->filled('from_date'), fn ($scope) => $scope->whereDate('created_at', '>=', $request->query('from_date')))
+                ->when($request->filled('to_date'), fn ($scope) => $scope->whereDate('created_at', '<=', $request->query('to_date')))
+                ->when($request->filled('status'), fn ($scope) => $scope->where('status', $request->query('status')))
+                ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('daily_sequence')
+                ->orderBy('created_at');
+
+            $orders = $query->limit(100)->get();
+            $adjustments = OrderAdjustment::query()
+                ->with(['order.customer:id,name', 'requester:id,name'])
+                ->where('status', OrderAdjustment::STATUS_PENDING_APPROVAL)
+                ->latest('submitted_at')
+                ->limit(50)
+                ->get()
+                ->map(fn (OrderAdjustment $adjustment) => [
+                    'id' => (int) $adjustment->id,
+                    'order_id' => (int) $adjustment->order_id,
+                    'order_code' => (string) ($adjustment->order?->code ?: '#'.$adjustment->order_id),
+                    'customer_name' => (string) ($adjustment->order?->customer?->name ?? 'Khách hàng'),
+                    'requester_name' => (string) ($adjustment->requester?->name ?? 'Sale'),
+                    'note' => (string) ($adjustment->adjustment_note ?? ''),
+                    'created_at' => optional($adjustment->submitted_at ?? $adjustment->created_at)->toIso8601String(),
+                ])->values();
+
+            return $this->ok([
+                'orders' => $orders->map(fn (Order $order) => $this->accountingOrderPayload($order))->values(),
+                'pending_adjustments' => $adjustments,
+                'statuses' => ['all', 'delivered', 'completed', 'pending', 'approved', 'cancelled'],
+            ]);
         }
+
+        if ($key !== 'dashboard') return $this->fail('Man hinh accounting khong duoc ho tro.', 404);
 
         $today = now()->toDateString();
         $transactions = Transaction::query();
@@ -228,8 +261,56 @@ class RoleScreenApiController extends BaseApiController
                 ['label' => 'Thu chi hom nay', 'value' => (float) (clone $transactions)->whereDate('created_at', $today)->sum('amount')],
                 ['label' => 'Cong no khach hang', 'value' => (float) Order::query()->sum('amount_due')],
             ],
-            'items' => $this->latestOrders()->take(20)->values(),
+            'items' => Order::query()
+                ->with(['customer:id,name,phone,address', 'user:id,name', 'accountingReconciliation'])
+                ->whereDate('created_at', $today)
+                ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('daily_sequence')
+                ->orderBy('created_at')
+                ->limit(50)
+                ->get()
+                ->map(fn (Order $order) => $this->accountingOrderPayload($order))
+                ->values(),
         ]);
+    }
+
+    public function confirmAccountingOrder(Request $request, Order $order): JsonResponse
+    {
+        $this->authorizeLayout($request, 'accounting');
+        Auth::setUser($request->user());
+        Auth::guard('web')->setUser($request->user());
+        $request->setUserResolver(fn () => $request->user());
+        $request->headers->set('Accept', 'application/json');
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
+        $response = app(\App\Http\Controllers\AccountingDashboardController::class)->confirmReconciliation($request, $order);
+
+        return $response instanceof JsonResponse
+            ? $response
+            : $this->ok(null, 'Đã xác nhận doanh thu đơn hàng.');
+    }
+
+    private function accountingOrderPayload(Order $order): array
+    {
+        $reconciliation = $order->accountingReconciliation;
+        return [
+            'id' => (int) $order->id,
+            'sequence' => $order->daily_sequence ? (int) $order->daily_sequence : null,
+            'code' => (string) ($order->code ?: '#'.$order->id),
+            'customer_name' => (string) ($order->customer?->name ?? 'Khách hàng'),
+            'sale_name' => (string) ($order->user?->name ?? 'Chưa xác định'),
+            'created_at' => optional($order->created_at)->toIso8601String(),
+            'status' => (string) $order->status,
+            'total' => (float) ($order->total ?? 0),
+            'reconciliation_status' => (string) ($reconciliation?->status ?? AccountingReconciliation::STATUS_PENDING),
+            'can_confirm' => in_array((string) $order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED], true)
+                && $reconciliation?->status !== AccountingReconciliation::STATUS_CONFIRMED,
+            'items' => $order->items->map(fn ($item) => [
+                'name' => (string) ($item->product?->name ?? $item->variant?->name ?? 'Sản phẩm'),
+                'size' => (float) ($item->variant?->size ?? 0),
+                'quantity' => (float) ($item->quantity ?? 0),
+                'price' => (float) ($item->price ?? 0),
+            ])->values(),
+        ];
     }
 
     private function ceo(Request $request, string $key): JsonResponse
