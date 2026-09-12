@@ -1907,6 +1907,18 @@
                                 ]);
                             }
                             $orderPendingAdjustments = ($pendingAdjustmentsByOrder ?? collect())->get($order->id, collect());
+                            $zaloText = collect([
+                                'ĐƠN HÀNG '.($order->code ?: '#'.$order->id),
+                                'Khách hàng: '.($order->customer?->name ?: ($order->recipient_name ?: 'Khách hàng')),
+                                ($order->recipient_phone ?: $order->customer?->phone) ? 'SĐT: '.($order->recipient_phone ?: $order->customer?->phone) : null,
+                                $deliveryAddress !== '' ? 'Địa chỉ: '.$deliveryAddress : null,
+                                '',
+                                'Sản phẩm:',
+                                ...$order->items->map(fn ($item) => '- '.($item->display_name ?: 'Sản phẩm').((float) ($item->variant?->size ?? 0) > 0 ? ' - Size '.$item->variant->size : '').': SL '.$formatQuantity($item->quantity))->all(),
+                                '',
+                                'Tổng tiền: '.number_format((float) $order->total, 0, ',', '.').'đ',
+                                trim((string) $order->note) !== '' ? 'Ghi chú: '.$order->note : null,
+                            ])->filter(fn ($line) => $line !== null)->implode("\n");
                         @endphp
                         <article class="monitor-panel monitor-order status-{{ $monitorState }} {{ $canManageOrder ? 'is-mine' : '' }} {{ $isCancelled ? 'is-cancelled' : '' }}" id="monitor-order-{{ $order->id }}" title="{{ $monitorStateLabels[$monitorState] }}">
                             <div class="monitor-order-main">
@@ -2233,6 +2245,9 @@
                                             <i class="bi bi-eye me-1"></i>Chi tiết
                                         </button>
                                     @endif
+                                    <button class="btn btn-sm btn-outline-success js-copy-zalo-order" type="button" data-zalo-text="{{ e($zaloText) }}">
+                                        <i class="bi bi-clipboard me-1"></i>Chép Zalo
+                                    </button>
                                     @if($canManageOrder)
                                         @if($isCancelled)
                                             <form method="POST" action="{{ route('site.orders.resend', $order) }}"
@@ -2385,6 +2400,33 @@
 
 @push('scripts')
 <script>
+document.addEventListener('click', async event => {
+    const button = event.target.closest('.js-copy-zalo-order');
+    if (!button) return;
+
+    const text = button.dataset.zaloText || '';
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+        } else {
+            const helper = document.createElement('textarea');
+            helper.value = text;
+            helper.style.position = 'fixed';
+            helper.style.opacity = '0';
+            document.body.appendChild(helper);
+            helper.focus();
+            helper.select();
+            document.execCommand('copy');
+            helper.remove();
+        }
+        const original = button.innerHTML;
+        button.innerHTML = '<i class="bi bi-check2 me-1"></i>Đã chép';
+        setTimeout(() => { button.innerHTML = original; }, 1600);
+    } catch (error) {
+        window.alert('Không thể chép nội dung đơn. Vui lòng thử lại.');
+    }
+});
+
 window.monitorAdminDeleteOrder = function (form, orderCode, saleName, orderTotal) {
     const amount = new Intl.NumberFormat('vi-VN').format(Number(orderTotal) || 0) + 'đ';
     const confirmed = window.confirm(
