@@ -1844,6 +1844,7 @@
                     @forelse($orders as $order)
                         @php
                             $isCancelled = $order->status === \App\Models\Order::STATUS_CANCELLED;
+                            $isOverdue = $order->status === \App\Models\Order::STATUS_OVERDUE_DELIVERY;
                             $monitorState = $monitorStateForOrder($order);
                             $canApprove = !$isCancelled && ($canApproveByOrder[$order->id] ?? false);
                             $hasInvalidSizeItems = $order->items->contains(
