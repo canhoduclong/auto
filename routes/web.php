@@ -89,7 +89,7 @@ Route::get('/locale/{locale}', function (string $locale) {
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
     Route::post('/login', [AuthController::class, 'login'])
-        ->middleware('throttle:5,1'); // 5 lần/phút chống brute-force
+        ->middleware('throttle:login'); // 5 lần/phút theo tài khoản+IP, 40 lần/phút theo IP
     Route::get('/auth/google', [AuthController::class, 'redirectToGoogle'])->name('auth.google.redirect');
     Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback'])->name('auth.google.callback');
     Route::get('/register', [AuthController::class, 'showRegistrationForm'])->name('register');
