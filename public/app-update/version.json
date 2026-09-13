@@ -1,8 +1,8 @@
 {
-  "version": "1.1.10",
-  "version_code": 53,
+  "version": "1.1.11",
+  "version_code": 54,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.1.10: Hoàn thành hiển thị dạng nhãn; đơn đã kết thúc chỉ xem thông tin, không mở lại form giao hàng."
+  "message": "Bản cập nhật 1.1.11: Bổ sung lộ trình chờ xác nhận cho shipper; cải thiện hiển thị đơn và duyệt yêu cầu điều chỉnh trong layout kế toán."
 }

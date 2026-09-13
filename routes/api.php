@@ -129,6 +129,10 @@ Route::prefix('mobile')->group(function () {
 
         Route::prefix('accounting')->group(function () {
             Route::post('/orders/{order}/confirm', [RoleScreenApiController::class, 'confirmAccountingOrder']);
+            Route::post('/orders/{order}/approve', [RoleScreenApiController::class, 'approveAccountingOrder']);
+            Route::post('/orders/{order}/reject', [RoleScreenApiController::class, 'rejectAccountingOrder']);
+            Route::post('/order-adjustments/{orderAdjustment}/approve', [RoleScreenApiController::class, 'approveAccountingAdjustment']);
+            Route::post('/order-adjustments/{orderAdjustment}/reject', [RoleScreenApiController::class, 'rejectAccountingAdjustment']);
         });
     });
 });

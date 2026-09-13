@@ -8,12 +8,15 @@ use App\Models\Inventory;
 use App\Models\InventoryDocument;
 use App\Models\Order;
 use App\Models\OrderAdjustment;
+use App\Models\OrderHistory;
 use App\Models\OrderReturn;
 use App\Models\SupplierProductPrice;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Models\WarehouseInventoryTransfer;
 use App\Models\WarehouseTransfer;
+use App\Services\ApprovalService;
+use App\Services\OrderAutoApprovalService;
 use App\Models\DuckFarm;
 use App\Models\DuckProcessingConversionRate;
 use App\Models\ProcurementPurchase;
@@ -227,7 +230,7 @@ class RoleScreenApiController extends BaseApiController
 
             $orders = $query->limit(100)->get();
             $adjustments = OrderAdjustment::query()
-                ->with(['order.customer:id,name', 'requester:id,name'])
+                ->with(['order.customer:id,name', 'requester:id,name', 'items.variant:id,name'])
                 ->where('status', OrderAdjustment::STATUS_PENDING_APPROVAL)
                 ->latest('submitted_at')
                 ->limit(50)
@@ -240,10 +243,19 @@ class RoleScreenApiController extends BaseApiController
                     'requester_name' => (string) ($adjustment->requester?->name ?? 'Sale'),
                     'note' => (string) ($adjustment->adjustment_note ?? ''),
                     'created_at' => optional($adjustment->submitted_at ?? $adjustment->created_at)->toIso8601String(),
+                    'can_review' => $request->user()->isAdmin()
+                        || app(ApprovalService::class)->canApproveAdjustmentStep($adjustment, $request->user()),
+                    'items' => $adjustment->items->map(fn ($item) => [
+                        'product_name' => (string) ($item->variant?->name ?? 'Sản phẩm'),
+                        'original_quantity' => (float) ($item->original_quantity ?? 0),
+                        'adjusted_quantity' => (float) ($item->adjusted_quantity ?? 0),
+                        'original_price' => (float) ($item->original_price ?? 0),
+                        'adjusted_price' => (float) ($item->adjusted_price ?? 0),
+                    ])->values(),
                 ])->values();
 
             return $this->ok([
-                'orders' => $orders->map(fn (Order $order) => $this->accountingOrderPayload($order))->values(),
+                'orders' => $orders->map(fn (Order $order) => $this->accountingOrderPayload($order, $request->user()))->values(),
                 'pending_adjustments' => $adjustments,
                 'statuses' => ['all', 'delivered', 'completed', 'pending', 'approved', 'cancelled'],
             ]);
@@ -269,7 +281,7 @@ class RoleScreenApiController extends BaseApiController
                 ->orderBy('created_at')
                 ->limit(50)
                 ->get()
-                ->map(fn (Order $order) => $this->accountingOrderPayload($order))
+                ->map(fn (Order $order) => $this->accountingOrderPayload($order, $request->user()))
                 ->values(),
         ]);
     }
@@ -289,7 +301,7 @@ class RoleScreenApiController extends BaseApiController
             : $this->ok(null, 'Đã xác nhận doanh thu đơn hàng.');
     }
 
-    private function accountingOrderPayload(Order $order): array
+    private function accountingOrderPayload(Order $order, User $actor): array
     {
         $reconciliation = $order->accountingReconciliation;
         return [
@@ -304,6 +316,7 @@ class RoleScreenApiController extends BaseApiController
             'reconciliation_status' => (string) ($reconciliation?->status ?? AccountingReconciliation::STATUS_PENDING),
             'can_confirm' => in_array((string) $order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED], true)
                 && $reconciliation?->status !== AccountingReconciliation::STATUS_CONFIRMED,
+            'can_approve' => app(ApprovalService::class)->canApproveCurrentStep($order, $actor),
             'items' => $order->items->map(fn ($item) => [
                 'name' => (string) ($item->product?->name ?? $item->variant?->name ?? 'Sản phẩm'),
                 'size' => (float) ($item->variant?->size ?? 0),
@@ -311,6 +324,76 @@ class RoleScreenApiController extends BaseApiController
                 'price' => (float) ($item->price ?? 0),
             ])->values(),
         ];
+    }
+
+    public function approveAccountingOrder(Request $request, Order $order, ApprovalService $approvalService): JsonResponse
+    {
+        $this->authorizeLayout($request, 'accounting');
+        $this->bindAccountingWebAuth($request);
+        abort_unless($approvalService->canApproveCurrentStep($order, $request->user()), 403);
+        $statusBefore = (string) $order->status;
+        $approvalService->approve($order, $request->user(), $request->input('note'));
+        app(OrderAutoApprovalService::class)->processOrder($order);
+        $order->refresh();
+        $this->logAccountingOrderReview($request, $order, 'approve_order', $statusBefore);
+
+        return $this->ok(null, 'Đã duyệt đơn hàng.');
+    }
+
+    public function rejectAccountingOrder(Request $request, Order $order, ApprovalService $approvalService): JsonResponse
+    {
+        $this->authorizeLayout($request, 'accounting');
+        $request->validate(['reason' => ['required', 'string', 'max:2000']]);
+        $request->merge(['note' => $request->input('reason')]);
+        $this->bindAccountingWebAuth($request);
+        abort_unless($approvalService->canApproveCurrentStep($order, $request->user()), 403);
+        $statusBefore = (string) $order->status;
+        $approvalService->reject($order, $request->user(), $request->input('note'));
+        $order->refresh();
+        $this->logAccountingOrderReview($request, $order, 'reject_order', $statusBefore);
+
+        return $this->ok(null, 'Đã từ chối đơn hàng.');
+    }
+
+    public function approveAccountingAdjustment(Request $request, OrderAdjustment $orderAdjustment): JsonResponse
+    {
+        $this->authorizeLayout($request, 'accounting');
+        $this->bindAccountingWebAuth($request);
+        app(\App\Http\Controllers\OrderAdjustmentController::class)->approve($request, $orderAdjustment);
+
+        return $this->ok(null, 'Đã duyệt yêu cầu điều chỉnh.');
+    }
+
+    public function rejectAccountingAdjustment(Request $request, OrderAdjustment $orderAdjustment): JsonResponse
+    {
+        $this->authorizeLayout($request, 'accounting');
+        $request->validate(['reason' => ['required', 'string', 'max:2000']]);
+        $this->bindAccountingWebAuth($request);
+        app(\App\Http\Controllers\OrderAdjustmentController::class)->reject($request, $orderAdjustment);
+
+        return $this->ok(null, 'Đã từ chối yêu cầu điều chỉnh.');
+    }
+
+    private function bindAccountingWebAuth(Request $request): void
+    {
+        Auth::setUser($request->user());
+        Auth::guard('web')->setUser($request->user());
+        $request->setUserResolver(fn () => Auth::user());
+        $request->headers->set('Accept', 'application/json');
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
+    }
+
+    private function logAccountingOrderReview(Request $request, Order $order, string $action, string $statusBefore): void
+    {
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'action' => $action,
+            'user_id' => $request->user()->id,
+            'role' => 'accounting',
+            'status_before' => $statusBefore,
+            'status_after' => (string) $order->status,
+            'note' => $request->input('note'),
+        ]);
     }
 
     private function ceo(Request $request, string $key): JsonResponse
