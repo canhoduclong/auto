@@ -46,4 +46,14 @@ class ShipperDeliverySchedulesViewTest extends TestCase
         $this->assertStringContainsString("links('pagination::bootstrap-5')", $template);
         $this->assertStringContainsString('Xem chi tiết', $template);
     }
+
+    public function test_each_route_order_shows_order_and_receive_status(): void
+    {
+        $template = file_get_contents(resource_path('views/shipper/delivery-schedules.blade.php'));
+
+        $this->assertStringContainsString('Trạng thái: {{ $orderStatus }}', $template);
+        $this->assertStringContainsString('Có thể nhận ngay', $template);
+        $this->assertStringContainsString('Chờ xác nhận lộ trình để nhận', $template);
+        $this->assertStringContainsString('Chưa thể nhận', $template);
+    }
 }

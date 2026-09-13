@@ -3286,6 +3286,16 @@ class ShipperDashboardController extends Controller
         }
 
         $deliveryRouteTotal = count($deliveryRoutes);
+        $routeOrderIds = collect($deliveryRoutes)
+            ->flatMap(fn (array $route) => $route['orders']->pluck('id'))
+            ->unique()
+            ->values();
+        $receivableOrderIds = collect();
+        if ($routeOrderIds->isNotEmpty()) {
+            $receivableQuery = Order::query()->whereIn('id', $routeOrderIds);
+            $this->constrainAvailableReadyOrder($receivableQuery);
+            $receivableOrderIds = $receivableQuery->pluck('id')->map(fn ($id) => (int) $id);
+        }
         $routesPerPage = 10;
         $currentRoutePage = LengthAwarePaginator::resolveCurrentPage('page');
         $deliveryRoutes = new LengthAwarePaginator(
@@ -3333,7 +3343,8 @@ class ShipperDashboardController extends Controller
             'selectedDate',
             'routeSearch',
             'routeStatusFilter',
-            'routeCompletionFilter'
+            'routeCompletionFilter',
+            'receivableOrderIds'
         ));
     }
 

@@ -19,6 +19,7 @@
     .ds-detail-header { background: linear-gradient(135deg, #0f766e, #0d9488); color: #fff; }
     .ds-order-card { border: 1px solid #e2e8f0; border-radius: 13px; padding: 1rem; background: #fff; }
     .ds-order-index { width: 34px; height: 34px; border-radius: 50%; background: #ecfdf5; color: #047857; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; flex: 0 0 auto; }
+    .ds-order-state { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
     .ds-product-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .75rem; padding: .45rem 0; border-top: 1px dashed #e2e8f0; font-size: .86rem; }
     .ds-action-bar { background: #f8fafc; border-top: 1px solid #e2e8f0; }
     .ds-filter-card { border: 0; border-radius: 16px; box-shadow: 0 4px 18px rgba(15, 23, 42, .06); }
@@ -139,13 +140,52 @@
                         <input type="hidden" name="date" value="{{ $deliveryRoute['date'] }}">
                         <div class="card-body d-flex flex-column gap-3">
                             @foreach($deliveryRoute['orders'] as $orderIndex => $order)
+                                @php
+                                    $orderStatus = match ($order->status) {
+                                        \App\Models\Order::STATUS_OVERDUE_DELIVERY => 'Quá hạn giao',
+                                        \App\Models\Order::STATUS_APPROVED => 'Đã duyệt',
+                                        \App\Models\Order::STATUS_READY_TO_PACK => 'Chờ đóng gói',
+                                        \App\Models\Order::STATUS_PACKING => 'Đang đóng gói',
+                                        \App\Models\Order::STATUS_PACKED => 'Đã đóng gói',
+                                        \App\Models\Order::STATUS_READY_TO_SHIP => 'Chờ shipper nhận',
+                                        \App\Models\Order::STATUS_DELIVERING => 'Đang giao',
+                                        \App\Models\Order::STATUS_DELIVERED => 'Đã giao',
+                                        \App\Models\Order::STATUS_COMPLETED => 'Hoàn thành',
+                                        \App\Models\Order::STATUS_RETURNING => 'Đang hoàn hàng',
+                                        \App\Models\Order::STATUS_RETURNED_COMPLETED => 'Đã hoàn hàng',
+                                        \App\Models\Order::STATUS_CANCELLED => 'Đã hủy',
+                                        default => (string) $order->status,
+                                    };
+                                    $isReceivable = $receivableOrderIds->contains((int) $order->id);
+                                    $isReceived = $order->status === \App\Models\Order::STATUS_DELIVERING;
+                                    $isFinished = in_array($order->status, [\App\Models\Order::STATUS_DELIVERED, \App\Models\Order::STATUS_COMPLETED], true) || $order->histories->isNotEmpty();
+                                    $canReceiveAfterConfirmation = ! $isReceivable && ! $isReceived && ! $isFinished
+                                        && $deliveryRoute['status'] !== 'confirmed'
+                                        && in_array($order->status, [\App\Models\Order::STATUS_PACKED, \App\Models\Order::STATUS_READY_TO_SHIP], true);
+                                    [$receiveLabel, $receiveClass, $receiveIcon] = $isReceivable
+                                        ? ['Có thể nhận ngay', 'bg-success', 'bi-check-circle']
+                                        : ($isReceived
+                                            ? ['Đã nhận đơn', 'bg-primary', 'bi-truck']
+                                            : ($isFinished
+                                                ? ['Đã hoàn tất giao', 'bg-secondary', 'bi-check2-all']
+                                                : ($canReceiveAfterConfirmation
+                                                    ? ['Chờ xác nhận lộ trình để nhận', 'bg-warning text-dark', 'bi-clock-history']
+                                                    : ['Chưa thể nhận', 'bg-light text-dark border', 'bi-hourglass-split'])));
+                                @endphp
                                 @if($deliveryRoute['actionable_orders']->contains('id', $order->id))<input type="hidden" name="order_ids[]" value="{{ $order->id }}">@endif
                                 <article class="ds-order-card">
                                     <div class="d-flex align-items-start gap-3">
                                         <span class="ds-order-index">{{ $orderIndex + 1 }}</span>
                                         <div class="flex-fill min-w-0">
                                             <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
-                                                <div><div class="fw-bold text-dark">{{ $order->customer?->name ?? $order->recipient_name ?? 'Khách hàng' }}</div><div class="text-muted small">Mã đơn: {{ $order->code ?: '#'.$order->id }}</div></div>
+                                                <div>
+                                                    <div class="fw-bold text-dark">{{ $order->customer?->name ?? $order->recipient_name ?? 'Khách hàng' }}</div>
+                                                    <div class="text-muted small">Mã đơn: {{ $order->code ?: '#'.$order->id }}</div>
+                                                    <div class="ds-order-state mt-2">
+                                                        <span class="badge bg-info text-dark">Trạng thái: {{ $orderStatus }}</span>
+                                                        <span class="badge {{ $receiveClass }}"><i class="bi {{ $receiveIcon }} me-1"></i>{{ $receiveLabel }}</span>
+                                                    </div>
+                                                </div>
                                                 <span class="badge bg-light text-primary border"><i class="bi bi-clock me-1"></i>{{ $order->delivery_time ?: 'Chưa có giờ giao' }}</span>
                                             </div>
                                             @include('shipper.partials.order-date-sale', ['order' => $order])
