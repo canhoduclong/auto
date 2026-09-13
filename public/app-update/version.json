@@ -1,8 +1,8 @@
 {
-  "version": "1.1.8",
-  "version_code": 51,
+  "version": "1.1.9",
+  "version_code": 52,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.1.8: Sửa triệt để lỗi xác nhận lộ trình Shipper bị thiếu token."
+  "message": "Bản cập nhật 1.1.9: Gộp Đơn hàng về một danh sách có tìm kiếm/lọc, đơn mới nổi lên trên, hoàn tất giao ngay trên thẻ đơn; không bắt buộc ảnh khi hoàn thành."
 }

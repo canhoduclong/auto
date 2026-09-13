@@ -622,10 +622,6 @@ class ShipperApiController extends BaseApiController
             return $this->fail('Khong co quyen thao tac don nay', 403);
         }
 
-        if (empty($order->proof_images)) {
-            return $this->fail('Vui long tai len it nhat mot hinh anh giao hang.', 422);
-        }
-
         Auth::setUser($user);
         $request->headers->set('Accept', 'application/json');
         app(ShipperDashboardController::class)->markDelivered($request, $order);
