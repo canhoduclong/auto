@@ -78,6 +78,46 @@ class OverdueOrderContinuationTest extends TestCase
         return [['packed_waiting_pickup'], ['packing'], ['pending_leader_approval']];
     }
 
+    public function test_admin_can_explicitly_allow_an_overdue_order_to_continue(): void
+    {
+        $admin = $this->actor('admin');
+        $order = $this->overdueOrder($this->actor('sale'));
+        $order->histories()->create([
+            'action' => 'mark_overdue_delivery',
+            'role' => 'system',
+            'status_before' => Order::STATUS_READY_TO_SHIP,
+            'status_after' => Order::STATUS_OVERDUE_DELIVERY,
+        ]);
+
+        $this->actingAs($admin)
+            ->post(route('orders.resume-overdue-delivery', $order))
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $order->refresh();
+        $this->assertSame(Order::STATUS_READY_TO_SHIP, $order->status);
+        $this->assertTrue($order->skip_auto_cancel);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'action' => 'resume_overdue_delivery',
+            'user_id' => $admin->id,
+            'role' => 'admin',
+            'status_before' => Order::STATUS_OVERDUE_DELIVERY,
+            'status_after' => Order::STATUS_READY_TO_SHIP,
+        ]);
+    }
+
+    public function test_non_admin_cannot_allow_an_overdue_order_to_continue(): void
+    {
+        $order = $this->overdueOrder($this->actor('sale'));
+
+        $this->actingAs($this->actor('shipper'))
+            ->postJson(route('orders.resume-overdue-delivery', $order))
+            ->assertForbidden();
+
+        $this->assertSame(Order::STATUS_OVERDUE_DELIVERY, $order->fresh()->status);
+    }
+
     #[DataProvider('cancelActors')]
     public function test_overdue_cancellation_permissions_and_reservation_release(string $actorType, bool $allowed): void
     {

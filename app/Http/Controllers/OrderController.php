@@ -21,6 +21,7 @@ use App\Support\ProductVariantSorter;
 use App\Models\Setting;
 use App\Services\ApprovalService;
 use App\Services\CustomerPriorityService;
+use App\Services\ShipperAssignmentService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\Builder;
@@ -1577,6 +1578,20 @@ class OrderController extends Controller
             : ' Booking tồn kho đã được khôi phục.';
 
         return back()->with('success', "Đã phục hồi đơn về trạng thái {$restoredStatus}.{$stockMessage}");
+    }
+
+    public function resumeOverdueDelivery(Request $request, Order $order, ShipperAssignmentService $assignmentService)
+    {
+        $admin = $request->user();
+        abort_unless($admin?->isAdmin(), 403);
+
+        try {
+            $restoredStatus = $assignmentService->resumeOverdueOrder($order->id, $admin->id, 'admin');
+        } catch (\RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        return back()->with('success', "Đã cho phép đơn tiếp tục xử lý từ công đoạn {$restoredStatus}. Đơn sẽ không tự chuyển sang quá hạn lần nữa.");
     }
 
     public function restoreAllCancelledFromMonitoring(Request $request)

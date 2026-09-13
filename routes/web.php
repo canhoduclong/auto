@@ -802,6 +802,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/orders/{order}/restore', [OrderController::class, 'restoreCancelled'])
         ->name('orders.restore-cancelled')
         ->middleware('role:admin');
+    Route::post('/orders/{order}/resume-overdue-delivery', [OrderController::class, 'resumeOverdueDelivery'])
+        ->name('orders.resume-overdue-delivery')
+        ->middleware('role:admin');
     Route::delete('/orders/{order}/admin-delete', [\App\Http\Controllers\AdminOrderDeletionController::class, 'destroy'])
         ->name('orders.admin-delete')
         ->middleware('role:admin');
@@ -1149,6 +1152,9 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
     Route::post('/my-orders/{order}/cancel', [OrderController::class, 'cancel'])->name('site.orders.cancel');
     Route::post('/my-orders/{order}/restore', [OrderController::class, 'restoreCancelled'])
         ->name('site.orders.restore-cancelled')
+        ->middleware('role:admin');
+    Route::post('/my-orders/{order}/resume-overdue-delivery', [OrderController::class, 'resumeOverdueDelivery'])
+        ->name('site.orders.resume-overdue-delivery')
         ->middleware('role:admin');
     Route::post('/my-orders/{order}/resend', [PageController::class, 'copyOrder'])
         ->name('site.orders.resend');

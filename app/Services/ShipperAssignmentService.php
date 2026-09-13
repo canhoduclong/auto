@@ -12,6 +12,40 @@ use Illuminate\Support\Facades\DB;
 
 class ShipperAssignmentService
 {
+    public function resumeOverdueOrder(int $orderId, ?int $actorId, string $actorRole = 'admin'): string
+    {
+        return DB::transaction(function () use ($orderId, $actorId, $actorRole): string {
+            $order = Order::query()->lockForUpdate()->findOrFail($orderId);
+
+            return $this->resumeLockedOverdueOrder($order, $actorId, $actorRole);
+        });
+    }
+
+    private function resumeLockedOverdueOrder(Order $order, ?int $actorId, string $actorRole): string
+    {
+        if ($order->status !== Order::STATUS_OVERDUE_DELIVERY) {
+            throw new \RuntimeException('Chỉ có thể tiếp tục đơn đang ở trạng thái quá hạn giao.');
+        }
+
+        $previousStatus = $order->histories()
+            ->where('action', 'mark_overdue_delivery')->latest('id')->value('status_before');
+        if (! in_array($previousStatus, Order::RESTORABLE_AFTER_CANCEL_STATUSES, true)) {
+            throw new \RuntimeException('Không xác định được công đoạn hợp lệ trước khi đơn quá hạn giao.');
+        }
+
+        $order->update(['status' => $previousStatus, 'skip_auto_cancel' => true]);
+        $order->histories()->create([
+            'action' => 'resume_overdue_delivery',
+            'user_id' => $actorId,
+            'role' => $actorRole,
+            'status_before' => Order::STATUS_OVERDUE_DELIVERY,
+            'status_after' => $previousStatus,
+            'note' => 'Admin cho phép tiếp tục xử lý đơn quá hạn giao.',
+        ]);
+
+        return $previousStatus;
+    }
+
     public function assignmentStatuses(): array
     {
         return [
@@ -169,22 +203,11 @@ class ShipperAssignmentService
                 continue;
             }
 
-            $previousStatus = $lockedOrder->histories()
-                ->where('action', 'mark_overdue_delivery')->latest('id')->value('status_before');
-            // Resume the recorded warehouse/approval stage; never assume an
-            // overdue order was packed merely because it is being scheduled.
-            if (! in_array($previousStatus, Order::RESTORABLE_AFTER_CANCEL_STATUSES, true)) {
-                abort(422, 'Không xác định được công đoạn trước khi giao trễ của đơn #'.$lockedOrder->code.'.');
+            try {
+                $this->resumeLockedOverdueOrder($lockedOrder, $actorId, $actorRole);
+            } catch (\RuntimeException $exception) {
+                abort(422, $exception->getMessage().' Đơn #'.$lockedOrder->code.'.');
             }
-            $lockedOrder->update(['status' => $previousStatus, 'skip_auto_cancel' => true]);
-            $lockedOrder->histories()->create([
-                'action' => 'resume_overdue_delivery',
-                'user_id' => $actorId,
-                'role' => $actorRole,
-                'status_before' => Order::STATUS_OVERDUE_DELIVERY,
-                'status_after' => $previousStatus,
-                'note' => 'Tiếp tục xử lý đơn giao trễ khi gửi lại lịch giao hàng.',
-            ]);
             $order->refresh();
         }
 

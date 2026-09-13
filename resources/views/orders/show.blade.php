@@ -164,6 +164,16 @@
                 </form>
             @endif
 
+            @if(auth()->user()?->isAdmin() && $order->status === \App\Models\Order::STATUS_OVERDUE_DELIVERY)
+                <form action="{{ route('orders.resume-overdue-delivery', $order) }}" method="POST" class="d-inline ms-2"
+                      onsubmit="return confirm('Cho phép đơn {{ addslashes($order->code ?: ('#' . $order->id)) }} tiếp tục từ công đoạn trước khi quá hạn?');">
+                    @csrf
+                    <button type="submit" class="btn btn-success">
+                        <i class="bi bi-play-circle me-1"></i>Cho phép tiếp tục giao
+                    </button>
+                </form>
+            @endif
+
             @if(auth()->user()?->isAdmin())
                 <form action="{{ route('orders.admin-delete', $order) }}" method="POST" class="d-inline ms-2"
                       onsubmit="const reason = window.prompt('Nhập lý do xóa đơn (ít nhất 5 ký tự):'); if (!reason || reason.trim().length < 5) { window.alert('Vui lòng nhập lý do xóa ít nhất 5 ký tự.'); return false; } this.elements.reason.value = reason.trim(); return window.confirm('Xóa vĩnh viễn đơn này và loại toàn bộ doanh số, hoa hồng liên quan?');">

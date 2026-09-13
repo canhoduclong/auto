@@ -1868,6 +1868,7 @@
                             $canAdminRestoreOrder = $isAdminUser
                                 && $isCancelled
                                 && empty($order->trash_at);
+                            $canAdminResumeOverdueOrder = $isAdminUser && $isOverdue;
                             $isEditable = $canManageOrder && $order->canBeDirectlyEditedByOwner();
                             $canCancel = in_array($order->status, \App\Models\Order::CANCELLABLE_STATUSES, true)
                                 && ($isAdminUser || $canManageOrder);
@@ -2289,6 +2290,15 @@
                                             @csrf
                                             <button type="submit" class="btn btn-sm btn-outline-success">
                                                 <i class="bi bi-arrow-counterclockwise me-1"></i>Phục hồi đơn
+                                            </button>
+                                        </form>
+                                    @endif
+                                    @if($canAdminResumeOverdueOrder)
+                                        <form method="POST" class="monitor-cancel-form" action="{{ route('site.orders.resume-overdue-delivery', $order) }}"
+                                              onsubmit="return confirm('Cho phép đơn {{ addslashes($order->code ?: ('#' . $order->id)) }} tiếp tục từ công đoạn trước khi quá hạn?');">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-success">
+                                                <i class="bi bi-play-circle me-1"></i>Cho phép tiếp tục giao
                                             </button>
                                         </form>
                                     @endif
