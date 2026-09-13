@@ -1,8 +1,8 @@
 {
-  "version": "1.1.9",
-  "version_code": 52,
+  "version": "1.1.10",
+  "version_code": 53,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.1.9: Gộp Đơn hàng về một danh sách có tìm kiếm/lọc, đơn mới nổi lên trên, hoàn tất giao ngay trên thẻ đơn; không bắt buộc ảnh khi hoàn thành."
+  "message": "Bản cập nhật 1.1.10: Hoàn thành hiển thị dạng nhãn; đơn đã kết thúc chỉ xem thông tin, không mở lại form giao hàng."
 }
