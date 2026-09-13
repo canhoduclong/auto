@@ -19,6 +19,7 @@ class TextOrderDraft extends Model
         'note', 'raw_text', 'status', 'error_message', 'automation_mode', 'automation_enabled',
         'automation_dates', 'automation_last_run_at', 'automation_last_error',
         'charge_vat', 'vat_percent', 'collect_customer_shipping_fee', 'customer_shipping_fee',
+        'warehouse_product_permissions',
     ];
 
     protected $casts = [
@@ -30,6 +31,7 @@ class TextOrderDraft extends Model
         'size_kg' => 'decimal:3',
         'unit_price' => 'decimal:2',
         'parsed_items' => 'array',
+        'warehouse_product_permissions' => 'array',
         'use_truck_station' => 'boolean',
         'automation_enabled' => 'boolean',
         'automation_dates' => 'array',

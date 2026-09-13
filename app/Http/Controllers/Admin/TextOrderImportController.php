@@ -809,6 +809,7 @@ class TextOrderImportController extends Controller
                     'recipient_phone' => $draft->phone ?: $customer->phone,
                     'recipient_address' => $draft->address ?: $customer->address,
                     'note' => $draft->note,
+                    'warehouse_product_permissions' => $draft->warehouse_product_permissions,
                     'charge_vat' => $draft->charge_vat,
                     'vat_percent' => $draft->vat_percent,
                     'collect_customer_shipping_fee' => $draft->collect_customer_shipping_fee,
@@ -987,6 +988,10 @@ class TextOrderImportController extends Controller
             'truck_station_phone' => ['nullable', 'string', 'max:30'],
             'truck_receive_time' => ['nullable', 'string', 'max:255'],
             'note' => ['nullable', 'string', 'max:10000'],
+            'warehouse_product_permissions' => ['nullable', 'array'],
+            'warehouse_product_permissions.*.quantity' => ['required', 'boolean'],
+            'warehouse_product_permissions.*.sizes' => ['nullable', 'array'],
+            'warehouse_product_permissions.*.sizes.*' => ['numeric', 'gt:0'],
             'items' => ['nullable', 'array', 'min:1'],
             'items.*.product_variant_id' => ['nullable', 'exists:product_variants,id'],
             'items.*.quantity' => ['nullable', 'integer', 'min:1'],
@@ -997,6 +1002,10 @@ class TextOrderImportController extends Controller
         if (isset($validated['items'])) {
             $validated['parsed_items'] = $validated['items'];
             unset($validated['items']);
+        }
+
+        if ($request->has('warehouse_product_permissions')) {
+            $validated['warehouse_product_permissions'] = $request->input('warehouse_product_permissions') ?: null;
         }
 
         foreach (['charge_vat' => 'vat_percent', 'collect_customer_shipping_fee' => 'customer_shipping_fee'] as $flag => $amount) {

@@ -175,6 +175,7 @@
         'id' => $variant->id,
         'product_id' => $variant->product_id,
         'label' => ($variant->size ?: ($variant->name ?: $variant->sku)) . ($variant->sku ? ' · ' . $variant->sku : ''),
+        'size' => (float) $variant->size,
         'kg' => (float) ($variant->kg ?: $variant->size ?: 1),
         'price' => (float) ($variant->latestPriceRule?->price ?? $variant->price ?? $variant->product?->default_price ?? $variant->product?->price ?? 0),
         'product_name' => $variant->product?->name ?: 'Sản phẩm',
@@ -507,6 +508,11 @@
                                         </tbody>
                                     </table>
                                 </div>
+                                <div class="border rounded p-2 my-2 js-draft-packing" data-policy="{{ json_encode($draft->warehouse_product_permissions) }}">
+                                    <div class="fw-bold small">Cho phép kho linh động đóng hàng theo sản phẩm</div>
+                                    <div class="text-muted small mb-2">Kho chỉ được phối các biến thể đã chọn cho từng sản phẩm. Không chọn thêm: đóng đúng biến thể đặt hàng.</div>
+                                    <div class="js-draft-packing-options"></div>
+                                </div>
                                 @if(!$hasOrderForSelectedDate)
                                     <div class="draft-picker draft-product-picker" hidden>
                                         <div class="draft-picker-search">
@@ -752,7 +758,108 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const grandTotal = editor.querySelector('.draft-edit-grand-total');
         if (grandTotal) grandTotal.textContent = money(total);
+        renderPackingPermissions(editor);
     };
+    const selectedVariantIds = editor => Array.from(editor.querySelectorAll('.js-draft-variant'))
+        .map(select => Number(select.value))
+        .filter(Boolean);
+    const packingState = box => {
+        if (!box._state) box._state = JSON.parse(box.dataset.policy || 'null') || {};
+        return box._state;
+    };
+    const renderPackingPermissions = editor => {
+        const box = editor.querySelector('.js-draft-packing');
+        if (!box) return;
+        const container = box.querySelector('.js-draft-packing-options');
+        const state = packingState(box);
+        const ids = selectedVariantIds(editor);
+        const productIds = [...new Set(variants.filter(v => ids.includes(Number(v.id))).map(v => Number(v.product_id)))];
+        const signature = productIds.join(',') + '|' + ids.join(',');
+        if (box._signature === signature && container.childElementCount) return;
+        box._signature = signature;
+        container.replaceChildren();
+        if (!productIds.length) {
+            container.textContent = 'Chọn sản phẩm để cấu hình quyền đóng hàng.';
+            return;
+        }
+        productIds.forEach(productId => {
+            const productVariants = variants.filter(v => Number(v.product_id) === productId);
+            const sizeOptions = [];
+            const seenSizes = new Set();
+            productVariants.filter(v => Number(v.size) > 0).forEach(v => {
+                const size = Number(v.size);
+                if (seenSizes.has(size)) return;
+                seenSizes.add(size);
+                sizeOptions.push({size, label: v.label, inDraft: ids.includes(Number(v.id))});
+            });
+            const orderedSizes = productVariants.filter(v => ids.includes(Number(v.id)) && Number(v.size) > 0).map(v => Number(v.size));
+            state[productId] ||= {quantity: false, sizes: []};
+            const policy = state[productId];
+            policy.sizes = [...new Set([...(policy.sizes || []).map(Number), ...orderedSizes])];
+            const section = document.createElement('div');
+            section.className = 'mb-2 js-draft-packing-product';
+            section.dataset.productId = String(productId);
+            const title = document.createElement('strong');
+            title.className = 'd-block mb-1 small';
+            title.textContent = productVariants[0]?.product_name || 'Sản phẩm';
+            section.append(title);
+            const checkbox = (labelText, checked, disabled, onChange) => {
+                const label = document.createElement('label');
+                label.className = 'd-inline-flex align-items-center gap-1 me-3 mb-1 small';
+                const input = document.createElement('input');
+                input.type = 'checkbox';
+                input.className = 'form-check-input m-0';
+                input.checked = checked;
+                input.disabled = disabled;
+                input.addEventListener('change', () => onChange(input));
+                label.append(input, document.createTextNode(labelText));
+                section.append(label);
+                return input;
+            };
+            checkbox('1. Số lượng', policy.quantity === true || policy.quantity === 1 || policy.quantity === '1', false, input => policy.quantity = input.checked);
+            if (sizeOptions.length) {
+                section.append(document.createElement('br'));
+                const variantInputs = [];
+                const syncPolicySizes = () => {
+                    policy.sizes = [...new Set([...orderedSizes, ...variantInputs.filter(i => i.checked && !i.disabled).map(i => Number(i.dataset.size))])];
+                };
+                const allInput = checkbox('2. Chọn tất cả (All)', sizeOptions.every(option => (policy.sizes || []).map(Number).includes(option.size)), false, input => {
+                    variantInputs.forEach(i => { if (!i.disabled) i.checked = input.checked; });
+                    syncPolicySizes();
+                });
+                section.append(document.createElement('br'));
+                sizeOptions.forEach(option => {
+                    const checked = option.inDraft || (policy.sizes || []).map(Number).includes(option.size);
+                    const input = checkbox(option.inDraft ? `${option.label} (trong đơn)` : option.label, checked, option.inDraft, () => {
+                        syncPolicySizes();
+                        allInput.checked = variantInputs.every(i => i.checked);
+                    });
+                    input.dataset.size = String(option.size);
+                    variantInputs.push(input);
+                });
+                allInput.checked = variantInputs.every(i => i.checked);
+            }
+            container.append(section);
+        });
+    };
+    const packingPermissionsData = editor => {
+        const box = editor?.querySelector('.js-draft-packing');
+        if (!box) return null;
+        const state = packingState(box);
+        const ids = selectedVariantIds(editor);
+        const productIds = [...new Set(variants.filter(v => ids.includes(Number(v.id))).map(v => Number(v.product_id)))];
+        if (!productIds.length) return null;
+        const payload = {};
+        productIds.forEach(productId => {
+            const policy = state[productId] || {quantity: false, sizes: []};
+            payload[productId] = {
+                quantity: policy.quantity ? 1 : 0,
+                sizes: [...new Set((policy.sizes || []).map(Number).filter(size => size > 0))],
+            };
+        });
+        return payload;
+    };
+    document.querySelectorAll('.draft-template-editor').forEach(editor => renderPackingPermissions(editor));
     const escapeHtml = value => {
         const node = document.createElement('div');
         node.textContent = String(value ?? '');
@@ -873,6 +980,7 @@ document.addEventListener('DOMContentLoaded', () => {
             use_truck_station: editor?.querySelector('.js-draft-use-truck')?.checked ? 1 : 0,
             truck_station_name: value('truck_station_name'), truck_station_phone: value('truck_station_phone'), truck_receive_time: value('truck_receive_time'),
             delivery_date: value('delivery_date'), delivery_time: value('delivery_time'), note: value('note'),
+            warehouse_product_permissions: packingPermissionsData(editor),
             items: Array.from(editor?.querySelectorAll('[data-draft-item]') || []).map(item => ({
                 product_variant_id: item.querySelector('[name="item_product_variant_id"]')?.value || null,
                 quantity: item.querySelector('[name="item_quantity"]')?.value || null,

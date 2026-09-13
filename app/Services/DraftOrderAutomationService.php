@@ -110,6 +110,7 @@ class DraftOrderAutomationService
                     'recipient_phone' => $draft->phone ?: $customer->phone,
                     'recipient_address' => $draft->address ?: $customer->address,
                     'note' => $draft->note,
+                    'warehouse_product_permissions' => $draft->warehouse_product_permissions,
                     'charge_vat' => $draft->charge_vat,
                     'vat_percent' => $draft->vat_percent,
                     'collect_customer_shipping_fee' => $draft->collect_customer_shipping_fee,
