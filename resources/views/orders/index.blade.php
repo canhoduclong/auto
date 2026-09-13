@@ -23,7 +23,7 @@
     </div>
 
     @php
-        $hasActiveFilter = request()->hasAny(['customer_name','phone_number','user_id','team_id','payment_status','status','from_date','to_date','my_pending_approval']);
+        $hasActiveFilter = request()->hasAny(['code','q','search','keyword','customer_name','phone_number','user_id','team_id','payment_status','status','from_date','to_date','my_pending_approval']);
     @endphp
     <div class="card mb-3 shadow-sm border-0">
         <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center" style="cursor:pointer;" id="ordersFilterToggle" role="button" aria-expanded="{{ $hasActiveFilter ? 'true' : 'false' }}" aria-controls="ordersFilterBody">
@@ -43,8 +43,12 @@
         <div class="card-body">
             <form method="GET" action="{{ route('orders.index') }}" class="row g-3">
                 <div class="col-md-3">
+                    <label for="code" class="form-label">{{ __('orders.labels.code') }}</label>
+                    <input type="text" name="code" id="code" class="form-control" value="{{ request('code') ?: request('q') ?: request('search') ?: request('keyword') }}" placeholder="Mã đơn hàng hoặc ID">
+                </div>
+                <div class="col-md-3">
                     <label for="customer_name" class="form-label">{{ __('orders.labels.customer') }}</label>
-                    <input type="text" name="customer_name" id="customer_name" class="form-control" value="{{ request('customer_name') }}" placeholder="Tên khách hàng">
+                    <input type="text" name="customer_name" id="customer_name" class="form-control" value="{{ request('customer_name') }}" placeholder="Tên KH hoặc Mã đơn">
                 </div>
                 <div class="col-md-3">
                     <label for="phone_number" class="form-label">{{ __('orders.labels.phone') }}</label>

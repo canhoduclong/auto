@@ -708,6 +708,16 @@ class PageController extends Controller
         $fromDate = $request->input('from_date');
         $toDate = $request->input('to_date');
 
+        if ($request->filled('code') || $request->filled('q') || $request->filled('search') || $request->filled('keyword')) {
+            $codeKeyword = trim((string) ($request->input('code') ?: $request->input('q') ?: $request->input('search') ?: $request->input('keyword')));
+            $cleanCodeKeyword = ltrim($codeKeyword, '#');
+            $query->where(function ($sub) use ($codeKeyword, $cleanCodeKeyword) {
+                $sub->where('code', 'like', "%{$codeKeyword}%")
+                    ->orWhere('code', 'like', "%{$cleanCodeKeyword}%")
+                    ->orWhere('id', 'like', "%{$cleanCodeKeyword}%");
+            });
+        }
+
         if ($fromDate && $toDate) {
             $from = Carbon::parse($fromDate)->startOfDay();
             $to = Carbon::parse($toDate)->endOfDay();

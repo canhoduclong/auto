@@ -1840,7 +1840,8 @@ class WarehouseDashboardController extends Controller
         $receivedWeights = [];
         $receivedTotalWeight = 0.0;
 
-        DB::transaction(function () use ($transfer, $order, $validated, $orderItemsById, &$receivedWeights, &$receivedTotalWeight): void {
+        try {
+            DB::transaction(function () use ($transfer, $order, $validated, $orderItemsById, &$receivedWeights, &$receivedTotalWeight): void {
             $document = InventoryDocument::create([
                 'type' => 'import',
                 'document_date' => now()->toDateString(),
@@ -1938,7 +1939,12 @@ class WarehouseDashboardController extends Controller
                 'status_after' => $order->status,
                 'note' => 'Kho da tiep nhan dieu chuyen #'.$transfer->id.' | Hao hụt KL: '.$weightLoss.' kg',
             ]);
-        });
+            });
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Không thể tiếp nhận phiếu điều chuyển #'.$transfer->id.': '.$e->getMessage());
+        }
 
         return back()->with('success', 'Đã tiếp nhận hàng điều chuyển, tạo phiếu nhập kho và cập nhật tồn kho thành công.');
     }
@@ -1964,12 +1970,18 @@ class WarehouseDashboardController extends Controller
                 }
 
                 $sourceInventory = Inventory::query()->lockForUpdate()->find($reservation->inventory_id);
-                if (! $sourceInventory
-                    || (int) $sourceInventory->warehouse_id !== $sourceWarehouseId
-                    || (int) $sourceInventory->quantity < $quantity
-                    || (int) $sourceInventory->reserved_quantity < $quantity) {
-                    throw new \RuntimeException('Dữ liệu tồn kho đặt trước không hợp lệ khi tiếp nhận điều chuyển.');
+                if (! $sourceInventory || (int) $sourceInventory->warehouse_id !== $sourceWarehouseId) {
+                    // Ton kho nguon khong con: bo reservation cu de khong chan tiep nhan
+                    $reservation->delete();
+                    continue;
                 }
+
+                // Chi chuyen phan ton kho nguon con du, tranh am kho gay loi 500
+                $movableQuantity = min(
+                    $quantity,
+                    max(0, (int) $sourceInventory->quantity),
+                    max(0, (int) $sourceInventory->reserved_quantity)
+                );
 
                 $targetInventory = Inventory::query()->firstOrCreate(
                     [
@@ -1984,8 +1996,10 @@ class WarehouseDashboardController extends Controller
                 );
                 $targetInventory = Inventory::query()->lockForUpdate()->findOrFail($targetInventory->id);
 
-                $sourceInventory->decrement('quantity', $quantity);
-                $sourceInventory->decrement('reserved_quantity', $quantity);
+                if ($movableQuantity > 0) {
+                    $sourceInventory->decrement('quantity', $movableQuantity);
+                    $sourceInventory->decrement('reserved_quantity', $movableQuantity);
+                }
                 $targetInventory->increment('reserved_quantity', $quantity);
 
                 InventoryReservation::create([
@@ -1996,14 +2010,16 @@ class WarehouseDashboardController extends Controller
                 ]);
                 $reservation->delete();
 
-                InventoryMovement::create([
-                    'inventory_id' => $sourceInventory->id,
-                    'quantity' => -$quantity,
-                    'type' => 'transfer_out',
-                    'reference_id' => $transfer->id,
-                    'reference_type' => WarehouseTransfer::class,
-                    'user_id' => Auth::id(),
-                ]);
+                if ($movableQuantity > 0) {
+                    InventoryMovement::create([
+                        'inventory_id' => $sourceInventory->id,
+                        'quantity' => -$movableQuantity,
+                        'type' => 'transfer_out',
+                        'reference_id' => $transfer->id,
+                        'reference_type' => WarehouseTransfer::class,
+                        'user_id' => Auth::id(),
+                    ]);
+                }
             }
         }
     }

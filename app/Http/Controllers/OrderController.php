@@ -898,9 +898,26 @@ class OrderController extends Controller
         }
 
         // Filtering
+        if ($request->filled('code') || $request->filled('q') || $request->filled('search') || $request->filled('keyword')) {
+            $code = trim((string) ($request->input('code') ?: $request->input('q') ?: $request->input('search') ?: $request->input('keyword')));
+            $cleanCode = ltrim($code, '#');
+            $query->where(function ($q) use ($code, $cleanCode) {
+                $q->where('code', 'like', '%' . $code . '%')
+                  ->orWhere('code', 'like', '%' . $cleanCode . '%')
+                  ->orWhere('id', 'like', '%' . $cleanCode . '%');
+            });
+        }
+
         if ($request->filled('customer_name')) {
-            $query->whereHas('customer', function ($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->input('customer_name') . '%');
+            $customerName = trim((string) $request->input('customer_name'));
+            $cleanCustomerName = ltrim($customerName, '#');
+            $query->where(function ($q) use ($customerName, $cleanCustomerName) {
+                $q->whereHas('customer', function ($sub) use ($customerName) {
+                    $sub->where('name', 'like', '%' . $customerName . '%');
+                })
+                ->orWhere('code', 'like', '%' . $customerName . '%')
+                ->orWhere('code', 'like', '%' . $cleanCustomerName . '%')
+                ->orWhere('id', 'like', '%' . $cleanCustomerName . '%');
             });
         }
 
