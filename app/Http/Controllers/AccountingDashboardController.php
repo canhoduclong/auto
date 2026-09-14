@@ -901,6 +901,9 @@ class AccountingDashboardController extends Controller
         if (! in_array($dateField, ['business_date', 'delivered_at'], true)) {
             $dateField = 'business_date';
         }
+        $hasExclusionTable = Schema::hasTable('accounting_reconciliation_exclusions');
+        $canExcludeMissingOrders = $hasExclusionTable
+            && Schema::hasColumn('accounting_reconciliation_exclusions', 'deleted_order_id');
 
         $baseQuery = Order::query()
             ->with([
@@ -916,10 +919,10 @@ class AccountingDashboardController extends Controller
                 'histories as is_restored_order' => fn ($historyQuery) => $historyQuery
                     ->where('action', 'restore_cancelled_order'),
             ])
-            ->whereNotExists(fn ($query) => $query
+            ->when($hasExclusionTable, fn ($query) => $query->whereNotExists(fn ($exclusionQuery) => $exclusionQuery
                 ->selectRaw('1')
                 ->from('accounting_reconciliation_exclusions')
-                ->whereColumn('accounting_reconciliation_exclusions.order_id', 'orders.id'))
+                ->whereColumn('accounting_reconciliation_exclusions.order_id', 'orders.id')))
             ->where(function ($dateQuery) use ($targetDate, $dateField): void {
                 if ($dateField === 'delivered_at') {
                     $dateQuery->whereDate('delivered_at', $targetDate);
@@ -1002,9 +1005,11 @@ class AccountingDashboardController extends Controller
 
         $missingOrders = collect();
         if (Schema::hasTable('admin_deleted_orders')) {
-            $excludedDeletedIds = DB::table('accounting_reconciliation_exclusions')
-                ->whereNotNull('deleted_order_id')
-                ->pluck('deleted_order_id');
+            $excludedDeletedIds = $canExcludeMissingOrders
+                ? DB::table('accounting_reconciliation_exclusions')
+                    ->whereNotNull('deleted_order_id')
+                    ->pluck('deleted_order_id')
+                : collect();
             $missingOrders = DB::table('admin_deleted_orders')
                 ->whereNotIn('id', $excludedDeletedIds)
                 ->orderByDesc('deleted_at')
@@ -1040,7 +1045,16 @@ class AccountingDashboardController extends Controller
                         ? $deleted->delivered_at
                         : ($deleted->import_batch_id ? $deleted->delivery_date : $deleted->created_at);
 
-                    return $dateValue && Carbon::parse($dateValue)->toDateString() === $targetDate
+                    if (! $dateValue) {
+                        return false;
+                    }
+                    try {
+                        $matchesDate = Carbon::parse($dateValue)->toDateString() === $targetDate;
+                    } catch (\Throwable) {
+                        return false;
+                    }
+
+                    return $matchesDate
                         && ($saleId <= 0 || $deleted->sale_id === $saleId)
                         && ($shipperId <= 0 || $deleted->shipper_id === $shipperId)
                         && ($status === '' || $deleted->status === $status)
@@ -1078,11 +1092,14 @@ class AccountingDashboardController extends Controller
             'accountingStatus' => $accountingStatus,
             'dateField' => $dateField,
             'missingOrders' => $missingOrders,
+            'canExcludeReconciliationOrders' => $hasExclusionTable,
+            'canExcludeMissingOrders' => $canExcludeMissingOrders,
         ]);
     }
 
     public function excludeInvalidReconciliationOrder(Request $request, Order $order)
     {
+        abort_unless(Schema::hasTable('accounting_reconciliation_exclusions'), 503, 'Chức năng đang được cập nhật dữ liệu.');
         $isMissing = $order->trash_at !== null;
         $isCancelled = $order->status === Order::STATUS_CANCELLED;
         if (! $isMissing && ! $isCancelled) {
@@ -1111,6 +1128,12 @@ class AccountingDashboardController extends Controller
 
     public function excludeMissingReconciliationOrder(Request $request, int $deletedOrderId)
     {
+        abort_unless(
+            Schema::hasTable('accounting_reconciliation_exclusions')
+                && Schema::hasColumn('accounting_reconciliation_exclusions', 'deleted_order_id'),
+            503,
+            'Chức năng đang được cập nhật dữ liệu.'
+        );
         $deletedOrder = DB::table('admin_deleted_orders')->where('id', $deletedOrderId)->first();
         abort_unless($deletedOrder, 404);
         if (Order::query()->whereKey($deletedOrder->order_id)->exists()) {

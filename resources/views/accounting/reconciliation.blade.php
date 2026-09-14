@@ -289,6 +289,7 @@
                             <td><span class="badge text-bg-danger">Không thể đối soát</span></td>
                             <td>{{ $missingBusinessDate ? \Carbon\Carbon::parse($missingBusinessDate)->format('d/m/Y H:i') : '-' }}</td>
                             <td>
+                                @if($canExcludeMissingOrders ?? false)
                                 <form method="POST" action="{{ route('accounting.reconciliation.exclude-missing', $missingOrder->deleted_record_id) }}" class="js-exclude-invalid-order-form">
                                     @csrf
                                     @method('DELETE')
@@ -297,6 +298,9 @@
                                         <i class="bi bi-trash me-1"></i>Xóa khỏi kế toán
                                     </button>
                                 </form>
+                                @else
+                                    <span class="small text-muted">Chờ cập nhật dữ liệu để xóa</span>
+                                @endif
                             </td>
                         </tr>
                     @endforeach
@@ -372,7 +376,7 @@
                                         type="button"
                                         title="Hủy xác nhận đối soát và gỡ doanh thu, hoa hồng của đơn"
                                     >Hủy đối soát</button>
-                                    @if($isInvalidOrder)
+                                    @if($isInvalidOrder && ($canExcludeReconciliationOrders ?? false))
                                         <form method="POST" action="{{ route('accounting.reconciliation.exclude', $order) }}" class="js-exclude-invalid-order-form">
                                             @csrf
                                             @method('DELETE')
