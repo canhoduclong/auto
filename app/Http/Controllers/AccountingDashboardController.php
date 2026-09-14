@@ -889,18 +889,32 @@ class AccountingDashboardController extends Controller
 
     public function reconciliation(Request $request)
     {
-        $selectedDate = (string) $request->input('date', now()->toDateString());
-        $targetDate = Carbon::parse($selectedDate)->toDateString();
+        $usesCombinedDateFilters = $request->hasAny(['business_date', 'delivered_date']);
+        if ($usesCombinedDateFilters) {
+            $validatedDates = $request->validate([
+                'business_date' => ['nullable', 'date_format:Y-m-d'],
+                'delivered_date' => ['nullable', 'date_format:Y-m-d'],
+            ]);
+            $businessDate = filled($validatedDates['business_date'] ?? null) ? (string) $validatedDates['business_date'] : null;
+            $deliveredDate = filled($validatedDates['delivered_date'] ?? null) ? (string) $validatedDates['delivered_date'] : null;
+            if ($businessDate === null && $deliveredDate === null) {
+                $businessDate = now()->toDateString();
+            }
+        } else {
+            // Giữ tương thích với các liên kết cũ dùng date_field + date.
+            $legacyDate = Carbon::parse((string) $request->input('date', now()->toDateString()))->toDateString();
+            $legacyDateField = (string) $request->input('date_field', 'business_date');
+            $businessDate = $legacyDateField === 'delivered_at' ? null : $legacyDate;
+            $deliveredDate = $legacyDateField === 'delivered_at' ? $legacyDate : null;
+        }
+        $dateField = $businessDate !== null ? 'business_date' : 'delivered_at';
+        $selectedDate = $businessDate ?? $deliveredDate ?? now()->toDateString();
         $orderId = (int) $request->input('order_id', 0);
         $saleId = (int) $request->input('sale_id', 0);
         $shipperId = (int) $request->input('shipper_id', 0);
         $status = trim((string) $request->input('status', ''));
         $paymentStatus = trim((string) $request->input('payment_status', ''));
         $accountingStatus = trim((string) $request->input('accounting_status', ''));
-        $dateField = (string) $request->input('date_field', 'business_date');
-        if (! in_array($dateField, ['business_date', 'delivered_at'], true)) {
-            $dateField = 'business_date';
-        }
         $sort = (string) $request->input('sort', 'date');
         $sortDirection = strtolower((string) $request->input('direction', 'desc'));
         $sortableColumns = ['code', 'customer', 'status', 'paid', 'due', 'sale', 'shipper', 'shipping_fee', 'accounting_status', 'date'];
@@ -932,37 +946,32 @@ class AccountingDashboardController extends Controller
                 ->selectRaw('1')
                 ->from('accounting_reconciliation_exclusions')
                 ->whereColumn('accounting_reconciliation_exclusions.order_id', 'orders.id')))
-            ->where(function ($dateQuery) use ($targetDate, $dateField): void {
-                if ($dateField === 'delivered_at') {
-                    $dateQuery->whereDate('delivered_at', $targetDate);
-
-                    return;
-                }
-
-                $dateQuery->where(function ($regularBusinessDateQuery) use ($targetDate): void {
+            ->when($businessDate !== null, function ($dateQuery) use ($businessDate): void {
+                $dateQuery->where(function ($regularBusinessDateQuery) use ($businessDate): void {
                     $regularBusinessDateQuery
                         ->whereDoesntHave('histories', fn ($historyQuery) => $historyQuery
                             ->where('action', 'restore_cancelled_order'))
-                        ->where(function ($businessDateQuery) use ($targetDate): void {
+                        ->where(function ($businessDateQuery) use ($businessDate): void {
                             // Đồng bộ với màn Theo dõi đơn hàng ngày: đơn thường
                             // theo ngày tạo, đơn nhập kế toán theo ngày nghiệp vụ.
-                            $businessDateQuery->where(function ($normalQuery) use ($targetDate): void {
+                            $businessDateQuery->where(function ($normalQuery) use ($businessDate): void {
                                 $normalQuery->whereNull('accounting_sales_import_batch_id')
-                                    ->whereDate('created_at', $targetDate);
-                            })->orWhere(function ($importQuery) use ($targetDate): void {
+                                    ->whereDate('created_at', $businessDate);
+                            })->orWhere(function ($importQuery) use ($businessDate): void {
                                 $importQuery->whereNotNull('accounting_sales_import_batch_id')
-                                    ->whereDate('delivery_date', $targetDate);
+                                    ->whereDate('delivery_date', $businessDate);
                             });
                         });
-                })->orWhere(function ($restoredOrderQuery) use ($targetDate): void {
+                })->orWhere(function ($restoredOrderQuery) use ($businessDate): void {
                     // Đơn phục hồi có ngày tạo cũ nhưng phải được kế toán nhận
                     // tại ngày Shipper thực sự giao lại đơn.
                     $restoredOrderQuery
                         ->whereHas('histories', fn ($historyQuery) => $historyQuery
                             ->where('action', 'restore_cancelled_order'))
-                        ->whereDate('delivered_at', $targetDate);
+                        ->whereDate('delivered_at', $businessDate);
                 });
             })
+            ->when($deliveredDate !== null, fn ($dateQuery) => $dateQuery->whereDate('delivered_at', $deliveredDate))
             ->when($orderId > 0, fn ($q) => $q->whereKey($orderId))
             ->when($saleId > 0, fn ($q) => $q->where('user_id', $saleId))
             ->when($shipperId > 0, fn ($q) => $q->where('shipper_id', $shipperId))
@@ -1080,21 +1089,19 @@ class AccountingDashboardController extends Controller
                         'deleted_at' => $deleted->deleted_at,
                     ];
                 })
-                ->filter(function ($deleted) use ($targetDate, $dateField, $saleId, $shipperId, $status, $paymentStatus, $accountingStatus): bool {
-                    $dateValue = $dateField === 'delivered_at'
-                        ? $deleted->delivered_at
-                        : ($deleted->import_batch_id ? $deleted->delivery_date : $deleted->created_at);
-
-                    if (! $dateValue) {
-                        return false;
-                    }
+                ->filter(function ($deleted) use ($businessDate, $deliveredDate, $saleId, $shipperId, $status, $paymentStatus, $accountingStatus): bool {
+                    $businessDateValue = $deleted->import_batch_id ? $deleted->delivery_date : $deleted->created_at;
                     try {
-                        $matchesDate = Carbon::parse($dateValue)->toDateString() === $targetDate;
+                        $matchesBusinessDate = $businessDate === null
+                            || ($businessDateValue && Carbon::parse($businessDateValue)->toDateString() === $businessDate);
+                        $matchesDeliveredDate = $deliveredDate === null
+                            || ($deleted->delivered_at && Carbon::parse($deleted->delivered_at)->toDateString() === $deliveredDate);
                     } catch (\Throwable) {
                         return false;
                     }
 
-                    return $matchesDate
+                    return $matchesBusinessDate
+                        && $matchesDeliveredDate
                         && ($saleId <= 0 || $deleted->sale_id === $saleId)
                         && ($shipperId <= 0 || $deleted->shipper_id === $shipperId)
                         && ($status === '' || $deleted->status === $status)
@@ -1122,7 +1129,9 @@ class AccountingDashboardController extends Controller
         return view('accounting.reconciliation', [
             'orders' => $orders,
             'stats' => $stats,
-            'selectedDate' => $targetDate,
+            'selectedDate' => $selectedDate,
+            'businessDate' => $businessDate,
+            'deliveredDate' => $deliveredDate,
             'sales' => User::query()->whereHas('roles', fn ($q) => $q->whereIn('name', ['sale', 'leader_sale', 'sale_manager', 'manager_sale']))->orderBy('name')->get(['id', 'name']),
             'shippers' => User::query()->whereHas('roles', fn ($q) => $q->whereIn('name', ['shipper', 'ship']))->orderBy('name')->get(['id', 'name']),
             'saleId' => $saleId,

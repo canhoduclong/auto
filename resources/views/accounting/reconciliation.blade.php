@@ -187,21 +187,30 @@
 
 <div class="recon-grid">
     <div class="recon-panel">
-        <div class="panel-head">Tổng quan ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</div>
+        <div class="panel-head">
+            Tổng quan
+            @if($businessDate && $deliveredDate)
+                · Ngày nghiệp vụ {{ \Carbon\Carbon::parse($businessDate)->format('d/m/Y') }}
+                · Ngày giao {{ \Carbon\Carbon::parse($deliveredDate)->format('d/m/Y') }}
+            @elseif($businessDate)
+                ngày nghiệp vụ {{ \Carbon\Carbon::parse($businessDate)->format('d/m/Y') }}
+            @else
+                ngày giao {{ \Carbon\Carbon::parse($deliveredDate)->format('d/m/Y') }}
+            @endif
+        </div>
         <div class="panel-body">
             <form method="GET" class="row g-2 mb-3">
                 <input type="hidden" name="sort" value="{{ $sort }}">
                 <input type="hidden" name="direction" value="{{ $sortDirection }}">
                 <div class="col-12">
-                    <label class="form-label">Loại ngày</label>
-                    <select class="form-select" name="date_field">
-                        <option value="business_date" @selected($dateField === 'business_date')>Ngày nghiệp vụ</option>
-                        <option value="delivered_at" @selected($dateField === 'delivered_at')>Ngày giao thực tế</option>
-                    </select>
+                    <label class="form-label">Ngày nghiệp vụ / ngày lên đơn</label>
+                    <input class="form-control" type="date" name="business_date" value="{{ $businessDate }}">
+                    <div class="form-text">Để trống nếu không lọc theo ngày này.</div>
                 </div>
                 <div class="col-12">
-                    <label class="form-label">{{ $dateField === 'business_date' ? 'Ngày nghiệp vụ' : 'Ngày giao thực tế' }}</label>
-                    <input class="form-control" type="date" name="date" value="{{ $selectedDate }}">
+                    <label class="form-label">Ngày giao thực tế</label>
+                    <input class="form-control" type="date" name="delivered_date" value="{{ $deliveredDate }}">
+                    <div class="form-text">Có thể chọn cùng ngày nghiệp vụ để lọc kết hợp.</div>
                 </div>
                 <div class="col-12">
                     <label class="form-label">Sale</label>
@@ -301,7 +310,7 @@
                             <th><a class="recon-sort-link" href="{{ $sortLink('shipper') }}">Shipper <i class="bi {{ $sortIcon('shipper') }}"></i></a></th>
                             <th><a class="recon-sort-link" href="{{ $sortLink('shipping_fee') }}">Phí ship <i class="bi {{ $sortIcon('shipping_fee') }}"></i></a></th>
                             <th><a class="recon-sort-link" href="{{ $sortLink('accounting_status') }}">Kế toán <i class="bi {{ $sortIcon('accounting_status') }}"></i></a></th>
-                            <th><a class="recon-sort-link" href="{{ $sortLink('date') }}">{{ $dateField === 'business_date' ? 'Ngày nghiệp vụ' : 'Ngày giao' }} <i class="bi {{ $sortIcon('date') }}"></i></a></th>
+                            <th><a class="recon-sort-link" href="{{ $sortLink('date') }}">{{ $businessDate && $deliveredDate ? 'Ngày nghiệp vụ / Ngày giao' : ($businessDate ? 'Ngày nghiệp vụ' : 'Ngày giao') }} <i class="bi {{ $sortIcon('date') }}"></i></a></th>
                             <th></th>
                         </tr>
                     </thead>
@@ -335,7 +344,14 @@
                             <td>{{ $missingOrder->shipper_name }}</td>
                             <td>{{ $money($missingOrder->shipping_fee) }}</td>
                             <td><span class="badge text-bg-danger">Không thể đối soát</span></td>
-                            <td>{{ $missingBusinessDate ? \Carbon\Carbon::parse($missingBusinessDate)->format('d/m/Y H:i') : '-' }}</td>
+                            <td>
+                                @if($businessDate && $deliveredDate)
+                                    <span class="d-block">NV: {{ ($missingOrder->import_batch_id ? $missingOrder->delivery_date : $missingOrder->created_at) ? \Carbon\Carbon::parse($missingOrder->import_batch_id ? $missingOrder->delivery_date : $missingOrder->created_at)->format('d/m/Y H:i') : '-' }}</span>
+                                    <span class="d-block text-muted small">Giao: {{ $missingOrder->delivered_at ? \Carbon\Carbon::parse($missingOrder->delivered_at)->format('d/m/Y H:i') : '-' }}</span>
+                                @else
+                                    {{ $missingBusinessDate ? \Carbon\Carbon::parse($missingBusinessDate)->format('d/m/Y H:i') : '-' }}
+                                @endif
+                            </td>
                             <td>
                                 @if($canExcludeMissingOrders ?? false)
                                 <form method="POST" action="{{ route('accounting.reconciliation.exclude-missing', $missingOrder->deleted_record_id) }}" class="js-exclude-invalid-order-form">
@@ -401,7 +417,14 @@
                                 </span>
                             </td>
                             <td>
-                                @if($dateField === 'business_date')
+                                @if($businessDate && $deliveredDate)
+                                    <span class="d-block">NV: {{ $order->is_restored_order
+                                        ? (optional($order->delivered_at)->format('d/m/Y H:i') ?: '-')
+                                        : ($order->accounting_sales_import_batch_id
+                                        ? (optional($order->delivery_date)->format('d/m/Y') ?: '-')
+                                        : (optional($order->created_at)->format('d/m/Y H:i') ?: '-')) }}</span>
+                                    <span class="d-block text-muted small">Giao: {{ optional($order->delivered_at)->format('d/m/Y H:i') ?: '-' }}</span>
+                                @elseif($dateField === 'business_date')
                                     {{ $order->is_restored_order
                                         ? (optional($order->delivered_at)->format('d/m/Y H:i') ?: '-')
                                         : ($order->accounting_sales_import_batch_id
