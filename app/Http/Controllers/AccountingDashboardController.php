@@ -901,6 +901,15 @@ class AccountingDashboardController extends Controller
         if (! in_array($dateField, ['business_date', 'delivered_at'], true)) {
             $dateField = 'business_date';
         }
+        $sort = (string) $request->input('sort', 'date');
+        $sortDirection = strtolower((string) $request->input('direction', 'desc'));
+        $sortableColumns = ['code', 'customer', 'status', 'paid', 'due', 'sale', 'shipper', 'shipping_fee', 'accounting_status', 'date'];
+        if (! in_array($sort, $sortableColumns, true)) {
+            $sort = 'date';
+        }
+        if (! in_array($sortDirection, ['asc', 'desc'], true)) {
+            $sortDirection = 'desc';
+        }
         $hasExclusionTable = Schema::hasTable('accounting_reconciliation_exclusions');
         $canExcludeMissingOrders = $hasExclusionTable
             && Schema::hasColumn('accounting_reconciliation_exclusions', 'deleted_order_id');
@@ -970,9 +979,38 @@ class AccountingDashboardController extends Controller
             ->when($accountingStatus === 'confirmed', fn ($q) => $q->whereHas('accountingReconciliation', fn ($r) => $r->where('status', AccountingReconciliation::STATUS_CONFIRMED)))
             ->when($accountingStatus === 'pending', fn ($q) => $q->whereDoesntHave('accountingReconciliation', fn ($r) => $r->where('status', AccountingReconciliation::STATUS_CONFIRMED)));
 
-        $orders = (clone $baseQuery)
-            ->orderByRaw('CASE WHEN delivered_at IS NULL THEN 1 ELSE 0 END')
-            ->orderByDesc('delivered_at')
+        $ordersQuery = clone $baseQuery;
+        match ($sort) {
+            'code' => $ordersQuery->orderBy('orders.code', $sortDirection),
+            'customer' => $ordersQuery->orderBy(
+                Customer::query()->select('name')->whereColumn('customers.id', 'orders.customer_id'),
+                $sortDirection
+            ),
+            'status' => $ordersQuery->orderBy('orders.status', $sortDirection),
+            'paid' => $ordersQuery->orderBy('orders.amount_paid', $sortDirection),
+            'due' => $ordersQuery->orderBy('orders.amount_due', $sortDirection),
+            'sale' => $ordersQuery->orderBy(
+                User::query()->select('name')->whereColumn('users.id', 'orders.user_id'),
+                $sortDirection
+            ),
+            'shipper' => $ordersQuery->orderBy(
+                User::query()->select('name')->whereColumn('users.id', 'orders.shipper_id'),
+                $sortDirection
+            ),
+            'shipping_fee' => $ordersQuery->orderBy('orders.shipping_fee', $sortDirection),
+            'accounting_status' => $ordersQuery->orderBy(
+                AccountingReconciliation::query()->select('status')->whereColumn('accounting_reconciliations.order_id', 'orders.id'),
+                $sortDirection
+            ),
+            'date' => $dateField === 'delivered_at'
+                ? $ordersQuery->orderBy('orders.delivered_at', $sortDirection)
+                : $ordersQuery->orderByRaw(
+                    'CASE WHEN orders.accounting_sales_import_batch_id IS NOT NULL THEN orders.delivery_date ELSE orders.created_at END '.$sortDirection
+                ),
+        };
+
+        $orders = $ordersQuery
+            ->orderBy('orders.id', $sortDirection)
             ->paginate(25)
             ->appends($request->query());
         $orders->getCollection()->transform(function (Order $order) {
@@ -1091,6 +1129,8 @@ class AccountingDashboardController extends Controller
             'paymentStatus' => $paymentStatus,
             'accountingStatus' => $accountingStatus,
             'dateField' => $dateField,
+            'sort' => $sort,
+            'sortDirection' => $sortDirection,
             'missingOrders' => $missingOrders,
             'canExcludeReconciliationOrders' => $hasExclusionTable,
             'canExcludeMissingOrders' => $canExcludeMissingOrders,

@@ -21,6 +21,18 @@
         'partial' => 'Thanh toán một phần',
         'unpaid' => 'Chưa thanh toán',
     ];
+    $sortLink = function (string $column) use ($sort, $sortDirection): string {
+        $nextDirection = $sort === $column && $sortDirection === 'asc' ? 'desc' : 'asc';
+
+        return request()->fullUrlWithQuery([
+            'sort' => $column,
+            'direction' => $nextDirection,
+            'page' => 1,
+        ]);
+    };
+    $sortIcon = fn (string $column): string => $sort === $column
+        ? ($sortDirection === 'asc' ? 'bi-caret-up-fill' : 'bi-caret-down-fill')
+        : 'bi-arrow-down-up';
 @endphp
 
 @push('styles')
@@ -139,6 +151,16 @@
         font-weight: 700;
         text-align: right;
     }
+    .recon-sort-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        color: inherit;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+    .recon-sort-link:hover { color: var(--bs-primary); }
+    .recon-sort-link .bi { font-size: .72rem; opacity: .7; }
     @media (max-width: 992px) {
         .recon-grid { grid-template-columns: 1fr; }
     }
@@ -150,6 +172,8 @@
         <div class="panel-head">Tổng quan ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}</div>
         <div class="panel-body">
             <form method="GET" class="row g-2 mb-3">
+                <input type="hidden" name="sort" value="{{ $sort }}">
+                <input type="hidden" name="direction" value="{{ $sortDirection }}">
                 <div class="col-12">
                     <label class="form-label">Loại ngày</label>
                     <select class="form-select" name="date_field">
@@ -251,16 +275,16 @@
                             <th style="width: 38px">
                                 <input class="form-check-input" type="checkbox" id="selectAllReconciliation" aria-label="Chọn tất cả đơn có thể xử lý đối soát">
                             </th>
-                            <th>Mã đơn</th>
-                            <th>Khách hàng</th>
-                            <th>Giao hàng</th>
-                            <th>Đã thu</th>
-                            <th>Còn thiếu</th>
-                            <th>Sale</th>
-                            <th>Shipper</th>
-                            <th>Phí ship</th>
-                            <th>Kế toán</th>
-                            <th>{{ $dateField === 'business_date' ? 'Ngày nghiệp vụ' : 'Ngày giao' }}</th>
+                            <th><a class="recon-sort-link" href="{{ $sortLink('code') }}">Mã đơn <i class="bi {{ $sortIcon('code') }}"></i></a></th>
+                            <th><a class="recon-sort-link" href="{{ $sortLink('customer') }}">Khách hàng <i class="bi {{ $sortIcon('customer') }}"></i></a></th>
+                            <th><a class="recon-sort-link" href="{{ $sortLink('status') }}">Giao hàng <i class="bi {{ $sortIcon('status') }}"></i></a></th>
+                            <th><a class="recon-sort-link" href="{{ $sortLink('paid') }}">Đã thu <i class="bi {{ $sortIcon('paid') }}"></i></a></th>
+                            <th><a class="recon-sort-link" href="{{ $sortLink('due') }}">Còn thiếu <i class="bi {{ $sortIcon('due') }}"></i></a></th>
+                            <th><a class="recon-sort-link" href="{{ $sortLink('sale') }}">Sale <i class="bi {{ $sortIcon('sale') }}"></i></a></th>
+                            <th><a class="recon-sort-link" href="{{ $sortLink('shipper') }}">Shipper <i class="bi {{ $sortIcon('shipper') }}"></i></a></th>
+                            <th><a class="recon-sort-link" href="{{ $sortLink('shipping_fee') }}">Phí ship <i class="bi {{ $sortIcon('shipping_fee') }}"></i></a></th>
+                            <th><a class="recon-sort-link" href="{{ $sortLink('accounting_status') }}">Kế toán <i class="bi {{ $sortIcon('accounting_status') }}"></i></a></th>
+                            <th><a class="recon-sort-link" href="{{ $sortLink('date') }}">{{ $dateField === 'business_date' ? 'Ngày nghiệp vụ' : 'Ngày giao' }} <i class="bi {{ $sortIcon('date') }}"></i></a></th>
                             <th></th>
                         </tr>
                     </thead>
