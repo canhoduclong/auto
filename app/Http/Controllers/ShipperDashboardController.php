@@ -755,6 +755,11 @@ class ShipperDashboardController extends Controller
             ->whereHas('entries', fn ($query) => $query
                 ->whereNotNull('warehouse_transfer_id')
                 ->orWhereNotNull('order_transfer_id'))
+            ->whereNotExists(fn ($query) => $query
+                ->selectRaw('1')
+                ->from('warehouse_dispatch_slip_dismissals')
+                ->whereColumn('warehouse_dispatch_slip_dismissals.warehouse_dispatch_slip_id', 'warehouse_dispatch_slips.id')
+                ->where('warehouse_dispatch_slip_dismissals.user_id', $user->id))
             ->when(! $user->hasRole('admin') && ! $user->hasRole('manager_shipper'), fn ($query) => $query
                 ->where('shipper_id', $user->id))
             ->when($selectedDate, fn ($query) => $query->whereDate('business_date', $selectedDate))
@@ -773,6 +778,38 @@ class ShipperDashboardController extends Controller
             ->withQueryString();
 
         return view('shipper.warehouse-transfers', compact('dispatchSlips', 'selectedDate'));
+    }
+
+    public function dismissWarehouseTransferSlip(Request $request, WarehouseDispatchSlip $dispatchSlip)
+    {
+        $user = Auth::user();
+        if (! $user->hasRole('admin')
+            && ! $user->hasRole('manager_shipper')
+            && (int) $dispatchSlip->shipper_id !== (int) $user->id) {
+            abort(403, 'Bạn không có quyền xóa phiếu này khỏi danh sách.');
+        }
+
+        $validated = $request->validate([
+            'delete_reason' => ['required', 'string', 'max:1000'],
+        ], [
+            'delete_reason.required' => 'Vui lòng nhập lý do xóa phiếu khỏi danh sách.',
+        ]);
+
+        DB::table('warehouse_dispatch_slip_dismissals')->updateOrInsert(
+            [
+                'warehouse_dispatch_slip_id' => $dispatchSlip->id,
+                'user_id' => $user->id,
+            ],
+            [
+                'reason' => trim((string) $validated['delete_reason']),
+                'dismissed_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+
+        return redirect()->route('shipper.warehouse-transfers')
+            ->with('success', 'Đã xóa phiếu '.$dispatchSlip->code.' khỏi danh sách của bạn. Dữ liệu kho vẫn được giữ nguyên.');
     }
 
     public function warehouseTransferSlip(Request $request, WarehouseDispatchSlip $dispatchSlip)
@@ -820,6 +857,11 @@ class ShipperDashboardController extends Controller
             ->whereHas('entries', fn ($query) => $query
                 ->whereNotNull('warehouse_transfer_id')
                 ->orWhereNotNull('order_transfer_id'))
+            ->whereNotExists(fn ($query) => $query
+                ->selectRaw('1')
+                ->from('warehouse_dispatch_slip_dismissals')
+                ->whereColumn('warehouse_dispatch_slip_dismissals.warehouse_dispatch_slip_id', 'warehouse_dispatch_slips.id')
+                ->where('warehouse_dispatch_slip_dismissals.user_id', $user->id))
             ->when(! $user->hasRole('admin') && ! $user->hasRole('manager_shipper'), fn ($query) => $query
                 ->where('shipper_id', $user->id))
             ->when($selectedDate, fn ($query) => $query->whereDate('business_date', $selectedDate))

@@ -18,6 +18,71 @@ class ShipperWarehouseTransferVisibilityTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_shipper_can_remove_a_slip_from_their_list_with_a_reason_without_deleting_warehouse_data(): void
+    {
+        $shipperRole = Role::create(['name' => 'shipper']);
+        $shipper = User::factory()->create();
+        $shipper->roles()->attach($shipperRole);
+        $source = Warehouse::factory()->create();
+        $target = Warehouse::factory()->create();
+        $customer = Customer::create(['name' => 'Khách xóa phiếu', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'warehouse_id' => $source->id,
+            'code' => 'DISMISS-SLIP-001',
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $transfer = WarehouseTransfer::create([
+            'order_id' => $order->id,
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseTransfer::STATUS_IN_TRANSIT,
+        ]);
+        $slip = WarehouseDispatchSlip::create([
+            'business_date' => now(),
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseDispatchSlip::STATUS_FINALIZED,
+            'created_by' => $shipper->id,
+            'finalized_by' => $shipper->id,
+            'finalized_at' => now(),
+        ]);
+        $entry = WarehouseDispatchSlipEntry::create([
+            'warehouse_dispatch_slip_id' => $slip->id,
+            'warehouse_transfer_id' => $transfer->id,
+            'snapshot' => ['type' => 'warehouse_transfer'],
+        ]);
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.warehouse-transfers'))
+            ->assertOk()
+            ->assertSee($slip->code)
+            ->assertSee(route('shipper.warehouse-transfers.dismiss', $slip), false);
+
+        $this->actingAs($shipper)
+            ->delete(route('shipper.warehouse-transfers.dismiss', $slip), [
+                'delete_reason' => 'Phiếu thử nghiệm không còn cần theo dõi',
+            ])
+            ->assertRedirect(route('shipper.warehouse-transfers'))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('warehouse_dispatch_slip_dismissals', [
+            'warehouse_dispatch_slip_id' => $slip->id,
+            'user_id' => $shipper->id,
+            'reason' => 'Phiếu thử nghiệm không còn cần theo dõi',
+        ]);
+        $this->assertDatabaseHas('warehouse_dispatch_slips', ['id' => $slip->id]);
+        $this->assertDatabaseHas('warehouse_dispatch_slip_entries', ['id' => $entry->id]);
+        $this->assertDatabaseHas('warehouse_transfers', ['id' => $transfer->id]);
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.warehouse-transfers'))
+            ->assertOk()
+            ->assertDontSee(route('shipper.warehouse-transfers.show', $slip), false);
+    }
+
     public function test_assigned_shipper_can_resume_a_rolled_back_transfer(): void
     {
         $shipperRole = Role::create(['name' => 'shipper']);

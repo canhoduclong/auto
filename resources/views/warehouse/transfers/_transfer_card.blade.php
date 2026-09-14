@@ -128,7 +128,13 @@
                 </form>
             </div>
         @else
-            <div class="text-end text-muted small">Đã xử lý</div>
+            <form method="POST" action="{{ route('warehouse.transfers.undo-receipt', $transfer) }}" class="js-undo-transfer-receipt-form">
+                @csrf
+                <input type="hidden" name="undo_note" value="">
+                <button type="submit" class="btn btn-outline-danger btn-sm">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Gỡ tiếp nhận
+                </button>
+            </form>
         @endif
         </div>
     </div>

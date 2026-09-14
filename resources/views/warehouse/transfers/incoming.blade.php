@@ -321,6 +321,24 @@ document.addEventListener('DOMContentLoaded', function () {
             form.submit();
         });
     });
+
+    document.querySelectorAll('.js-undo-transfer-receipt-form').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+
+            if (!window.confirm('Gỡ tiếp nhận đơn này? Phiếu nhập và tồn kho đã tiếp nhận sẽ được hoàn tác.')) {
+                return;
+            }
+
+            const reason = window.prompt('Nhập lý do gỡ tiếp nhận:', 'Nhận nhầm đơn');
+            if (reason === null || reason.trim() === '') {
+                return;
+            }
+
+            form.querySelector('input[name="undo_note"]').value = reason.trim();
+            form.submit();
+        });
+    });
 });
 </script>
 @endpush

@@ -13,9 +13,9 @@ use App\Models\InventoryReservation;
 use App\Models\InventoryStocktake;
 use App\Models\Order;
 use App\Models\OrderHistory;
-use App\Models\OrderTransfer;
 use App\Models\OrderItemPackingSizeAllocation;
 use App\Models\OrderReturn;
+use App\Models\OrderTransfer;
 use App\Models\ProcurementPurchase;
 use App\Models\ProcurementPurchaseItem;
 use App\Models\Product;
@@ -1842,103 +1842,103 @@ class WarehouseDashboardController extends Controller
 
         try {
             DB::transaction(function () use ($transfer, $order, $validated, $orderItemsById, &$receivedWeights, &$receivedTotalWeight): void {
-            $document = InventoryDocument::create([
-                'type' => 'import',
-                'document_date' => now()->toDateString(),
-                'warehouse_id' => $transfer->target_warehouse_id,
-                'notes' => 'Nhap kho dieu chuyen don #'.$order->code.' [WHT#'.$transfer->id.']',
-                'shipping_fee' => 0,
-                'user_id' => Auth::id(),
-            ]);
-
-            foreach ($validated['item_weights'] as $weightData) {
-                $orderItemId = (int) $weightData['order_item_id'];
-                $receivedWeight = round((float) $weightData['received_weight'], 3);
-                $orderItem = $orderItemsById->get($orderItemId);
-                if (! $orderItem) {
-                    continue;
-                }
-
-                $qty = (int) ($orderItem->quantity ?? 0);
-                if ($qty > 0) {
-                    $document->items()->create([
-                        'product_variant_id' => $orderItem->product_variant_id,
-                        'quantity' => $qty,
-                        'unit_cost' => (float) ($orderItem->price ?? 0),
-                    ]);
-
-                    $inventory = Inventory::firstOrCreate(
-                        [
-                            'product_variant_id' => $orderItem->product_variant_id,
-                            'warehouse_id' => $transfer->target_warehouse_id,
-                        ],
-                        ['quantity' => 0, 'reserved_quantity' => 0]
-                    );
-
-                    InventoryMovement::create([
-                        'inventory_id' => $inventory->id,
-                        'quantity' => $qty,
-                        'type' => 'import',
-                        'reference_id' => $document->id,
-                        'reference_type' => InventoryDocument::class,
-                        'user_id' => Auth::id(),
-                    ]);
-
-                    $inventory->increment('quantity', $qty);
-
-                    $totalStock = (int) Inventory::query()
-                        ->where('product_variant_id', $orderItem->product_variant_id)
-                        ->sum('quantity');
-
-                    ProductVariant::query()
-                        ->where('id', $orderItem->product_variant_id)
-                        ->update(['stock' => $totalStock]);
-                }
-
-                $receivedWeights[] = [
-                    'order_item_id' => $orderItemId,
-                    'product_variant_id' => (int) $orderItem->product_variant_id,
-                    'received_weight' => $receivedWeight,
-                ];
-                $receivedTotalWeight += $receivedWeight;
-            }
-
-            if (Schema::hasColumn('orders', 'warehouse_id')) {
-                $order->update([
+                $document = InventoryDocument::create([
+                    'type' => 'import',
+                    'document_date' => now()->toDateString(),
                     'warehouse_id' => $transfer->target_warehouse_id,
+                    'notes' => 'Nhap kho dieu chuyen don #'.$order->code.' [WHT#'.$transfer->id.']',
+                    'shipping_fee' => 0,
+                    'user_id' => Auth::id(),
                 ]);
-            }
 
-            $this->movePackedOrderReservationsToWarehouse(
-                $order,
-                (int) $transfer->source_warehouse_id,
-                (int) $transfer->target_warehouse_id,
-                $transfer
-            );
+                foreach ($validated['item_weights'] as $weightData) {
+                    $orderItemId = (int) $weightData['order_item_id'];
+                    $receivedWeight = round((float) $weightData['received_weight'], 3);
+                    $orderItem = $orderItemsById->get($orderItemId);
+                    if (! $orderItem) {
+                        continue;
+                    }
 
-            $packedTotalWeight = (float) ($transfer->packed_total_weight ?? 0);
-            $weightLoss = round($packedTotalWeight - $receivedTotalWeight, 3);
+                    $qty = (int) ($orderItem->quantity ?? 0);
+                    if ($qty > 0) {
+                        $document->items()->create([
+                            'product_variant_id' => $orderItem->product_variant_id,
+                            'quantity' => $qty,
+                            'unit_cost' => (float) ($orderItem->price ?? 0),
+                        ]);
 
-            $transfer->update([
-                'status' => WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
-                'import_document_id' => $document->id,
-                'received_by' => Auth::id(),
-                'received_at' => now(),
-                'received_weights' => $receivedWeights,
-                'received_total_weight' => round($receivedTotalWeight, 3),
-                'weight_loss' => $weightLoss,
-                'note' => trim((string) ($validated['receive_note'] ?? '')) ?: $transfer->note,
-            ]);
+                        $inventory = Inventory::firstOrCreate(
+                            [
+                                'product_variant_id' => $orderItem->product_variant_id,
+                                'warehouse_id' => $transfer->target_warehouse_id,
+                            ],
+                            ['quantity' => 0, 'reserved_quantity' => 0]
+                        );
 
-            OrderHistory::create([
-                'order_id' => $order->id,
-                'action' => 'warehouse_transfer_received',
-                'user_id' => Auth::id(),
-                'role' => 'warehouse',
-                'status_before' => $order->status,
-                'status_after' => $order->status,
-                'note' => 'Kho da tiep nhan dieu chuyen #'.$transfer->id.' | Hao hụt KL: '.$weightLoss.' kg',
-            ]);
+                        InventoryMovement::create([
+                            'inventory_id' => $inventory->id,
+                            'quantity' => $qty,
+                            'type' => 'import',
+                            'reference_id' => $document->id,
+                            'reference_type' => InventoryDocument::class,
+                            'user_id' => Auth::id(),
+                        ]);
+
+                        $inventory->increment('quantity', $qty);
+
+                        $totalStock = (int) Inventory::query()
+                            ->where('product_variant_id', $orderItem->product_variant_id)
+                            ->sum('quantity');
+
+                        ProductVariant::query()
+                            ->where('id', $orderItem->product_variant_id)
+                            ->update(['stock' => $totalStock]);
+                    }
+
+                    $receivedWeights[] = [
+                        'order_item_id' => $orderItemId,
+                        'product_variant_id' => (int) $orderItem->product_variant_id,
+                        'received_weight' => $receivedWeight,
+                    ];
+                    $receivedTotalWeight += $receivedWeight;
+                }
+
+                if (Schema::hasColumn('orders', 'warehouse_id')) {
+                    $order->update([
+                        'warehouse_id' => $transfer->target_warehouse_id,
+                    ]);
+                }
+
+                $this->movePackedOrderReservationsToWarehouse(
+                    $order,
+                    (int) $transfer->source_warehouse_id,
+                    (int) $transfer->target_warehouse_id,
+                    $transfer
+                );
+
+                $packedTotalWeight = (float) ($transfer->packed_total_weight ?? 0);
+                $weightLoss = round($packedTotalWeight - $receivedTotalWeight, 3);
+
+                $transfer->update([
+                    'status' => WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+                    'import_document_id' => $document->id,
+                    'received_by' => Auth::id(),
+                    'received_at' => now(),
+                    'received_weights' => $receivedWeights,
+                    'received_total_weight' => round($receivedTotalWeight, 3),
+                    'weight_loss' => $weightLoss,
+                    'note' => trim((string) ($validated['receive_note'] ?? '')) ?: $transfer->note,
+                ]);
+
+                OrderHistory::create([
+                    'order_id' => $order->id,
+                    'action' => 'warehouse_transfer_received',
+                    'user_id' => Auth::id(),
+                    'role' => 'warehouse',
+                    'status_before' => $order->status,
+                    'status_after' => $order->status,
+                    'note' => 'Kho da tiep nhan dieu chuyen #'.$transfer->id.' | Hao hụt KL: '.$weightLoss.' kg',
+                ]);
             });
         } catch (\Throwable $e) {
             report($e);
@@ -1947,6 +1947,161 @@ class WarehouseDashboardController extends Controller
         }
 
         return back()->with('success', 'Đã tiếp nhận hàng điều chuyển, tạo phiếu nhập kho và cập nhật tồn kho thành công.');
+    }
+
+    public function undoTransferReceipt(Request $request, WarehouseTransfer $transfer)
+    {
+        $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        if ($managedWarehouseId && (int) $transfer->target_warehouse_id !== $managedWarehouseId) {
+            return back()->with('error', 'Bạn chỉ có thể gỡ tiếp nhận hàng của kho mình quản lý.');
+        }
+
+        $validated = $request->validate([
+            'undo_note' => ['required', 'string', 'max:1000'],
+        ], [
+            'undo_note.required' => 'Vui lòng nhập lý do gỡ tiếp nhận.',
+        ]);
+
+        try {
+            DB::transaction(function () use ($transfer, $validated): void {
+                $lockedTransfer = WarehouseTransfer::query()
+                    ->with(['order.items', 'sourceWarehouse', 'targetWarehouse'])
+                    ->lockForUpdate()
+                    ->findOrFail($transfer->id);
+
+                if ($lockedTransfer->status !== WarehouseTransfer::STATUS_RECEIVED_COMPLETED) {
+                    throw new \RuntimeException('Phiếu điều chuyển không còn ở trạng thái đã tiếp nhận.');
+                }
+                if (! $lockedTransfer->import_document_id) {
+                    throw new \RuntimeException('Không tìm thấy phiếu nhập kho cần hoàn tác.');
+                }
+
+                $document = InventoryDocument::query()
+                    ->with('items')
+                    ->lockForUpdate()
+                    ->find($lockedTransfer->import_document_id);
+                if (! $document || $document->type !== 'import'
+                    || (int) $document->warehouse_id !== (int) $lockedTransfer->target_warehouse_id) {
+                    throw new \RuntimeException('Phiếu nhập kho không hợp lệ nên chưa thể gỡ tiếp nhận.');
+                }
+
+                $importMovements = InventoryMovement::query()
+                    ->where('reference_type', InventoryDocument::class)
+                    ->where('reference_id', $document->id)
+                    ->lockForUpdate()
+                    ->get();
+                $transferOutMovements = InventoryMovement::query()
+                    ->where('reference_type', WarehouseTransfer::class)
+                    ->where('reference_id', $lockedTransfer->id)
+                    ->where('type', 'transfer_out')
+                    ->lockForUpdate()
+                    ->get();
+
+                $variantIds = collect();
+                foreach ($importMovements->groupBy('inventory_id') as $inventoryId => $movements) {
+                    $quantity = (float) $movements->sum('quantity');
+                    $inventory = Inventory::query()->lockForUpdate()->find($inventoryId);
+                    if (! $inventory || (float) $inventory->quantity < $quantity) {
+                        throw new \RuntimeException('Tồn kho đã được sử dụng, không đủ để gỡ tiếp nhận.');
+                    }
+                    $inventory->decrement('quantity', $quantity);
+                    $variantIds->push((int) $inventory->product_variant_id);
+                }
+
+                $order = $lockedTransfer->order;
+                if ($order) {
+                    foreach ($order->items as $item) {
+                        $targetReservations = InventoryReservation::query()
+                            ->where('order_item_id', $item->id)
+                            ->whereHas('inventory', fn ($query) => $query->where('warehouse_id', $lockedTransfer->target_warehouse_id))
+                            ->lockForUpdate()
+                            ->get();
+
+                        foreach ($targetReservations as $reservation) {
+                            $targetInventory = Inventory::query()->lockForUpdate()->findOrFail($reservation->inventory_id);
+                            if ((float) $targetInventory->reserved_quantity < (float) $reservation->quantity) {
+                                throw new \RuntimeException('Giữ hàng tại kho nhận đã thay đổi, không thể gỡ tiếp nhận an toàn.');
+                            }
+
+                            $sourceInventory = Inventory::query()->firstOrCreate(
+                                [
+                                    'warehouse_id' => $lockedTransfer->source_warehouse_id,
+                                    'product_variant_id' => $targetInventory->product_variant_id,
+                                ],
+                                ['quantity' => 0, 'reserved_quantity' => 0]
+                            );
+                            $sourceInventory = Inventory::query()->lockForUpdate()->findOrFail($sourceInventory->id);
+
+                            $targetInventory->decrement('reserved_quantity', (float) $reservation->quantity);
+                            InventoryReservation::create([
+                                'order_item_id' => $item->id,
+                                'inventory_id' => $sourceInventory->id,
+                                'quantity' => $reservation->quantity,
+                                'reserved_at' => now(),
+                            ]);
+                            $reservation->delete();
+                        }
+                    }
+
+                    foreach ($transferOutMovements->groupBy('inventory_id') as $inventoryId => $movements) {
+                        $quantity = abs((float) $movements->sum('quantity'));
+                        $sourceInventory = Inventory::query()->lockForUpdate()->find($inventoryId);
+                        if ($sourceInventory) {
+                            $sourceInventory->increment('quantity', $quantity);
+                            $sourceInventory->increment('reserved_quantity', $quantity);
+                            $variantIds->push((int) $sourceInventory->product_variant_id);
+                        }
+                    }
+
+                    if (Schema::hasColumn('orders', 'warehouse_id')) {
+                        $order->update(['warehouse_id' => $lockedTransfer->source_warehouse_id]);
+                    }
+                }
+
+                InventoryMovement::query()->whereIn('id', $importMovements->pluck('id'))->delete();
+                InventoryMovement::query()->whereIn('id', $transferOutMovements->pluck('id'))->delete();
+                $document->items()->delete();
+                $document->delete();
+
+                $reason = trim((string) $validated['undo_note']);
+                $lockedTransfer->update([
+                    'status' => WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                    'import_document_id' => null,
+                    'received_by' => null,
+                    'received_at' => null,
+                    'received_weights' => null,
+                    'received_total_weight' => null,
+                    'weight_loss' => null,
+                    'note' => trim(($lockedTransfer->note ? $lockedTransfer->note.' | ' : '').'Gỡ tiếp nhận: '.$reason),
+                ]);
+
+                if ($order) {
+                    OrderHistory::create([
+                        'order_id' => $order->id,
+                        'action' => 'warehouse_transfer_receipt_undone',
+                        'user_id' => Auth::id(),
+                        'role' => 'warehouse',
+                        'status_before' => $order->status,
+                        'status_after' => $order->status,
+                        'note' => 'Kho gỡ tiếp nhận phiếu điều chuyển #'.$lockedTransfer->id.'. Lý do: '.$reason,
+                    ]);
+                }
+
+                foreach ($variantIds->unique() as $variantId) {
+                    ProductVariant::query()->whereKey($variantId)->update([
+                        'stock' => Inventory::query()
+                            ->where('product_variant_id', $variantId)
+                            ->sum('quantity'),
+                    ]);
+                }
+            });
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->with('error', 'Không thể gỡ tiếp nhận: '.$exception->getMessage());
+        }
+
+        return back()->with('success', 'Đã gỡ tiếp nhận và hoàn tác tồn kho. Đơn được đưa về danh sách chờ tiếp nhận.');
     }
 
     private function movePackedOrderReservationsToWarehouse(
@@ -1966,6 +2121,7 @@ class WarehouseDashboardController extends Controller
                 $quantity = (int) $reservation->quantity;
                 if ($quantity <= 0) {
                     $reservation->delete();
+
                     continue;
                 }
 
@@ -1973,6 +2129,7 @@ class WarehouseDashboardController extends Controller
                 if (! $sourceInventory || (int) $sourceInventory->warehouse_id !== $sourceWarehouseId) {
                     // Ton kho nguon khong con: bo reservation cu de khong chan tiep nhan
                     $reservation->delete();
+
                     continue;
                 }
 
@@ -2108,14 +2265,14 @@ class WarehouseDashboardController extends Controller
     {
         $this->authorizePackingOrderAccess($order);
 
-        if (!empty($order->warehouse_allowed_sizes) || $order->warehouse_product_permissions !== null) {
+        if (! empty($order->warehouse_allowed_sizes) || $order->warehouse_product_permissions !== null) {
             $order->loadMissing('items.variant', 'items.packingSizeAllocations.variant');
             foreach ($order->items as $item) {
                 $mix = $item->packingSizeAllocations;
                 $hasValidMix = $mix->isNotEmpty()
                     && (int) $mix->sum('quantity') === (int) $item->quantity
                     && $mix->every(fn ($allocation) => $order->allowsPackingSize((float) $allocation->variant?->size, (int) $item->product_id));
-                if (!empty($order->packingSizesForProduct((int) $item->product_id)) && (float) $item->variant?->size > 0 && !$order->allowsPackingSize((float) $item->variant->size, (int) $item->product_id) && !$hasValidMix) {
+                if (! empty($order->packingSizesForProduct((int) $item->product_id)) && (float) $item->variant?->size > 0 && ! $order->allowsPackingSize((float) $item->variant->size, (int) $item->product_id) && ! $hasValidMix) {
                     throw \Illuminate\Validation\ValidationException::withMessages([
                         'allocations' => 'Vui lòng lưu cơ cấu theo size Sale cho phép trước khi bắt đầu đóng hàng.',
                     ]);
@@ -2439,11 +2596,12 @@ class WarehouseDashboardController extends Controller
 
     public function mobilePackingContext(Order $order, ?int $warehouseId): array
     {
-        if (!in_array($order->status, array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]), true)) {
+        if (! in_array($order->status, array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]), true)) {
             return ['size_options' => [], 'stock_guard' => [], 'can_edit' => false];
         }
         $date = ($order->accounting_sales_import_batch_id ? $order->delivery_date : $order->created_at)?->toDateString();
         $guard = $this->evaluateSingleOrderStock($order, $warehouseId, $date);
+
         return [
             'stock_guard' => $guard,
             'can_edit' => $this->canProcessOrderOnCurrentRun($order),
@@ -2460,6 +2618,7 @@ class WarehouseDashboardController extends Controller
 
             return $order->items->filter(function ($item) use ($shortItemIds, $order) {
                 $item->setRelation('order', $order);
+
                 return ($item->variant?->product?->allow_adjacent_packing_sizes ?? true)
                     && (float) ($item->variant?->size ?? 0) > 0
                     && ($order->packingSizesForProduct((int) $item->product_id) !== null || $shortItemIds->contains((int) $item->id) || $item->packingSizeAllocations->isNotEmpty());
@@ -3194,7 +3353,7 @@ class WarehouseDashboardController extends Controller
         if (! $item || $mainSize <= 0) {
             throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Dòng hàng không có size hợp lệ để chọn size liền kề.']);
         }
-        if (!($item->variant->product?->allow_adjacent_packing_sizes ?? true)) {
+        if (! ($item->variant->product?->allow_adjacent_packing_sizes ?? true)) {
             throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Sản phẩm này đã tắt chức năng chọn size liền kề khi đóng hàng.']);
         }
         $mainSizeLabel = rtrim(rtrim(number_format($mainSize, 2, '.', ''), '0'), '.');
@@ -3212,7 +3371,7 @@ class WarehouseDashboardController extends Controller
             throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Chỉ được dùng size chính '.$mainSizeLabel.' hoặc size khác của cùng sản phẩm.']);
         }
 
-        if ($variants->contains(fn (ProductVariant $variant) => !$order->allowsPackingSize((float) $variant->size, (int) $item->product_id))) {
+        if ($variants->contains(fn (ProductVariant $variant) => ! $order->allowsPackingSize((float) $variant->size, (int) $item->product_id))) {
             throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Chỉ được đóng các size Sale đã cho phép trong đơn hàng.']);
         }
 
@@ -3459,7 +3618,7 @@ class WarehouseDashboardController extends Controller
                 $newWeight = round((float) $validated['item_actual_weight'], 3);
                 $isCutProduct = $item->variant?->product?->product_type === Product::TYPE_CUT;
                 if (isset($validated['item_packed_quantity'])) {
-                    if (!$isCutProduct) {
+                    if (! $isCutProduct) {
                         throw \Illuminate\Validation\ValidationException::withMessages(['item_packed_quantity' => 'Chỉ hàng pha lóc được cập nhật số lượng đóng thực tế.']);
                     }
                     $requiredWeight = round((float) $item->quantity * (float) $item->effective_unit_weight, 3);
@@ -3469,7 +3628,7 @@ class WarehouseDashboardController extends Controller
                     $item->packed_quantity = (int) $validated['item_packed_quantity'];
                 }
                 $itemSize = $item->packingAverageSize();
-                if (!$isCutProduct && $itemSize > 0 && (int) $item->quantity > 0) {
+                if (! $isCutProduct && $itemSize > 0 && (int) $item->quantity > 0) {
                     $averageWeight = $newWeight / (int) $item->quantity;
                     $averageMin = max(0, $itemSize - 0.25);
                     $averageMax = $itemSize + 0.25;
@@ -3558,12 +3717,12 @@ class WarehouseDashboardController extends Controller
                 $inventory->save();
             }
         }
-        if ($order->status !== Order::STATUS_PACKING || !$item->product_variant_id) {
+        if ($order->status !== Order::STATUS_PACKING || ! $item->product_variant_id) {
             return;
         }
         $packingDate = $order->accounting_sales_import_batch_id && $order->delivery_date
             ? $order->delivery_date : $order->created_at;
-        if (!$packingDate->isToday()) {
+        if (! $packingDate->isToday()) {
             return;
         }
         $remaining = (int) $item->quantity;
@@ -3572,12 +3731,16 @@ class WarehouseDashboardController extends Controller
         foreach ($inventories as $inventory) {
             $reserved = (int) $inventory->reservations()->sum('quantity');
             $quantity = min($remaining, max(0, (int) $inventory->quantity - $reserved));
-            if ($quantity <= 0) continue;
+            if ($quantity <= 0) {
+                continue;
+            }
             InventoryReservation::create(['order_item_id' => $item->id, 'inventory_id' => $inventory->id,
                 'quantity' => $quantity, 'reserved_at' => now()]);
             $inventory->update(['reserved_quantity' => $reserved + $quantity]);
             $remaining -= $quantity;
-            if ($remaining === 0) break;
+            if ($remaining === 0) {
+                break;
+            }
         }
         if ($remaining > 0) {
             throw \Illuminate\Validation\ValidationException::withMessages(['items' => 'Không đủ tồn kho cho số lượng mới. Vui lòng bổ sung hàng trước khi tăng số lượng.']);
@@ -3721,22 +3884,23 @@ class WarehouseDashboardController extends Controller
         $canDirectAdjust = collect($changes)->every(function ($change) use ($order, $orderItemsById, $variantsById) {
             $productId = $orderItemsById->get($change['order_item_id'])?->product_id
                 ?? $variantsById->get($change['product_variant_id'])?->product_id;
+
             return $order->allowsWarehouseQuantityChange((int) $productId);
         });
-        if ($order->status === Order::STATUS_PACKING && !$canDirectAdjust) {
+        if ($order->status === Order::STATUS_PACKING && ! $canDirectAdjust) {
             throw \Illuminate\Validation\ValidationException::withMessages(['items' => 'Sale chưa cho phép kho đổi số lượng sản phẩm này khi đang đóng hàng.']);
         }
         if ($canDirectAdjust) {
             DB::transaction(function () use ($order, $changes, $validated): void {
                 $order = Order::query()->lockForUpdate()->findOrFail($order->id);
-                if (!in_array($order->status, [Order::STATUS_APPROVED, Order::STATUS_READY_TO_PACK, Order::STATUS_PACKING], true)
+                if (! in_array($order->status, [Order::STATUS_APPROVED, Order::STATUS_READY_TO_PACK, Order::STATUS_PACKING], true)
                     || $order->warehouse_adjustment_status === Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION) {
                     throw \Illuminate\Validation\ValidationException::withMessages(['items' => 'Trạng thái đơn đã thay đổi. Vui lòng tải lại trang.']);
                 }
                 foreach ($changes as $change) {
                     $currentItem = $order->items()->find($change['order_item_id']);
                     $productId = $currentItem?->product_id ?? ProductVariant::find($change['product_variant_id'])?->product_id;
-                    if (!$order->allowsWarehouseQuantityChange((int) $productId)
+                    if (! $order->allowsWarehouseQuantityChange((int) $productId)
                         || ($currentItem && (int) $currentItem->quantity !== (int) $change['old_quantity'])) {
                         throw \Illuminate\Validation\ValidationException::withMessages(['items' => 'Quyền hoặc số lượng đã thay đổi. Vui lòng tải lại trang.']);
                     }

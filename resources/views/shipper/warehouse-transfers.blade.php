@@ -13,7 +13,7 @@
     .dispatch-history-date { padding: 14px 16px; border-bottom: 1px solid #eef2f7; }
     .dispatch-history-date:last-child { border-bottom: 0; }
     .dispatch-history-slips { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 10px; margin-top: 10px; }
-    .dispatch-history-slip { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 9px; color: #334155; background: #fff; text-decoration: none; }
+    .dispatch-history-slip { display: flex; align-items: stretch; border: 1px solid #cbd5e1; border-radius: 9px; color: #334155; background: #fff; overflow: hidden; }
     .dispatch-history-slip:hover { border-color: #0f766e; background: #ecfdf5; color: #0f766e; }
     .dispatch-history-slip { border-left-width: 5px; }
     .dispatch-history-slip.progress-pending { border-left-color: #2563eb; }
@@ -22,6 +22,8 @@
     .dispatch-history-slip.progress-completed { border-left-color: #15803d; background: #f0fdf4; }
     .dispatch-history-slip.progress-cancelled { border-left-color: #64748b; background: #f1f5f9; }
     .dispatch-slip-main { min-width: 0; }
+    .dispatch-slip-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; color: inherit; text-decoration: none; flex: 1 1 auto; min-width: 0; }
+    .dispatch-slip-delete { display: flex; align-items: center; padding: 8px; border-left: 1px solid #e2e8f0; }
     .dispatch-slip-route { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     @media (max-width: 576px) {
         .dispatch-history-slips { grid-template-columns: minmax(0, 1fr); }
@@ -61,7 +63,8 @@
                         $viewed = $slip->viewers->isNotEmpty();
                         $progressColors = ['pending' => 'bg-primary', 'transit' => 'bg-warning text-dark', 'waiting' => 'bg-info text-dark', 'completed' => 'bg-success', 'cancelled' => 'bg-secondary'];
                     @endphp
-                    <a class="dispatch-history-slip progress-{{ $progress['key'] }}" href="{{ route('shipper.warehouse-transfers.show', $slip) }}">
+                    <div class="dispatch-history-slip progress-{{ $progress['key'] }}">
+                      <a class="dispatch-slip-link" href="{{ route('shipper.warehouse-transfers.show', $slip) }}">
                         <span class="dispatch-slip-main">
                             <strong class="d-block">{{ $slip->code }}</strong>
                             <span class="badge {{ $viewed ? 'bg-light text-dark border' : 'bg-primary' }}"><i class="bi {{ $viewed ? 'bi-eye' : 'bi-envelope-fill' }} me-1"></i>{{ $viewed ? 'Đã xem' : 'Mới · Chưa xem' }}</span>
@@ -75,7 +78,16 @@
                             <span class="badge bg-light text-dark border">{{ $slip->entries_count }} mục</span>
                             <i class="bi bi-chevron-right"></i>
                         </span>
-                    </a>
+                      </a>
+                      <form method="POST" action="{{ route('shipper.warehouse-transfers.dismiss', $slip) }}" class="dispatch-slip-delete js-dismiss-slip-form">
+                          @csrf
+                          @method('DELETE')
+                          <input type="hidden" name="delete_reason" value="">
+                          <button type="submit" class="btn btn-outline-danger btn-sm" title="Xóa khỏi danh sách">
+                              <i class="bi bi-trash"></i><span class="visually-hidden">Xóa phiếu</span>
+                          </button>
+                      </form>
+                    </div>
                 @endforeach
             </div>
         </section>
@@ -90,4 +102,23 @@
 @if($dispatchSlips->hasPages())
     <div class="mt-3">{{ $dispatchSlips->links() }}</div>
 @endif
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.js-dismiss-slip-form').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            if (!window.confirm('Xóa phiếu này khỏi danh sách của bạn? Dữ liệu và chứng từ kho vẫn được giữ nguyên.')) return;
+
+            const reason = window.prompt('Nhập lý do xóa phiếu:', 'Không còn cần theo dõi');
+            if (reason === null || reason.trim() === '') return;
+
+            form.querySelector('input[name="delete_reason"]').value = reason.trim();
+            form.submit();
+        });
+    });
+});
+</script>
+@endpush
 @endsection

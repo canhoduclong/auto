@@ -413,6 +413,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/rap-don-hang', [WarehouseDashboardController::class, 'rapDonHang'])->name('orders.rap-don-hang');
         Route::get('/transfers/incoming', [WarehouseDashboardController::class, 'incomingTransfers'])->name('transfers.incoming');
         Route::post('/transfers/{transfer}/confirm-receipt', [WarehouseDashboardController::class, 'confirmTransferReceipt'])->name('transfers.confirm-receipt');
+        Route::post('/transfers/{transfer}/undo-receipt', [WarehouseDashboardController::class, 'undoTransferReceipt'])->name('transfers.undo-receipt');
         Route::post('/transfers/{transfer}/rollback', [WarehouseDashboardController::class, 'rollbackIncomingTransfer'])->name('transfers.rollback');
         Route::get('/returns', [WarehouseDashboardController::class, 'returns'])->name('returns');
         Route::get('/returns/{order}/weight-entry', [WarehouseDashboardController::class, 'showWeightEntry'])->name('returns.weight-entry');
@@ -507,6 +508,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'shipperPrint'])->name('finance-requests.print');
         Route::get('/delivery-statistics', [ShipperDashboardController::class, 'deliveryStatistics'])->name('delivery-statistics');
         Route::get('/warehouse-transfers', [ShipperDashboardController::class, 'warehouseTransfers'])->name('warehouse-transfers');
+        Route::delete('/warehouse-transfers/slips/{dispatchSlip}', [ShipperDashboardController::class, 'dismissWarehouseTransferSlip'])->name('warehouse-transfers.dismiss');
         Route::get('/warehouse-transfers/slips/{dispatchSlip}', [ShipperDashboardController::class, 'warehouseTransferSlip'])->name('warehouse-transfers.show');
         Route::post('/warehouse-transfers/{transfer}/pickup', [ShipperDashboardController::class, 'pickupWarehouseTransfer'])->name('warehouse-transfers.pickup');
         Route::post('/warehouse-transfers/{transfer}/deliver', [ShipperDashboardController::class, 'deliverWarehouseTransfer'])->name('warehouse-transfers.deliver');
