@@ -265,6 +265,41 @@
                         </tr>
                     </thead>
                     <tbody>
+                    @foreach($missingOrders ?? collect() as $missingOrder)
+                        @php
+                            $missingDue = max(0, $missingOrder->total - $missingOrder->paid_amount);
+                            $missingBusinessDate = $dateField === 'delivered_at'
+                                ? $missingOrder->delivered_at
+                                : ($missingOrder->import_batch_id ? $missingOrder->delivery_date : $missingOrder->created_at);
+                        @endphp
+                        <tr class="table-danger">
+                            <td><input class="form-check-input" type="checkbox" disabled title="Đơn gốc đã bị xóa"></td>
+                            <td class="fw-bold">
+                                {{ $missingOrder->code }}
+                                <span class="badge text-bg-dark d-block mt-1">Không còn dữ liệu đơn thực tế</span>
+                                <span class="small text-danger d-block mt-1">Admin xóa: {{ $missingOrder->admin_delete_reason }}</span>
+                            </td>
+                            <td>{{ $missingOrder->customer_name }}</td>
+                            <td><span class="badge text-bg-secondary">Đã xóa</span></td>
+                            <td class="text-success fw-semibold">{{ $money($missingOrder->paid_amount) }}</td>
+                            <td class="{{ $missingDue > 0 ? 'text-danger' : 'text-success' }} fw-semibold">{{ $money($missingDue) }}</td>
+                            <td>{{ $missingOrder->sale_name }}</td>
+                            <td>{{ $missingOrder->shipper_name }}</td>
+                            <td>{{ $money($missingOrder->shipping_fee) }}</td>
+                            <td><span class="badge text-bg-danger">Không thể đối soát</span></td>
+                            <td>{{ $missingBusinessDate ? \Carbon\Carbon::parse($missingBusinessDate)->format('d/m/Y H:i') : '-' }}</td>
+                            <td>
+                                <form method="POST" action="{{ route('accounting.reconciliation.exclude-missing', $missingOrder->deleted_record_id) }}" class="js-exclude-invalid-order-form">
+                                    @csrf
+                                    @method('DELETE')
+                                    <input type="hidden" name="reason" value="">
+                                    <button class="btn btn-sm btn-danger" type="submit">
+                                        <i class="bi bi-trash me-1"></i>Xóa khỏi kế toán
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    @endforeach
                     @forelse($orders as $order)
                         @php
                             $recon = $order->accountingReconciliation;
@@ -351,7 +386,9 @@
                             </td>
                         </tr>
                     @empty
+                        @if(($missingOrders ?? collect())->isEmpty())
                         <tr><td colspan="12" class="text-center text-muted py-4">Không có đơn giao hàng cần đối soát.</td></tr>
+                        @endif
                     @endforelse
                     @if($orders->isNotEmpty())
                         <tr class="recon-inline-detail-row d-none" id="reconciliationDetailRow">

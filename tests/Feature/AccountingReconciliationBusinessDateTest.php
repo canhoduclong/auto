@@ -7,11 +7,77 @@ use App\Models\Order;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class AccountingReconciliationBusinessDateTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_accounting_can_identify_and_remove_an_admin_deleted_order_snapshot(): void
+    {
+        $accountRole = Role::create(['name' => 'accounting']);
+        $accountant = User::factory()->create();
+        $accountant->roles()->attach($accountRole);
+        $sale = User::factory()->create(['name' => 'Sale đơn đã xóa']);
+        $customer = Customer::create(['name' => 'Khách đơn đã mất', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $sale->id,
+            'code' => 'ADMIN-DELETED-RECON-001',
+            'status' => Order::STATUS_DELIVERED,
+            'delivered_at' => now(),
+            'total' => 350000,
+            'amount_paid' => 100000,
+            'shipping_fee' => 20000,
+        ]);
+        $deletedRecordId = DB::table('admin_deleted_orders')->insertGetId([
+            'order_id' => $order->id,
+            'order_code' => $order->code,
+            'customer_id' => $customer->id,
+            'sale_user_id' => $sale->id,
+            'order_total' => $order->total,
+            'recognized_revenue' => 0,
+            'commission_amount' => 0,
+            'reason' => 'Admin xóa nhầm dữ liệu thử nghiệm',
+            'snapshot' => json_encode([
+                'order' => $order->getAttributes(),
+                'customer' => ['id' => $customer->id, 'name' => $customer->name],
+                'sale' => ['id' => $sale->id, 'name' => $sale->name],
+            ], JSON_UNESCAPED_UNICODE),
+            'deleted_by' => $accountant->id,
+            'deleted_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $order->delete();
+
+        $this->actingAs($accountant)
+            ->get(route('accounting.reconciliation', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('ADMIN-DELETED-RECON-001')
+            ->assertSee('Không còn dữ liệu đơn thực tế')
+            ->assertSee('Admin xóa nhầm dữ liệu thử nghiệm')
+            ->assertSee(route('accounting.reconciliation.exclude-missing', $deletedRecordId), false);
+
+        $this->actingAs($accountant)
+            ->delete(route('accounting.reconciliation.exclude-missing', $deletedRecordId), [
+                'reason' => 'Đơn gốc không còn tồn tại',
+            ])
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('accounting_reconciliation_exclusions', [
+            'deleted_order_id' => $deletedRecordId,
+            'order_id' => null,
+            'excluded_by' => $accountant->id,
+        ]);
+        $this->assertDatabaseHas('admin_deleted_orders', ['id' => $deletedRecordId]);
+
+        $this->actingAs($accountant)
+            ->get(route('accounting.reconciliation', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertDontSee(route('accounting.reconciliation.exclude-missing', $deletedRecordId), false);
+    }
 
     public function test_accounting_can_identify_and_remove_cancelled_or_trashed_orders_from_reconciliation(): void
     {

@@ -1000,6 +1000,71 @@ class AccountingDashboardController extends Controller
             'pending' => max(0, $allForStats->count() - $confirmedCount),
         ];
 
+        $missingOrders = collect();
+        if (Schema::hasTable('admin_deleted_orders')) {
+            $excludedDeletedIds = DB::table('accounting_reconciliation_exclusions')
+                ->whereNotNull('deleted_order_id')
+                ->pluck('deleted_order_id');
+            $missingOrders = DB::table('admin_deleted_orders')
+                ->whereNotIn('id', $excludedDeletedIds)
+                ->orderByDesc('deleted_at')
+                ->get()
+                ->map(function ($deleted) {
+                    $snapshot = json_decode((string) $deleted->snapshot, true) ?: [];
+                    $attributes = (array) ($snapshot['order'] ?? []);
+
+                    return (object) [
+                        'deleted_record_id' => (int) $deleted->id,
+                        'order_id' => (int) $deleted->order_id,
+                        'code' => (string) ($deleted->order_code ?: '#'.$deleted->order_id),
+                        'customer_name' => (string) ($snapshot['customer']['name'] ?? '-'),
+                        'sale_name' => (string) ($snapshot['sale']['name'] ?? '-'),
+                        'sale_id' => (int) ($deleted->sale_user_id ?? 0),
+                        'shipper_id' => (int) ($attributes['shipper_id'] ?? 0),
+                        'shipper_name' => '-',
+                        'status' => (string) ($attributes['status'] ?? 'deleted'),
+                        'payment_status' => (string) ($attributes['payment_status'] ?? ''),
+                        'total' => (float) ($deleted->order_total ?? 0),
+                        'paid_amount' => (float) ($attributes['amount_paid'] ?? 0),
+                        'shipping_fee' => (float) ($attributes['shipping_fee'] ?? 0),
+                        'created_at' => $attributes['created_at'] ?? null,
+                        'delivery_date' => $attributes['delivery_date'] ?? null,
+                        'delivered_at' => $attributes['delivered_at'] ?? null,
+                        'import_batch_id' => $deleted->accounting_sales_import_batch_id,
+                        'admin_delete_reason' => (string) $deleted->reason,
+                        'deleted_at' => $deleted->deleted_at,
+                    ];
+                })
+                ->filter(function ($deleted) use ($targetDate, $dateField, $saleId, $shipperId, $status, $paymentStatus, $accountingStatus): bool {
+                    $dateValue = $dateField === 'delivered_at'
+                        ? $deleted->delivered_at
+                        : ($deleted->import_batch_id ? $deleted->delivery_date : $deleted->created_at);
+
+                    return $dateValue && Carbon::parse($dateValue)->toDateString() === $targetDate
+                        && ($saleId <= 0 || $deleted->sale_id === $saleId)
+                        && ($shipperId <= 0 || $deleted->shipper_id === $shipperId)
+                        && ($status === '' || $deleted->status === $status)
+                        && ($paymentStatus === '' || $deleted->payment_status === $paymentStatus)
+                        && $accountingStatus !== 'confirmed';
+                })
+                ->values();
+
+            if ($missingOrders->isNotEmpty()) {
+                $shipperNames = User::query()
+                    ->whereIn('id', $missingOrders->pluck('shipper_id')->filter()->unique())
+                    ->pluck('name', 'id');
+                $missingOrders->each(function ($deleted) use ($shipperNames): void {
+                    $deleted->shipper_name = (string) ($shipperNames[$deleted->shipper_id] ?? '-');
+                });
+                $stats['total_orders'] += $missingOrders->count();
+                $stats['total_revenue'] += $missingOrders->sum('total');
+                $stats['total_paid'] += $missingOrders->sum('paid_amount');
+                $stats['total_due'] += $missingOrders->sum(fn ($deleted) => max(0, $deleted->total - $deleted->paid_amount));
+                $stats['total_shipping_fee'] += $missingOrders->sum('shipping_fee');
+                $stats['pending'] += $missingOrders->count();
+            }
+        }
+
         return view('accounting.reconciliation', [
             'orders' => $orders,
             'stats' => $stats,
@@ -1012,6 +1077,7 @@ class AccountingDashboardController extends Controller
             'paymentStatus' => $paymentStatus,
             'accountingStatus' => $accountingStatus,
             'dateField' => $dateField,
+            'missingOrders' => $missingOrders,
         ]);
     }
 
@@ -1041,6 +1107,32 @@ class AccountingDashboardController extends Controller
         );
 
         return back()->with('success', 'Đã xóa đơn '.$order->code.' khỏi danh sách đối soát kế toán. Dữ liệu gốc vẫn được giữ nguyên.');
+    }
+
+    public function excludeMissingReconciliationOrder(Request $request, int $deletedOrderId)
+    {
+        $deletedOrder = DB::table('admin_deleted_orders')->where('id', $deletedOrderId)->first();
+        abort_unless($deletedOrder, 404);
+        if (Order::query()->whereKey($deletedOrder->order_id)->exists()) {
+            return back()->with('error', 'Đơn thực tế vẫn còn tồn tại nên không thể xóa theo chức năng này.');
+        }
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+        DB::table('accounting_reconciliation_exclusions')->updateOrInsert(
+            ['deleted_order_id' => $deletedOrderId],
+            [
+                'order_id' => null,
+                'excluded_by' => auth()->id(),
+                'reason' => trim((string) $validated['reason']),
+                'excluded_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+
+        return back()->with('success', 'Đã xóa dòng kế toán của đơn không còn tồn tại '.$deletedOrder->order_code.'.');
     }
 
     public function paymentMatching(Request $request)
