@@ -916,6 +916,10 @@ class AccountingDashboardController extends Controller
                 'histories as is_restored_order' => fn ($historyQuery) => $historyQuery
                     ->where('action', 'restore_cancelled_order'),
             ])
+            ->whereNotExists(fn ($query) => $query
+                ->selectRaw('1')
+                ->from('accounting_reconciliation_exclusions')
+                ->whereColumn('accounting_reconciliation_exclusions.order_id', 'orders.id'))
             ->where(function ($dateQuery) use ($targetDate, $dateField): void {
                 if ($dateField === 'delivered_at') {
                     $dateQuery->whereDate('delivered_at', $targetDate);
@@ -953,7 +957,11 @@ class AccountingDashboardController extends Controller
             ->when(
                 $status !== '',
                 fn ($q) => $q->where('status', $status),
-                fn ($q) => $q->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])
+                fn ($q) => $q->where(function ($statusQuery): void {
+                    $statusQuery
+                        ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_CANCELLED])
+                        ->orWhereNotNull('trash_at');
+                })
             )
             ->when($paymentStatus !== '', fn ($q) => $q->where('payment_status', $paymentStatus))
             ->when($accountingStatus === 'confirmed', fn ($q) => $q->whereHas('accountingReconciliation', fn ($r) => $r->where('status', AccountingReconciliation::STATUS_CONFIRMED)))
@@ -1005,6 +1013,34 @@ class AccountingDashboardController extends Controller
             'accountingStatus' => $accountingStatus,
             'dateField' => $dateField,
         ]);
+    }
+
+    public function excludeInvalidReconciliationOrder(Request $request, Order $order)
+    {
+        $isMissing = $order->trash_at !== null;
+        $isCancelled = $order->status === Order::STATUS_CANCELLED;
+        if (! $isMissing && ! $isCancelled) {
+            return back()->with('error', 'Chỉ được xóa khỏi đối soát các đơn không còn tồn tại hoặc đã bị hủy.');
+        }
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ], [
+            'reason.required' => 'Vui lòng nhập lý do xóa đơn khỏi danh sách đối soát.',
+        ]);
+
+        DB::table('accounting_reconciliation_exclusions')->updateOrInsert(
+            ['order_id' => $order->id],
+            [
+                'excluded_by' => auth()->id(),
+                'reason' => trim((string) $validated['reason']),
+                'excluded_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+
+        return back()->with('success', 'Đã xóa đơn '.$order->code.' khỏi danh sách đối soát kế toán. Dữ liệu gốc vẫn được giữ nguyên.');
     }
 
     public function paymentMatching(Request $request)

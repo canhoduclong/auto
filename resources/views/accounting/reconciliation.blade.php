@@ -269,8 +269,11 @@
                         @php
                             $recon = $order->accountingReconciliation;
                             $isConfirmed = $recon?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED;
-                            $canCancel = $isConfirmed && ! $order->accounting_sales_import_batch_id;
-                            $canConfirm = (bool) $order->reconciliation_can_confirm;
+                            $isMissingOrder = $order->trash_at !== null;
+                            $isCancelledOrder = $order->status === \App\Models\Order::STATUS_CANCELLED;
+                            $isInvalidOrder = $isMissingOrder || $isCancelledOrder;
+                            $canCancel = ! $isInvalidOrder && $isConfirmed && ! $order->accounting_sales_import_batch_id;
+                            $canConfirm = ! $isInvalidOrder && (bool) $order->reconciliation_can_confirm;
                             $canSelect = $canConfirm || $canCancel;
                             $selectionTitle = $canConfirm
                                 ? 'Chọn đơn để xác nhận'
@@ -278,7 +281,7 @@
                             $paidAmount = (float) ($order->reconciliation_paid_amount ?? $order->amount_paid ?? 0);
                             $dueAmount = (float) ($order->reconciliation_due_amount ?? $order->amount_due ?? 0);
                         @endphp
-                        <tr class="recon-order-row" data-order-id="{{ $order->id }}" data-can-confirm="{{ $canConfirm ? '1' : '0' }}" data-can-cancel="{{ $canCancel ? '1' : '0' }}" data-cancel-allowed="{{ $order->accounting_sales_import_batch_id ? '0' : '1' }}" data-detail-url="{{ route('accounting.reconciliation.detail', $order) }}" data-confirm-url="{{ route('accounting.reconciliation.confirm', $order) }}" data-cancel-url="{{ route('accounting.reconciliation.cancel', $order) }}">
+                        <tr class="recon-order-row {{ $isInvalidOrder ? 'table-danger' : '' }}" data-order-id="{{ $order->id }}" data-can-confirm="{{ $canConfirm ? '1' : '0' }}" data-can-cancel="{{ $canCancel ? '1' : '0' }}" data-cancel-allowed="{{ $order->accounting_sales_import_batch_id ? '0' : '1' }}" data-detail-url="{{ route('accounting.reconciliation.detail', $order) }}" data-confirm-url="{{ route('accounting.reconciliation.confirm', $order) }}" data-cancel-url="{{ route('accounting.reconciliation.cancel', $order) }}">
                             <td>
                                 <input
                                     class="form-check-input js-recon-select"
@@ -289,7 +292,14 @@
                                     {{ $canSelect ? '' : 'disabled' }}
                                 >
                             </td>
-                            <td class="fw-bold">{{ $order->code }}</td>
+                            <td class="fw-bold">
+                                {{ $order->code }}
+                                @if($isMissingOrder)
+                                    <span class="badge text-bg-dark d-block mt-1">Không còn tồn tại</span>
+                                @elseif($isCancelledOrder)
+                                    <span class="badge text-bg-danger d-block mt-1">Đơn đã hủy</span>
+                                @endif
+                            </td>
                             <td>{{ $order->customer?->name ?? '-' }}</td>
                             <td><span class="badge text-bg-light border">{{ $order->status }}</span></td>
                             <td class="text-success fw-semibold">{{ $money($paidAmount) }}</td>
@@ -327,6 +337,16 @@
                                         type="button"
                                         title="Hủy xác nhận đối soát và gỡ doanh thu, hoa hồng của đơn"
                                     >Hủy đối soát</button>
+                                    @if($isInvalidOrder)
+                                        <form method="POST" action="{{ route('accounting.reconciliation.exclude', $order) }}" class="js-exclude-invalid-order-form">
+                                            @csrf
+                                            @method('DELETE')
+                                            <input type="hidden" name="reason" value="">
+                                            <button class="btn btn-sm btn-danger" type="submit" title="Xóa đơn lỗi khỏi danh sách đối soát">
+                                                <i class="bi bi-trash me-1"></i>Xóa
+                                            </button>
+                                        </form>
+                                    @endif
                                 </div>
                             </td>
                         </tr>
@@ -352,6 +372,19 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.js-exclude-invalid-order-form').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            if (!confirm('Xóa đơn này khỏi danh sách đối soát kế toán? Dữ liệu gốc của đơn vẫn được giữ lại.')) return;
+
+            const reason = prompt('Nhập lý do xóa khỏi đối soát:', 'Đơn không còn hiệu lực');
+            if (reason === null || reason.trim() === '') return;
+
+            form.querySelector('input[name="reason"]').value = reason.trim();
+            form.submit();
+        });
+    });
+
     const detailBox = document.getElementById('reconciliationDetail');
     const detailRow = document.getElementById('reconciliationDetailRow');
     const selectAllCheckbox = document.getElementById('selectAllReconciliation');

@@ -299,8 +299,14 @@
                         </div>
                     </div>
 
-                    <hr>
-                    <h6 class="fw-bold">Lịch sử điều chỉnh giá</h6>
+                    <div class="d-flex justify-content-end gap-2 mt-3 pb-3 border-bottom">
+                        <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Hủy</button>
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-save me-1"></i>Lưu giá mới
+                        </button>
+                    </div>
+
+                    <h6 class="fw-bold mt-3">Lịch sử điều chỉnh giá</h6>
                     <div class="table-responsive">
                         <table class="table table-sm">
                             <thead>
@@ -320,10 +326,6 @@
                             </tbody>
                         </table>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-light btn-sm" data-bs-dismiss="modal">Hủy</button>
-                    <button class="btn btn-primary btn-sm">Lưu giá mới</button>
                 </div>
             </form>
         </div>

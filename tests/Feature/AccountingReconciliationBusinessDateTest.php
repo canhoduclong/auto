@@ -13,6 +13,57 @@ class AccountingReconciliationBusinessDateTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_accounting_can_identify_and_remove_cancelled_or_trashed_orders_from_reconciliation(): void
+    {
+        $accountRole = Role::create(['name' => 'accounting']);
+        $accountant = User::factory()->create();
+        $accountant->roles()->attach($accountRole);
+        $customer = Customer::create(['name' => 'Khách đơn không hiệu lực', 'status' => 'active']);
+        $cancelled = Order::create([
+            'customer_id' => $customer->id,
+            'code' => 'RECON-CANCELLED-INVALID',
+            'status' => Order::STATUS_CANCELLED,
+            'cancelled_at' => now(),
+            'total' => 100000,
+        ]);
+        $trashed = Order::create([
+            'customer_id' => $customer->id,
+            'code' => 'RECON-TRASHED-INVALID',
+            'status' => Order::STATUS_DELIVERED,
+            'delivered_at' => now(),
+            'trash_at' => now(),
+            'total' => 200000,
+        ]);
+
+        $this->actingAs($accountant)
+            ->get(route('accounting.reconciliation', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('RECON-CANCELLED-INVALID')
+            ->assertSee('Đơn đã hủy')
+            ->assertSee('RECON-TRASHED-INVALID')
+            ->assertSee('Không còn tồn tại')
+            ->assertSee(route('accounting.reconciliation.exclude', $cancelled), false);
+
+        $this->actingAs($accountant)
+            ->delete(route('accounting.reconciliation.exclude', $cancelled), [
+                'reason' => 'Đơn đã hủy không cần đối soát',
+            ])
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('accounting_reconciliation_exclusions', [
+            'order_id' => $cancelled->id,
+            'excluded_by' => $accountant->id,
+            'reason' => 'Đơn đã hủy không cần đối soát',
+        ]);
+        $this->assertDatabaseHas('orders', ['id' => $cancelled->id]);
+
+        $this->actingAs($accountant)
+            ->get(route('accounting.reconciliation', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertDontSee(route('accounting.reconciliation.exclude', $cancelled), false)
+            ->assertSee('RECON-TRASHED-INVALID');
+    }
+
     public function test_restored_delivered_order_is_listed_on_its_actual_delivery_day(): void
     {
         $accountRole = Role::create(['name' => 'accounting']);
