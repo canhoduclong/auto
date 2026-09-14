@@ -39,6 +39,7 @@
         'returned_completed' => ['Đã trả xong', 'text-bg-danger'],
         'cancelled' => ['Đã hủy', 'text-bg-danger'],
     ];
+    $listedMissingOrders = $orders->currentPage() === 1 ? ($missingOrders ?? collect()) : collect();
     $sortLink = function (string $column) use ($sort, $sortDirection): string {
         $nextDirection = $sort === $column && $sortDirection === 'asc' ? 'desc' : 'asc';
 
@@ -302,6 +303,7 @@
                             <th style="width: 38px">
                                 <input class="form-check-input" type="checkbox" id="selectAllReconciliation" aria-label="Chọn tất cả đơn có thể xử lý đối soát">
                             </th>
+                            <th class="text-center" style="width: 52px">STT</th>
                             <th><a class="recon-sort-link" href="{{ $sortLink('customer') }}">Khách hàng <i class="bi {{ $sortIcon('customer') }}"></i></a></th>
                             <th><a class="recon-sort-link" href="{{ $sortLink('status') }}">Giao hàng <i class="bi {{ $sortIcon('status') }}"></i></a></th>
                             <th><a class="recon-sort-link" href="{{ $sortLink('paid') }}">Đã thu <i class="bi {{ $sortIcon('paid') }}"></i></a></th>
@@ -310,17 +312,14 @@
                             <th><a class="recon-sort-link" href="{{ $sortLink('shipper') }}">Shipper <i class="bi {{ $sortIcon('shipper') }}"></i></a></th>
                             <th><a class="recon-sort-link" href="{{ $sortLink('shipping_fee') }}">Phí ship <i class="bi {{ $sortIcon('shipping_fee') }}"></i></a></th>
                             <th><a class="recon-sort-link" href="{{ $sortLink('accounting_status') }}">Kế toán <i class="bi {{ $sortIcon('accounting_status') }}"></i></a></th>
-                            <th><a class="recon-sort-link" href="{{ $sortLink('date') }}">{{ $businessDate && $deliveredDate ? 'Ngày nghiệp vụ / Ngày giao' : ($businessDate ? 'Ngày nghiệp vụ' : 'Ngày giao') }} <i class="bi {{ $sortIcon('date') }}"></i></a></th>
+                            <th><a class="recon-sort-link" href="{{ $sortLink('date') }}">Giao <i class="bi {{ $sortIcon('date') }}"></i></a></th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                    @foreach($missingOrders ?? collect() as $missingOrder)
+                    @foreach($listedMissingOrders as $missingOrder)
                         @php
                             $missingDue = max(0, $missingOrder->total - $missingOrder->paid_amount);
-                            $missingBusinessDate = $dateField === 'delivered_at'
-                                ? $missingOrder->delivered_at
-                                : ($missingOrder->import_batch_id ? $missingOrder->delivery_date : $missingOrder->created_at);
                             try {
                                 $missingCreatedDate = $missingOrder->created_at
                                     ? \Carbon\Carbon::parse($missingOrder->created_at)->format('d/m/Y')
@@ -331,6 +330,7 @@
                         @endphp
                         <tr class="table-danger">
                             <td><input class="form-check-input" type="checkbox" disabled title="Đơn gốc đã bị xóa"></td>
+                            <td class="text-center text-muted">{{ $loop->iteration }}</td>
                             <td class="fw-bold">
                                 {{ $missingOrder->customer_name }}
                                 <span class="small text-muted fw-normal d-block mt-1">{{ $missingOrder->code }}, Ngày {{ $missingCreatedDate }}</span>
@@ -344,14 +344,7 @@
                             <td>{{ $missingOrder->shipper_name }}</td>
                             <td>{{ $money($missingOrder->shipping_fee) }}</td>
                             <td><span class="badge text-bg-danger">Không thể đối soát</span></td>
-                            <td>
-                                @if($businessDate && $deliveredDate)
-                                    <span class="d-block">NV: {{ ($missingOrder->import_batch_id ? $missingOrder->delivery_date : $missingOrder->created_at) ? \Carbon\Carbon::parse($missingOrder->import_batch_id ? $missingOrder->delivery_date : $missingOrder->created_at)->format('d/m/Y H:i') : '-' }}</span>
-                                    <span class="d-block text-muted small">Giao: {{ $missingOrder->delivered_at ? \Carbon\Carbon::parse($missingOrder->delivered_at)->format('d/m/Y H:i') : '-' }}</span>
-                                @else
-                                    {{ $missingBusinessDate ? \Carbon\Carbon::parse($missingBusinessDate)->format('d/m/Y H:i') : '-' }}
-                                @endif
-                            </td>
+                            <td>{{ $missingOrder->delivered_at ? \Carbon\Carbon::parse($missingOrder->delivered_at)->format('d/m/Y H:i') : '-' }}</td>
                             <td>
                                 @if($canExcludeMissingOrders ?? false)
                                 <form method="POST" action="{{ route('accounting.reconciliation.exclude-missing', $missingOrder->deleted_record_id) }}" class="js-exclude-invalid-order-form">
@@ -395,6 +388,7 @@
                                     {{ $canSelect ? '' : 'disabled' }}
                                 >
                             </td>
+                            <td class="text-center text-muted">{{ ($orders->firstItem() ?? 1) + $loop->index + ($missingOrders ?? collect())->count() }}</td>
                             <td class="fw-bold">
                                 {{ $order->customer?->name ?? '-' }}
                                 <span class="small text-muted fw-normal d-block mt-1">{{ $order->code }}, Ngày {{ optional($order->created_at)->format('d/m/Y') ?: '-' }}</span>
@@ -416,27 +410,10 @@
                                     {{ $isConfirmed ? 'Đã xác nhận' : 'Chưa xác nhận' }}
                                 </span>
                             </td>
-                            <td>
-                                @if($businessDate && $deliveredDate)
-                                    <span class="d-block">NV: {{ $order->is_restored_order
-                                        ? (optional($order->delivered_at)->format('d/m/Y H:i') ?: '-')
-                                        : ($order->accounting_sales_import_batch_id
-                                        ? (optional($order->delivery_date)->format('d/m/Y') ?: '-')
-                                        : (optional($order->created_at)->format('d/m/Y H:i') ?: '-')) }}</span>
-                                    <span class="d-block text-muted small">Giao: {{ optional($order->delivered_at)->format('d/m/Y H:i') ?: '-' }}</span>
-                                @elseif($dateField === 'business_date')
-                                    {{ $order->is_restored_order
-                                        ? (optional($order->delivered_at)->format('d/m/Y H:i') ?: '-')
-                                        : ($order->accounting_sales_import_batch_id
-                                        ? (optional($order->delivery_date)->format('d/m/Y') ?: '-')
-                                        : (optional($order->created_at)->format('d/m/Y H:i') ?: '-')) }}
-                                @else
-                                    {{ optional($order->delivered_at)->format('d/m/Y H:i') ?: '-' }}
-                                @endif
-                            </td>
+                            <td>{{ optional($order->delivered_at)->format('d/m/Y H:i') ?: '-' }}</td>
                             <td>
                                 <div class="d-flex gap-1">
-                                    <button class="btn btn-sm btn-outline-primary js-recon-toggle" type="button">Xem chi tiết</button>
+                                    <button class="btn btn-sm btn-outline-primary js-recon-toggle" type="button">Xem</button>
                                     <button
                                         class="btn btn-sm btn-outline-success js-recon-confirm {{ $isConfirmed ? 'd-none' : '' }}"
                                         type="button"
@@ -447,7 +424,7 @@
                                         class="btn btn-sm btn-outline-danger js-recon-cancel {{ $canCancel ? '' : 'd-none' }}"
                                         type="button"
                                         title="Hủy xác nhận đối soát và gỡ doanh thu, hoa hồng của đơn"
-                                    >Hủy đối soát</button>
+                                    >Hủy</button>
                                     @if($isInvalidOrder && ($canExcludeReconciliationOrders ?? false))
                                         <form method="POST" action="{{ route('accounting.reconciliation.exclude', $order) }}" class="js-exclude-invalid-order-form">
                                             @csrf
@@ -462,13 +439,13 @@
                             </td>
                         </tr>
                     @empty
-                        @if(($missingOrders ?? collect())->isEmpty())
-                        <tr><td colspan="11" class="text-center text-muted py-4">Không có đơn giao hàng cần đối soát.</td></tr>
+                        @if($listedMissingOrders->isEmpty())
+                        <tr><td colspan="12" class="text-center text-muted py-4">Không có đơn giao hàng cần đối soát.</td></tr>
                         @endif
                     @endforelse
                     @if($orders->isNotEmpty())
                         <tr class="recon-inline-detail-row d-none" id="reconciliationDetailRow">
-                            <td colspan="11">
+                            <td colspan="12">
                                 <div class="recon-detail" id="reconciliationDetail"></div>
                             </td>
                         </tr>
@@ -644,7 +621,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 ${recon.can_cancel ? `<form id="reconCancelForm" data-cancel-url="${esc(cancelUrl)}" class="mt-3">
                     <label class="form-label">Lý do hủy đối soát</label>
                     <textarea class="form-control mb-2" name="reason" rows="2" minlength="3" maxlength="1000" required></textarea>
-                    <button class="btn btn-outline-danger" type="submit">Hủy đối soát</button>
+                    <button class="btn btn-outline-danger" type="submit">Hủy</button>
                 </form>` : ''}
             </div>`
             : `<form id="reconConfirmForm" data-confirm-url="${esc(confirmUrl)}" class="mt-2">
@@ -785,7 +762,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function resetToggleButtons() {
         document.querySelectorAll('.js-recon-toggle').forEach(button => {
-            button.textContent = 'Xem chi tiết';
+            button.textContent = 'Xem';
             button.classList.remove('btn-primary');
             button.classList.add('btn-outline-primary');
         });
