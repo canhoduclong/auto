@@ -18,6 +18,73 @@ class ShipperWarehouseTransferVisibilityTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_assigned_shipper_can_resume_a_rolled_back_transfer(): void
+    {
+        $shipperRole = Role::create(['name' => 'shipper']);
+        $shipper = User::factory()->create(['name' => 'Tài xế tiếp tục giao']);
+        $shipper->roles()->attach($shipperRole);
+        $source = Warehouse::factory()->create(['name' => 'Kho gửi']);
+        $target = Warehouse::factory()->create(['name' => 'Kho nhận']);
+        $customer = Customer::create(['name' => 'Khách tiếp tục giao', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'warehouse_id' => $source->id,
+            'code' => 'TRANSFER-RESUME',
+            'status' => Order::STATUS_READY_TO_SHIP,
+            'total' => 0,
+        ]);
+        $transfer = WarehouseTransfer::create([
+            'order_id' => $order->id,
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseTransfer::STATUS_CANCELLED,
+            'delivered_by' => $shipper->id,
+            'delivered_at' => now(),
+        ]);
+        $slip = WarehouseDispatchSlip::create([
+            'business_date' => now()->toDateString(),
+            'source_warehouse_id' => $source->id,
+            'target_warehouse_id' => $target->id,
+            'shipper_id' => $shipper->id,
+            'status' => WarehouseDispatchSlip::STATUS_FINALIZED,
+            'created_by' => $shipper->id,
+            'finalized_by' => $shipper->id,
+            'finalized_at' => now(),
+        ]);
+        WarehouseDispatchSlipEntry::create([
+            'warehouse_dispatch_slip_id' => $slip->id,
+            'warehouse_transfer_id' => $transfer->id,
+            'snapshot' => ['type' => 'warehouse_transfer'],
+        ]);
+
+        $this->actingAs($shipper)
+            ->get(route('shipper.warehouse-transfers.show', $slip))
+            ->assertOk()
+            ->assertSee('Tiếp tục giao hàng')
+            ->assertSee(route('shipper.warehouse-transfers.resume', $transfer), false);
+
+        $documentCount = \App\Models\InventoryDocument::count();
+        $this->actingAs($shipper)
+            ->postJson(route('shipper.warehouse-transfers.resume', $transfer), [
+                'resume_note' => 'Kho nhận đã sẵn sàng',
+            ])
+            ->assertOk()
+            ->assertJsonPath('status', WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE);
+
+        $this->assertSame(WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE, $transfer->fresh()->status);
+        $this->assertSame($documentCount, \App\Models\InventoryDocument::count());
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'action' => 'warehouse_transfer_resumed_by_shipper',
+        ]);
+
+        $this->actingAs($shipper)
+            ->postJson(route('shipper.warehouse-transfers.resume', $transfer))
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Phiếu điều chuyển không còn ở trạng thái đã hoàn lại.');
+    }
+
     public function test_assigned_shipper_sees_active_transfer_even_when_order_delivery_date_is_different(): void
     {
         $shipperRole = Role::create(['name' => 'shipper']);

@@ -510,6 +510,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/warehouse-transfers/slips/{dispatchSlip}', [ShipperDashboardController::class, 'warehouseTransferSlip'])->name('warehouse-transfers.show');
         Route::post('/warehouse-transfers/{transfer}/pickup', [ShipperDashboardController::class, 'pickupWarehouseTransfer'])->name('warehouse-transfers.pickup');
         Route::post('/warehouse-transfers/{transfer}/deliver', [ShipperDashboardController::class, 'deliverWarehouseTransfer'])->name('warehouse-transfers.deliver');
+        Route::post('/warehouse-transfers/{transfer}/resume', [ShipperDashboardController::class, 'resumeWarehouseTransfer'])->name('warehouse-transfers.resume');
         Route::post('/warehouse-transfers/bulk-pickup', [ShipperDashboardController::class, 'bulkPickupWarehouseTransfers'])->name('warehouse-transfers.bulk-pickup')->middleware('role:manager_shipper,admin');
         Route::post('/warehouse-transfers/bulk-deliver', [ShipperDashboardController::class, 'bulkDeliverWarehouseTransfers'])->name('warehouse-transfers.bulk-deliver')->middleware('role:manager_shipper,admin');
 

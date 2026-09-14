@@ -134,7 +134,16 @@
         @elseif($status === 'completed')
             <span class="badge bg-success">Phiếu điều chuyển đã hoàn tất</span>
         @else
-            <span class="badge bg-danger">Phiếu điều chuyển đã hoàn lại</span>
+            <div class="d-flex flex-column flex-md-row gap-2 align-items-start">
+                <span class="badge bg-danger flex-grow-1">Phiếu điều chuyển đã hoàn lại</span>
+                <form method="POST" action="{{ route('shipper.warehouse-transfers.resume', $transfer) }}" class="js-resume-transfer-form">
+                    @csrf
+                    <input type="hidden" name="resume_note" value="">
+                    <button type="submit" class="btn btn-outline-success btn-sm">
+                        <i class="bi bi-play-circle me-1"></i>Tiếp tục giao hàng
+                    </button>
+                </form>
+            </div>
         @endif
     </div>
     @endif

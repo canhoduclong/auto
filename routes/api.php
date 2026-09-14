@@ -60,6 +60,7 @@ Route::prefix('mobile')->group(function () {
             Route::post('/warehouse-transfers/{transfer}/pickup', [ShipperApiController::class, 'pickupWarehouseTransfer']);
             Route::post('/warehouse-transfers/{transfer}/deliver', [ShipperApiController::class, 'deliverWarehouseTransfer']);
             Route::post('/warehouse-transfers/{transfer}/rollback', [ShipperApiController::class, 'rollbackWarehouseTransfer']);
+            Route::post('/warehouse-transfers/{transfer}/resume', [ShipperApiController::class, 'resumeWarehouseTransfer']);
         });
 
         Route::prefix('warehouse')->group(function () {

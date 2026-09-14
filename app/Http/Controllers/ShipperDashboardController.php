@@ -1185,6 +1185,64 @@ class ShipperDashboardController extends Controller
             : back()->with('success', $message);
     }
 
+    /**
+     * Restore a transfer rolled back by its shipper to the warehouse receiving queue.
+     */
+    public function resumeWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
+    {
+        $this->authorizeWarehouseTransferShipper($transfer);
+
+        $validated = $request->validate([
+            'resume_note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            DB::transaction(function () use ($transfer, $validated): void {
+                $lockedTransfer = WarehouseTransfer::query()
+                    ->with(['order', 'sourceWarehouse', 'targetWarehouse'])
+                    ->lockForUpdate()
+                    ->findOrFail($transfer->id);
+
+                if ($lockedTransfer->status !== WarehouseTransfer::STATUS_CANCELLED) {
+                    throw new \RuntimeException('Phiếu điều chuyển không còn ở trạng thái đã hoàn lại.');
+                }
+
+                $reason = trim((string) ($validated['resume_note'] ?? ''));
+                $lockedTransfer->update([
+                    'status' => WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                ]);
+
+                if ($lockedTransfer->order) {
+                    OrderHistory::create([
+                        'order_id' => $lockedTransfer->order->id,
+                        'action' => 'warehouse_transfer_resumed_by_shipper',
+                        'user_id' => Auth::id(),
+                        'role' => 'shipper',
+                        'status_before' => $lockedTransfer->order->status,
+                        'status_after' => $lockedTransfer->order->status,
+                        'note' => 'Shipper tiếp tục giao phiếu điều chuyển #'.$lockedTransfer->id
+                            .' tới '.($lockedTransfer->targetWarehouse?->name ?? 'kho nhận')
+                            .($reason !== '' ? '; Ghi chú: '.$reason : '').'.',
+                    ]);
+                }
+            });
+        } catch (\RuntimeException $exception) {
+            return $request->expectsJson()
+                ? response()->json(['message' => $exception->getMessage()], 422)
+                : back()->with('error', $exception->getMessage());
+        }
+
+        $message = 'Đã cho phép tiếp tục giao hàng. Phiếu đang chờ kho nhận xác nhận.';
+
+        return $request->expectsJson()
+            ? response()->json([
+                'message' => $message,
+                'transfer_id' => $transfer->id,
+                'status' => WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+            ])
+            : back()->with('success', $message);
+    }
+
     public function deliverWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
     {
         $this->authorizeWarehouseTransferShipper($transfer);
@@ -1979,6 +2037,7 @@ class ShipperDashboardController extends Controller
                 $reservation->delete();
                 $inventory->reserved_quantity = $inventory->reservations()->sum('quantity');
                 $inventory->save();
+
                 continue;
             }
 
@@ -2382,6 +2441,7 @@ class ShipperDashboardController extends Controller
 
         if ($request->input('download') === 'excel') {
             abort_unless($selectedHistory, 404, 'Ngày này chưa có bản điều phối.');
+
             return \Maatwebsite\Excel\Facades\Excel::download(
                 new \App\Exports\DispatchHistoryExport($selectedHistory),
                 'dieu-phoi-tong-'.$selectedDate.'-lan-'.$selectedHistory->version.'.xlsx'
@@ -2603,11 +2663,9 @@ class ShipperDashboardController extends Controller
                 ? 'confirmed'
                 : ($actions->isNotEmpty() && $actions->every(fn ($action) => $action === 'schedule_rejected') ? 'rejected' : 'waiting');
             $route['quantity'] = $route['orders']->sum(fn (Order $order) => $order->items->sum('quantity'));
-            $route['total_fee'] = $route['orders']->sum(fn (Order $order) =>
-                ($order->charge_shipping_fee ?? true) ? (float) ($order->shipping_fee ?? 0) : 0
+            $route['total_fee'] = $route['orders']->sum(fn (Order $order) => ($order->charge_shipping_fee ?? true) ? (float) ($order->shipping_fee ?? 0) : 0
             );
-            $route['completed_orders'] = $route['orders']->filter(fn (Order $order) =>
-                in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_RETURNED_COMPLETED], true)
+            $route['completed_orders'] = $route['orders']->filter(fn (Order $order) => in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_RETURNED_COMPLETED], true)
                 || $order->histories?->isNotEmpty()
             )->count();
             $route['completion_status'] = $route['completed_orders'] === $route['orders']->count()

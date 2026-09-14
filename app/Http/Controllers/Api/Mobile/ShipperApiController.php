@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers\Api\Mobile;
 
-use App\Services\ShipperAssignmentService;
 use App\Http\Controllers\ShipperDashboardController;
-use App\Models\MobileLocationPing;
 use App\Models\Customer;
+use App\Models\MobileLocationPing;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\OrderReturn;
@@ -14,11 +13,12 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseDispatchSlip;
 use App\Models\WarehouseTransfer;
+use App\Services\ShipperAssignmentService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
@@ -253,6 +253,13 @@ class ShipperApiController extends BaseApiController
         return app(ShipperDashboardController::class)->rollbackWarehouseTransfer($request, $transfer);
     }
 
+    public function resumeWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
+    {
+        $this->bindWebAuth($request);
+
+        return app(ShipperDashboardController::class)->resumeWarehouseTransfer($request, $transfer);
+    }
+
     public function warehouses(Request $request): JsonResponse
     {
         $this->ensureShipperRole($request);
@@ -264,7 +271,7 @@ class ShipperApiController extends BaseApiController
     {
         $this->ensureShipperRole($request);
         $user = $request->user();
-        if ((int) $order->shipper_id !== (int) $user->id && !$user->hasRole('admin')) {
+        if ((int) $order->shipper_id !== (int) $user->id && ! $user->hasRole('admin')) {
             return $this->fail('Khong co quyen thao tac don nay.', 403);
         }
         if ($order->status !== Order::STATUS_DELIVERING) {
@@ -278,7 +285,7 @@ class ShipperApiController extends BaseApiController
         ]);
         $warehouse = Warehouse::query()->findOrFail((int) $validated['return_warehouse_id']);
         $note = trim((string) ($validated['return_note'] ?? ''));
-        $note = trim($note . ' | Kho trả về: ' . $warehouse->name, ' |');
+        $note = trim($note.' | Kho trả về: '.$warehouse->name, ' |');
 
         $orderReturn = DB::transaction(function () use ($order, $user, $validated, $warehouse, $note) {
             $updates = [
@@ -327,7 +334,7 @@ class ShipperApiController extends BaseApiController
                 'role' => 'shipper',
                 'status_before' => Order::STATUS_DELIVERING,
                 'status_after' => Order::STATUS_RETURNING,
-                'note' => 'Shipper gửi trả hàng qua mobile: ' . $validated['return_reason'] . ' | Kho trả về: ' . $warehouse->name,
+                'note' => 'Shipper gửi trả hàng qua mobile: '.$validated['return_reason'].' | Kho trả về: '.$warehouse->name,
             ]);
 
             return $orderReturn;
@@ -339,15 +346,15 @@ class ShipperApiController extends BaseApiController
     public function assignOrder(Request $request, Order $order, User $shipper): JsonResponse
     {
         $this->ensureManagerShipperRole($request);
-        if (!in_array($order->status, $this->assignmentStatuses(), true)) {
+        if (! in_array($order->status, $this->assignmentStatuses(), true)) {
             return $this->fail('Don chua o trang thai co the dieu phoi.', 422);
         }
-        if (!($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper'))) {
+        if (! ($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper'))) {
             return $this->fail('Nguoi dung khong phai shipper.', 422);
         }
         $previous = $order->shipper;
         $order->update(['shipper_id' => $shipper->id]);
-        if ($order->customer && !$order->customer->default_shipper_id) {
+        if ($order->customer && ! $order->customer->default_shipper_id) {
             $order->customer->update(['default_shipper_id' => $shipper->id]);
         }
         OrderHistory::query()->create([
@@ -357,15 +364,16 @@ class ShipperApiController extends BaseApiController
             'role' => 'manager_shipper',
             'status_before' => $order->status,
             'status_after' => $order->status,
-            'note' => 'Điều phối mobile: ' . ($previous?->name ? $previous->name . ' -> ' : '') . $shipper->name,
+            'note' => 'Điều phối mobile: '.($previous?->name ? $previous->name.' -> ' : '').$shipper->name,
         ]);
-        return $this->ok(null, 'Da dieu phoi don cho ' . $shipper->name);
+
+        return $this->ok(null, 'Da dieu phoi don cho '.$shipper->name);
     }
 
     public function unassignOrder(Request $request, Order $order): JsonResponse
     {
         $this->ensureManagerShipperRole($request);
-        if (!in_array($order->status, $this->assignmentStatuses(), true) || !$order->shipper_id) {
+        if (! in_array($order->status, $this->assignmentStatuses(), true) || ! $order->shipper_id) {
             return $this->fail('Don khong the go dieu phoi.', 422);
         }
         $previous = $order->shipper;
@@ -377,8 +385,9 @@ class ShipperApiController extends BaseApiController
             'role' => 'manager_shipper',
             'status_before' => $order->status,
             'status_after' => $order->status,
-            'note' => 'Gỡ điều phối mobile khỏi ' . ($previous?->name ?? 'shipper'),
+            'note' => 'Gỡ điều phối mobile khỏi '.($previous?->name ?? 'shipper'),
         ]);
+
         return $this->ok(null, 'Da go dieu phoi don');
     }
 
@@ -390,14 +399,14 @@ class ShipperApiController extends BaseApiController
             'transfer_pending_orders' => ['nullable', 'boolean'],
         ]);
         $shipper = User::query()->findOrFail((int) $validated['shipper_id']);
-        if (!($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper'))) {
+        if (! ($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper'))) {
             return $this->fail('Nguoi dung khong phai shipper.', 422);
         }
 
         $previousId = $customer->default_shipper_id ? (int) $customer->default_shipper_id : null;
         DB::transaction(function () use ($request, $customer, $shipper, $previousId): void {
             $customer->update(['default_shipper_id' => $shipper->id]);
-            if (!$request->boolean('transfer_pending_orders') || !$previousId || $previousId === (int) $shipper->id) {
+            if (! $request->boolean('transfer_pending_orders') || ! $previousId || $previousId === (int) $shipper->id) {
                 return;
             }
             Order::query()
@@ -574,7 +583,7 @@ class ShipperApiController extends BaseApiController
     {
         $this->ensureShipperRole($request);
         $user = $request->user();
-        if ((int) $order->shipper_id !== (int) $user->id && !$user->hasRole('admin')) {
+        if ((int) $order->shipper_id !== (int) $user->id && ! $user->hasRole('admin')) {
             return $this->fail('Khong co quyen thao tac don nay', 403);
         }
 
@@ -605,20 +614,20 @@ class ShipperApiController extends BaseApiController
             'role' => 'shipper',
             'status_before' => $before,
             'status_after' => $nextStatus,
-            'note' => 'Mobile update status. GPS: ' . ($validated['lat'] ?? '-') . ',' . ($validated['lng'] ?? '-'),
+            'note' => 'Mobile update status. GPS: '.($validated['lat'] ?? '-').','.($validated['lng'] ?? '-'),
         ]);
 
         return $this->ok([
-                'order_id' => (int) $order->id,
-                'status' => $nextStatus,
-            ], 'Cap nhat trang thai thanh cong');
+            'order_id' => (int) $order->id,
+            'status' => $nextStatus,
+        ], 'Cap nhat trang thai thanh cong');
     }
 
     public function completeDelivery(Request $request, Order $order): JsonResponse
     {
         $this->ensureShipperRole($request);
         $user = $request->user();
-        if ((int) $order->shipper_id !== (int) $user->id && !$user->hasRole('admin')) {
+        if ((int) $order->shipper_id !== (int) $user->id && ! $user->hasRole('admin')) {
             return $this->fail('Khong co quyen thao tac don nay', 403);
         }
 
@@ -650,7 +659,7 @@ class ShipperApiController extends BaseApiController
     {
         $this->ensureShipperRole($request);
         $user = $request->user();
-        if ((int) $order->shipper_id !== (int) $user->id && !$user->hasRole('admin')) {
+        if ((int) $order->shipper_id !== (int) $user->id && ! $user->hasRole('admin')) {
             return $this->fail('Khong co quyen upload anh cho don nay', 403);
         }
 
@@ -669,9 +678,9 @@ class ShipperApiController extends BaseApiController
         ]);
 
         return $this->ok([
-                'path' => $path,
-                'url' => Storage::disk('public')->url($path),
-            ], 'Upload anh thanh cong');
+            'path' => $path,
+            'url' => Storage::disk('public')->url($path),
+        ], 'Upload anh thanh cong');
     }
 
     public function updateLocation(Request $request): JsonResponse
@@ -721,7 +730,7 @@ class ShipperApiController extends BaseApiController
     private function ensureShipperRole(Request $request): void
     {
         $user = $request->user();
-        if (!$user || !($user->hasRole('shipper') || $user->hasRole('ship') || $user->hasRole('manager_shipper') || $user->hasRole('admin'))) {
+        if (! $user || ! ($user->hasRole('shipper') || $user->hasRole('ship') || $user->hasRole('manager_shipper') || $user->hasRole('admin'))) {
             abort(403, 'Role khong duoc phep truy cap API shipper');
         }
     }
@@ -739,7 +748,7 @@ class ShipperApiController extends BaseApiController
     private function ensureManagerShipperRole(Request $request): void
     {
         $user = $request->user();
-        if (!$user || !($user->hasRole('manager_shipper') || $user->hasRole('admin'))) {
+        if (! $user || ! ($user->hasRole('manager_shipper') || $user->hasRole('admin'))) {
             abort(403, 'Role khong duoc phep dieu phoi shipper');
         }
     }
@@ -775,8 +784,8 @@ class ShipperApiController extends BaseApiController
         $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
 
         $decisionNote = $historyAction === 'schedule_rejected'
-            ? 'Shipper ' . $user->name . ' tu choi lo trinh giao hang qua mobile app. Ly do: ' . trim((string) $validated['reason'])
-            : 'Shipper ' . $user->name . ' xac nhan lo trinh giao hang qua mobile app.';
+            ? 'Shipper '.$user->name.' tu choi lo trinh giao hang qua mobile app. Ly do: '.trim((string) $validated['reason'])
+            : 'Shipper '.$user->name.' xac nhan lo trinh giao hang qua mobile app.';
 
         DB::transaction(function () use ($orders, $userId, $historyAction, $snapshotHash, $snapshot, $decisionNote): void {
             foreach ($orders as $order) {
@@ -861,7 +870,7 @@ class ShipperApiController extends BaseApiController
 
     private function deliveryScheduleStatus(?OrderHistory $latestHistory, string $currentSnapshotHash): string
     {
-        if (!$latestHistory) {
+        if (! $latestHistory) {
             return 'none';
         }
 
@@ -927,7 +936,7 @@ class ShipperApiController extends BaseApiController
             ? strtoupper(substr((string) $history->schedule_snapshot_hash, 0, 6))
             : str_pad((string) $shipperId, 3, '0', STR_PAD_LEFT);
 
-        return 'LT-' . Carbon::parse($selectedDate)->format('Ymd') . '-' . $suffix;
+        return 'LT-'.Carbon::parse($selectedDate)->format('Ymd').'-'.$suffix;
     }
 
     private function attachDeliveryScheduleMetadata($orders): void
@@ -948,7 +957,7 @@ class ShipperApiController extends BaseApiController
 
         foreach ($orders as $order) {
             $history = $histories->get($order->id);
-            if (!$history) {
+            if (! $history) {
                 continue;
             }
 
