@@ -917,7 +917,7 @@ class AccountingDashboardController extends Controller
         $baseQuery = Order::query()
             ->with([
                 'customer:id,name,phone,address',
-                'user:id,name',
+                'user:id,name,short_name',
                 'shipper:id,name',
                 'returnRecords:id,order_id,status,refund_amount',
                 'accountingReconciliation.confirmer:id,name',
@@ -990,7 +990,9 @@ class AccountingDashboardController extends Controller
             'paid' => $ordersQuery->orderBy('orders.amount_paid', $sortDirection),
             'due' => $ordersQuery->orderBy('orders.amount_due', $sortDirection),
             'sale' => $ordersQuery->orderBy(
-                User::query()->select('name')->whereColumn('users.id', 'orders.user_id'),
+                User::query()
+                    ->selectRaw("COALESCE(NULLIF(short_name, ''), name)")
+                    ->whereColumn('users.id', 'orders.user_id'),
                 $sortDirection
             ),
             'shipper' => $ordersQuery->orderBy(
@@ -1061,7 +1063,7 @@ class AccountingDashboardController extends Controller
                         'order_id' => (int) $deleted->order_id,
                         'code' => (string) ($deleted->order_code ?: '#'.$deleted->order_id),
                         'customer_name' => (string) ($snapshot['customer']['name'] ?? '-'),
-                        'sale_name' => (string) ($snapshot['sale']['name'] ?? '-'),
+                        'sale_name' => (string) ($snapshot['sale']['short_name'] ?? $snapshot['sale']['name'] ?? '-'),
                         'sale_id' => (int) ($deleted->sale_user_id ?? 0),
                         'shipper_id' => (int) ($attributes['shipper_id'] ?? 0),
                         'shipper_name' => '-',
@@ -2608,6 +2610,7 @@ class AccountingDashboardController extends Controller
             'order' => [
                 'id' => $order->id,
                 'code' => $order->code ?: ('#'.$order->id),
+                'created_date' => optional($order->created_at)->format('d/m/Y'),
                 'status' => $order->status,
                 'payment_status' => $order->payment_status,
                 'total' => (float) $order->total,

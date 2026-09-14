@@ -21,6 +21,24 @@
         'partial' => 'Thanh toán một phần',
         'unpaid' => 'Chưa thanh toán',
     ];
+    $deliveryStatusMeta = [
+        'order_placed' => ['Đã đặt hàng', 'text-bg-secondary'],
+        'order_confirmed' => ['Đã xác nhận', 'text-bg-info'],
+        'approved' => ['Đã duyệt', 'text-bg-info'],
+        'ready_to_pack' => ['Chờ đóng gói', 'text-bg-warning'],
+        'packing' => ['Đang đóng gói', 'text-bg-warning'],
+        'packed' => ['Đã đóng gói', 'text-bg-primary'],
+        'ready_to_ship' => ['Chờ vận chuyển', 'text-bg-primary'],
+        'shipping' => ['Đang vận chuyển', 'text-bg-primary'],
+        'delivering' => ['Đang giao hàng', 'text-bg-primary'],
+        'in_delivery' => ['Đang giao hàng', 'text-bg-primary'],
+        'delivered' => ['Đã giao hàng', 'text-bg-success'],
+        'completed' => ['Hoàn thành', 'text-bg-success'],
+        'returning' => ['Đang trả hàng', 'text-bg-warning'],
+        'returned' => ['Hoàn trả', 'text-bg-danger'],
+        'returned_completed' => ['Đã trả xong', 'text-bg-danger'],
+        'cancelled' => ['Đã hủy', 'text-bg-danger'],
+    ];
     $sortLink = function (string $column) use ($sort, $sortDirection): string {
         $nextDirection = $sort === $column && $sortDirection === 'asc' ? 'desc' : 'asc';
 
@@ -275,7 +293,6 @@
                             <th style="width: 38px">
                                 <input class="form-check-input" type="checkbox" id="selectAllReconciliation" aria-label="Chọn tất cả đơn có thể xử lý đối soát">
                             </th>
-                            <th><a class="recon-sort-link" href="{{ $sortLink('code') }}">Mã đơn <i class="bi {{ $sortIcon('code') }}"></i></a></th>
                             <th><a class="recon-sort-link" href="{{ $sortLink('customer') }}">Khách hàng <i class="bi {{ $sortIcon('customer') }}"></i></a></th>
                             <th><a class="recon-sort-link" href="{{ $sortLink('status') }}">Giao hàng <i class="bi {{ $sortIcon('status') }}"></i></a></th>
                             <th><a class="recon-sort-link" href="{{ $sortLink('paid') }}">Đã thu <i class="bi {{ $sortIcon('paid') }}"></i></a></th>
@@ -295,15 +312,22 @@
                             $missingBusinessDate = $dateField === 'delivered_at'
                                 ? $missingOrder->delivered_at
                                 : ($missingOrder->import_batch_id ? $missingOrder->delivery_date : $missingOrder->created_at);
+                            try {
+                                $missingCreatedDate = $missingOrder->created_at
+                                    ? \Carbon\Carbon::parse($missingOrder->created_at)->format('d/m/Y')
+                                    : '-';
+                            } catch (\Throwable) {
+                                $missingCreatedDate = '-';
+                            }
                         @endphp
                         <tr class="table-danger">
                             <td><input class="form-check-input" type="checkbox" disabled title="Đơn gốc đã bị xóa"></td>
                             <td class="fw-bold">
-                                {{ $missingOrder->code }}
+                                {{ $missingOrder->customer_name }}
+                                <span class="small text-muted fw-normal d-block mt-1">{{ $missingOrder->code }}, Ngày {{ $missingCreatedDate }}</span>
                                 <span class="badge text-bg-dark d-block mt-1">Không còn dữ liệu đơn thực tế</span>
                                 <span class="small text-danger d-block mt-1">Admin xóa: {{ $missingOrder->admin_delete_reason }}</span>
                             </td>
-                            <td>{{ $missingOrder->customer_name }}</td>
                             <td><span class="badge text-bg-secondary">Đã xóa</span></td>
                             <td class="text-success fw-semibold">{{ $money($missingOrder->paid_amount) }}</td>
                             <td class="{{ $missingDue > 0 ? 'text-danger' : 'text-success' }} fw-semibold">{{ $money($missingDue) }}</td>
@@ -356,18 +380,19 @@
                                 >
                             </td>
                             <td class="fw-bold">
-                                {{ $order->code }}
+                                {{ $order->customer?->name ?? '-' }}
+                                <span class="small text-muted fw-normal d-block mt-1">{{ $order->code }}, Ngày {{ optional($order->created_at)->format('d/m/Y') ?: '-' }}</span>
                                 @if($isMissingOrder)
                                     <span class="badge text-bg-dark d-block mt-1">Không còn tồn tại</span>
                                 @elseif($isCancelledOrder)
                                     <span class="badge text-bg-danger d-block mt-1">Đơn đã hủy</span>
                                 @endif
                             </td>
-                            <td>{{ $order->customer?->name ?? '-' }}</td>
-                            <td><span class="badge text-bg-light border">{{ $order->status }}</span></td>
+                            @php($orderStatusMeta = $deliveryStatusMeta[$order->status] ?? [$order->status, 'text-bg-secondary'])
+                            <td><span class="badge {{ $orderStatusMeta[1] }}">{{ $orderStatusMeta[0] }}</span></td>
                             <td class="text-success fw-semibold">{{ $money($paidAmount) }}</td>
                             <td class="{{ $dueAmount > 0 ? 'text-danger' : 'text-success' }} fw-semibold">{{ $money($dueAmount) }}</td>
-                            <td>{{ $order->user?->name ?? '-' }}</td>
+                            <td>{{ $order->user?->short_name ?: ($order->user?->name ?? '-') }}</td>
                             <td>{{ $order->shipper?->name ?? '-' }}</td>
                             <td>{{ $money($order->shipping_fee) }}</td>
                             <td class="js-accounting-status">
@@ -415,12 +440,12 @@
                         </tr>
                     @empty
                         @if(($missingOrders ?? collect())->isEmpty())
-                        <tr><td colspan="12" class="text-center text-muted py-4">Không có đơn giao hàng cần đối soát.</td></tr>
+                        <tr><td colspan="11" class="text-center text-muted py-4">Không có đơn giao hàng cần đối soát.</td></tr>
                         @endif
                     @endforelse
                     @if($orders->isNotEmpty())
                         <tr class="recon-inline-detail-row d-none" id="reconciliationDetailRow">
-                            <td colspan="12">
+                            <td colspan="11">
                                 <div class="recon-detail" id="reconciliationDetail"></div>
                             </td>
                         </tr>
@@ -609,7 +634,7 @@ document.addEventListener('DOMContentLoaded', function () {
         detailBox.innerHTML = `
             <div class="recon-panel">
                 <div class="panel-head d-flex justify-content-between align-items-center">
-                    <span>Chi tiết ${esc(order.code)}</span>
+                    <span>Chi tiết ${esc(order.code)}, Ngày ${esc(order.created_date)}</span>
                     <span class="badge ${recon.status === 'confirmed' ? 'text-bg-success' : 'text-bg-warning'}">${recon.status === 'confirmed' ? 'Đã xác nhận' : 'Chưa xác nhận'}</span>
                 </div>
                 <div class="panel-body">
