@@ -318,6 +318,14 @@ class ApprovalService
 
     public function canApproveCurrentStep(Order $order, User $user): bool
     {
+        if (! in_array((string) $order->status, [
+            OrderStatus::Pending->value,
+            Order::STATUS_PENDING_LEADER_APPROVAL,
+            Order::STATUS_PENDING_MANAGER_APPROVAL,
+        ], true)) {
+            return false;
+        }
+
         $isAccounted = $order->relationLoaded('accountingReconciliation')
             ? $order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED
             : $order->accountingReconciliation()

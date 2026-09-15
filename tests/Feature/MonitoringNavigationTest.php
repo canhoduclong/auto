@@ -3,17 +3,78 @@
 namespace Tests\Feature;
 
 use App\Models\AccountingReconciliation;
+use App\Models\ApprovalStep;
+use App\Models\ApprovalWorkflow;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\Role;
 use App\Models\TextOrderDraft;
 use App\Models\User;
+use App\Services\ApprovalService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class MonitoringNavigationTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_accounted_delivered_order_with_stale_pending_step_cannot_be_approved_again(): void
+    {
+        $saleRole = Role::query()->create(['name' => 'sale']);
+        $managerRole = Role::query()->create(['name' => 'manager']);
+        $sale = User::factory()->create();
+        $sale->roles()->attach($saleRole);
+        $manager = User::factory()->create();
+        $manager->roles()->attach($managerRole);
+        $workflow = ApprovalWorkflow::query()->create([
+            'code' => 'stale-accounted-approval-test',
+            'name' => 'Kiểm tra duyệt trùng đơn đã đối soát',
+            'is_active' => true,
+            'applies_to' => [ApprovalWorkflow::ACTIVITY_ORDER_CREATE],
+        ]);
+        ApprovalStep::query()->create([
+            'approval_flow_id' => $workflow->id,
+            'step_order' => 1,
+            'role_slug' => 'manager',
+        ]);
+        $customer = Customer::query()->create([
+            'user_id' => $sale->id,
+            'name' => 'Khách đã đối soát',
+            'status' => 'active',
+        ]);
+        $order = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $sale->id,
+            'code' => 'ACCOUNTED-NO-REAPPROVE',
+            'status' => 'pending',
+        ]);
+        app(ApprovalService::class)->initOrderApproval($order);
+        $order->update(['status' => Order::STATUS_DELIVERED, 'delivered_at' => now()]);
+        AccountingReconciliation::query()->create([
+            'order_id' => $order->id,
+            'sale_id' => $sale->id,
+            'status' => AccountingReconciliation::STATUS_CONFIRMED,
+            'confirmed_by' => $manager->id,
+            'confirmed_at' => now(),
+        ]);
+
+        $this->actingAs($manager)
+            ->withSession(['active_role' => 'manager'])
+            ->get(route('pages.my_orders.monitoring', ['tab' => 'today', 'view' => 'cards']))
+            ->assertOk()
+            ->assertSee('ACCOUNTED-NO-REAPPROVE')
+            ->assertSee('Kế toán đã xác nhận và tính doanh số')
+            ->assertDontSee('action="'.route('site.orders.approve', $order).'"', false);
+
+        $this->actingAs($manager)
+            ->post(route('site.orders.approve', $order), ['note' => 'Không được duyệt lại'])
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('approval_orders', [
+            'order_id' => $order->id,
+            'status' => 'pending',
+        ]);
+    }
 
     public function test_monitoring_menu_has_dashboard_and_does_not_render_fake_sequence_slots(): void
     {

@@ -3342,7 +3342,11 @@ class PageController extends Controller
 
     private function applyMonitoringApprovalScope(Builder $query, $roleNames): Builder
     {
-        $query->where('status', '!=', Order::STATUS_CANCELLED)
+        $query->whereIn('status', [
+            OrderStatus::Pending->value,
+            Order::STATUS_PENDING_LEADER_APPROVAL,
+            Order::STATUS_PENDING_MANAGER_APPROVAL,
+        ])
             ->whereDoesntHave('accountingReconciliation', fn (Builder $reconciliation) => $reconciliation
                 ->where('status', \App\Models\AccountingReconciliation::STATUS_CONFIRMED));
 
