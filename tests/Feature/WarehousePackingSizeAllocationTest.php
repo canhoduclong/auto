@@ -350,6 +350,28 @@ class WarehousePackingSizeAllocationTest extends TestCase
         ])->assertUnprocessable();
     }
 
+    public function test_saved_packed_quantity_can_be_cleared_to_enter_again(): void
+    {
+        [$user, $order, $item, $variants] = $this->fixture(40, 2.3);
+        $variants['2.3']->product->update(['product_type' => Product::TYPE_CUT]);
+        $order->update(['status' => Order::STATUS_PACKING]);
+        $item->update(['packed_quantity' => 35, 'actual_weight' => 92, 'packed_weight' => 92]);
+
+        $this->actingAs($user)
+            ->postJson(route('warehouse.orders.logistics', $order), [
+                'item_id' => $item->id,
+                'packed_quantity_only' => true,
+                'clear_packed_quantity' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('cleared_packed_quantity', true);
+
+        $item->refresh();
+        $this->assertNull($item->packed_quantity);
+        $this->assertSame(92.0, (float) $item->actual_weight);
+        $this->assertSame(92.0, (float) $item->packed_weight);
+    }
+
     public function test_mobile_lists_note_and_size_options_and_validates_saved_mix(): void
     {
         [$user, $order, $item, $variants, $inventories] = $this->fixture(10);

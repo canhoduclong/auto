@@ -514,8 +514,11 @@
                                                             @csrf
                                                             <input type="hidden" name="item_id" value="{{ $item->id }}">
                                                             <input type="hidden" name="packed_quantity_only" value="1">
-                                                            <input type="number" name="item_packed_quantity" class="form-control form-control-sm" min="1" max="100000" step="1" required value="{{ $item->packed_quantity ?? $orderedQty }}" aria-label="Số lượng đóng thực tế" style="width:72px">
-                                                            <button class="btn btn-sm btn-success" type="submit">Lưu</button>
+                                                            <input type="number" name="item_packed_quantity" class="form-control form-control-sm" min="1" max="100000" step="1" required value="{{ $item->packed_quantity ?? $orderedQty }}" aria-label="Số lượng đóng thực tế" style="width:72px" {{ $item->packed_quantity !== null ? 'disabled' : '' }}>
+                                                            <button class="btn btn-sm btn-success js-packed-quantity-submit {{ $item->packed_quantity !== null ? 'd-none' : '' }}" type="submit">Lưu</button>
+                                                            <button class="btn btn-sm btn-outline-success js-clear-packed-quantity {{ $item->packed_quantity === null ? 'd-none' : '' }}" type="submit" formnovalidate title="Làm lại số lượng đóng thực tế">
+                                                                <i class="bi bi-arrow-counterclockwise"></i>
+                                                            </button>
                                                         </form>
                                                     @else
                                                         <strong>{{ number_format((int) ($item->packed_quantity ?? $orderedQty)) }}</strong>
@@ -545,10 +548,11 @@
                                                                     min="0" step="0.001" required
                                                                     inputmode="decimal"
                                                                     data-qty="{{ $orderedQty }}"
-                                                                    data-size="{{ !$isCutPackingItem ? $item->packingAverageSize() : 0 }}">
-                                                                <button class="btn btn-sm {{ $isItemLogisticsSaved ? 'btn-secondary' : 'btn-success' }} js-logistics-submit-btn" type="submit">{{ $isItemLogisticsSaved ? 'Đã lưu' : 'Lưu' }}</button>
-                                                                <button class="btn btn-sm btn-outline-danger js-clear-item-weight {{ $isItemLogisticsSaved ? '' : 'd-none' }}"
-                                                                        type="submit" formnovalidate title="Gỡ kg đã lưu nhầm">
+                                                                    data-size="{{ !$isCutPackingItem ? $item->packingAverageSize() : 0 }}"
+                                                                    {{ $isItemLogisticsSaved ? 'disabled' : '' }}>
+                                                                <button class="btn btn-sm btn-success js-logistics-submit-btn {{ $isItemLogisticsSaved ? 'd-none' : '' }}" type="submit">Lưu</button>
+                                                                <button class="btn btn-sm btn-outline-success js-clear-item-weight {{ $isItemLogisticsSaved ? '' : 'd-none' }}"
+                                                                        type="submit" formnovalidate title="Làm lại kg thực tế">
                                                                     <i class="bi bi-arrow-counterclockwise"></i>
                                                                 </button>
                                                             </form>
@@ -780,7 +784,7 @@
                         @endif
 
                         @if($canProcessThisOrder && ($isReadyToPack || $isPacking))
-                            @if($isReadyToPack && !$isPendingSaleConfirmation && $stockShortages->isNotEmpty())
+                            @if(($isReadyToPack || $isPacking) && !$isPendingSaleConfirmation && $stockShortages->isNotEmpty())
                                 <div class="wh-stock-alert mt-2">
                                     <details open>
                                         <summary>Chi tiết thiếu hàng ({{ $stockShortages->count() }} sản phẩm)</summary>
@@ -924,7 +928,7 @@
                                     </details>
                                 @endif
 
-                                @if($isReadyToPack && !$isPendingSaleConfirmation && $stockShortages->isNotEmpty() && !$hasActiveCuttingBatch)
+                                @if(($isReadyToPack || $isPacking) && !$isPendingSaleConfirmation && $stockShortages->isNotEmpty() && !$hasActiveCuttingBatch)
                                     @foreach($stockShortages as $shortage)
                                         @php
                                             $cuttingPlan = $orderCuttingPlans->get((int) ($shortage['variant_id'] ?? 0));
@@ -941,7 +945,7 @@
                                     @endforeach
                                 @endif
 
-                                @if($isReadyToPack && !$isPendingSaleConfirmation && $stockShortages->isNotEmpty())
+                                @if(($isReadyToPack || $isPacking) && !$isPendingSaleConfirmation && $stockShortages->isNotEmpty())
                                     <a class="btn btn-outline-danger btn-sm wh-inventory-action-btn" href="{{ route($packingInventoryRoute ?? 'warehouse.stock-in') }}">
                                         <i class="bi bi-box-arrow-in-down me-1"></i>Nhập kho
                                     </a>

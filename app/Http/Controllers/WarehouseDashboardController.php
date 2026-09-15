@@ -3505,6 +3505,7 @@ class WarehouseDashboardController extends Controller
             'item_actual_weight' => ['nullable', 'numeric', 'min:0'],
             'item_packed_quantity' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'packed_quantity_only' => ['nullable', 'boolean'],
+            'clear_packed_quantity' => ['nullable', 'boolean'],
             'clear_item_weight' => ['nullable', 'boolean'],
             'packing_details' => ['nullable', 'boolean'],
         ];
@@ -3572,6 +3573,17 @@ class WarehouseDashboardController extends Controller
 
             $item = $order->items->firstWhere('id', $itemId);
             if ($item) {
+                if ($request->boolean('clear_packed_quantity')) {
+                    $item->update(['packed_quantity' => null]);
+                    $message = 'Đã làm lại số lượng đóng thực tế. Bạn có thể nhập và lưu lại.';
+
+                    if ($expectsJson) {
+                        return response()->json(['ok' => true, 'cleared_packed_quantity' => true, 'message' => $message]);
+                    }
+
+                    return back()->with('success', $message);
+                }
+
                 if ($request->boolean('packed_quantity_only')) {
                     if (! isset($validated['item_packed_quantity'])) {
                         throw \Illuminate\Validation\ValidationException::withMessages(['item_packed_quantity' => 'Vui lòng nhập số lượng đóng thực tế.']);

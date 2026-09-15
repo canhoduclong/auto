@@ -1709,8 +1709,8 @@
         });
 
         async function submitLogisticsForm(form, options = {}) {
-            const submitBtn = form.querySelector('.js-logistics-submit-btn');
-            const clearBtn = form.querySelector('.js-clear-item-weight');
+            const submitBtn = form.querySelector('.js-logistics-submit-btn, .js-packed-quantity-submit');
+            const clearBtn = form.querySelector('.js-clear-item-weight, .js-clear-packed-quantity');
             if (submitBtn) {
                 submitBtn.disabled = true;
             }
@@ -1721,6 +1721,10 @@
                 if (options.clearItemWeight) {
                     formData.set('clear_item_weight', '1');
                     formData.delete('item_actual_weight');
+                }
+                if (options.clearPackedQuantity) {
+                    formData.set('clear_packed_quantity', '1');
+                    formData.delete('item_packed_quantity');
                 }
                 const response = await fetch(form.action, {
                     method: 'POST',
@@ -1757,11 +1761,13 @@
                         const amountCell = row.querySelector('.js-item-total-amount strong');
 
                         if (payload.cleared) {
+                            if (weightInput) weightInput.disabled = false;
                             if (amountCell) amountCell.textContent = '---';
                             if (submitBtn) {
                                 submitBtn.textContent = 'Lưu';
                                 submitBtn.classList.remove('btn-secondary', 'wh-warning-action-btn');
                                 submitBtn.classList.add('btn-success');
+                                submitBtn.classList.remove('d-none');
                             }
                             clearBtn?.classList.add('d-none');
                             weightInput?.focus();
@@ -1783,11 +1789,25 @@
                         }
 
                         if (!payload.cleared && submitBtn && amountCell && amountCell.textContent.trim() !== '---') {
-                            submitBtn.textContent = 'Đã lưu';
-                            submitBtn.classList.remove('wh-warning-action-btn', 'btn-success');
-                            submitBtn.classList.add('btn-secondary');
+                            if (weightInput) weightInput.disabled = true;
+                            submitBtn.classList.add('d-none');
                             clearBtn?.classList.remove('d-none');
                         }
+                    }
+                }
+
+                if (form.classList.contains('js-packed-quantity-form')) {
+                    const quantityInput = form.querySelector('input[name="item_packed_quantity"]');
+                    if (payload.cleared_packed_quantity) {
+                        if (quantityInput) quantityInput.disabled = false;
+                        submitBtn?.classList.remove('d-none');
+                        clearBtn?.classList.add('d-none');
+                        quantityInput?.focus();
+                        quantityInput?.select();
+                    } else {
+                        if (quantityInput) quantityInput.disabled = true;
+                        submitBtn?.classList.add('d-none');
+                        clearBtn?.classList.remove('d-none');
                     }
                 }
 
@@ -1917,14 +1937,15 @@
             });
         });
 
-        document.querySelectorAll('.js-logistics-item-form, .js-logistics-fee-form').forEach(function (form) {
+        document.querySelectorAll('.js-logistics-item-form, .js-logistics-fee-form, .js-packed-quantity-form').forEach(function (form) {
             form.addEventListener('submit', function (event) {
                 event.preventDefault();
                 const clearRequested = event.submitter?.classList.contains('js-clear-item-weight');
+                const clearPackedQuantity = event.submitter?.classList.contains('js-clear-packed-quantity');
                 if (clearRequested && !window.confirm('Gỡ số kg đã lưu cho mặt hàng này để nhập lại?')) return;
                 const weightInput = form.querySelector('.js-weight-input');
                 if (!clearRequested && weightInput && !validateWeightInput(weightInput)) return;
-                submitLogisticsForm(form, { clearItemWeight: clearRequested });
+                submitLogisticsForm(form, { clearItemWeight: clearRequested, clearPackedQuantity });
             });
         });
 

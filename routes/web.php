@@ -230,6 +230,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::prefix('leader')->name('leader.')->middleware('role:leader,leader_sale,sale_manager,admin')->group(function () {
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'leaderIndex'])->name('finance-requests.index');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'leaderStore'])->name('finance-requests.store');
+        Route::get('/requests/{transaction}/edit', [DepartmentFinanceRequestController::class, 'leaderEdit'])->name('finance-requests.edit');
+        Route::put('/requests/{transaction}', [DepartmentFinanceRequestController::class, 'leaderUpdate'])->name('finance-requests.update');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'leaderPrint'])->name('finance-requests.print');
     });
 

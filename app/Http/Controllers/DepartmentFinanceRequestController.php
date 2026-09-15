@@ -124,6 +124,28 @@ class DepartmentFinanceRequestController extends Controller
         return $this->store($request, 'leader');
     }
 
+    public function leaderEdit(Request $request, Transaction $transaction)
+    {
+        $this->authorizeLeaderEdit($transaction);
+
+        return $this->index($request, 'leader', $transaction);
+    }
+
+    public function leaderUpdate(Request $request, Transaction $transaction)
+    {
+        $this->authorizeLeaderEdit($transaction);
+        $data = $this->validatedRequestData($request, 'leader');
+        unset($data['status'], $data['submitted_by'], $data['request_source'], $data['request_department']);
+
+        // Editing is only allowed before approval starts, so the existing approval
+        // rows remain valid and no approval history needs to be reset.
+        $transaction->update($data);
+
+        return redirect()
+            ->route('leader.finance-requests.index')
+            ->with('success', 'Đã cập nhật phiếu yêu cầu #' . $transaction->id . '.');
+    }
+
     public function leaderPrint(Transaction $transaction)
     {
         return $this->printRequest($transaction, 'leader');
@@ -170,7 +192,7 @@ class DepartmentFinanceRequestController extends Controller
         return self::SOURCES[$source];
     }
 
-    private function index(Request $request, string $source)
+    private function index(Request $request, string $source, ?Transaction $editingRequest = null)
     {
         $settings = $this->settings;
         
@@ -196,6 +218,7 @@ class DepartmentFinanceRequestController extends Controller
                 'transactionCategory:id,code,name,flow_direction',
                 'account:id,name,type',
                 'destinationAccount:id,name,type,account_number,bank_name',
+                'approvalSteps:id,transaction_id,status,approved_by',
             ])
             ->where('request_source', $source)
             ->when($config['own_only'] ?? false, fn ($query) => $query->where('submitted_by', auth()->id()))
@@ -231,6 +254,7 @@ class DepartmentFinanceRequestController extends Controller
             'accounts' => Account::active()->orderBy('name')->get(['id', 'name', 'type', 'account_number', 'bank_name']),
             'managedAccounts' => $managedAccounts,
             'defaultManagedAccountId' => $defaultManagedAccountId,
+            'editingRequest' => $editingRequest,
         ]);
     }
 
@@ -239,8 +263,19 @@ class DepartmentFinanceRequestController extends Controller
         $config = $this->config($source);
         $this->authorizeSource($config);
 
-        $rawAmount = str_replace(['.', ',', ' '], '', (string) $request->input('amount', ''));
-        $request->merge(['amount' => $rawAmount]);
+        $data = $this->validatedRequestData($request, $source);
+
+        $transaction = Transaction::create($data);
+        app(\App\Services\ApprovalService::class)->initTransactionApproval($transaction);
+
+        return redirect()
+            ->route($config['route_prefix'] . '.index')
+            ->with('success', 'Đã gửi ' . ($transaction->request_form_type === Transaction::REQUEST_FORM_PAYMENT ? 'phiếu đề nghị thanh toán' : 'phiếu yêu cầu thu/chi') . ' #' . $transaction->id . ' vào luồng Kế toán xác nhận → Director duyệt → Kế toán hoàn thành.');
+    }
+
+    private function validatedRequestData(Request $request, string $source): array
+    {
+        $config = $this->config($source);
 
         $validated = $request->validate([
             'request_form_type' => ['required', 'in:' . Transaction::REQUEST_FORM_CASH . ',' . Transaction::REQUEST_FORM_PAYMENT],
@@ -357,12 +392,28 @@ class DepartmentFinanceRequestController extends Controller
             $data['receipt_image_path'] = $request->file('receipt_image')->store('transactions/requests', 'public');
         }
 
-        $transaction = Transaction::create($data);
-        app(\App\Services\ApprovalService::class)->initTransactionApproval($transaction);
+        return $data;
+    }
 
-        return redirect()
-            ->route($config['route_prefix'] . '.index')
-            ->with('success', 'Đã gửi ' . ($transaction->request_form_type === Transaction::REQUEST_FORM_PAYMENT ? 'phiếu đề nghị thanh toán' : 'phiếu yêu cầu thu/chi') . ' #' . $transaction->id . ' vào luồng Kế toán xác nhận → Director duyệt → Kế toán hoàn thành.');
+    private function authorizeLeaderEdit(Transaction $transaction): void
+    {
+        $config = $this->config('leader');
+        $this->authorizeSource($config);
+
+        abort_unless($transaction->request_source === 'leader', 404);
+        abort_unless($transaction->status === Transaction::STATUS_PENDING_APPROVAL, 403);
+        abort_unless(
+            $transaction->approvalSteps()
+                ->where(fn ($query) => $query->whereNotNull('approved_by')->orWhere('status', '!=', 'pending'))
+                ->doesntExist(),
+            403
+        );
+
+        $user = auth()->user();
+        abort_unless(
+            $user->hasRole('admin') || (int) $transaction->submitted_by === (int) $user->id,
+            403
+        );
     }
 
     private function printRequest(Transaction $transaction, string $source)

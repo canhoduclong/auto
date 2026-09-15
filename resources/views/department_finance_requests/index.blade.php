@@ -11,9 +11,11 @@
         \App\Models\Transaction::STATUS_APPROVED => ['label' => 'Đã duyệt', 'class' => 'success'],
         \App\Models\Transaction::STATUS_REJECTED => ['label' => 'Từ chối', 'class' => 'danger'],
     ];
-    $selectedFormType = old('request_form_type', \App\Models\Transaction::REQUEST_FORM_CASH);
-    $oldItems = old('items', [['content' => '', 'unit' => '', 'quantity' => 1, 'unit_price' => 0]]);
-    $selectedMethod = old('method', 'cash');
+    $editingRequest = $editingRequest ?? null;
+    $selectedFormType = old('request_form_type', $editingRequest?->request_form_type ?? \App\Models\Transaction::REQUEST_FORM_CASH);
+    $oldItems = old('items', $editingRequest?->request_items ?? [['content' => '', 'unit' => '', 'quantity' => 1, 'unit_price' => 0]]);
+    $selectedMethod = old('method', $editingRequest?->method ?? 'cash');
+    $selectedFlow = old('flow_direction', $editingRequest?->type === 'extra_income' ? 'in' : 'out');
     $currentUser = auth()->user();
     $currentDepartmentName = $currentUser?->department?->name;
     $currentBlockName = $currentUser?->department?->block?->name ?: $currentUser?->block?->name;
@@ -206,14 +208,17 @@
     <div class="fr-panel">
         <div class="fr-panel-head">
             <div>
-                <h2 class="fr-title">Tạo phiếu tài chính</h2>
+                <h2 class="fr-title">{{ $editingRequest ? 'Sửa phiếu #' . $editingRequest->id : 'Tạo phiếu tài chính' }}</h2>
                 <div class="fr-subtitle">{{ $config['label'] }} gửi duyệt theo luồng Kế toán xác nhận → Director duyệt → Kế toán hoàn thành</div>
             </div>
             <span class="badge text-bg-light border px-3 py-2">{{ $config['label'] }}</span>
         </div>
         <div class="fr-panel-body">
-            <form method="POST" action="{{ route($config['route_prefix'] . '.store') }}" enctype="multipart/form-data">
+            <form method="POST" action="{{ $editingRequest ? route('leader.finance-requests.update', $editingRequest) : route($config['route_prefix'] . '.store') }}" enctype="multipart/form-data">
                 @csrf
+                @if($editingRequest)
+                    @method('PUT')
+                @endif
 
                 <div class="fr-section-label"><i class="bi bi-card-checklist"></i> Thông tin phiếu</div>
                 <div class="fr-user-card mb-3">
@@ -235,16 +240,16 @@
                     <div id="flowDirectionGroup">
                         <label class="form-label fw-semibold">Dòng tiền <span class="text-danger">*</span></label>
                         <div class="btn-group w-100" role="group" aria-label="Dòng tiền">
-                            <input type="radio" class="btn-check" name="flow_direction" id="requestIn" value="in" @checked(old('flow_direction') === 'in')>
+                            <input type="radio" class="btn-check" name="flow_direction" id="requestIn" value="in" @checked($selectedFlow === 'in')>
                             <label class="btn btn-outline-success" for="requestIn"><i class="bi bi-arrow-down-circle me-1"></i>Thu</label>
 
-                            <input type="radio" class="btn-check" name="flow_direction" id="requestOut" value="out" @checked(old('flow_direction', 'out') === 'out')>
+                            <input type="radio" class="btn-check" name="flow_direction" id="requestOut" value="out" @checked($selectedFlow === 'out')>
                             <label class="btn btn-outline-danger" for="requestOut"><i class="bi bi-arrow-up-circle me-1"></i>Chi</label>
                         </div>
                     </div>
                     <div>
                         <label class="form-label fw-semibold">Tiêu đề phiếu <span class="text-danger">*</span></label>
-                        <input type="text" name="request_title" class="form-control" value="{{ old('request_title') }}" placeholder="VD: Mua vật tư đóng gói">
+                        <input type="text" name="request_title" class="form-control" value="{{ old('request_title', $editingRequest?->request_title) }}" placeholder="VD: Mua vật tư đóng gói">
                     </div>
                     <div>
                         <label class="form-label fw-semibold">Hình thức chi trả <span class="text-danger">*</span></label>
@@ -262,7 +267,7 @@
                             <select name="destination_account_id" id="managedDestinationAccountId" class="form-select">
                                 <option value="">-- Chọn tài khoản --</option>
                                 @foreach($managedAccounts as $account)
-                                    <option value="{{ $account->id }}" @selected((string) old('destination_account_id', $defaultManagedAccountId) === (string) $account->id)>
+                                    <option value="{{ $account->id }}" @selected((string) old('destination_account_id', $editingRequest?->destination_account_id ?? $defaultManagedAccountId) === (string) $account->id)>
                                         {{ $account->name }}{{ $account->account_number ? ' - ' . $account->account_number : '' }}{{ $account->bank_name ? ' (' . $account->bank_name . ')' : '' }}
                                     </option>
                                 @endforeach
@@ -273,19 +278,19 @@
                     <div id="externalBankGroup" class="fr-meta-grid">
                         <div>
                             <label class="form-label fw-semibold">Tên tài khoản <span class="text-danger">*</span></label>
-                            <input type="text" name="external_recipient" id="externalRecipient" class="form-control" maxlength="255" value="{{ old('external_recipient') }}" placeholder="VD: Công ty ABC, Nguyễn Văn A...">
+                            <input type="text" name="external_recipient" id="externalRecipient" class="form-control" maxlength="255" value="{{ old('external_recipient', $editingRequest?->external_recipient) }}" placeholder="VD: Công ty ABC, Nguyễn Văn A...">
                         </div>
                         <div>
                             <label class="form-label fw-semibold">Số tài khoản <span class="text-danger">*</span></label>
-                            <input type="text" name="external_account_number" id="externalAccountNumber" class="form-control" maxlength="100" value="{{ old('external_account_number') }}">
+                            <input type="text" name="external_account_number" id="externalAccountNumber" class="form-control" maxlength="100" value="{{ old('external_account_number', $editingRequest?->external_account_number) }}">
                         </div>
                         <div>
                             <label class="form-label fw-semibold">Ngân hàng <span class="text-danger">*</span></label>
-                            <input type="text" name="external_bank_name" id="externalBankName" class="form-control" maxlength="150" value="{{ old('external_bank_name') }}">
+                            <input type="text" name="external_bank_name" id="externalBankName" class="form-control" maxlength="150" value="{{ old('external_bank_name', $editingRequest?->external_bank_name) }}">
                         </div>
                         <div>
                             <label class="form-label fw-semibold">Chi nhánh</label>
-                            <input type="text" name="external_bank_branch" id="externalBankBranch" class="form-control" maxlength="150" value="{{ old('external_bank_branch') }}">
+                            <input type="text" name="external_bank_branch" id="externalBankBranch" class="form-control" maxlength="150" value="{{ old('external_bank_branch', $editingRequest?->external_bank_branch) }}">
                         </div>
                     </div>
                 </div>
@@ -293,7 +298,7 @@
                 <div class="fr-note-grid mb-4">
                     <div>
                         <label class="form-label fw-semibold">Nội dung/Lý do <span class="text-danger">*</span></label>
-                        <textarea name="note" class="form-control" rows="5" maxlength="1000" placeholder="Mô tả rõ lý do thu/chi, nhà cung cấp, vật tư, ghi chú kế toán...">{{ old('note') }}</textarea>
+                        <textarea name="note" class="form-control" rows="5" maxlength="1000" placeholder="Mô tả rõ lý do thu/chi, nhà cung cấp, vật tư, ghi chú kế toán...">{{ old('note', $editingRequest?->note) }}</textarea>
                     </div>
                     <div>
                         <label class="form-label fw-semibold">Chứng từ đính kèm</label>
@@ -358,7 +363,7 @@
                         <div class="fr-summary-row align-items-center">
                             <label class="form-label mb-0" for="requestVat">VAT</label>
                             <div class="input-group input-group-sm" style="max-width: 190px;">
-                                <input type="number" name="request_vat" id="requestVat" class="form-control text-end" min="0" step="1000" value="{{ old('request_vat', 0) }}">
+                                <input type="number" name="request_vat" id="requestVat" class="form-control text-end" min="0" step="1000" value="{{ old('request_vat', $editingRequest?->request_vat ?? 0) }}">
                                 <span class="input-group-text">đ</span>
                             </div>
                         </div>
@@ -370,8 +375,11 @@
                 </div>
 
                 <div class="fr-actions">
+                    @if($editingRequest)
+                        <a href="{{ route('leader.finance-requests.index') }}" class="btn btn-outline-secondary px-4">Hủy sửa</a>
+                    @endif
                     <button type="submit" class="btn btn-primary px-4">
-                        <i class="bi bi-send me-1"></i>Gửi duyệt
+                        <i class="bi bi-{{ $editingRequest ? 'check-lg' : 'send' }} me-1"></i>{{ $editingRequest ? 'Lưu thay đổi' : 'Gửi duyệt' }}
                     </button>
                 </div>
             </form>
@@ -470,6 +478,11 @@
                             </td>
                             <td>{{ optional($requestItem->created_at)->format('d/m/Y H:i') }}</td>
                             <td class="text-end">
+                                @if($source === 'leader' && $requestItem->status === \App\Models\Transaction::STATUS_PENDING_APPROVAL && !$requestItem->approvalSteps->contains(fn ($step) => $step->approved_by !== null || $step->status !== 'pending') && ((int) $requestItem->submitted_by === (int) auth()->id() || auth()->user()->hasRole('admin')))
+                                    <a href="{{ route('leader.finance-requests.edit', $requestItem) }}" class="btn btn-outline-primary btn-sm fr-action-icon" title="Sửa phiếu">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                @endif
                                 <a href="{{ route($config['route_prefix'] . '.print', $requestItem) }}" target="_blank" class="btn btn-outline-secondary btn-sm fr-action-icon" title="In phiếu">
                                     <i class="bi bi-printer"></i>
                                 </a>
