@@ -2391,6 +2391,7 @@ class ShipperDashboardController extends Controller
                 $q->whereIn('name', ['shipper', 'manager_shipper']);
             })
             ->where('id', '!=', Auth::id())
+            ->where('show_in_shipper_assignment', true)
             ->orderBy('name')
             ->get();
 

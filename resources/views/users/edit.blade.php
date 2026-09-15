@@ -79,6 +79,13 @@
             </div>
         </div>
 
+        <div class="form-check mb-3">
+            <input type="hidden" name="show_in_shipper_assignment" value="0">
+            <input class="form-check-input" type="checkbox" name="show_in_shipper_assignment" value="1" id="show_in_shipper_assignment" @checked(old('show_in_shipper_assignment', $user->show_in_shipper_assignment ?? true))>
+            <label class="form-check-label" for="show_in_shipper_assignment">Hiển thị trong popup chọn shipper</label>
+            <div class="form-text">Tắt mục này để ẩn shipper khỏi popup điều phối nhưng vẫn giữ tài khoản và lịch sử giao hàng.</div>
+        </div>
+
         <div class="mb-3">
             <label class="form-label">Layout website mặc định</label>
             @php

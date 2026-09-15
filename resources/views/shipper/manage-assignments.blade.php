@@ -1557,11 +1557,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 code: 'T' + shipper.id + '-1',
                 name: 'Lộ trình 1 - ' + shipper.name,
             }];
-            const routeButtons = trips.map(function (trip) {
+            const routeButtons = trips.map(function (trip, tripIndex) {
+                const routeName = compactTripName(trip.name, tripIndex, shipper.name);
                 return `
                     <div class="d-flex gap-1">
                         <button type="submit" class="btn btn-outline-success text-start flex-grow-1 js-pick-shipper" data-shipper-id="${shipper.id}" data-trip-code="${trip.code}">
-                            <i class="bi bi-person me-2"></i>${trip.name} <strong>- ${tripOrderCount(shipper.id, trip.code)} Đơn</strong>
+                            <i class="bi bi-person me-2"></i>${routeName} <strong>· ${tripOrderCount(shipper.id, trip.code)} đơn</strong>
                         </button>
                         <button type="button" class="btn btn-outline-danger js-popup-add-trip" data-shipper-id="${shipper.id}" title="Thêm mới lộ trình">+</button>
                     </div>
@@ -1582,6 +1583,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
             `;
         }).join('');
+    }
+
+    function compactTripName(name, index, shipperName) {
+        let compact = String(name || '').trim();
+        const suffix = ' - ' + String(shipperName || '').trim();
+        if (suffix.trim() !== '-' && compact.toLocaleLowerCase('vi').endsWith(suffix.toLocaleLowerCase('vi'))) {
+            compact = compact.slice(0, -suffix.length).trim();
+        }
+        return compact || ('Lộ trình ' + (index + 1));
     }
 
     function tripOrderCount(shipperId, tripCode) {

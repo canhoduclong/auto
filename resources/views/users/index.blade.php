@@ -234,6 +234,7 @@
                             <th style="width:220px;">Người dùng</th>
                             <th>Team / Kho</th>
                             <th>Quyền</th>
+                            <th>Popup ship</th>
                             <th>Trạng thái</th>
                             <th>Lần cuối online</th>
                             <th style="width:150px;">Hành động</th>
@@ -287,6 +288,18 @@
                                 @foreach($user->roles as $role)
                                     <span class="badge rounded-pill bg-info bg-opacity-10 text-info" style="font-size:.72rem;">{{ $role->name }}</span>
                                 @endforeach
+                            </td>
+                            <td>
+                                @if($user->roles->contains(fn($role) => in_array(strtolower($role->name), ['shipper', 'manager_shipper'], true)))
+                                    <form method="POST" action="{{ route('users.toggle-shipper-assignment-visibility', $user) }}">
+                                        @csrf
+                                        <button type="submit" class="btn btn-sm {{ $user->show_in_shipper_assignment ?? true ? 'btn-success' : 'btn-outline-secondary' }}" title="Bấm để đổi trạng thái hiển thị">
+                                            <i class="ph {{ $user->show_in_shipper_assignment ?? true ? 'ph-eye' : 'ph-eye-slash' }} me-1"></i>{{ $user->show_in_shipper_assignment ?? true ? 'Hiện' : 'Ẩn' }}
+                                        </button>
+                                    </form>
+                                @else
+                                    <span class="text-muted">—</span>
+                                @endif
                             </td>
                             <td>
                                 @if($isOnline)

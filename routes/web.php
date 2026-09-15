@@ -887,6 +887,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('users/bulk-assign-team', [UserController::class, 'bulkAssignTeamForm'])->name('users.bulk-assign-team.form')->middleware('permission');
     Route::post('users/bulk-assign-team', [UserController::class, 'bulkAssignTeam'])->name('users.bulk-assign-team')->middleware('permission');
     Route::post('users/bulk-delete', [UserController::class, 'bulkDelete'])->name('users.bulk-delete')->middleware('permission');
+    Route::post('users/{user}/toggle-shipper-assignment-visibility', [UserController::class, 'toggleShipperAssignmentVisibility'])->name('users.toggle-shipper-assignment-visibility')->middleware('permission');
     Route::resource('users', UserController::class)->middleware('permission');
     Route::post('teams/{team}/assign-user', [TeamController::class, 'assignUser'])->name('teams.assign-user')->middleware('permission');
     Route::post('teams/{team}/remove-user', [TeamController::class, 'removeUser'])->name('teams.remove-user')->middleware('permission');

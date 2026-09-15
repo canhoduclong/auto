@@ -184,6 +184,7 @@ class UserController extends Controller
             'account_ids' => 'nullable|array',
             'account_ids.*' => 'integer|exists:accounts,id',
             'default_account_id' => 'nullable|integer|exists:accounts,id',
+            'show_in_shipper_assignment' => 'nullable|boolean',
         ]);
         $managedAccountPayload = $this->managedAccountPayload($request);
 
@@ -198,6 +199,7 @@ class UserController extends Controller
             'team_id'       => $request->team_id,
             'block_id'      => $request->block_id,
             'department_id' => $request->department_id,
+            'show_in_shipper_assignment' => $request->boolean('show_in_shipper_assignment', true),
         ]);
 
         if ($request->roles) {
@@ -380,6 +382,7 @@ class UserController extends Controller
             'account_ids' => 'nullable|array',
             'account_ids.*' => 'integer|exists:accounts,id',
             'default_account_id' => 'nullable|integer|exists:accounts,id',
+            'show_in_shipper_assignment' => 'nullable|boolean',
         ]);
         $managedAccountPayload = $this->managedAccountPayload($request);
 
@@ -436,12 +439,26 @@ class UserController extends Controller
             'default_workspace' => $requestedDefaultWorkspace,
             'default_role_id' => $defaultMobileRoleId,
             'mobile_selected_role' => $defaultMobileRole?->name,
+            'show_in_shipper_assignment' => $request->boolean('show_in_shipper_assignment'),
         ]);
 
         $user->roles()->sync($request->roles ?? []);
         $user->managedAccounts()->sync($managedAccountPayload);
 
         return redirect()->route('users.index')->with('success', __('users.messages.updated'));
+    }
+
+    public function toggleShipperAssignmentVisibility(User $user)
+    {
+        abort_unless($user->roles()->whereIn('name', ['shipper', 'manager_shipper'])->exists(), 422, 'Người dùng này không có vai trò shipper.');
+
+        $user->update([
+            'show_in_shipper_assignment' => ! (bool) $user->show_in_shipper_assignment,
+        ]);
+
+        return back()->with('success', $user->show_in_shipper_assignment
+            ? 'Đã hiển thị shipper trong popup điều phối.'
+            : 'Đã ẩn shipper khỏi popup điều phối.');
     }
 
     public function destroy(Request $request, User $user)

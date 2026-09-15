@@ -40,6 +40,7 @@ class User extends Authenticatable
         'mobile_selected_role',
         'default_workspace',
         'default_role_id',
+        'show_in_shipper_assignment',
     ];
 
     /**
@@ -63,6 +64,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'last_seen_at' => 'datetime',
             'password' => 'hashed',
+            'show_in_shipper_assignment' => 'boolean',
         ];
     }
 
