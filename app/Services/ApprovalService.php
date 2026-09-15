@@ -6,6 +6,7 @@ use App\Enums\OrderStatus;
 use App\Models\ApprovalOrder;
 use App\Models\ApprovalStep;
 use App\Models\ApprovalWorkflow;
+use App\Models\AccountingReconciliation;
 use App\Models\Order;
 use App\Models\OrderAdjustment;
 use App\Models\Transaction;
@@ -317,6 +318,18 @@ class ApprovalService
 
     public function canApproveCurrentStep(Order $order, User $user): bool
     {
+        $isAccounted = $order->relationLoaded('accountingReconciliation')
+            ? $order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED
+            : $order->accountingReconciliation()
+                ->where('status', AccountingReconciliation::STATUS_CONFIRMED)
+                ->exists();
+
+        // A legacy pending approval row must never reopen an order after
+        // accounting has confirmed revenue.
+        if ($isAccounted) {
+            return false;
+        }
+
         $current = $this->getCurrentPendingStep($order);
 
         if (! $current?->step) {

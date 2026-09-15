@@ -18,6 +18,63 @@ class ShipperAssignmentWorkflowTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_manager_can_review_and_print_published_delivery_notes(): void
+    {
+        $manager = User::factory()->create(['name' => 'Quản lý in phiếu']);
+        $manager->roles()->attach(Role::create(['name' => 'manager_shipper']));
+        $shipper = User::factory()->create(['name' => 'Shipper tuyến in']);
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
+        $customer = Customer::create(['name' => 'Khách cần in', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $manager->id,
+            'shipper_id' => $shipper->id,
+            'code' => 'PRINT-DELIVERY-001',
+            'status' => Order::STATUS_READY_TO_SHIP,
+            'total' => 125000,
+        ]);
+        \App\Models\ShipperDispatchHistory::create([
+            'schedule_date' => now()->toDateString(),
+            'version' => 1,
+            'route_plan' => [[
+                'shipper_id' => $shipper->id,
+                'shipper_name' => $shipper->name,
+                'routes' => [['name' => 'Chuyến sáng', 'orders' => [['order_id' => $order->id]]]],
+            ]],
+            'orders_count' => 1,
+            'created_by' => $manager->id,
+            'published_at' => now(),
+        ]);
+
+        $this->actingAs($manager)
+            ->get(route('shipper.manage-assignments.review.index'))
+            ->assertOk()
+            ->assertSee('Review &amp; In ấn', false)
+            ->assertSee('PRINT-DELIVERY-001')
+            ->assertSee('Chuyến sáng')
+            ->assertSee('Chưa in');
+
+        $this->actingAs($manager)
+            ->post(route('shipper.manage-assignments.review.print'), [
+                'date' => now()->toDateString(),
+                'order_ids' => [$order->id],
+            ])
+            ->assertOk()
+            ->assertSee('PHIẾU GIAO HÀNG')
+            ->assertSee('PRINT-DELIVERY-001');
+
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'action' => 'delivery_note_printed',
+            'user_id' => $manager->id,
+        ]);
+
+        $this->actingAs($manager)
+            ->get(route('shipper.manage-assignments.review.index'))
+            ->assertOk()
+            ->assertSee('Đã In');
+    }
+
     public function test_packing_update_does_not_invalidate_an_already_confirmed_route(): void
     {
         $savedSnapshot = [[

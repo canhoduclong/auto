@@ -271,6 +271,9 @@
                 <a href="{{ route('shipper.manage-assignments') }}" class="sp-nav-link {{ request()->routeIs('shipper.manage-assignments') ? 'active' : '' }}">
                     <i class="bi bi-person-badge"></i> Điều phối đơn hàng
                 </a>
+                <a href="{{ route('shipper.manage-assignments.review.index') }}" class="sp-nav-link {{ request()->routeIs('shipper.manage-assignments.review.index', 'shipper.manage-assignments.review.print') ? 'active' : '' }}">
+                    <i class="bi bi-printer"></i> Review &amp; In ấn
+                </a>
                 <a href="{{ route('shipper.customers') }}" class="sp-nav-link {{ request()->routeIs('shipper.customers') ? 'active' : '' }}">
                     <i class="bi bi-people"></i> Quản lý khách hàng
                 </a>

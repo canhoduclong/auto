@@ -2526,6 +2526,134 @@ class ShipperDashboardController extends Controller
         ]);
     }
 
+    /**
+     * Review the latest published dispatch plan and print its delivery notes.
+     */
+    public function printReviewAssignments(Request $request)
+    {
+        $this->authorizeManagerShipper();
+
+        $selectedDate = $request->filled('date')
+            ? Carbon::parse($request->input('date'))->toDateString()
+            : Carbon::today()->toDateString();
+
+        $quickDates = collect(range(0, 6))->map(function (int $offset) {
+            $date = Carbon::today()->subDays($offset)->toDateString();
+            $dispatch = $this->latestDispatchForDate($date);
+
+            return [
+                'date' => $date,
+                'label' => Carbon::parse($date)->format('d/m'),
+                'count' => $dispatch ? count($this->dispatchOrderIds($dispatch)) : 0,
+            ];
+        });
+
+        $dispatch = $this->latestDispatchForDate($selectedDate);
+        $orderIds = $dispatch ? $this->dispatchOrderIds($dispatch) : [];
+        $routeMeta = $dispatch ? $this->dispatchOrderMeta($dispatch) : [];
+        $ordersById = Order::query()
+            ->with(['customer', 'shipper:id,name,phone', 'user:id,name', 'warehouse:id,name', 'items.product', 'items.variant.product'])
+            ->whereIn('id', $orderIds)
+            ->get()
+            ->keyBy('id');
+        $orders = collect($orderIds)->map(fn (int $id) => $ordersById->get($id))->filter()->values();
+        $printHistories = OrderHistory::query()
+            ->with('user:id,name')
+            ->whereIn('order_id', $orderIds)
+            ->where('action', 'delivery_note_printed')
+            ->orderByDesc('id')
+            ->get()
+            ->unique('order_id')
+            ->keyBy('order_id');
+
+        return view('shipper.manage-assignments-print-review', compact(
+            'selectedDate', 'quickDates', 'dispatch', 'orders', 'routeMeta', 'printHistories'
+        ));
+    }
+
+    public function printAssignmentDocuments(Request $request)
+    {
+        $this->authorizeManagerShipper();
+
+        $validated = $request->validate([
+            'date' => ['required', 'date'],
+            'order_ids' => ['required', 'array', 'min:1'],
+            'order_ids.*' => ['integer', 'distinct', 'exists:orders,id'],
+        ], [
+            'order_ids.required' => 'Vui lòng chọn ít nhất một phiếu để in.',
+            'order_ids.min' => 'Vui lòng chọn ít nhất một phiếu để in.',
+        ]);
+
+        $selectedDate = Carbon::parse($validated['date'])->toDateString();
+        $dispatch = $this->latestDispatchForDate($selectedDate);
+        abort_unless($dispatch, 404, 'Ngày này chưa có lộ trình đã phát hành.');
+
+        $publishedIds = $this->dispatchOrderIds($dispatch);
+        $requestedIds = collect($validated['order_ids'])->map(fn ($id) => (int) $id)->values();
+        abort_if($requestedIds->diff($publishedIds)->isNotEmpty(), 422, 'Có phiếu không thuộc lộ trình đã phát hành của ngày đã chọn.');
+
+        $ordersById = Order::query()
+            ->with(['customer', 'shipper:id,name,phone', 'user:id,name', 'warehouse:id,name', 'items.product', 'items.variant.product'])
+            ->whereIn('id', $requestedIds)
+            ->get()
+            ->keyBy('id');
+        $orders = $requestedIds->map(fn (int $id) => $ordersById->get($id))->filter()->values();
+        abort_if($orders->count() !== $requestedIds->count(), 404, 'Không tìm thấy đầy đủ phiếu cần in.');
+
+        DB::transaction(function () use ($orders): void {
+            foreach ($orders as $order) {
+                OrderHistory::create([
+                    'order_id' => $order->id,
+                    'action' => 'delivery_note_printed',
+                    'user_id' => Auth::id(),
+                    'role' => 'manager_shipper',
+                    'status_before' => $order->status,
+                    'status_after' => $order->status,
+                    'note' => 'Đã in phiếu giao hàng từ trang Review & In ấn.',
+                ]);
+            }
+        });
+
+        return view('shipper.assignment-documents-print', [
+            'orders' => $orders,
+            'selectedDate' => $selectedDate,
+        ]);
+    }
+
+    private function dispatchOrderIds(ShipperDispatchHistory $dispatch): array
+    {
+        return collect($dispatch->route_plan ?? [])
+            ->flatMap(fn ($shipperPlan) => collect($shipperPlan['routes'] ?? [])
+                ->flatMap(fn ($route) => $route['orders'] ?? []))
+            ->pluck('order_id')
+            ->filter(fn ($id) => (int) $id > 0)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function dispatchOrderMeta(ShipperDispatchHistory $dispatch): array
+    {
+        $meta = [];
+        foreach ($dispatch->route_plan ?? [] as $shipperPlan) {
+            foreach ($shipperPlan['routes'] ?? [] as $routeIndex => $route) {
+                foreach ($route['orders'] ?? [] as $orderIndex => $routeOrder) {
+                    $orderId = (int) ($routeOrder['order_id'] ?? 0);
+                    if ($orderId > 0 && ! isset($meta[$orderId])) {
+                        $meta[$orderId] = [
+                            'shipper_name' => $shipperPlan['shipper_name'] ?? null,
+                            'route_name' => $route['name'] ?? $route['route_name'] ?? 'Chuyến '.($routeIndex + 1),
+                            'sequence' => $orderIndex + 1,
+                        ];
+                    }
+                }
+            }
+        }
+
+        return $meta;
+    }
+
     private function applyDefaultShipperAssignmentsForDate(string $selectedDate): void
     {
         $orders = Order::with(['customer.defaultShipper'])

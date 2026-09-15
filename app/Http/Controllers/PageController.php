@@ -1258,6 +1258,7 @@ class PageController extends Controller
             );
 
             $canApproveByOrder[$order->id] = $order->status !== Order::STATUS_CANCELLED
+                && $order->accountingReconciliation?->status !== \App\Models\AccountingReconciliation::STATUS_CONFIRMED
                 && $isInApprovalScope
                 && $currentStep?->step
                 ? $roleNames->contains(strtolower((string) $currentStep->step->role_slug))
@@ -3341,7 +3342,9 @@ class PageController extends Controller
 
     private function applyMonitoringApprovalScope(Builder $query, $roleNames): Builder
     {
-        $query->where('status', '!=', Order::STATUS_CANCELLED);
+        $query->where('status', '!=', Order::STATUS_CANCELLED)
+            ->whereDoesntHave('accountingReconciliation', fn (Builder $reconciliation) => $reconciliation
+                ->where('status', \App\Models\AccountingReconciliation::STATUS_CONFIRMED));
 
         return $this->applyCurrentApprovalStepScope($query, $roleNames);
     }
