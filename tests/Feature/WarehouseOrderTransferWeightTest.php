@@ -17,6 +17,45 @@ class WarehouseOrderTransferWeightTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_orders_in_an_active_shipper_route_are_excluded_from_warehouse_transfers(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $target = Warehouse::factory()->create();
+        $warehouseUser = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $warehouseUser->roles()->attach(Role::create(['name' => 'warehouse']));
+        $shipper = User::factory()->create();
+        $customer = Customer::create(['name' => 'Khách đã có lộ trình', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $warehouseUser->id,
+            'shipper_id' => $shipper->id,
+            'warehouse_id' => $warehouse->id,
+            'code' => 'ROUTED-NO-TRANSFER',
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $order->histories()->create([
+            'action' => 'schedule_confirmed',
+            'user_id' => $shipper->id,
+            'role' => 'shipper',
+            'status_before' => Order::STATUS_PACKING,
+            'status_after' => Order::STATUS_READY_TO_SHIP,
+        ]);
+
+        $this->actingAs($warehouseUser)
+            ->get(route('warehouse.order-transfers'))
+            ->assertOk()
+            ->assertViewHas('orders', fn ($orders) => ! $orders->contains('id', $order->id));
+
+        $this->post(route('warehouse.order-transfers.store'), [
+            'shipper_id' => $shipper->id,
+            'warehouse_id' => $target->id,
+            'order_ids' => (string) $order->id,
+        ])->assertSessionHasErrors('order_ids');
+
+        $this->assertNull($order->fresh()->order_transfer_id);
+        $this->assertDatabaseCount('warehouse_transfers', 0);
+    }
+
     public function test_copied_orders_do_not_inherit_transfer_and_legacy_links_can_be_removed(): void
     {
         $role = Role::create(['name' => 'warehouse']);

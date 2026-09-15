@@ -186,6 +186,14 @@
     .route-zone-card:last-child {
         border-bottom: 0;
     }
+    .route-zone-card.is-sent {
+        background: #f3f4f6;
+        border-left: 4px solid #9ca3af;
+    }
+    .route-zone-card.is-confirmed {
+        background: #ecfdf5;
+        border-left: 4px solid #16a34a;
+    }
     .route-line-title {
         color: #0f766e;
         font-weight: 800;
@@ -515,10 +523,11 @@
             <input type="hidden" name="route_plan" id="routePlanInput">
             <input type="text" name="notes" id="scheduleNotesInput" class="form-control form-control-sm" maxlength="500" placeholder="Ghi chú (tùy chọn)" style="width: 100%">
             <button type="submit"
-                class="btn btn-sm {{ $assignedOrdersCount > 0 ? 'btn-success' : 'btn-secondary' }}"
+                id="routeReviewButton"
+                class="btn btn-sm {{ $assignedOrdersCount > 0 && $hasUnpublishedSchedules ? 'btn-success' : 'btn-secondary' }}"
                 style="min-width: 220px"
-                title="{{ $assignedOrdersCount > 0 ? 'Mở trang xem lại bảng kê trước khi gửi' : 'Chưa có đơn đã gán shipper' }}"
-                @disabled($assignedOrdersCount === 0)>
+                title="{{ $assignedOrdersCount === 0 ? 'Chưa có đơn đã gán shipper' : ($hasUnpublishedSchedules ? 'Mở trang xem lại bảng kê trước khi gửi' : 'Lộ trình đã gửi và chưa có thay đổi mới') }}"
+                @disabled($assignedOrdersCount === 0 || !$hasUnpublishedSchedules)>
                 <i class="bi bi-eye me-1"></i>Xem lại & Gửi xác nhận
             </button>
         </form>
@@ -766,13 +775,13 @@
                                         default => 'bg-warning text-dark',
                                     };
                                     $scheduleLabel = match ($scheduleStatus) {
-                                        'confirmed' => 'Đã Xác nhận',
+                                        'confirmed' => 'Shipper đã xác nhận',
                                         'rejected' => 'Từ chối',
                                         'draft' => 'Chưa gửi',
-                                        default => 'Chờ xác nhận',
+                                        default => 'Đã gửi · Chờ xác nhận',
                                     };
                                 @endphp
-                                <div class="route-zone-card">
+                                <div class="route-zone-card {{ $scheduleStatus === 'confirmed' ? 'is-confirmed' : ($scheduleStatus === 'waiting' ? 'is-sent' : '') }}">
                                     <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
                                         <div>
                                             <div class="fw-semibold text-dark">{{ $shipper?->name ?? 'Shipper #' . $shipperId }}</div>
@@ -1075,6 +1084,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const pinnedShippersStorageKey = 'pinnedAssignmentShippers';
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     let isRestoringTrips = false;
+
+    function enableRouteReviewAfterChange() {
+        const button = document.getElementById('routeReviewButton');
+        if (!button) return;
+        button.disabled = false;
+        button.classList.remove('btn-secondary');
+        button.classList.add('btn-success');
+        button.title = 'Lộ trình có thay đổi mới — mở trang xem lại trước khi gửi';
+    }
 
     function escapeHtml(value) {
         return String(value ?? '').replace(/[&<>"']/g, function (char) {
@@ -1773,6 +1791,7 @@ document.addEventListener('DOMContentLoaded', function () {
             syncShippingFeeEditor(event.target.closest('.js-shipping-fee-editor'));
         }
         if (!event.target.closest('.js-trip-shipper')) return;
+        enableRouteReviewAfterChange();
         if (event.target.matches('.js-order-shipping-fee')) {
             collectTripPlan(false);
             saveTripState();
@@ -1795,7 +1814,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
     document.addEventListener('change', function (event) {
         if (!event.target.closest('.js-trip-shipper')) return;
+        enableRouteReviewAfterChange();
         refreshTripBlocks();
+    });
+
+    document.addEventListener('click', function (event) {
+        if (event.target.closest('.js-add-trip, .js-remove-trip, .js-popup-add-trip')) {
+            enableRouteReviewAfterChange();
+        }
     });
 
     document.addEventListener('submit', async function (event) {

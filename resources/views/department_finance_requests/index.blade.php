@@ -208,7 +208,7 @@
     <div class="fr-panel">
         <div class="fr-panel-head">
             <div>
-                <h2 class="fr-title">{{ $editingRequest ? 'Sửa phiếu #' . $editingRequest->id : 'Tạo phiếu tài chính' }}</h2>
+                <h2 class="fr-title">{{ $editingRequest ? ($editingRequest->status === \App\Models\Transaction::STATUS_REJECTED ? 'Sửa và gửi lại phiếu #' : 'Sửa phiếu #') . $editingRequest->id : 'Tạo phiếu tài chính' }}</h2>
                 <div class="fr-subtitle">{{ $config['label'] }} gửi duyệt theo luồng Kế toán xác nhận → Director duyệt → Kế toán hoàn thành</div>
             </div>
             <span class="badge text-bg-light border px-3 py-2">{{ $config['label'] }}</span>
@@ -379,7 +379,7 @@
                         <a href="{{ route('leader.finance-requests.index') }}" class="btn btn-outline-secondary px-4">Hủy sửa</a>
                     @endif
                     <button type="submit" class="btn btn-primary px-4">
-                        <i class="bi bi-{{ $editingRequest ? 'check-lg' : 'send' }} me-1"></i>{{ $editingRequest ? 'Lưu thay đổi' : 'Gửi duyệt' }}
+                        <i class="bi bi-{{ $editingRequest ? 'check-lg' : 'send' }} me-1"></i>{{ $editingRequest?->status === \App\Models\Transaction::STATUS_REJECTED ? 'Lưu và gửi lại' : ($editingRequest ? 'Lưu thay đổi' : 'Gửi duyệt') }}
                     </button>
                 </div>
             </form>
@@ -478,8 +478,15 @@
                             </td>
                             <td>{{ optional($requestItem->created_at)->format('d/m/Y H:i') }}</td>
                             <td class="text-end">
-                                @if($source === 'leader' && $requestItem->status === \App\Models\Transaction::STATUS_PENDING_APPROVAL && !$requestItem->approvalSteps->contains(fn ($step) => $step->approved_by !== null || $step->status !== 'pending') && ((int) $requestItem->submitted_by === (int) auth()->id() || auth()->user()->hasRole('admin')))
-                                    <a href="{{ route('leader.finance-requests.edit', $requestItem) }}" class="btn btn-outline-primary btn-sm fr-action-icon" title="Sửa phiếu">
+                                @php
+                                    $canEditLeaderRequest = $source === 'leader'
+                                        && ((int) $requestItem->submitted_by === (int) auth()->id() || auth()->user()->hasRole('admin'))
+                                        && ($requestItem->status === \App\Models\Transaction::STATUS_REJECTED
+                                            || ($requestItem->status === \App\Models\Transaction::STATUS_PENDING_APPROVAL
+                                                && !$requestItem->approvalSteps->contains(fn ($step) => $step->approved_by !== null || $step->status !== 'pending')));
+                                @endphp
+                                @if($canEditLeaderRequest)
+                                    <a href="{{ route('leader.finance-requests.edit', $requestItem) }}" class="btn btn-outline-primary btn-sm fr-action-icon" title="{{ $requestItem->status === \App\Models\Transaction::STATUS_REJECTED ? 'Sửa và gửi lại' : 'Sửa phiếu' }}">
                                         <i class="bi bi-pencil"></i>
                                     </a>
                                 @endif

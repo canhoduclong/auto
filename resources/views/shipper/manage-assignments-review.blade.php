@@ -273,7 +273,7 @@
                 <input type="hidden" name="date" value="{{ $selectedDate }}">
                 <input type="hidden" name="notes" value="{{ $notes }}">
                 <input type="hidden" name="route_plan" value="{{ $routePlanJson }}">
-                <button type="submit" class="btn btn-success btn-sm">
+                <button type="submit" class="btn {{ ($canSendSchedule ?? true) ? 'btn-success' : 'btn-secondary' }} btn-sm" @disabled(!($canSendSchedule ?? true)) title="{{ ($canSendSchedule ?? true) ? 'Gửi lộ trình cho shipper' : 'Lộ trình đã gửi và chưa có thay đổi mới' }}">
                     <i class="bi bi-send-check me-1"></i>Gửi lộ trình cho shipper
                 </button>
             </form>

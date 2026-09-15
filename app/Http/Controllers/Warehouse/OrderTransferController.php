@@ -379,6 +379,22 @@ class OrderTransferController extends Controller
             ->whereNull('order_transfer_id')
             ->whereIn('status', ['ready_to_ship', 'packed', 'packed_waiting_pickup'])
             ->whereNotNull('warehouse_id')
+            ->whereNotExists(function ($historyQuery): void {
+                $historyQuery->selectRaw('1')
+                    ->from('order_histories as latest_schedule_history')
+                    ->whereColumn('latest_schedule_history.order_id', 'orders.id')
+                    ->whereIn('latest_schedule_history.action', ['schedule_created', 'schedule_confirmed'])
+                    ->whereRaw(
+                        'latest_schedule_history.id = (
+                            select oh2.id
+                            from order_histories as oh2
+                            where oh2.order_id = orders.id
+                              and oh2.action in ("schedule_created", "schedule_confirmed", "schedule_rejected")
+                            order by oh2.created_at desc, oh2.id desc
+                            limit 1
+                        )'
+                    );
+            })
             ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId));
     }
 

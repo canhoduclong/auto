@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class DepartmentFinanceRequestController extends Controller
 {
@@ -134,16 +135,35 @@ class DepartmentFinanceRequestController extends Controller
     public function leaderUpdate(Request $request, Transaction $transaction)
     {
         $this->authorizeLeaderEdit($transaction);
+        $isResubmission = $transaction->status === Transaction::STATUS_REJECTED;
         $data = $this->validatedRequestData($request, 'leader');
         unset($data['status'], $data['submitted_by'], $data['request_source'], $data['request_department']);
 
-        // Editing is only allowed before approval starts, so the existing approval
-        // rows remain valid and no approval history needs to be reset.
-        $transaction->update($data);
+        DB::transaction(function () use ($transaction, $data, $isResubmission): void {
+            if ($isResubmission) {
+                $data = array_merge($data, [
+                    'status' => Transaction::STATUS_PENDING_APPROVAL,
+                    'approved_by' => null,
+                    'approved_at' => null,
+                    'rejected_by' => null,
+                    'rejected_at' => null,
+                    'reject_reason' => null,
+                ]);
+                $transaction->approvalSteps()->delete();
+            }
+
+            $transaction->update($data);
+
+            if ($isResubmission) {
+                app(\App\Services\ApprovalService::class)->initTransactionApproval($transaction);
+            }
+        });
 
         return redirect()
             ->route('leader.finance-requests.index')
-            ->with('success', 'Đã cập nhật phiếu yêu cầu #' . $transaction->id . '.');
+            ->with('success', $isResubmission
+                ? 'Đã cập nhật và gửi lại phiếu yêu cầu #' . $transaction->id . ' vào luồng duyệt.'
+                : 'Đã cập nhật phiếu yêu cầu #' . $transaction->id . '.');
     }
 
     public function leaderPrint(Transaction $transaction)
@@ -401,13 +421,15 @@ class DepartmentFinanceRequestController extends Controller
         $this->authorizeSource($config);
 
         abort_unless($transaction->request_source === 'leader', 404);
-        abort_unless($transaction->status === Transaction::STATUS_PENDING_APPROVAL, 403);
-        abort_unless(
-            $transaction->approvalSteps()
-                ->where(fn ($query) => $query->whereNotNull('approved_by')->orWhere('status', '!=', 'pending'))
-                ->doesntExist(),
-            403
-        );
+        abort_unless(in_array($transaction->status, [Transaction::STATUS_PENDING_APPROVAL, Transaction::STATUS_REJECTED], true), 403);
+        if ($transaction->status === Transaction::STATUS_PENDING_APPROVAL) {
+            abort_unless(
+                $transaction->approvalSteps()
+                    ->where(fn ($query) => $query->whereNotNull('approved_by')->orWhere('status', '!=', 'pending'))
+                    ->doesntExist(),
+                403
+            );
+        }
 
         $user = auth()->user();
         abort_unless(

@@ -64,6 +64,34 @@ class LeaderFinanceRequestEditTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_rejected_request_can_be_edited_and_resubmitted(): void
+    {
+        $leader = $this->leader();
+        $transaction = $this->requestFor($leader, Transaction::STATUS_REJECTED);
+        $transaction->update([
+            'rejected_by' => $leader->id,
+            'rejected_at' => now(),
+            'reject_reason' => 'Thiếu nội dung',
+        ]);
+
+        $this->actingAs($leader)
+            ->get(route('leader.finance-requests.edit', $transaction))
+            ->assertOk()
+            ->assertSee('Sửa và gửi lại phiếu #' . $transaction->id)
+            ->assertSee('Lưu và gửi lại');
+
+        $this->put(route('leader.finance-requests.update', $transaction), $this->validPayload())
+            ->assertRedirect(route('leader.finance-requests.index'))
+            ->assertSessionHas('success');
+
+        $transaction->refresh();
+        $this->assertSame(Transaction::STATUS_PENDING_APPROVAL, $transaction->status);
+        $this->assertSame('Không được cập nhật', $transaction->request_title);
+        $this->assertNull($transaction->rejected_by);
+        $this->assertNull($transaction->rejected_at);
+        $this->assertNull($transaction->reject_reason);
+    }
+
     private function leader(): User
     {
         $user = User::factory()->create();

@@ -2317,6 +2317,7 @@ class ShipperDashboardController extends Controller
 
         $this->applyDefaultShipperAssignmentsForDate($selectedDate);
 
+        $archivedPlannedOrderIds = $this->archivedPlannedOrderIdsForDate($selectedDate);
         $ordersQuery = Order::with([
             'customer.defaultShipper',
             'customer.truckStation',
@@ -2342,11 +2343,21 @@ class ShipperDashboardController extends Controller
                 ->orderByDesc('created_at')
                 ->orderByDesc('id'),
         ])
-            ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
+            ->where(function ($query) use ($archivedPlannedOrderIds): void {
+                $query->where(fn ($eligible) => $this->constrainAssignmentStatuses($eligible));
+                if ($archivedPlannedOrderIds !== []) {
+                    $query->orWhereIn('orders.id', $archivedPlannedOrderIds);
+                }
+            })
             // Màn hình điều phối là sổ theo ngày tạo đơn. Không dùng
             // forWorkflowDate() tại đây vì scope đó cố ý kéo các đơn ngoại lệ
             // được khôi phục từ ngày cũ vào luồng vận hành hôm nay.
-            ->whereDate('orders.created_at', $selectedDate)
+            ->where(function ($dateQuery) use ($selectedDate, $archivedPlannedOrderIds): void {
+                $dateQuery->whereDate('orders.created_at', $selectedDate);
+                if ($archivedPlannedOrderIds !== []) {
+                    $dateQuery->orWhereIn('orders.id', $archivedPlannedOrderIds);
+                }
+            })
             ->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")
             ->orderBy('delivery_time', 'asc')
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
@@ -2428,6 +2439,19 @@ class ShipperDashboardController extends Controller
             $order->setAttribute('assignment_origin_warehouse_id', $warehouse?->id);
             $order->setAttribute('assignment_origin_warehouse_name', $warehouse?->name);
         }
+    }
+
+    private function archivedPlannedOrderIdsForDate(string $selectedDate): array
+    {
+        return collect($this->latestDispatchForDate($selectedDate)?->route_plan ?? [])
+            ->flatMap(fn ($shipperPlan) => $shipperPlan['routes'] ?? [])
+            ->flatMap(fn ($route) => $route['orders'] ?? [])
+            ->pluck('order_id')
+            ->filter(fn ($id) => (int) $id > 0)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function resolveAssignmentOriginWarehouse(Order $order): ?Warehouse
@@ -2544,9 +2568,10 @@ class ShipperDashboardController extends Controller
         $statusByShipperId = [];
 
         foreach ($assignedOrders as $shipperId => $orders) {
-            $snapshotHash = $this->hashDeliveryScheduleSnapshot($this->buildDeliveryScheduleSnapshot($orders));
+            $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
+            $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
             $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate((int) $shipperId, $selectedDate);
-            $statusByShipperId[(int) $shipperId] = $this->deliveryScheduleStatus($latestHistory, $snapshotHash);
+            $statusByShipperId[(int) $shipperId] = $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot);
             if (in_array($statusByShipperId[(int) $shipperId], ['none', 'changed'], true)) {
                 $statusByShipperId[(int) $shipperId] = 'draft';
             }
@@ -2563,7 +2588,6 @@ class ShipperDashboardController extends Controller
                 'daily_sequence' => $order->daily_sequence !== null ? (int) $order->daily_sequence : null,
                 'delivery_date' => optional($order->delivery_date)->toDateString(),
                 'delivery_time' => $order->delivery_time,
-                'updated_at' => optional($order->updated_at)->toDateTimeString(),
             ];
         })->values()->all();
     }
@@ -2720,7 +2744,7 @@ class ShipperDashboardController extends Controller
         })->all();
     }
 
-    private function deliveryScheduleStatus(?OrderHistory $latestHistory, string $currentSnapshotHash): string
+    private function deliveryScheduleStatus(?OrderHistory $latestHistory, string $currentSnapshotHash, array $currentSnapshot = []): string
     {
         if (! $latestHistory) {
             return 'none';
@@ -2730,15 +2754,42 @@ class ShipperDashboardController extends Controller
             return 'confirmed';
         }
 
+        if ($latestHistory->action === 'schedule_created' && $latestHistory->schedule_snapshot_hash === $currentSnapshotHash) {
+            return 'waiting';
+        }
+
+        // Older snapshots contained updated_at, so completing packing changed
+        // their hash even though the approved route itself was unchanged.
+        $savedSnapshot = json_decode((string) $latestHistory->schedule_snapshot, true);
+        $sameRoute = is_array($savedSnapshot) && $currentSnapshot !== []
+            && $this->normalizeDeliveryScheduleSnapshot($savedSnapshot) === $this->normalizeDeliveryScheduleSnapshot($currentSnapshot);
+        if ($latestHistory->action === 'schedule_confirmed' && $sameRoute) {
+            return 'confirmed';
+        }
+
+        if ($latestHistory->action === 'schedule_rejected' && $sameRoute) {
+            return 'rejected';
+        }
+
+        if ($latestHistory->action === 'schedule_created' && $sameRoute) {
+            return 'waiting';
+        }
+
         if ($latestHistory->action === 'schedule_rejected' && $latestHistory->schedule_snapshot_hash === $currentSnapshotHash) {
             return 'rejected';
         }
 
-        if ($latestHistory->action === 'schedule_created') {
-            return 'waiting';
-        }
-
         return 'changed';
+    }
+
+    private function normalizeDeliveryScheduleSnapshot(array $snapshot): array
+    {
+        return collect($snapshot)->filter(fn ($order) => is_array($order) && (int) ($order['order_id'] ?? 0) > 0)->map(fn (array $order) => [
+            'order_id' => (int) ($order['order_id'] ?? 0),
+            'daily_sequence' => isset($order['daily_sequence']) ? (int) $order['daily_sequence'] : null,
+            'delivery_date' => $order['delivery_date'] ?? null,
+            'delivery_time' => $order['delivery_time'] ?? null,
+        ])->values()->all();
     }
 
     /**
@@ -2956,7 +3007,17 @@ class ShipperDashboardController extends Controller
             'notes' => $validated['notes'] ?? '',
             'routePlan' => $routePlan,
             'routePlanJson' => json_encode($routePlan, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'canSendSchedule' => $this->routePlanHasChanges($selectedDate, $routePlan),
         ]);
+    }
+
+    private function routePlanHasChanges(string $selectedDate, array $routePlan): bool
+    {
+        $latestPlan = $this->latestDispatchForDate($selectedDate)?->route_plan;
+
+        return ! is_array($latestPlan)
+            || json_encode($latestPlan, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+                !== json_encode($routePlan, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     public function createDeliverySchedule(Request $request)
@@ -2971,6 +3032,9 @@ class ShipperDashboardController extends Controller
 
         $date = $this->assignmentOrderingDate($request);
         $routePlan = $this->decodeRoutePlan($validated['route_plan'] ?? null);
+        if (! $this->routePlanHasChanges($date, $routePlan)) {
+            return $this->assignmentMutationResponse($request, 'Lộ trình hiện tại đã được gửi, không có thay đổi mới.');
+        }
         try {
             $this->applyRoutePlanFees($routePlan, $date);
         } catch (HttpExceptionInterface $exception) {
@@ -3622,7 +3686,7 @@ class ShipperDashboardController extends Controller
             $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
             $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
             $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
-            if ($historyAction === 'schedule_confirmed' && $this->deliveryScheduleStatus($latestHistory, $snapshotHash) === 'confirmed') {
+            if ($historyAction === 'schedule_confirmed' && $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot) === 'confirmed') {
                 return back()->with('info', 'Lịch trình đã được xác nhận trước đó.');
             }
 
@@ -3662,7 +3726,7 @@ class ShipperDashboardController extends Controller
         $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
         $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
         $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
-        if ($historyAction === 'schedule_confirmed' && $this->deliveryScheduleStatus($latestHistory, $snapshotHash) === 'confirmed') {
+        if ($historyAction === 'schedule_confirmed' && $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot) === 'confirmed') {
             return back()->with('info', 'Lịch trình đã được xác nhận trước đó.');
         }
 

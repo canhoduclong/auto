@@ -18,6 +18,88 @@ class ShipperAssignmentWorkflowTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_packing_update_does_not_invalidate_an_already_confirmed_route(): void
+    {
+        $savedSnapshot = [[
+            'order_id' => 15,
+            'daily_sequence' => 2,
+            'delivery_date' => '2026-09-15',
+            'delivery_time' => '08:30',
+            'updated_at' => '2026-09-15 07:00:00',
+        ]];
+        $currentSnapshot = [[
+            'order_id' => 15,
+            'daily_sequence' => 2,
+            'delivery_date' => '2026-09-15',
+            'delivery_time' => '08:30',
+        ]];
+        $history = new OrderHistory([
+            'action' => 'schedule_confirmed',
+            'schedule_snapshot_hash' => hash('sha256', json_encode($savedSnapshot)),
+            'schedule_snapshot' => json_encode($savedSnapshot),
+        ]);
+        $controller = app(\App\Http\Controllers\ShipperDashboardController::class);
+        $method = new \ReflectionMethod($controller, 'deliveryScheduleStatus');
+
+        $status = $method->invoke(
+            $controller,
+            $history,
+            hash('sha256', json_encode($currentSnapshot)),
+            $currentSnapshot
+        );
+
+        $this->assertSame('confirmed', $status);
+    }
+
+    public function test_manager_page_keeps_confirmed_daily_orders_and_disables_resend_until_changed(): void
+    {
+        $manager = User::factory()->create();
+        $manager->roles()->attach(Role::create(['name' => 'manager_shipper']));
+        $shipper = User::factory()->create(['name' => 'Shipper đã nhận lịch', 'show_in_shipper_assignment' => true]);
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
+        $customer = Customer::create(['name' => 'Khách đã giao', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $manager->id,
+            'shipper_id' => $shipper->id,
+            'code' => 'CONFIRMED-DAILY-ORDER',
+            'status' => Order::STATUS_DELIVERED,
+            'daily_sequence' => 1,
+        ]);
+        $controller = app(\App\Http\Controllers\ShipperDashboardController::class);
+        $snapshotMethod = new \ReflectionMethod($controller, 'buildDeliveryScheduleSnapshot');
+        $snapshot = $snapshotMethod->invoke($controller, collect([$order->fresh()]));
+        $routePlan = [[
+            'shipper_id' => $shipper->id,
+            'shipper_name' => $shipper->name,
+            'routes' => [['name' => 'Lộ trình 1', 'orders' => [['order_id' => $order->id]]]],
+        ]];
+        $order->histories()->create([
+            'action' => 'schedule_confirmed',
+            'user_id' => $shipper->id,
+            'role' => 'shipper',
+            'schedule_snapshot_hash' => hash('sha256', json_encode($snapshot)),
+            'schedule_snapshot' => json_encode(array_merge($snapshot, [['route_plan' => $routePlan[0]]])),
+        ]);
+        \App\Models\ShipperDispatchHistory::create([
+            'schedule_date' => now()->toDateString(),
+            'version' => 1,
+            'route_plan' => $routePlan,
+            'orders_count' => 1,
+            'created_by' => $manager->id,
+            'published_at' => now(),
+        ]);
+
+        $this->actingAs($manager)
+            ->get(route('shipper.manage-assignments', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('CONFIRMED-DAILY-ORDER')
+            ->assertSee('Shipper đã xác nhận')
+            ->assertSee('route-zone-card is-confirmed', false)
+            ->assertSee('id="routeReviewButton"', false)
+            ->assertSee('disabled', false);
+    }
+
     public function test_confirmed_ready_order_is_visible_in_shippers_my_orders(): void
     {
         $shipperRole = Role::create(['name' => 'shipper']);

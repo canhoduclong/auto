@@ -119,7 +119,7 @@ class ShipperApiController extends BaseApiController
         $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
         $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
         $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
-        $status = $this->deliveryScheduleStatus($latestHistory, $snapshotHash);
+        $status = $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot);
         $pendingOrders = in_array($status, ['waiting', 'changed'], true) ? $orders : collect();
 
         return $this->ok([
@@ -845,7 +845,6 @@ class ShipperApiController extends BaseApiController
                 'daily_sequence' => $order->daily_sequence !== null ? (int) $order->daily_sequence : null,
                 'delivery_date' => optional($order->delivery_date)->toDateString(),
                 'delivery_time' => $order->delivery_time,
-                'updated_at' => optional($order->updated_at)->toDateTimeString(),
             ];
         })->values()->all();
     }
@@ -868,7 +867,7 @@ class ShipperApiController extends BaseApiController
             ->first();
     }
 
-    private function deliveryScheduleStatus(?OrderHistory $latestHistory, string $currentSnapshotHash): string
+    private function deliveryScheduleStatus(?OrderHistory $latestHistory, string $currentSnapshotHash, array $currentSnapshot = []): string
     {
         if (! $latestHistory) {
             return 'none';
@@ -878,15 +877,40 @@ class ShipperApiController extends BaseApiController
             return 'confirmed';
         }
 
+        if ($latestHistory->action === 'schedule_created' && $latestHistory->schedule_snapshot_hash === $currentSnapshotHash) {
+            return 'waiting';
+        }
+
+        $savedSnapshot = json_decode((string) $latestHistory->schedule_snapshot, true);
+        $sameRoute = is_array($savedSnapshot) && $currentSnapshot !== []
+            && $this->normalizeDeliveryScheduleSnapshot($savedSnapshot) === $this->normalizeDeliveryScheduleSnapshot($currentSnapshot);
+        if ($latestHistory->action === 'schedule_confirmed' && $sameRoute) {
+            return 'confirmed';
+        }
+
+        if ($latestHistory->action === 'schedule_rejected' && $sameRoute) {
+            return 'rejected';
+        }
+
+        if ($latestHistory->action === 'schedule_created' && $sameRoute) {
+            return 'waiting';
+        }
+
         if ($latestHistory->action === 'schedule_rejected' && $latestHistory->schedule_snapshot_hash === $currentSnapshotHash) {
             return 'rejected';
         }
 
-        if ($latestHistory->action === 'schedule_created') {
-            return 'waiting';
-        }
-
         return 'changed';
+    }
+
+    private function normalizeDeliveryScheduleSnapshot(array $snapshot): array
+    {
+        return collect($snapshot)->filter(fn ($order) => is_array($order) && (int) ($order['order_id'] ?? 0) > 0)->map(fn (array $order) => [
+            'order_id' => (int) ($order['order_id'] ?? 0),
+            'daily_sequence' => isset($order['daily_sequence']) ? (int) $order['daily_sequence'] : null,
+            'delivery_date' => $order['delivery_date'] ?? null,
+            'delivery_time' => $order['delivery_time'] ?? null,
+        ])->values()->all();
     }
 
     private function constrainConfirmedDeliverySchedule($query): void
