@@ -6452,7 +6452,8 @@ class WarehouseDashboardController extends Controller
             'selected_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date'],
         ]);
-        $rangeType = $validated['range_type'] ?? 'day';
+        // This screen is an operational report for one working day.
+        $rangeType = 'day';
         $selectedDate = $validated['selected_date'] ?? now()->toDateString();
         $dates = $this->getDateRange($rangeType, $selectedDate);
         $from = Carbon::parse($dates['from'])->startOfDay();
@@ -6463,11 +6464,20 @@ class WarehouseDashboardController extends Controller
             [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
         }
         $endDate = $to->toDateString();
-        $warehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $user = Auth::user();
+        $warehouseId = $user?->warehouse_id ? (int) $user->warehouse_id : null;
+
+        // Never turn a missing warehouse assignment into a company-wide report.
+        if ($user?->hasRole('warehouse') && ! $warehouseId) {
+            abort(403, 'Tài khoản chưa được phân công kho quản lý.');
+        }
+
+        $warehouse = $warehouseId ? Warehouse::query()->findOrFail($warehouseId) : null;
 
         $supplierImports = InventoryDocument::query()
             ->where('type', 'import')->whereNotNull('supplier_id')
             ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+            ->whereHas('supplier', fn ($q) => $q->where('name', 'like', '%San Hà%'))
             ->whereBetween('document_date', [$from->toDateString(), $to->toDateString()])
             ->with(['supplier:id,name', 'items.productVariant.product'])
             ->orderByDesc('document_date')->orderByDesc('id')->get();
@@ -6500,8 +6510,8 @@ class WarehouseDashboardController extends Controller
             ->get()->keyBy(fn (Order $order) => strtoupper((string) $order->code));
         $exportedOrders = $exportDocuments->map(function (InventoryDocument $document) use ($exportOrderCodes, $ordersByCode) {
             $code = $exportOrderCodes->get($document->id);
-            return $code && $ordersByCode->has($code) ? ['document' => $document, 'order' => $ordersByCode->get($code)] : null;
-        })->filter()->values();
+            return ['document' => $document, 'order' => $code ? $ordersByCode->get($code) : null];
+        })->values();
 
         $inventory = Inventory::query()
             ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
@@ -6520,7 +6530,7 @@ class WarehouseDashboardController extends Controller
 
         return view('warehouse.reports.index', compact(
             'rangeType', 'selectedDate', 'endDate', 'from', 'to', 'supplierImports',
-            'inventoryTransfers', 'orderTransfers', 'exportedOrders', 'inventory', 'totals'
+            'inventoryTransfers', 'orderTransfers', 'exportedOrders', 'inventory', 'totals', 'warehouse'
         ));
     }
 
