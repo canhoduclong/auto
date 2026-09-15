@@ -78,6 +78,16 @@ class WarehouseTransfer extends Model
         return $this->belongsTo(User::class, 'received_by');
     }
 
+    public function exportDocument()
+    {
+        return $this->belongsTo(InventoryDocument::class, 'export_document_id');
+    }
+
+    public function importDocument()
+    {
+        return $this->belongsTo(InventoryDocument::class, 'import_document_id');
+    }
+
     public function dispatchEntry()
     {
         return $this->hasOne(WarehouseDispatchSlipEntry::class);

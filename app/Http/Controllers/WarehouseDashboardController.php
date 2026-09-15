@@ -6447,183 +6447,80 @@ class WarehouseDashboardController extends Controller
      */
     public function reports(Request $request)
     {
-        // Default to current day if not specified
-        $rangeType = $request->input('range_type', 'day');
-        $selectedDate = $request->input('selected_date', Carbon::now()->toDateString());
-
-        $warehouseId = Auth::user()->warehouse_id;
-
-        // Calculate date range based on selection
+        $validated = $request->validate([
+            'range_type' => ['nullable', 'in:day,week,month,year,custom'],
+            'selected_date' => ['nullable', 'date'],
+            'end_date' => ['nullable', 'date'],
+        ]);
+        $rangeType = $validated['range_type'] ?? 'day';
+        $selectedDate = $validated['selected_date'] ?? now()->toDateString();
         $dates = $this->getDateRange($rangeType, $selectedDate);
-        $from = Carbon::parse($dates['from']);
-        $to = Carbon::parse($dates['to']);
+        $from = Carbon::parse($dates['from'])->startOfDay();
+        $to = $rangeType === 'custom' && ! empty($validated['end_date'])
+            ? Carbon::parse($validated['end_date'])->endOfDay()
+            : Carbon::parse($dates['to'])->endOfDay();
+        if ($to->lt($from)) {
+            [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+        }
+        $endDate = $to->toDateString();
+        $warehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
 
-        // Stock In Statistics
-        $stockInData = InventoryDocument::where('type', 'import')
+        $supplierImports = InventoryDocument::query()
+            ->where('type', 'import')->whereNotNull('supplier_id')
             ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
-            ->whereBetween('document_date', [$from, $to])
-            ->with('items')
-            ->get()
-            ->groupBy(function ($doc) use ($rangeType) {
-                if ($rangeType === 'day' || $rangeType === 'custom') {
-                    return $doc->document_date->format('d/m');
-                } elseif ($rangeType === 'week') {
-                    return 'W'.$doc->document_date->weekOfYear;
-                } elseif ($rangeType === 'month') {
-                    return $doc->document_date->format('m/Y');
-                }
+            ->whereBetween('document_date', [$from->toDateString(), $to->toDateString()])
+            ->with(['supplier:id,name', 'items.productVariant.product'])
+            ->orderByDesc('document_date')->orderByDesc('id')->get();
 
-                return $doc->document_date->format('Y');
-            })
-            ->map(fn ($docs) => [
-                'count' => $docs->count(),
-                'quantity' => $docs->flatMap(fn ($d) => $d->items)->sum('quantity'),
-            ]);
+        $inventoryTransfers = WarehouseInventoryTransfer::query()
+            ->where('status', WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED)
+            ->when($warehouseId, fn ($q) => $q->where('target_warehouse_id', $warehouseId))
+            ->whereBetween('received_at', [$from, $to])
+            ->with(['sourceWarehouse:id,name', 'targetWarehouse:id,name', 'order:id,code', 'items.variant.product'])
+            ->orderByDesc('received_at')->get();
 
-        // Stock Out Statistics
-        $stockOutData = InventoryDocument::where('type', 'export')
+        $orderTransfers = WarehouseTransfer::query()
+            ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
+            ->when($warehouseId, fn ($q) => $q->where('target_warehouse_id', $warehouseId))
+            ->whereBetween('received_at', [$from, $to])
+            ->with(['sourceWarehouse:id,name', 'targetWarehouse:id,name', 'order.customer', 'order.items.variant.product', 'importDocument.items.productVariant.product'])
+            ->orderByDesc('received_at')->get();
+
+        $exportDocuments = InventoryDocument::query()
+            ->where('type', 'export')
             ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
-            ->whereBetween('document_date', [$from, $to])
-            ->with('items')
-            ->get()
-            ->groupBy(function ($doc) use ($rangeType) {
-                if ($rangeType === 'day' || $rangeType === 'custom') {
-                    return $doc->document_date->format('d/m');
-                } elseif ($rangeType === 'week') {
-                    return 'W'.$doc->document_date->weekOfYear;
-                } elseif ($rangeType === 'month') {
-                    return $doc->document_date->format('m/Y');
-                }
+            ->whereBetween('document_date', [$from->toDateString(), $to->toDateString()])
+            ->with(['items.productVariant.product'])->orderByDesc('document_date')->orderByDesc('id')->get();
+        $exportOrderCodes = $exportDocuments->mapWithKeys(function (InventoryDocument $document) {
+            preg_match('/(?:đơn|don)\s*#\s*([A-Za-z0-9\-]+)/iu', (string) $document->notes, $matches);
+            return empty($matches[1]) ? [] : [$document->id => strtoupper(trim($matches[1]))];
+        });
+        $ordersByCode = Order::query()->with(['customer', 'shipper', 'items.variant.product'])
+            ->whereIn(DB::raw('UPPER(code)'), $exportOrderCodes->values()->unique()->all())
+            ->get()->keyBy(fn (Order $order) => strtoupper((string) $order->code));
+        $exportedOrders = $exportDocuments->map(function (InventoryDocument $document) use ($exportOrderCodes, $ordersByCode) {
+            $code = $exportOrderCodes->get($document->id);
+            return $code && $ordersByCode->has($code) ? ['document' => $document, 'order' => $ordersByCode->get($code)] : null;
+        })->filter()->values();
 
-                return $doc->document_date->format('Y');
-            })
-            ->map(fn ($docs) => [
-                'count' => $docs->count(),
-                'quantity' => $docs->flatMap(fn ($d) => $d->items)->sum('quantity'),
-            ]);
+        $inventory = Inventory::query()
+            ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
+            ->with(['warehouse:id,name', 'productVariant.product'])
+            ->orderByDesc('quantity')->get();
 
-        // Inventory Movement Statistics
-        $movementData = InventoryMovement::whereHas('inventory', fn ($q) => $q->when($warehouseId, fn ($q2) => $q2->where('warehouse_id', $warehouseId)))
-            ->whereBetween('created_at', [$from, $to])
-            ->get()
-            ->groupBy('type')
-            ->map(fn ($movements) => [
-                'count' => $movements->count(),
-                'quantity' => $movements->sum('quantity'),
-            ]);
-
-        // Top products by movement
-        $topProducts = InventoryMovement::whereHas('inventory', fn ($q) => $q->when($warehouseId, fn ($q2) => $q2->where('warehouse_id', $warehouseId)))
-            ->whereBetween('created_at', [$from, $to])
-            ->with('inventory.productVariant.product')
-            ->get()
-            ->groupBy('inventory.product_variant_id')
-            ->map(fn ($movements) => [
-                'product' => $movements->first()->inventory->productVariant->product,
-                'variant' => $movements->first()->inventory->productVariant,
-                'quantity' => $movements->sum('quantity'),
-                'count' => $movements->count(),
-            ])
-            ->sortByDesc('quantity')
-            ->take(10);
-
-        // Statistics by product and variant (based on import/export documents)
-        $reportItems = InventoryDocumentItem::query()
-            ->whereHas('document', function ($q) use ($warehouseId, $from, $to) {
-                $q->whereBetween('document_date', [$from, $to])
-                    ->whereIn('type', ['import', 'export'])
-                    ->when($warehouseId, fn ($q2) => $q2->where('warehouse_id', $warehouseId));
-            })
-            ->with([
-                'document:id,type,warehouse_id,document_date',
-                'productVariant:id,product_id,name,sku',
-                'productVariant.product:id,name,slug,unit',
-            ])
-            ->get();
-
-        $variantStats = $reportItems
-            ->groupBy('product_variant_id')
-            ->map(function ($items) {
-                $first = $items->first();
-                $variant = $first?->productVariant;
-                $product = $variant?->product;
-
-                $inQty = (int) $items
-                    ->filter(fn ($item) => $item->document?->type === 'import')
-                    ->sum('quantity');
-
-                $outQty = (int) $items
-                    ->filter(fn ($item) => $item->document?->type === 'export')
-                    ->sum('quantity');
-
-                return [
-                    'product_id' => $product?->id,
-                    'product_name' => $product?->name ?? 'N/A',
-                    'product_sku' => $product?->sku,
-                    'unit_label' => $product?->unit_label ?? 'Cái',
-                    'variant_id' => $variant?->id,
-                    'variant_name' => $variant?->name ?? 'N/A',
-                    'variant_sku' => $variant?->sku,
-                    'in_qty' => $inQty,
-                    'out_qty' => $outQty,
-                    'net_qty' => $inQty - $outQty,
-                ];
-            })
-            ->sortByDesc('net_qty')
-            ->values();
-
-        $productStats = $variantStats
-            ->groupBy('product_id')
-            ->map(function ($items) {
-                $first = $items->first();
-                $inQty = (int) $items->sum('in_qty');
-                $outQty = (int) $items->sum('out_qty');
-
-                return [
-                    'product_id' => $first['product_id'],
-                    'product_name' => $first['product_name'],
-                    'product_sku' => $first['product_sku'],
-                    'unit_label' => $first['unit_label'] ?? 'Cái',
-                    'variant_count' => $items->count(),
-                    'in_qty' => $inQty,
-                    'out_qty' => $outQty,
-                    'net_qty' => $inQty - $outQty,
-                ];
-            })
-            ->sortByDesc('net_qty')
-            ->values();
-
-        // Overall statistics
         $totals = [
-            'total_stock_in' => InventoryDocument::where('type', 'import')
-                ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
-                ->whereBetween('document_date', [$from, $to])
-                ->withSum('items', 'quantity')
-                ->get()
-                ->sum('items_sum_quantity') ?? 0,
-            'total_stock_out' => InventoryDocument::where('type', 'export')
-                ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
-                ->whereBetween('document_date', [$from, $to])
-                ->withSum('items', 'quantity')
-                ->get()
-                ->sum('items_sum_quantity') ?? 0,
-            'total_movements' => InventoryMovement::whereHas('inventory', fn ($q) => $q->when($warehouseId, fn ($q2) => $q2->where('warehouse_id', $warehouseId)))
-                ->whereBetween('created_at', [$from, $to])
-                ->count(),
+            'supplier_quantity' => $supplierImports->sum(fn ($doc) => $doc->items->sum('quantity')),
+            'supplier_amount' => $supplierImports->sum(fn ($doc) => $doc->items->sum(fn ($item) => $item->quantity * $item->unit_cost) + (float) $doc->shipping_fee),
+            'transfer_quantity' => $inventoryTransfers->sum(fn ($transfer) => $transfer->items->sum('quantity'))
+                + $orderTransfers->sum(fn ($transfer) => $transfer->importDocument?->items->sum('quantity') ?? $transfer->order?->items->sum('quantity') ?? 0),
+            'exported_orders' => $exportedOrders->count(),
+            'on_hand' => $inventory->sum('quantity'),
+            'available' => $inventory->sum(fn ($stock) => max(0, $stock->quantity - $stock->reserved_quantity)),
         ];
 
         return view('warehouse.reports.index', compact(
-            'rangeType',
-            'selectedDate',
-            'from',
-            'to',
-            'stockInData',
-            'stockOutData',
-            'movementData',
-            'topProducts',
-            'totals',
-            'productStats',
-            'variantStats'
+            'rangeType', 'selectedDate', 'endDate', 'from', 'to', 'supplierImports',
+            'inventoryTransfers', 'orderTransfers', 'exportedOrders', 'inventory', 'totals'
         ));
     }
 
