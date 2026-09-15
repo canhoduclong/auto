@@ -1909,16 +1909,37 @@
                                 ]);
                             }
                             $orderPendingAdjustments = ($pendingAdjustmentsByOrder ?? collect())->get($order->id, collect());
+                            $zaloProductLines = $order->items
+                                ->groupBy(fn ($item) => (string) ($item->product_id ?: $item->display_name))
+                                ->flatMap(function ($items) use ($formatQuantity) {
+                                    $first = $items->first();
+                                    $productName = $first->product?->name ?: $first->display_name ?: 'Sản phẩm';
+                                    $sizes = $items->map(fn ($item) => trim((string) ($item->variant?->size ?? '')))->filter()->unique()->values();
+
+                                    return collect([
+                                        '- '.$productName,
+                                        $sizes->isNotEmpty() ? '- Size '.$sizes->implode(' - ') : null,
+                                        '- Số Lượng: '.$formatQuantity($items->sum('quantity')),
+                                    ])->filter();
+                                })->values();
+                            $truckStationName = trim((string) ($order->truck_station_name ?: $order->truckStation?->name));
+                            $truckStationAddress = trim((string) ($order->truck_station_address ?: $order->truckStation?->address));
+                            $truckStationPhone = trim((string) ($order->truck_station_phone ?: $order->truckStation?->phone));
                             $zaloText = collect([
-                                'ĐƠN HÀNG '.($order->code ?: '#'.$order->id),
-                                'Khách hàng: '.($order->customer?->name ?: ($order->recipient_name ?: 'Khách hàng')),
-                                ($order->recipient_phone ?: $order->customer?->phone) ? 'SĐT: '.($order->recipient_phone ?: $order->customer?->phone) : null,
+                                '---- ĐƠN HÀNG '.($order->code ?: '#'.$order->id).' -----',
+                                'Khách hàng: '.($order->recipient_name ?: $order->customer?->name ?: 'Khách hàng'),
                                 $deliveryAddress !== '' ? 'Địa chỉ: '.$deliveryAddress : null,
+                                ($order->recipient_phone ?: $order->customer?->phone) ? 'SĐT: '.($order->recipient_phone ?: $order->customer?->phone) : null,
                                 '',
                                 'Sản phẩm:',
-                                ...$order->items->map(fn ($item) => '- '.($item->display_name ?: 'Sản phẩm').((float) ($item->variant?->size ?? 0) > 0 ? ' - Size '.$item->variant->size : '').': SL '.$formatQuantity($item->quantity))->all(),
                                 '',
-                                'Ghi chú: '.(trim((string) $order->note) !== '' ? trim((string) $order->note) : 'Không có'),
+                                ...$zaloProductLines->all(),
+                                '',
+                                trim((string) $order->note) !== '' ? 'Ghi chú: '.trim((string) $order->note) : null,
+                                trim((string) $order->delivery_time) !== '' ? "\nGiờ giao: ".trim((string) $order->delivery_time) : null,
+                                $order->use_truck_station && $truckStationName !== '' ? "\nGửi hàng nhà xe: ".$truckStationName.'.' : null,
+                                $order->use_truck_station && $truckStationAddress !== '' ? 'Đ/C: '.$truckStationAddress : null,
+                                $order->use_truck_station && $truckStationPhone !== '' ? 'Điện thoại: '.$truckStationPhone : null,
                             ])->filter(fn ($line) => $line !== null)->implode("\n");
                         @endphp
                         <article class="monitor-panel monitor-order status-{{ $monitorState }} {{ $canManageOrder ? 'is-mine' : '' }} {{ $isCancelled ? 'is-cancelled' : '' }}" id="monitor-order-{{ $order->id }}" title="{{ $monitorStateLabels[$monitorState] }}">

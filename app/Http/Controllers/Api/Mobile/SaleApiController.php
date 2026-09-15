@@ -1007,6 +1007,10 @@ class SaleApiController extends BaseApiController
             $payload['recipient_address'] = (string) ($order->recipient_address ?? $order->customer?->address ?? '');
             $payload['delivery_time'] = (string) ($order->delivery_time ?? '');
             $payload['note'] = (string) ($order->note ?? '');
+            $payload['use_truck_station'] = (bool) ($order->use_truck_station ?? false);
+            $payload['truck_station_name'] = (string) ($order->truck_station_name ?? $order->customer?->truck_station_name ?? '');
+            $payload['truck_station_address'] = (string) ($order->truck_station_address ?? $order->customer?->truck_station_address ?? '');
+            $payload['truck_station_phone'] = (string) ($order->truck_station_phone ?? $order->customer?->truck_station_phone ?? '');
             $payload['shipper_note'] = (string) ($order->shipper_note ?? '');
             $payload['order_discount'] = (float) ($order->order_discount ?? 0);
             $payload['order_discount_type'] = (string) ($order->order_discount_type ?? 'decrease');

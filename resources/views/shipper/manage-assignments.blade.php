@@ -40,6 +40,23 @@
         gap: .4rem;
         margin-top: .35rem;
     }
+    .shipper-picker-row {
+        display: grid;
+        grid-template-columns: 38px minmax(180px, 1fr) minmax(210px, 1.25fr);
+        gap: 10px;
+        align-items: start;
+        padding: 10px 0;
+        border-bottom: 1px solid #dbe4ea;
+    }
+    .shipper-picker-row:last-child { border-bottom: 0; }
+    .shipper-pin-btn { width: 38px; height: 38px; padding: 0; color: #f59e0b; border-color: #f59e0b; }
+    .shipper-pin-btn.is-pinned { color: #fff; background: #f59e0b; }
+    .shipper-picker-name { min-height: 38px; background: #0f766e; border-color: #0f766e; color: #fff; }
+    .shipper-picker-routes { display: grid; gap: 7px; }
+    @media (max-width: 575.98px) {
+        .shipper-picker-row { grid-template-columns: 38px minmax(0, 1fr); }
+        .shipper-picker-routes { grid-column: 2; }
+    }
     .ma-filter-group {
         display: flex;
         gap: 1rem;
@@ -1055,6 +1072,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const currency = new Intl.NumberFormat('vi-VN');
     const availableShippers = @json($availableShippersForPicker);
     const tripStorageKey = 'shipperTripPlan:' + @json($selectedDate);
+    const pinnedShippersStorageKey = 'pinnedAssignmentShippers';
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     let isRestoringTrips = false;
 
@@ -1076,6 +1094,22 @@ document.addEventListener('DOMContentLoaded', function () {
         } catch (error) {
             return {};
         }
+    }
+
+    function pinnedShipperIds() {
+        try {
+            return JSON.parse(localStorage.getItem(pinnedShippersStorageKey) || '[]').map(Number);
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function togglePinnedShipper(shipperId) {
+        const current = pinnedShipperIds();
+        const id = Number(shipperId);
+        const updated = current.includes(id) ? current.filter(item => item !== id) : [id, ...current];
+        localStorage.setItem(pinnedShippersStorageKey, JSON.stringify(updated));
+        renderShipperRoutePicker();
     }
 
     function saveTripState() {
@@ -1504,7 +1538,20 @@ document.addEventListener('DOMContentLoaded', function () {
         const picker = document.getElementById('shipperRoutePicker');
         if (!picker) return;
 
-        picker.innerHTML = availableShippers.map(function (shipper) {
+        const pinnedIds = pinnedShipperIds();
+        const sortedShippers = [...availableShippers].sort(function (a, b) {
+            const aIndex = pinnedIds.indexOf(Number(a.id));
+            const bIndex = pinnedIds.indexOf(Number(b.id));
+            if (aIndex >= 0 || bIndex >= 0) {
+                if (aIndex < 0) return 1;
+                if (bIndex < 0) return -1;
+                return aIndex - bIndex;
+            }
+            return String(a.name || '').localeCompare(String(b.name || ''), 'vi');
+        });
+
+        picker.innerHTML = sortedShippers.map(function (shipper) {
+            const isPinned = pinnedIds.includes(Number(shipper.id));
             const shipperBlock = document.querySelector(`.js-trip-shipper[data-shipper-id="${shipper.id}"]`);
             const trips = shipperBlock ? tripDefinitionsFor(shipperBlock) : [{
                 code: 'T' + shipper.id + '-1',
@@ -1514,7 +1561,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return `
                     <div class="d-flex gap-1">
                         <button type="submit" class="btn btn-outline-success text-start flex-grow-1 js-pick-shipper" data-shipper-id="${shipper.id}" data-trip-code="${trip.code}">
-                            <i class="bi bi-person me-2"></i>${trip.name}
+                            <i class="bi bi-person me-2"></i>${trip.name} <strong>- ${tripOrderCount(shipper.id, trip.code)} Đơn</strong>
                         </button>
                         <button type="button" class="btn btn-outline-danger js-popup-add-trip" data-shipper-id="${shipper.id}" title="Thêm mới lộ trình">+</button>
                     </div>
@@ -1522,16 +1569,23 @@ document.addEventListener('DOMContentLoaded', function () {
             }).join('');
 
             return `
-                <div class="border rounded-2 p-2">
-                    <button type="submit" class="btn btn-success text-start w-100 js-pick-shipper" data-shipper-id="${shipper.id}">
+                <div class="shipper-picker-row">
+                    <button type="button" class="btn shipper-pin-btn js-toggle-shipper-pin ${isPinned ? 'is-pinned' : ''}" data-shipper-id="${shipper.id}" title="${isPinned ? 'Bỏ ghim' : 'Ghim shipper lên đầu'}">
+                        <i class="bi bi-star${isPinned ? '-fill' : ''}"></i>
+                    </button>
+                    <button type="submit" class="btn shipper-picker-name text-start w-100 js-pick-shipper" data-shipper-id="${shipper.id}">
                         <i class="bi bi-person-check me-2"></i>${shipper.name}${shipper.phone ? `<span class="small ms-1">${shipper.phone}</span>` : ''}
                     </button>
-                    <div class="d-grid gap-2 mt-2">
+                    <div class="shipper-picker-routes">
                         ${routeButtons}
                     </div>
                 </div>
             `;
         }).join('');
+    }
+
+    function tripOrderCount(shipperId, tripCode) {
+        return document.querySelectorAll(`.js-trip-shipper[data-shipper-id="${shipperId}"] .js-trip-order .js-order-trip option:checked[value="${CSS.escape(tripCode)}"]`).length;
     }
 
     restoreTripState();
@@ -1663,6 +1717,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     }).join('');
                 }
             }
+            return;
+        }
+
+        const pinButton = event.target.closest('.js-toggle-shipper-pin');
+        if (pinButton) {
+            event.preventDefault();
+            togglePinnedShipper(pinButton.dataset.shipperId);
             return;
         }
 

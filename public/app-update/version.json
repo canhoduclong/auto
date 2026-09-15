@@ -1,8 +1,8 @@
 {
-  "version": "1.1.11",
-  "version_code": 54,
+  "version": "1.1.12",
+  "version_code": 55,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản cập nhật 1.1.11: Bổ sung lộ trình chờ xác nhận cho shipper; cải thiện hiển thị đơn và duyệt yêu cầu điều chỉnh trong layout kế toán."
+  "message": "Bản cập nhật 1.1.12: Chép nội dung đơn theo mẫu Zalo mới, tự động nhóm sản phẩm và chỉ hiển thị thông tin giao hàng, nhà xe khi có dữ liệu."
 }
