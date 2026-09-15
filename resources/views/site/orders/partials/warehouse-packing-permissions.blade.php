@@ -40,6 +40,9 @@
     .js-sale-packing-permissions .js-packing-size-label .form-check-input { position:absolute; opacity:0; pointer-events:none; }
     .js-sale-packing-permissions .js-packing-size-label:has(.form-check-input:checked) { border-color:#6ee7b7; background:#ecfdf5; }
     .js-sale-packing-permissions .js-packing-size-locked { cursor:default; }
+    .js-sale-packing-permissions .js-packing-quantity-label { border:1px solid #d7e1ee;border-radius:8px;padding:7px 10px;cursor:pointer;user-select:none; }
+    .js-sale-packing-permissions .js-packing-quantity-label .form-check-input { position:absolute;opacity:0;pointer-events:none; }
+    .js-sale-packing-permissions .js-packing-quantity-label:has(.form-check-input:checked) { border-color:#6ee7b7;background:#ecfdf5; }
 </style>
 @once
 @push('scripts')
@@ -94,12 +97,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     section.append(hiddenSize);
                     input.parentElement.classList.add('js-packing-size-locked');
                 }
+                const quantityInput = checkbox('Cho phép thay đổi số lượng', hidden.name, policy.quantity === true || policy.quantity === 1 || policy.quantity === '1', input => {
+                    policy.quantity = input.checked;
+                });
+                quantityInput.parentElement.classList.add('js-packing-quantity-label');
+                section.append(document.createElement('br'));
                 const sizeInputs = [];
                 const lockedSizes = orderedSizes;
                 policy.sizes = [...new Set([...(policy.sizes || []).map(Number), ...lockedSizes])];
                 sizes.forEach(size => {
                     const isLocked = lockedSizes.some(locked => Math.abs(locked - size) < 0.0001);
-                    const text = `Size ${size.toLocaleString('vi-VN', {maximumFractionDigits: 3})}${isLocked ? ' (trong đơn)' : ''}`;
+                    const text = `Size ${size.toLocaleString('vi-VN', {maximumFractionDigits: 3})}`;
                     const input = checkbox(text, `warehouse_product_permissions[${productId}][sizes][]`, (policy.sizes || []).map(Number).includes(size), () => {
                         policy.sizes = sizeInputs.filter(i => i.checked).map(i => Number(i.value));
                     });

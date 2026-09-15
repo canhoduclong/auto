@@ -6492,7 +6492,6 @@ class WarehouseDashboardController extends Controller
         $supplierImports = InventoryDocument::query()
             ->where('type', 'import')->whereNotNull('supplier_id')
             ->when($warehouseId, fn ($q) => $q->where('warehouse_id', $warehouseId))
-            ->whereHas('supplier', fn ($q) => $q->where('name', 'like', '%San Hà%'))
             ->whereBetween('document_date', [$from->toDateString(), $to->toDateString()])
             ->with(['supplier:id,name', 'items.productVariant.product'])
             ->orderByDesc('document_date')->orderByDesc('id')->get();
@@ -6501,7 +6500,7 @@ class WarehouseDashboardController extends Controller
             ->where('status', WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED)
             ->when($warehouseId, fn ($q) => $q->where('target_warehouse_id', $warehouseId))
             ->whereBetween('received_at', [$from, $to])
-            ->with(['sourceWarehouse:id,name', 'targetWarehouse:id,name', 'order:id,code', 'items.variant.product'])
+            ->with(['sourceWarehouse:id,name', 'targetWarehouse:id,name', 'order.customer', 'items.variant.product'])
             ->orderByDesc('received_at')->get();
 
         $orderTransfers = WarehouseTransfer::query()
@@ -6533,6 +6532,9 @@ class WarehouseDashboardController extends Controller
             ->with(['warehouse:id,name', 'productVariant.product'])
             ->orderByDesc('quantity')->get();
 
+        $inventorySummary = app(WarehouseInventorySummaryService::class)
+            ->build($warehouseId, $selectedDate);
+
         $totals = [
             'supplier_quantity' => $supplierImports->sum(fn ($doc) => $doc->items->sum('quantity')),
             'supplier_amount' => $supplierImports->sum(fn ($doc) => $doc->items->sum(fn ($item) => $item->quantity * $item->unit_cost) + (float) $doc->shipping_fee),
@@ -6545,7 +6547,8 @@ class WarehouseDashboardController extends Controller
 
         return view('warehouse.reports.index', compact(
             'rangeType', 'selectedDate', 'endDate', 'from', 'to', 'supplierImports',
-            'inventoryTransfers', 'orderTransfers', 'exportedOrders', 'inventory', 'totals', 'warehouse'
+            'inventoryTransfers', 'orderTransfers', 'exportedOrders', 'inventory', 'totals', 'warehouse',
+            'inventorySummary'
         ));
     }
 

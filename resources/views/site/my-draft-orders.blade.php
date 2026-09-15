@@ -842,6 +842,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 section.append(label);
                 return input;
             };
+            checkbox('Cho phép thay đổi số lượng', policy.quantity === true || policy.quantity === 1 || policy.quantity === '1', false, input => {
+                policy.quantity = input.checked;
+            });
+            section.append(document.createElement('br'));
             if (sizeOptions.length) {
                 const variantInputs = [];
                 const syncPolicySizes = () => {
@@ -849,7 +853,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 sizeOptions.forEach(option => {
                     const checked = option.inDraft || (policy.sizes || []).map(Number).includes(option.size);
-                    const input = checkbox(option.inDraft ? `${option.label} (trong đơn)` : option.label, checked, option.inDraft, () => {
+                    const input = checkbox(option.label, checked, option.inDraft, () => {
                         syncPolicySizes();
                     });
                     input.dataset.size = String(option.size);

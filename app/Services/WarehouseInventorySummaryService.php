@@ -218,6 +218,7 @@ class WarehouseInventorySummaryService
 
                 return [
                     'name' => (string) ($variant->name ?: ($variant->product?->name ?? 'Biến thể')),
+                    'size' => (float) ($variant->size ?? 0),
                     'unit' => (string) ($variant->product?->unit_label ?? '—'),
                     'opening' => $closing - $import + $export,
                     'import' => $import,
