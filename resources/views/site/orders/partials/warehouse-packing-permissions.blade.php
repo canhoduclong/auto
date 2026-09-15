@@ -12,8 +12,8 @@
      data-policy="{{ json_encode($packingPolicy) }}"
      data-legacy-quantity="{{ (int) ($packingOrder?->warehouse_can_adjust ?? false) }}"
      data-legacy-sizes="{{ json_encode($packingOrder ? $packingOrder->warehouse_allowed_sizes : []) }}">
-    <div class="fw-bold mb-2">Cho phép kho linh động điều chỉnh</div>
-    <div class="form-text mb-2">Kho chỉ được phối các size đã chọn cho từng sản phẩm. Không chọn size: đóng đúng size đặt hàng.</div>
+    <div class="fw-bold mb-2">Cho phép kho linh động chọn size</div>
+    <div class="form-text mb-2">Bấm vào nhãn size để cho phép kho chọn thêm size khi đóng hàng. Size trong đơn luôn được giữ.</div>
     <div class="js-product-packing-options"></div>
 </div>
 <style>
@@ -31,7 +31,15 @@
         color: #475569;
         font-size: .8rem;
         font-weight: 600;
+        border: 1px solid #d7e1ee;
+        border-radius: 8px;
+        padding: 7px 10px;
+        cursor: pointer;
+        user-select: none;
     }
+    .js-sale-packing-permissions .js-packing-size-label .form-check-input { position:absolute; opacity:0; pointer-events:none; }
+    .js-sale-packing-permissions .js-packing-size-label:has(.form-check-input:checked) { border-color:#6ee7b7; background:#ecfdf5; }
+    .js-sale-packing-permissions .js-packing-size-locked { cursor:default; }
 </style>
 @once
 @push('scripts')
@@ -86,56 +94,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     section.append(hiddenSize);
                     input.parentElement.classList.add('js-packing-size-locked');
                 }
-                checkbox('1. Sản lượng', hidden.name, policy.quantity === true || policy.quantity === 1 || policy.quantity === '1', input => policy.quantity = input.checked);
                 const sizeInputs = [];
-                const readable = sizes.length === 1;
-                const lockedSizes = readable ? [sizes[0]] : orderedSizes;
+                const lockedSizes = orderedSizes;
                 policy.sizes = [...new Set([...(policy.sizes || []).map(Number), ...lockedSizes])];
-                const lockedSize = readable ? sizes[0] : null;
-                if (readable && !(policy.sizes || []).map(Number).includes(lockedSize)) {
-                    policy.sizes = [lockedSize];
-                }
-                if (!readable) {
-                    const all = checkbox('2. Size All', '', false, input => {sizeInputs.forEach(i => i.checked = input.checked); policy.sizes = input.checked ? sizes : [];});
-                    all.parentElement.classList.add('js-packing-size-label');
-                    section.append(document.createElement('br'));
-                    function syncAll() {all.checked = false; all.indeterminate = false;}
-                    sizes.forEach(size => {
-                        const isLocked = lockedSizes.some(locked => Math.abs(locked - size) < 0.0001);
-                        const input = checkbox(`Size ${size.toFixed(1)}`, `warehouse_product_permissions[${productId}][sizes][]`, (policy.sizes || []).map(Number).includes(size), () => {policy.sizes = sizeInputs.filter(i => i.checked).map(i => Number(i.value)); syncAll();});
-                        input.parentElement.classList.add('js-packing-size-label');
-                        input.value = String(size); sizeInputs.push(input);
-                        if (isLocked) lockSize(input, size);
+                sizes.forEach(size => {
+                    const isLocked = lockedSizes.some(locked => Math.abs(locked - size) < 0.0001);
+                    const text = `Size ${size.toLocaleString('vi-VN', {maximumFractionDigits: 3})}${isLocked ? ' (trong đơn)' : ''}`;
+                    const input = checkbox(text, `warehouse_product_permissions[${productId}][sizes][]`, (policy.sizes || []).map(Number).includes(size), () => {
+                        policy.sizes = sizeInputs.filter(i => i.checked).map(i => Number(i.value));
                     });
-                } else {
-                    const lockedInput = checkbox(`Size ${lockedSize.toFixed(1)}`, `warehouse_product_permissions[${productId}][sizes][]`, true, () => {});
-                    lockSize(lockedInput, lockedSize);
-                    lockedInput.parentElement.classList.add('js-packing-size-label');
-                    lockedInput.value = String(lockedSize);
-                    sizeInputs.push(lockedInput);
-                    section.append(document.createElement('br'));
-                    sizes.filter(size => Math.abs(size - lockedSize) > 0.0001).forEach(size => {
-                        const input = checkbox(`Size ${size.toFixed(1)}`, `warehouse_product_permissions[${productId}][sizes][]`, (policy.sizes || []).map(Number).includes(size), () => {
-                            const selected = sizeInputs.filter(i => i.checked && !i.disabled).map(i => Number(i.value));
-                            const fixed = sizeInputs.filter(i => i.disabled).map(i => Number(i.value));
-                            if (selected.length > 1) {
-                                const lastSelected = input.value;
-                                sizeInputs.forEach(candidate => {
-                                    if (candidate !== input && !candidate.disabled) {
-                                        candidate.checked = false;
-                                    }
-                                });
-                                policy.sizes = [...fixed, Number(lastSelected)];
-                                return;
-                            }
-                            policy.sizes = [...fixed, ...selected];
-                        });
-                        input.parentElement.classList.add('js-packing-size-label');
-                        input.value = String(size); sizeInputs.push(input);
-                        if (lockedSizes.some(locked => Math.abs(locked - size) < 0.0001)) lockSize(input, size);
-                    });
-                    policy.sizes = [lockedSize];
-                }
+                    input.parentElement.classList.add('js-packing-size-label');
+                    input.value = String(size);
+                    sizeInputs.push(input);
+                    if (isLocked) lockSize(input, size);
+                });
                 container.append(section);
             });
             if (!products.length) container.textContent = 'Chọn sản phẩm để cấu hình quyền đóng hàng.';

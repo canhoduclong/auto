@@ -136,14 +136,12 @@
         font-size: .82rem !important;
         font-weight: 700;
         line-height: 1.3;
+        cursor: pointer;
+        user-select: none;
     }
-    .js-draft-packing-option .form-check-input {
-        flex: 0 0 18px;
-        width: 18px;
-        height: 18px;
-        margin: 0 !important;
-    }
+    .js-draft-packing-option .form-check-input { position: absolute; opacity: 0; pointer-events: none; }
     .js-draft-packing-option:has(.form-check-input:checked) { border-color: #6ee7b7; background: #ecfdf5; }
+    .js-draft-packing-option:has(.form-check-input:disabled) { cursor: default; }
     .draft-edit-footer-actions { align-items: center; }
     .draft-edit-footer-actions .btn { white-space: nowrap; }
     .draft-edit-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 4px 0; border-top: 1px solid #dce6f1; }
@@ -537,7 +535,7 @@
                                 </div>
                                 <div class="border rounded p-2 my-2 js-draft-packing" data-policy="{{ json_encode($draft->warehouse_product_permissions) }}">
                                     <div class="fw-bold small">Cho phép kho linh động đóng hàng theo sản phẩm</div>
-                                    <div class="text-muted small mb-2">Kho chỉ được phối các biến thể đã chọn cho từng sản phẩm. Không chọn thêm: đóng đúng biến thể đặt hàng.</div>
+                                    <div class="text-muted small mb-2">Bấm vào nhãn size để cho phép kho chọn thêm size khi đóng hàng. Size trong đơn luôn được giữ.</div>
                                     <div class="js-draft-packing-options"></div>
                                 </div>
                                 @if(!$hasOrderForSelectedDate)
@@ -817,12 +815,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const size = Number(v.size);
                 if (seenSizes.has(size)) return;
                 seenSizes.add(size);
-                const details = [
-                    v.variant_name ? String(v.variant_name).trim() : '',
-                    v.sku ? 'SKU: ' + String(v.sku).trim() : '',
-                    'Size: ' + new Intl.NumberFormat('vi-VN', {maximumFractionDigits: 3}).format(size),
-                ].filter(Boolean);
-                sizeOptions.push({size, label: details.join(' · '), inDraft: ids.includes(Number(v.id))});
+                const label = 'Size ' + new Intl.NumberFormat('vi-VN', {maximumFractionDigits: 3}).format(size);
+                sizeOptions.push({size, label, inDraft: ids.includes(Number(v.id))});
             });
             const orderedSizes = productVariants.filter(v => ids.includes(Number(v.id)) && Number(v.size) > 0).map(v => Number(v.size));
             state[productId] ||= {quantity: false, sizes: []};
@@ -848,28 +842,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 section.append(label);
                 return input;
             };
-            checkbox('Cho phép điều chỉnh số lượng', policy.quantity === true || policy.quantity === 1 || policy.quantity === '1', false, input => policy.quantity = input.checked);
             if (sizeOptions.length) {
-                section.append(document.createElement('br'));
                 const variantInputs = [];
                 const syncPolicySizes = () => {
                     policy.sizes = [...new Set([...orderedSizes, ...variantInputs.filter(i => i.checked && !i.disabled).map(i => Number(i.dataset.size))])];
                 };
-                const allInput = checkbox('Chọn tất cả biến thể', sizeOptions.every(option => (policy.sizes || []).map(Number).includes(option.size)), false, input => {
-                    variantInputs.forEach(i => { if (!i.disabled) i.checked = input.checked; });
-                    syncPolicySizes();
-                });
-                section.append(document.createElement('br'));
                 sizeOptions.forEach(option => {
                     const checked = option.inDraft || (policy.sizes || []).map(Number).includes(option.size);
                     const input = checkbox(option.inDraft ? `${option.label} (trong đơn)` : option.label, checked, option.inDraft, () => {
                         syncPolicySizes();
-                        allInput.checked = variantInputs.every(i => i.checked);
                     });
                     input.dataset.size = String(option.size);
                     variantInputs.push(input);
                 });
-                allInput.checked = variantInputs.every(i => i.checked);
             }
             container.append(section);
         });
