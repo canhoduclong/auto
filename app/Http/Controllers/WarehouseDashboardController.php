@@ -1798,7 +1798,22 @@ class WarehouseDashboardController extends Controller
             $sequence++;
         }
 
-        return view('warehouse.transfers.incoming', compact('transfers', 'managedWarehouseId', 'selectedDate'));
+        $inventoryTransfers = WarehouseInventoryTransfer::query()
+            ->with([
+                'sourceWarehouse:id,name', 'targetWarehouse:id,name', 'requester:id,name',
+                'receiver:id,name', 'order:id,code,customer_id', 'order.customer:id,name',
+                'items.variant.product', 'dispatchEntry.slip',
+            ])
+            ->where('target_warehouse_id', $managedWarehouseId ?? 0)
+            ->whereIn('status', [
+                WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE,
+                WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED,
+            ])
+            ->orderByRaw("CASE WHEN status = 'pending_receive' THEN 0 ELSE 1 END")
+            ->latest('id')
+            ->get();
+
+        return view('warehouse.transfers.incoming', compact('transfers', 'inventoryTransfers', 'managedWarehouseId', 'selectedDate'));
     }
 
     public function confirmTransferReceipt(Request $request, WarehouseTransfer $transfer)

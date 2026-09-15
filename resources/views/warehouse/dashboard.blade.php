@@ -230,18 +230,12 @@
                     'route' => route('warehouse.orders'),
                 ],
                 [
-                    'label' => 'Tiếp nhận Đơn',
-                    'total' => ($stats['transfers_incoming'] ?? 0) + ($stats['transfers_completed'] ?? 0),
-                    'done' => $stats['transfers_completed'] ?? 0,
-                    'route' => route('warehouse.transfers.incoming'),
+                    'label' => 'Tiếp nhận đơn & hàng',
+                    'total' => ($stats['transfers_incoming'] ?? 0) + ($stats['transfers_completed'] ?? 0) + ($stats['receiving'] ?? 0) + ($stats['received'] ?? 0),
+                    'done' => ($stats['transfers_completed'] ?? 0) + ($stats['received'] ?? 0),
+                    'route' => route('warehouse.receiving'),
                     'key' => 'incoming-orders',
-                    'show' => ($stats['transfers_incoming'] ?? 0) > 0,
-                ],
-                [
-                    'label' => 'Tiếp nhận hàng',
-                    'total' => ($stats['receiving'] ?? 0) + ($stats['received'] ?? 0),
-                    'done' => $stats['received'] ?? 0,
-                    'route' => route('warehouse.inventory-transfers.incoming'),
+                    'show' => ($stats['transfers_incoming'] ?? 0) > 0 || ($stats['receiving'] ?? 0) > 0,
                 ],
                 [
                     'label' => 'Tiếp nhận đơn hoàn trả',
@@ -305,7 +299,7 @@
                 <div class="alert alert-danger mt-3" style="font-size:1.05rem;">
                     <i class="bi bi-exclamation-triangle me-2"></i>
                     <b>Cần tiếp nhận hàng:</b> Hiện có <b>{{ $stats['receiving'] }}</b> phiếu điều chuyển chờ tiếp nhận!
-                    <a href="{{ route('warehouse.inventory-transfers.incoming') }}" class="ms-2 text-danger text-decoration-underline">Xem chi tiết</a>
+                    <a href="{{ route('warehouse.receiving') }}" class="ms-2 text-danger text-decoration-underline">Xem chi tiết</a>
                 </div>
             @endif
             <div class="task-desc-legend">

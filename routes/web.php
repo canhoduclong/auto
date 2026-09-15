@@ -124,10 +124,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/{order}/reopen-packing', [OrderPackingController::class, 'reopenPacking'])->name('orders.reopen-packing');
         Route::get('/orders/{order}', [OrderPackingController::class, 'show'])->name('orders.detail');
         Route::get('/returns', [ReturnController::class, 'index'])->name('returns');
-        Route::get('/incoming', [ReceivingController::class, 'incoming'])->name('incoming');
-        Route::get('/incoming-orders', [ReceivingController::class, 'incoming'])->name('incoming-orders');
+        Route::get('/incoming-orders', [ReceivingController::class, 'incomingOrders'])->name('incoming-orders');
         Route::post('/incoming-orders/{transfer}/confirm', [ReceivingController::class, 'confirmIncomingOrder'])->name('incoming-orders.confirm');
-        Route::get('/incoming-inventory', [ReceivingController::class, 'incoming'])->name('incoming-inventory');
+        Route::get('/incoming-inventory', [ReceivingController::class, 'incomingInventory'])->name('incoming-inventory');
         Route::post('/incoming-inventory/{transfer}/confirm', [ReceivingController::class, 'confirmIncomingInventory'])->name('incoming-inventory.confirm');
         Route::get('/incoming-returns', [ReceivingController::class, 'incomingReturns'])->name('incoming-returns');
         Route::get('/incoming-returns/{orderReturn}/receive', [ReceivingController::class, 'receiveReturn'])->name('incoming-returns.receive');
@@ -420,6 +419,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/{order}/reopen-packing', [WarehouseDashboardController::class, 'reopenPacking'])->name('orders.reopen-packing');
         Route::post('/orders/rap-don-hang', [WarehouseDashboardController::class, 'rapDonHang'])->name('orders.rap-don-hang');
         Route::get('/transfers/incoming', [WarehouseDashboardController::class, 'incomingTransfers'])->name('transfers.incoming');
+        Route::get('/receiving', [WarehouseDashboardController::class, 'incomingTransfers'])->name('receiving');
         Route::post('/transfers/{transfer}/confirm-receipt', [WarehouseDashboardController::class, 'confirmTransferReceipt'])->name('transfers.confirm-receipt');
         Route::post('/transfers/{transfer}/undo-receipt', [WarehouseDashboardController::class, 'undoTransferReceipt'])->name('transfers.undo-receipt');
         Route::post('/transfers/{transfer}/rollback', [WarehouseDashboardController::class, 'rollbackIncomingTransfer'])->name('transfers.rollback');

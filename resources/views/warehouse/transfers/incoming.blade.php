@@ -1,7 +1,7 @@
 @extends('layouts.warehouse')
 
-@section('title', 'Tiếp nhận hàng điều chuyển')
-@section('subtitle', 'Đơn hàng điều chuyển từ kho khác qua shipper')
+@section('title', 'Tiếp nhận')
+@section('subtitle', 'Tiếp nhận đơn và hàng điều chuyển vào kho')
 
 @push('styles')
 <style>
@@ -202,6 +202,11 @@
     $timelineHours = $timelineTransfers->keys();
 @endphp
 
+<div class="d-flex gap-2 mb-3">
+    <a href="#incoming-orders" class="btn btn-sm btn-primary"><i class="bi bi-receipt me-1"></i>Tiếp nhận đơn</a>
+    <a href="#incoming-goods" class="btn btn-sm btn-outline-primary"><i class="bi bi-box-arrow-in-down me-1"></i>Tiếp nhận hàng</a>
+</div>
+
 @php
     $firstOrder = $transfers->first()?->order;
     $orderCreationDate = optional($firstOrder?->created_at)->format('d/m/Y') ?: '—';
@@ -247,7 +252,7 @@
     </div>
 </div>
 
-<div class="row g-4">
+<div class="row g-4" id="incoming-orders">
     <div class="col-12 col-lg-6">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="mb-0 fw-bold" style="color: var(--theme-primary) !important;">
@@ -285,6 +290,30 @@
         </div>
     </div>
 </div>
+
+<section id="incoming-goods" class="mt-5 pt-3 border-top">
+    @php($pendingInventoryCount = $inventoryTransfers->where('status', 'pending_receive')->count())
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <div><h4 class="mb-1 fw-bold"><i class="bi bi-box-arrow-in-down me-2"></i>Tiếp nhận hàng điều chuyển</h4><div class="text-muted small">Các phiếu hàng được chuyển tới kho đang quản lý.</div></div>
+        <span class="badge bg-warning text-dark rounded-pill">Chờ tiếp nhận: {{ number_format($pendingInventoryCount) }}</span>
+    </div>
+    <div class="row g-3">
+    @forelse($inventoryTransfers as $inventoryTransfer)
+        @php($isPendingInventory = $inventoryTransfer->status === 'pending_receive')
+        <div class="col-12 col-xl-6"><div class="card border-0 shadow-sm h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center"><div><strong>{{ $inventoryTransfer->transfer_code ?? '#'.$inventoryTransfer->id }}</strong><div class="small text-muted">Từ {{ $inventoryTransfer->sourceWarehouse?->name ?? '—' }} · {{ optional($inventoryTransfer->requested_at ?? $inventoryTransfer->created_at)->format('d/m/Y H:i') }}</div></div><span class="badge {{ $isPendingInventory ? 'bg-warning text-dark' : 'bg-success' }}">{{ $isPendingInventory ? 'Chờ tiếp nhận' : 'Đã tiếp nhận' }}</span></div>
+            <div class="card-body">
+                @if($inventoryTransfer->order)<div class="alert alert-info py-2 small">Hàng cho đơn <strong>{{ $inventoryTransfer->order->code ?: '#'.$inventoryTransfer->order->id }}</strong> · {{ $inventoryTransfer->order->customer?->name }}</div>@endif
+                @foreach($inventoryTransfer->items as $item)<div class="d-flex justify-content-between gap-2 border-bottom py-2"><span>{{ $item->variant?->product?->name ?? 'Sản phẩm' }} · Size {{ $item->variant?->size ?? '—' }}</span><strong class="text-nowrap">{{ number_format($item->quantity) }} · {{ number_format((float)$item->weight_kg,3,',','.') }} kg</strong></div>@endforeach
+                <div class="text-end fw-bold text-primary pt-2">Tổng KL: {{ number_format((float)$inventoryTransfer->items->sum('weight_kg'),3,',','.') }} kg</div>
+            </div>
+            @if($isPendingInventory)<div class="card-footer bg-white text-end"><form method="POST" action="{{ route('warehouse.inventory-transfers.confirm', $inventoryTransfer) }}" onsubmit="return confirm('Xác nhận tiếp nhận và nhập kho phiếu này?')">@csrf<button class="btn btn-success btn-sm"><i class="bi bi-check2-circle me-1"></i>Xác nhận nhập kho</button></form></div>@endif
+        </div></div>
+    @empty
+        <div class="col-12 text-center text-muted py-5"><i class="bi bi-inbox fs-1 d-block"></i>Không có phiếu hàng điều chuyển.</div>
+    @endforelse
+    </div>
+</section>
 
 @push('scripts')
 <script>

@@ -19,28 +19,6 @@ use Illuminate\Support\Facades\DB;
 
 class ReceivingController extends Controller
 {
-    public function incoming()
-    {
-        $warehouseId = $this->warehouseId();
-        $orderTransfers = WarehouseTransfer::with([
-            'order.customer', 'order.items.product', 'order.items.variant.product',
-            'sourceWarehouse', 'targetWarehouse', 'shipper',
-        ])->where('target_warehouse_id', $warehouseId)
-            ->whereIn('status', [WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE, WarehouseTransfer::STATUS_RECEIVED_COMPLETED])
-            ->orderByRaw("CASE WHEN status = 'delivered_waiting_receive' THEN 0 ELSE 1 END")
-            ->latest('id')->get();
-
-        $inventoryTransfers = WarehouseInventoryTransfer::with([
-            'sourceWarehouse:id,name', 'targetWarehouse:id,name', 'requester:id,name',
-            'receiver:id,name', 'items.variant.product',
-        ])->where('target_warehouse_id', $warehouseId)
-            ->whereIn('status', [WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE, WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED])
-            ->orderByRaw("CASE WHEN status = 'pending_receive' THEN 0 ELSE 1 END")
-            ->latest('id')->get();
-
-        return view('package.receiving.incoming', compact('orderTransfers', 'inventoryTransfers'));
-    }
-
     public function incomingOrders()
     {
         $warehouseId = $this->warehouseId();

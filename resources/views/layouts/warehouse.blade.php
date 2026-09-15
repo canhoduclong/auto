@@ -341,11 +341,8 @@
             </a>
 
             <div class="wh-nav-section">Tiếp nhận</div>
-            <a href="{{ route('warehouse.transfers.incoming') }}" class="wh-nav-link {{ request()->routeIs('warehouse.transfers.incoming') ? 'active' : '' }}">
-                <i class="bi bi-arrow-left-right"></i><span class="wh-nav-label">Tiếp nhận Đơn</span>
-            </a>
-            <a href="{{ route('warehouse.inventory-transfers.incoming') }}" class="wh-nav-link {{ request()->routeIs('warehouse.inventory-transfers.incoming') ? 'active' : '' }}">
-                <i class="bi bi-box-arrow-in-down"></i><span class="wh-nav-label">Tiếp nhận hàng</span>
+            <a href="{{ route('warehouse.receiving') }}" class="wh-nav-link {{ request()->routeIs('warehouse.receiving', 'warehouse.transfers.incoming', 'warehouse.inventory-transfers.incoming') ? 'active' : '' }}">
+                <i class="bi bi-box-arrow-in-down"></i><span class="wh-nav-label">Tiếp nhận</span>
             </a>
             <a href="{{ route('warehouse.returns') }}" class="wh-nav-link {{ request()->routeIs('warehouse.returns') ? 'active' : '' }}">
                 <i class="bi bi-arrow-return-left"></i><span class="wh-nav-label">Đơn trả về</span>
