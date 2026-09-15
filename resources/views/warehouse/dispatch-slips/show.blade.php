@@ -8,10 +8,12 @@
     $dispatchRoutePrefix = $dispatchRoutePrefix ?? 'warehouse.dispatch-slips';
     $readOnly = $readOnly ?? false;
 @endphp
+<div id="dispatchSlipShareContent" class="bg-white p-2">
 <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
     <div><a href="{{ route($dispatchRoutePrefix.'.index') }}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Danh sách phiếu</a><h4 class="fw-bold mt-1 mb-1">{{ $slip->code }}</h4><div class="text-muted">{{ $slip->sourceWarehouse?->name }} → {{ $slip->targetWarehouse?->name }} · {{ $slip->business_date->format('d/m/Y') }}</div></div>
-    <div class="d-flex gap-2 flex-wrap">
+    <div class="d-flex gap-2 flex-wrap" data-share-exclude>
         <a target="_blank" href="{{ route($dispatchRoutePrefix.'.print-export', $slip) }}" class="btn btn-outline-primary"><i class="bi bi-printer me-1"></i>In phiếu xuất tổng</a>
+        <button type="button" class="btn btn-outline-info" data-share-dispatch-slip data-share-target="#dispatchSlipShareContent" data-share-filename="chi-tiet-{{ $slip->code }}" data-share-title="Chi tiết {{ $slip->code }}"><i class="bi bi-share me-1"></i>Chia sẻ ảnh Zalo</button>
         @unless($readOnly)
         <a target="_blank" href="{{ route($dispatchRoutePrefix.'.print-import', $slip) }}" class="btn btn-outline-success"><i class="bi bi-printer me-1"></i>In phiếu nhập tổng</a>
         @if($slip->status === 'draft' && (auth()->user()->hasRole('admin') || !auth()->user()->warehouse_id || (int) auth()->user()->warehouse_id === (int) $slip->source_warehouse_id))
@@ -52,4 +54,9 @@
 <div class="card"><div class="card-header bg-white fw-bold">Tổng hợp hàng hóa trên phiếu</div><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead class="table-light"><tr><th>Sản phẩm</th><th>SKU/Size</th><th class="text-end">SL xuất</th><th class="text-end">KL thực tế đóng</th><th class="text-end">Giá</th><th class="text-end">Thành tiền</th><th class="text-end">SL đã nhận</th><th class="text-end">KL đã nhận</th></tr></thead><tbody>
 @forelse($summaryRows as $row)<tr><td><strong>{{ $row['product_name'] }}</strong></td><td>{{ $row['sku'] ?: '—' }} / {{ $row['size'] ?: '—' }}</td><td class="text-end">{{ number_format($row['quantity']) }}</td><td class="text-end text-nowrap">{{ $formatKg($row['weight']) }}</td><td class="text-end text-nowrap">{{ number_format($row['price'], 0, ',', '.') }}đ/{{ $row['priced_by_kg'] ? 'kg' : 'đv' }}</td><td class="text-end fw-semibold text-nowrap">{{ number_format($row['amount'], 0, ',', '.') }}đ</td><td class="text-end">{{ $row['received_quantity'] === null ? '—' : number_format($row['received_quantity']) }}</td><td class="text-end text-nowrap">{{ $row['received_weight'] === null ? '—' : $formatKg($row['received_weight']) }}</td></tr>@empty<tr><td colspan="8" class="text-center text-muted py-3">Chưa có hàng hóa.</td></tr>@endforelse
 </tbody><tfoot class="table-light fw-bold"><tr><td colspan="2">Tổng cộng</td><td class="text-end">{{ number_format($summaryRows->sum('quantity')) }}</td><td class="text-end text-nowrap">{{ $formatKg($summaryRows->sum('weight')) }}</td><td></td><td class="text-end text-nowrap">{{ number_format($summaryRows->sum('amount'), 0, ',', '.') }}đ</td><td class="text-end">{{ number_format((int) $summaryRows->sum(fn($row) => $row['received_quantity'] ?? 0)) }}</td><td class="text-end text-nowrap">{{ $formatKg($summaryRows->sum(fn($row) => $row['received_weight'] ?? 0)) }}</td></tr></tfoot></table></div></div>
+</div>
+@push('scripts')
+<script src="{{ asset('js/html2canvas.min.js') }}"></script>
+<script src="{{ asset('js/share-dispatch-slip.js') }}"></script>
+@endpush
 @endsection

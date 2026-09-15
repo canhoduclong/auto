@@ -5,11 +5,12 @@
 .customer-name{color:#0f172a;font-size:11.5px;line-height:1.35;font-weight:700}
 .order-table th:nth-child(1){width:5%}.order-table th:nth-child(2){width:24%}.order-table th:nth-child(3){width:10%}.order-table th:nth-child(4){width:9%}.order-table th:nth-child(5){width:13%}.order-table th:nth-child(6){width:16%}.order-table th:nth-child(7){width:23%}
 .transfer-goods-table th:nth-child(1){width:6%}.transfer-goods-table th:nth-child(2){width:34%}.transfer-goods-table th:nth-child(3){width:20%}.transfer-goods-table th:nth-child(4){width:18%}.transfer-goods-table th:nth-child(5){width:22%}
+.print-actions{position:fixed;right:24px;top:18px;z-index:10;display:flex;gap:8px}.print-actions button{border:0;border-radius:7px;background:#0f766e;color:#fff;font-size:13px;font-weight:700;padding:9px 16px;cursor:pointer;box-shadow:0 2px 8px rgba(15,23,42,.2)}.print-actions .share-btn{background:#087f5b}@media print{.print-actions{display:none!important}}
 </style></head><body>
 @php($formatKg = static fn (float|int|string $value): string => rtrim(rtrim(number_format((float) $value, 3, ',', '.'), '0'), ',').' kg')
 @php($formatMoney = static fn (float|int|string $value): string => number_format((float) $value, 0, ',', '.').'đ')
-<button class="no-print" onclick="window.print()">In phiếu</button>
-<main class="print-sheet">
+<div class="print-actions no-print"><button onclick="window.print()">In phiếu</button><button type="button" class="share-btn" data-share-dispatch-slip data-share-target="#dispatchSlipShareContent" data-share-filename="phieu-xuat-{{ $slip->code }}" data-share-title="Phiếu xuất kho {{ $slip->code }}">Chia sẻ ảnh Zalo</button></div>
+<main class="print-sheet" id="dispatchSlipShareContent">
 <div class="small">HOÀNG LONG TNT</div><h1>PHIẾU XUẤT KHO TỔNG</h1><div class="sub"><strong>{{ $slip->code }}</strong> · Ngày {{ $slip->business_date->format('d/m/Y') }}</div>
 @if($slip->status === 'draft')<div class="draft">BẢN NHÁP — PHIẾU CHƯA CHỐT</div>@endif
 <div class="meta"><div>Kho xuất: <strong>{{ $slip->sourceWarehouse?->name }}</strong></div><div>Kho nhận: <strong>{{ $slip->targetWarehouse?->name }}</strong></div><div>Địa chỉ xuất: {{ $slip->sourceWarehouse?->address ?: '—' }}</div><div>Địa chỉ nhận: {{ $slip->targetWarehouse?->address ?: '—' }}</div><div>Tài xế: <strong>{{ $slip->shipper?->name }}</strong></div><div>Điện thoại: {{ $slip->shipper?->phone ?: '—' }}</div><div>Người lập: {{ $slip->creator?->name }}</div><div>Chốt lúc: {{ optional($slip->finalized_at)->format('d/m/Y H:i') ?: 'Chưa chốt' }}</div></div>
@@ -40,4 +41,5 @@
 <div class="box handover-note">@if(filled($slip->notes)){{ $slip->notes }}@else<div class="write-line"></div><div class="write-line"></div>@endif</div>
 <div class="sign"><div><strong>NGƯỜI LẬP PHIẾU</strong><div class="small">(Ký, ghi rõ họ tên)</div><div class="sign-space"></div>{{ $slip->creator?->name }}</div><div><strong>THỦ KHO XUẤT</strong><div class="small">(Ký, ghi rõ họ tên)</div><div class="sign-space"></div></div><div><strong>TÀI XẾ NHẬN HÀNG</strong><div class="small">(Ký, ghi rõ họ tên)</div><div class="sign-space"></div>{{ $slip->shipper?->name }}</div></div>
 </main>
+<script src="{{ asset('js/html2canvas.min.js') }}"></script><script src="{{ asset('js/share-dispatch-slip.js') }}"></script>
 </body></html>

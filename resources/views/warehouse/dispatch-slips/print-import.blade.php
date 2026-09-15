@@ -5,10 +5,11 @@
 .customer-name{color:#0f172a;font-size:11.5px;line-height:1.35;font-weight:700}
 .manual-note{min-height:34px}
 .transfer-goods-table th:nth-child(1){width:6%}.transfer-goods-table th:nth-child(2){width:32%}.transfer-goods-table th:nth-child(3){width:18%}.transfer-goods-table th:nth-child(4){width:14%}.transfer-goods-table th:nth-child(5){width:17%}.transfer-goods-table th:nth-child(6){width:13%}
+.print-actions{position:fixed;right:24px;top:18px;z-index:10;display:flex;gap:8px}.print-actions button{border:0;border-radius:7px;background:#0f766e;color:#fff;font-size:13px;font-weight:700;padding:9px 16px;cursor:pointer;box-shadow:0 2px 8px rgba(15,23,42,.2)}.print-actions .share-btn{background:#087f5b}@media print{.print-actions{display:none!important}}
 </style></head><body>
 @php($formatKg = static fn (float|int|string $value): string => rtrim(rtrim(number_format((float) $value, 3, ',', '.'), '0'), ',').' kg')
-<button class="no-print" onclick="window.print()">In phiếu</button>
-<main class="print-sheet">
+<div class="print-actions no-print"><button onclick="window.print()">In phiếu</button><button type="button" class="share-btn" data-share-dispatch-slip data-share-target="#dispatchSlipShareContent" data-share-filename="phieu-nhap-{{ $slip->code }}" data-share-title="Phiếu nhập kho {{ $slip->code }}">Chia sẻ ảnh Zalo</button></div>
+<main class="print-sheet" id="dispatchSlipShareContent">
 <div class="small">HOÀNG LONG TNT</div><h1>PHIẾU NHẬP KHO TỔNG</h1><div class="sub">Tham chiếu phiếu xuất <strong>{{ $slip->code }}</strong> · Ngày {{ now()->format('d/m/Y') }}</div>
 <div class="notice {{ $slip->entry_received === $slip->entry_total && $slip->entry_total > 0 ? 'done' : '' }}">{{ $slip->entry_received === $slip->entry_total && $slip->entry_total > 0 ? 'ĐÃ TIẾP NHẬN HOÀN TẤT' : 'PHIẾU NHẬP TẠM — '.$slip->progress_label }}</div>
 <div class="meta"><div>Kho xuất: <strong>{{ $slip->sourceWarehouse?->name }}</strong></div><div>Kho nhập: <strong>{{ $slip->targetWarehouse?->name }}</strong></div><div>Tài xế bàn giao: {{ $slip->shipper?->name }}</div><div>Ngày nghiệp vụ: {{ $slip->business_date->format('d/m/Y') }}</div></div>
@@ -41,4 +42,5 @@
 <div class="box handover-note">@if(filled($slip->notes)){{ $slip->notes }}@else<div class="write-line"></div><div class="write-line"></div>@endif</div>
 <div class="sign"><div><strong>TÀI XẾ BÀN GIAO</strong><div class="small">(Ký, ghi rõ họ tên)</div><div class="sign-space"></div>{{ $slip->shipper?->name }}</div><div><strong>THỦ KHO NHẬN</strong><div class="small">(Ký, ghi rõ họ tên)</div><div class="sign-space"></div></div><div><strong>NGƯỜI ĐỐI CHIẾU</strong><div class="small">(Ký, ghi rõ họ tên)</div><div class="sign-space"></div></div></div>
 </main>
+<script src="{{ asset('js/html2canvas.min.js') }}"></script><script src="{{ asset('js/share-dispatch-slip.js') }}"></script>
 </body></html>
