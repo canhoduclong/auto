@@ -257,10 +257,10 @@
     .wh-item-table-head,
     .wh-item-table-row {
         display: grid;
-        grid-template-columns: 48px minmax(180px, 1fr) 52px 92px 90px 150px 76px 100px;
+        grid-template-columns: 48px minmax(170px, 1fr) 52px 52px 132px 80px 140px 76px 100px;
         gap: 8px;
         align-items: center; 
-        min-width: 850px;
+        min-width: 930px;
     }
     .wh-item-table-head {
         font-size: .72rem;

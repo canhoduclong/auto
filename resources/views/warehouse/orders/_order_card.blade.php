@@ -447,6 +447,7 @@
                                     <div>Sản phẩm</div>
                                     <div class="text-center">Size</div>
                                     <div class="text-center">SL</div>                                    
+                                    <div class="text-center">SL đóng</div>
                                     <div class="text-center">Tổng</div>
                                     <div class="text-center">Khối lượng</div>
                                     <div class="text-center">Đơn giá</div>
@@ -460,6 +461,7 @@
                                             $variant = $item->variant;
                                             $orderedQty = (int) $item->quantity;
                                             $isCutPackingItem = $item->variant?->product?->product_type === \App\Models\Product::TYPE_CUT;
+                                            $canSetPackedQuantity = $isCutPackingItem || $order->allowsWarehouseQuantityChange((int) $item->product_id);
                                             $unitPrice = (float) ($item->price ?? 0);
                                             $unitLabel = $variant?->product?->unit_label ?? '--'; 
                                             $pricedByKg = (bool) $item->effective_priced_by_kg;
@@ -505,16 +507,19 @@
                                                 <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
                                                 <div class="wh-item-cell">
                                                     <strong>{{ number_format($orderedQty) }}</strong>
-                                                    @if($canProcessThisOrder && !$isPackedReadonly && !$isPendingSaleConfirmation && $order->allowsWarehouseQuantityChange((int) $item->product_id))
-                                                        <form method="POST" action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.request-adjustment', $order) }}" class="mt-1">
+                                                </div>
+                                                <div class="wh-item-cell">
+                                                    @if($canProcessThisOrder && !$isPackedReadonly && !$isPendingSaleConfirmation && $canSetPackedQuantity)
+                                                        <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.logistics', $order) }}" method="POST" class="js-packed-quantity-form wh-compact-form justify-content-center">
                                                             @csrf
-                                                            <input type="hidden" name="reason" value="Kho điều chỉnh số lượng theo quyền Sale cho phép">
-                                                            <input type="hidden" name="items[0][order_item_id]" value="{{ $item->id }}">
-                                                            <input type="number" name="items[0][quantity]" value="{{ (int) $orderedQty }}" min="1" max="100000" required class="form-control form-control-sm" aria-label="Số lượng sản phẩm được phép điều chỉnh" style="width:80px">
-                                                            <button class="btn btn-sm btn-success mt-1">Lưu SL</button>
+                                                            <input type="hidden" name="item_id" value="{{ $item->id }}">
+                                                            <input type="hidden" name="packed_quantity_only" value="1">
+                                                            <input type="number" name="item_packed_quantity" class="form-control form-control-sm" min="1" max="100000" step="1" required value="{{ $item->packed_quantity ?? $orderedQty }}" aria-label="Số lượng đóng thực tế" style="width:72px">
+                                                            <button class="btn btn-sm btn-success" type="submit">Lưu</button>
                                                         </form>
+                                                    @else
+                                                        <strong>{{ number_format((int) ($item->packed_quantity ?? $orderedQty)) }}</strong>
                                                     @endif
-                                                    @if($isCutPackingItem && $item->packed_quantity !== null)<small class="d-block text-success">Đóng: {{ $item->packed_quantity }}</small>@endif
                                                 </div>
                                                 <div class="wh-item-cell"><strong>{{ $item->display_total_label }}</strong></div>
                                                 
@@ -534,11 +539,6 @@
                                                             <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.logistics', $order) }}" method="POST" class="js-logistics-item-form wh-compact-form justify-content-end">
                                                                 @csrf
                                                                 <input type="hidden" name="item_id" value="{{ $item->id }}">
-                                                                @if($isCutPackingItem)
-                                                                    <label class="small mb-0">SL đóng
-                                                                        <input type="number" name="item_packed_quantity" class="form-control form-control-sm" min="1" max="100000" step="1" required value="{{ $item->packed_quantity ?? $orderedQty }}" aria-label="Số lượng đóng thực tế" style="width:85px">
-                                                                    </label>
-                                                                @endif
                                                                 <input type="number" name="item_actual_weight" class="form-control form-control-sm actual_weight js-weight-input"
                                                                     value="{{ $itemWeightDefault }}"
                                                                     placeholder="{{ $weightUnitLabel }}"

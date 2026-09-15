@@ -1909,18 +1909,26 @@
                                 ]);
                             }
                             $orderPendingAdjustments = ($pendingAdjustmentsByOrder ?? collect())->get($order->id, collect());
+                            $formatZaloSize = static fn ($size): string => is_numeric($size)
+                                ? number_format((float) $size, 2, '.', '')
+                                : trim((string) $size);
                             $zaloProductLines = $order->items
                                 ->groupBy(fn ($item) => (string) ($item->product_id ?: $item->display_name))
-                                ->flatMap(function ($items) use ($formatQuantity) {
+                                ->values()
+                                ->pipe(function ($groups) use ($formatQuantity, $formatZaloSize) {
+                                    return $groups->flatMap(function ($items, $index) use ($groups, $formatQuantity, $formatZaloSize) {
                                     $first = $items->first();
                                     $productName = $first->product?->name ?: $first->display_name ?: 'Sản phẩm';
-                                    $sizes = $items->map(fn ($item) => trim((string) ($item->variant?->size ?? '')))->filter()->unique()->values();
+                                    $sizes = $items->map(fn ($item) => $formatZaloSize($item->variant?->size ?? ''))->filter()->unique()->values();
 
                                     return collect([
-                                        '- '.$productName,
+                                        ($index + 1).'. '.$productName,
+                                        '',
                                         $sizes->isNotEmpty() ? '- Size '.$sizes->implode(' - ') : null,
-                                        '- Số Lượng: '.$formatQuantity($items->sum('quantity')),
-                                    ])->filter();
+                                        '- Số Lượng: '.$formatQuantity($items->sum(fn ($item) => $item->packed_quantity ?? $item->quantity)),
+                                        $index < $groups->count() - 1 ? '' : null,
+                                    ])->filter(fn ($line) => $line !== null);
+                                    });
                                 })->values();
                             $truckStationName = trim((string) ($order->truck_station_name ?: $order->truckStation?->name));
                             $truckStationAddress = trim((string) ($order->truck_station_address ?: $order->truckStation?->address));

@@ -3504,11 +3504,12 @@ class WarehouseDashboardController extends Controller
             'item_id' => ['nullable', 'integer'],
             'item_actual_weight' => ['nullable', 'numeric', 'min:0'],
             'item_packed_quantity' => ['nullable', 'integer', 'min:1', 'max:100000'],
+            'packed_quantity_only' => ['nullable', 'boolean'],
             'clear_item_weight' => ['nullable', 'boolean'],
             'packing_details' => ['nullable', 'boolean'],
         ];
 
-        if ($request->filled('item_id') && ! $request->boolean('clear_item_weight')) {
+        if ($request->filled('item_id') && ! $request->boolean('clear_item_weight') && ! $request->boolean('packed_quantity_only')) {
             $rules['item_actual_weight'] = ['required', 'numeric', 'min:0'];
         }
 
@@ -3571,6 +3572,33 @@ class WarehouseDashboardController extends Controller
 
             $item = $order->items->firstWhere('id', $itemId);
             if ($item) {
+                if ($request->boolean('packed_quantity_only')) {
+                    if (! isset($validated['item_packed_quantity'])) {
+                        throw \Illuminate\Validation\ValidationException::withMessages(['item_packed_quantity' => 'Vui lòng nhập số lượng đóng thực tế.']);
+                    }
+                    $isCutProduct = $item->variant?->product?->product_type === Product::TYPE_CUT;
+                    if (! $isCutProduct && ! $order->allowsWarehouseQuantityChange((int) $item->product_id)) {
+                        throw \Illuminate\Validation\ValidationException::withMessages(['item_packed_quantity' => 'Sale chưa cho phép kho cập nhật số lượng đóng thực tế của sản phẩm này.']);
+                    }
+                    $oldPackedQuantity = $item->packed_quantity;
+                    $item->update(['packed_quantity' => (int) $validated['item_packed_quantity']]);
+                    OrderHistory::create([
+                        'order_id' => $order->id,
+                        'action' => 'warehouse_update_packed_quantity',
+                        'user_id' => Auth::id(),
+                        'role' => $this->packingActorRole(),
+                        'status_before' => $order->status,
+                        'status_after' => $order->status,
+                        'note' => 'Cập nhật SL đóng '.($item->variant?->name ?? $item->product?->name ?? ('dòng #'.$item->id))
+                            .': '.($oldPackedQuantity ?? $item->quantity).' → '.$item->packed_quantity.'.',
+                    ]);
+                    $message = 'Đã lưu số lượng đóng thực tế.';
+                    if ($expectsJson) {
+                        return response()->json(['ok' => true, 'message' => $message, 'packed_quantity' => $item->packed_quantity]);
+                    }
+                    return back()->with('success', $message);
+                }
+
                 if ($request->boolean('clear_item_weight')) {
                     $clearedWeight = $item->actual_weight;
                     $item->forceFill([
@@ -3618,8 +3646,8 @@ class WarehouseDashboardController extends Controller
                 $newWeight = round((float) $validated['item_actual_weight'], 3);
                 $isCutProduct = $item->variant?->product?->product_type === Product::TYPE_CUT;
                 if (isset($validated['item_packed_quantity'])) {
-                    if (! $isCutProduct) {
-                        throw \Illuminate\Validation\ValidationException::withMessages(['item_packed_quantity' => 'Chỉ hàng pha lóc được cập nhật số lượng đóng thực tế.']);
+                    if (! $isCutProduct && ! $order->allowsWarehouseQuantityChange((int) $item->product_id)) {
+                        throw \Illuminate\Validation\ValidationException::withMessages(['item_packed_quantity' => 'Sale chưa cho phép cập nhật số lượng đóng thực tế.']);
                     }
                     $requiredWeight = round((float) $item->quantity * (float) $item->effective_unit_weight, 3);
                     if ($newWeight < $requiredWeight - 0.000001) {
@@ -3628,8 +3656,9 @@ class WarehouseDashboardController extends Controller
                     $item->packed_quantity = (int) $validated['item_packed_quantity'];
                 }
                 $itemSize = $item->packingAverageSize();
-                if (! $isCutProduct && $itemSize > 0 && (int) $item->quantity > 0) {
-                    $averageWeight = $newWeight / (int) $item->quantity;
+                $packedQuantityForWeight = (int) ($item->packed_quantity ?? $item->quantity);
+                if (! $isCutProduct && $itemSize > 0 && $packedQuantityForWeight > 0) {
+                    $averageWeight = $newWeight / $packedQuantityForWeight;
                     $averageMin = max(0, $itemSize - 0.25);
                     $averageMax = $itemSize + 0.25;
                     if ($averageWeight < $averageMin - 0.000001 || $averageWeight > $averageMax + 0.000001) {
