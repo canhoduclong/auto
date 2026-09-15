@@ -68,6 +68,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\WarehouseController;
 use App\Http\Controllers\WarehouseDashboardController;
 use App\Http\Controllers\WarehouseStocktakeController;
+use App\Http\Controllers\Warehouse\AssignmentReviewController;
 
 // Public mobile update files. These routes are also a fallback when Nginx does
 // not serve public/app-update directly.
@@ -378,6 +379,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     // ─── Warehouse module ───────────────────────────────────────────────────
     Route::prefix('warehouse')->name('warehouse.')->middleware('role:warehouse,admin')->group(function () {
+        Route::get('/manage-assignments/review', [AssignmentReviewController::class, 'index'])->name('assignment-review.index');
+        Route::post('/manage-assignments/review/print', [AssignmentReviewController::class, 'print'])->name('assignment-review.print');
         Route::get('/procurement-receipts', [\App\Http\Controllers\WarehouseProcurementController::class, 'index'])->name('procurement-receipts.index');
         Route::post('/procurement-receipts/{purchase}/receive', [\App\Http\Controllers\WarehouseProcurementController::class, 'receive'])->name('procurement-receipts.receive');
         Route::get('/order-transfers', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'index'])->name('order-transfers');

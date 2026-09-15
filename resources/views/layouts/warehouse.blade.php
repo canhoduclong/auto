@@ -333,6 +333,9 @@
             <a href="{{ route('warehouse.stock-out.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-out.orders') ? 'active' : '' }}">
                 <i class="bi bi-receipt-cutoff"></i><span class="wh-nav-label">Đơn Xuất Kho</span>
             </a>
+            <a href="{{ route('warehouse.assignment-review.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.assignment-review.*') ? 'active' : '' }}">
+                <i class="bi bi-printer"></i><span class="wh-nav-label">Review &amp; In ấn</span>
+            </a>
             <a href="{{ route('warehouse.stock-out') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-out') ? 'active' : '' }}">
                 <i class="bi bi-box-arrow-right"></i><span class="wh-nav-label">Xuất Kho</span>
             </a>
