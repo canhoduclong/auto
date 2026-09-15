@@ -879,6 +879,21 @@ class WarehouseDispatchSlipController extends Controller
                     'item_count' => $expectedItems->count(),
                     'quantity' => (int) $expectedItems->sum('quantity'),
                     'weight' => round((float) $expectedItems->sum('weight_kg'), 3),
+                    'received' => $transfer->status === WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED,
+                    'receiver_name' => $transfer->receiver?->name,
+                    'received_at' => optional($transfer->received_at)->format('d/m/Y H:i'),
+                    'items' => $expectedItems->map(function ($item) use ($transfer): array {
+                        $liveItem = $transfer->items->firstWhere('product_variant_id', $item->product_variant_id);
+                        $variant = $liveItem?->variant;
+
+                        return [
+                            'product_name' => $item->product_name ?? $variant?->product?->name ?? $variant?->name ?? 'Sản phẩm',
+                            'sku' => $item->sku ?? $variant?->sku,
+                            'size' => $item->size ?? $variant?->size,
+                            'quantity' => (int) $item->quantity,
+                            'weight' => (float) $item->weight_kg,
+                        ];
+                    })->values(),
                 ]);
                 foreach ($expectedItems as $item) {
                     $received = $transfer->status === WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED;
