@@ -89,7 +89,7 @@ class AssignmentReviewController extends Controller
             }
         });
 
-        return view('warehouse.assignment-review.print', compact('orders', 'selectedDate'));
+        return view('shipper.assignment-documents-print', compact('orders', 'selectedDate'));
     }
 
     private function latestDispatch(string $date): ?ShipperDispatchHistory
@@ -115,12 +115,18 @@ class AssignmentReviewController extends Controller
 
     private function warehouseOrders(array $orderIds): Collection
     {
+        $user = Auth::user();
         $warehouseId = (int) (Auth::user()?->warehouse_id ?? 0);
 
         return Order::query()
             ->with(['customer', 'shipper:id,name,phone', 'user:id,name', 'warehouse:id,name', 'items.product', 'items.variant.product'])
             ->whereIn('id', $orderIds)
-            ->when($warehouseId > 0, fn ($query) => $query->where('warehouse_id', $warehouseId))
+            ->when(
+                ! $user?->hasRole('admin'),
+                fn ($query) => $warehouseId > 0
+                    ? $query->where('warehouse_id', $warehouseId)
+                    : $query->whereRaw('1 = 0')
+            )
             ->get()
             ->sortBy(fn (Order $order) => array_search((int) $order->id, $orderIds, true))
             ->values();
