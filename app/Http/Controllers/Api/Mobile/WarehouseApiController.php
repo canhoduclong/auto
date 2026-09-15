@@ -808,6 +808,7 @@ class WarehouseApiController extends BaseApiController
             ->where('action', 'start_packing')
             ->sortByDesc('id')
             ->first();
+        $activePacker = $activePackingHistory?->user;
 
         return [
             'id' => (int) $order->id,
@@ -816,6 +817,7 @@ class WarehouseApiController extends BaseApiController
             'status' => (string) $order->status,
             'status_label' => $statusMeta['label'],
             'status_color' => $statusMeta['color'],
+            'packer_name' => (string) ($activePacker?->short_name ?: $activePacker?->name ?: ''),
             'priority_state' => $this->priorityState((string) $order->status),
             'customer' => [
                 'name' => (string) ($order->customer?->name ?? '—'),
@@ -1062,7 +1064,7 @@ class WarehouseApiController extends BaseApiController
             'approved', Order::STATUS_READY_TO_PACK => ['label' => 'Chờ đóng gói', 'color' => 'gray'],
             Order::STATUS_PACKING => ['label' => 'Đang đóng', 'color' => 'amber'],
             'packed' => ['label' => 'Đã hoàn thành đóng hàng', 'color' => 'green'],
-            Order::STATUS_READY_TO_SHIP => ['label' => 'Đã hoàn thành đóng hàng', 'color' => 'green'],
+            Order::STATUS_READY_TO_SHIP => ['label' => 'Chờ lấy hàng', 'color' => 'green'],
             Order::STATUS_DELIVERING => ['label' => 'Đang giao', 'color' => 'green'],
             Order::STATUS_DELIVERED => ['label' => 'Đã giao', 'color' => 'green'],
             Order::STATUS_COMPLETED => ['label' => 'Hoàn thành', 'color' => 'green'],

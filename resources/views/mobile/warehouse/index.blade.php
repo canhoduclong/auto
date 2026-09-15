@@ -13,7 +13,7 @@
             <option value="approved">Chờ đóng gói</option>
             <option value="ready_to_pack">Chờ đóng gói</option>
             <option value="packing">Đang đóng gói</option>
-            <option value="packed_waiting_pickup">Chờ shipper</option>
+            <option value="packed_waiting_pickup">Chờ lấy hàng</option>
         </select>
     </div>
 </div>
@@ -50,11 +50,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const isReady = ['approved', 'ready_to_pack'].includes(order.status);
 
         return `<div class="m-card m-mobile-order-card">
-            <span class="m-mobile-status-badge">${order.status}</span>
+            <span class="m-mobile-status-badge">${order.status_label || order.status}</span>
             <div class="m-row"><div class="m-value">${order.code}</div></div>
             <div class="m-row"><span>${order.customer}</span><span>${order.created_at || ''}</span></div>
             <div class="m-label">${order.phone} - ${order.address}</div>
             <div class="m-row" style="margin-top:8px;"><span class="m-label">Sản phẩm</span><strong>${order.items_count}</strong></div>
+            ${order.status === 'packing' ? `<div class="m-row"><span class="m-label">Người đóng</span><strong>${order.packer_name || 'Chưa xác định'}</strong></div>` : ''}
             ${renderShortage(order.shortages || [])}
             ${isReady ? `<button class="m-btn ${canStart ? 'm-btn-primary' : 'm-btn-warn'} js-wh-start" data-id="${order.id}" ${canStart ? '' : 'disabled'}>${canStart ? 'Đóng hàng' : 'Unable'}</button>` : ''}
         </div>`;

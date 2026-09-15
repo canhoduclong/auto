@@ -17,6 +17,8 @@
                     ?->where('action', 'start_packing')
                     ->sortByDesc('id')
                     ->first();
+                $activePackerName = $activePackingHistory?->user?->short_name
+                    ?: $activePackingHistory?->user?->name;
                 $canUndoStartPacking = $isPacking
                     && (int) ($activePackingHistory?->user_id ?? 0) === (int) auth()->id();
                 $packingHistory = $order->histories
@@ -1019,7 +1021,10 @@
 
                             @if($isPacking)
                                 <div class="small text-muted mt-2">
-                                    {{ $canUndoStartPacking ? 'Bạn có thể Undo để trả đơn về hàng chờ.' : 'Đơn đang được user khác nhận đóng hàng.' }}
+                                    <i class="bi bi-person-badge me-1"></i>Người đóng: <strong>{{ $activePackerName ?: 'Chưa xác định' }}</strong>
+                                    @if($canUndoStartPacking)
+                                        · Bạn có thể Undo để trả đơn về hàng chờ.
+                                    @endif
                                 </div>
                             @endif
                         @else

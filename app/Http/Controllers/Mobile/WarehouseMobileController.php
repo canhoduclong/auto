@@ -24,7 +24,12 @@ class WarehouseMobileController extends Controller
         $date = (string) $request->query('date', now()->toDateString());
 
         $query = Order::query()
-            ->with(['customer:id,name,phone,address', 'items.variant.product'])
+            ->with([
+                'customer:id,name,phone,address',
+                'items.variant.product',
+                'histories' => fn ($query) => $query->where('action', 'start_packing')->latest('id'),
+                'histories.user:id,name,short_name',
+            ])
             ->whereDate('created_at', $date)
             ->orderBy('created_at');
 
@@ -46,11 +51,14 @@ class WarehouseMobileController extends Controller
 
         $data = $orders->map(function (Order $order) use ($guards) {
             $guard = $guards[$order->id] ?? ['has_shortage' => false, 'can_start_packing' => true, 'shortages' => []];
+            $packer = $order->histories->first()?->user;
 
             return [
                 'id' => (int) $order->id,
                 'code' => (string) ($order->code ?: ('#' . $order->id)),
                 'status' => (string) $order->status,
+                'status_label' => (string) (Order::statusOptions()[$order->status] ?? $order->status),
+                'packer_name' => (string) ($packer?->short_name ?: $packer?->name ?: ''),
                 'customer' => (string) ($order->customer?->name ?? '—'),
                 'phone' => (string) ($order->customer?->phone ?? '—'),
                 'address' => (string) ($order->customer?->address ?? '—'),

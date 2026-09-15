@@ -410,7 +410,7 @@ document.addEventListener('DOMContentLoaded', function () {
             : '';
 
         return `<div class="m-card sp-assignment-card ${order.shipper_id ? 'is-assigned' : ''}" data-assignment-card="${order.id}">
-            <span class="m-mobile-status-badge sp-status is-${statusClass(order.status_code || order.status)}">${esc(order.status)}</span>
+            <span class="m-mobile-status-badge sp-status is-${statusClass(order.status_code || order.status)}">${esc(order.status_label || order.status)}</span>
             <div class="sp-assignment-title">
                 <span class="sp-assignment-seq">${esc(order.daily_sequence || '-')}</span>
                 <div>

@@ -984,7 +984,7 @@
         \App\Models\Order::STATUS_APPROVED => 'Đã duyệt',
         \App\Models\Order::STATUS_READY_TO_PACK => 'Chờ đóng gói',
         \App\Models\Order::STATUS_PACKING => 'Đang đóng gói',
-        \App\Models\Order::STATUS_READY_TO_SHIP => 'Chờ vận chuyển',
+        \App\Models\Order::STATUS_READY_TO_SHIP => 'Chờ lấy hàng',
         \App\Models\Order::STATUS_DELIVERING => 'Đang giao hàng',
         \App\Models\Order::STATUS_RETURNING => 'Đang trả hàng',
         \App\Models\Order::STATUS_RETURNED_COMPLETED => 'Đã nhập kho trả hàng',
@@ -1918,8 +1918,7 @@
                                 'Sản phẩm:',
                                 ...$order->items->map(fn ($item) => '- '.($item->display_name ?: 'Sản phẩm').((float) ($item->variant?->size ?? 0) > 0 ? ' - Size '.$item->variant->size : '').': SL '.$formatQuantity($item->quantity))->all(),
                                 '',
-                                'Tổng tiền: '.number_format((float) $order->total, 0, ',', '.').'đ',
-                                trim((string) $order->note) !== '' ? 'Ghi chú: '.$order->note : null,
+                                'Ghi chú: '.(trim((string) $order->note) !== '' ? trim((string) $order->note) : 'Không có'),
                             ])->filter(fn ($line) => $line !== null)->implode("\n");
                         @endphp
                         <article class="monitor-panel monitor-order status-{{ $monitorState }} {{ $canManageOrder ? 'is-mine' : '' }} {{ $isCancelled ? 'is-cancelled' : '' }}" id="monitor-order-{{ $order->id }}" title="{{ $monitorStateLabels[$monitorState] }}">

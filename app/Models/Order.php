@@ -339,15 +339,29 @@ class Order extends Model
     public static function statusOptions()
     {
         return [
+            'draft' => 'Đơn nháp',
+            'pending' => 'Chờ duyệt',
+            self::STATUS_PENDING_LEADER_APPROVAL => 'Chờ Leader duyệt',
+            self::STATUS_PENDING_MANAGER_APPROVAL => 'Chờ Manager duyệt',
+            'pending_warehouse_approval' => 'Chờ kho duyệt',
             self::STATUS_ORDER_PLACED => 'Đơn hàng đã đặt',
             self::STATUS_ORDER_CONFIRMED => 'Đơn hàng đã xác nhận',
+            self::STATUS_APPROVED => 'Đã duyệt',
+            self::STATUS_READY_TO_PACK => 'Chờ đóng hàng',
+            self::STATUS_PACKING => 'Đang đóng hàng',
             self::STATUS_PACKED => 'Đã đóng gói',
+            self::STATUS_READY_TO_SHIP => 'Chờ lấy hàng',
+            self::STATUS_DELIVERING => 'Đang giao hàng',
             self::STATUS_IN_DELIVERY => 'Đang giao hàng',
             self::STATUS_DELIVERED => 'Đã giao hàng',
             self::STATUS_COMPLETED => 'Hoàn thành',
+            self::STATUS_RETURNING => 'Đang trả hàng',
+            self::STATUS_RETURNED_COMPLETED => 'Đã nhập kho trả hàng',
             self::STATUS_RETURNED => 'Hoàn trả',
             self::STATUS_CANCELLED => 'Đã hủy',
             self::STATUS_OVERDUE_DELIVERY => 'Giao trễ',
+            'shipping' => 'Đang vận chuyển',
+            'picked_up' => 'Đã lấy hàng',
         ];
     }
     

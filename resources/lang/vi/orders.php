@@ -116,7 +116,7 @@ return [
         'draft' => 'Ban nhap',
         'pending_director_approval' => 'Cho giam doc duyet',
         'preparing' => 'Dang chuan bi',
-        'packed_waiting_pickup' => 'Da dong hang cho lay',
+        'packed_waiting_pickup' => 'Chờ lấy hàng',
         'out_of_stock' => 'Het hang',
         'delivering' => 'Dang van chuyen',
         'unpaid' => 'Chua thanh toan',
