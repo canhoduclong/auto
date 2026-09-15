@@ -194,6 +194,8 @@
         background: #ecfdf5;
         border-left: 4px solid #16a34a;
     }
+    .trip-order-completed { background: #ecfdf5 !important; }
+    .trip-order-completed td { border-color: #a7f3d0 !important; }
     .route-line-title {
         color: #0f766e;
         font-weight: 800;
@@ -879,9 +881,16 @@
                                                             $productPayload = $assignmentProductPayload($order);
                                                             $productSummary = $assignmentProductSummary($order);
                                                             $statusLabel = \App\Models\Order::statusOptions()[$order->status] ?? $order->status;
+                                                            $isDeliveryCompleted = in_array($order->status, [
+                                                                \App\Models\Order::STATUS_DELIVERED,
+                                                                \App\Models\Order::STATUS_COMPLETED,
+                                                                \App\Models\Order::STATUS_RETURNED_COMPLETED,
+                                                            ], true) || $order->histories->contains(
+                                                                fn ($history) => in_array($history->action, ['delivered', 'mobile_delivered', 'shipper_delivered_bulk'], true)
+                                                            );
                                                         @endphp
                                                         <tr id="order-{{ $order->id }}"
-                                                            class="js-trip-order"
+                                                            class="js-trip-order {{ $isDeliveryCompleted ? 'trip-order-completed' : '' }}"
                                                             data-order-id="{{ $order->id }}"
                                                             data-order-code="{{ $order->code ?: $order->id }}"
                                                             data-customer-name="{{ e($customerName) }}"
@@ -898,6 +907,9 @@
                                                             <td class="trip-order-time">{{ $deliveryTime ?: 'Chưa hẹn giờ' }}</td>
                                                             <td class="trip-order-main">
                                                                 <span class="trip-order-customer">{{ $customerName }}</span>
+                                                                @if($isDeliveryCompleted)
+                                                                    <span class="badge bg-success ms-1"><i class="bi bi-check-circle me-1"></i>Đã giao / Hoàn thành</span>
+                                                                @endif
                                                                 @if($order->status === \App\Models\Order::STATUS_OVERDUE_DELIVERY)
                                                                     <span class="badge bg-warning text-dark">Giao trễ — chờ điều phối tiếp</span>
                                                                 @endif
@@ -939,16 +951,20 @@
                                                                         data-order-id="{{ $order->id }}"
                                                                         data-order-code="{{ $order->code ?: $order->id }}"
                                                                         data-customer-name="{{ $customerName }}"
-                                                                        data-set-default="0">
+                                                                        data-set-default="0"
+                                                                        @disabled($isDeliveryCompleted)
+                                                                        @if($isDeliveryCompleted) title="Đơn đã giao/hoàn thành, không thể đổi shipper" @endif>
                                                                         <i class="bi bi-arrow-left-right"></i>
                                                                     </button>
-                                                                    <form action="{{ route('shipper.unassign-order', [$order->id]) }}" method="POST">
-                                                                        @csrf
-                                                                        @method('DELETE')
-                                                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Bạn có chắc chắn muốn gỡ đơn này ra?')">
-                                                                            <i class="bi bi-x-circle"></i>
-                                                                        </button>
-                                                                    </form>
+                                                                    @unless($isDeliveryCompleted)
+                                                                        <form action="{{ route('shipper.unassign-order', [$order->id]) }}" method="POST">
+                                                                            @csrf
+                                                                            @method('DELETE')
+                                                                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Bạn có chắc chắn muốn gỡ đơn này ra?')">
+                                                                                <i class="bi bi-x-circle"></i>
+                                                                            </button>
+                                                                        </form>
+                                                                    @endunless
                                                                 </div>
                                                             </td>
                                                         </tr>

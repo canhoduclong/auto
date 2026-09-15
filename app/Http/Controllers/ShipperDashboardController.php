@@ -2338,6 +2338,7 @@ class ShipperDashboardController extends Controller
                     'complete_packing',
                     'warehouse_transfer_received',
                     'undo_start_packing',
+                    ...$this->customerDeliveryCompletionActions(),
                 ])
                 ->with('user.warehouse:id,name')
                 ->orderByDesc('created_at')
@@ -2443,12 +2444,29 @@ class ShipperDashboardController extends Controller
 
     private function archivedPlannedOrderIdsForDate(string $selectedDate): array
     {
-        return collect($this->latestDispatchForDate($selectedDate)?->route_plan ?? [])
+        $dispatchOrderIds = collect($this->latestDispatchForDate($selectedDate)?->route_plan ?? [])
             ->flatMap(fn ($shipperPlan) => $shipperPlan['routes'] ?? [])
             ->flatMap(fn ($route) => $route['orders'] ?? [])
             ->pluck('order_id')
             ->filter(fn ($id) => (int) $id > 0)
-            ->map(fn ($id) => (int) $id)
+            ->map(fn ($id) => (int) $id);
+
+        // Older published schedules predate shipper_dispatch_histories. Keep
+        // their delivered/completed orders visible from their per-order audit
+        // trail so a historical assignment day remains complete.
+        $legacyOrderIds = Order::query()
+            ->whereNotNull('shipper_id')
+            ->whereDate('created_at', $selectedDate)
+            ->whereHas('histories', fn ($history) => $history->whereIn('action', [
+                'schedule_created',
+                'schedule_confirmed',
+                'schedule_rejected',
+            ]))
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id);
+
+        return $dispatchOrderIds
+            ->merge($legacyOrderIds)
             ->unique()
             ->values()
             ->all();
@@ -2698,7 +2716,11 @@ class ShipperDashboardController extends Controller
         foreach ($assignedOrders as $shipperId => $orders) {
             $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
             $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
-            $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate((int) $shipperId, $selectedDate);
+            $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate(
+                (int) $shipperId,
+                $selectedDate,
+                $orders->pluck('id')->map(fn ($id) => (int) $id)->all()
+            );
             $statusByShipperId[(int) $shipperId] = $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot);
             if (in_array($statusByShipperId[(int) $shipperId], ['none', 'changed'], true)) {
                 $statusByShipperId[(int) $shipperId] = 'draft';
@@ -2725,16 +2747,44 @@ class ShipperDashboardController extends Controller
         return hash('sha256', json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 
-    private function latestDeliveryScheduleHistoryForShipperOnDate(int $shipperId, string $selectedDate): ?OrderHistory
+    private function latestDeliveryScheduleHistoryForShipperOnDate(
+        int $shipperId,
+        string $selectedDate,
+        array $visibleOrderIds = []
+    ): ?OrderHistory
     {
+        $plannedOrderIds = $this->archivedPlannedOrderIdsForShipperOnDate($shipperId, $selectedDate);
+        $orderIds = collect($plannedOrderIds)
+            ->merge($visibleOrderIds)
+            ->filter(fn ($id) => (int) $id > 0)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($orderIds === []) {
+            $orderIds = Order::query()
+                ->where('shipper_id', $shipperId)
+                ->whereDate('created_at', $selectedDate)
+                ->whereHas('histories', fn ($history) => $history->whereIn('action', [
+                    'schedule_created',
+                    'schedule_confirmed',
+                    'schedule_rejected',
+                ]))
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+        }
+
+        if ($orderIds === []) {
+            return null;
+        }
+
         return OrderHistory::query()
-            ->join('orders', 'orders.id', '=', 'order_histories.order_id')
-            ->where('orders.shipper_id', $shipperId)
-            ->whereDate('orders.created_at', $selectedDate)
+            ->whereIn('order_id', $orderIds)
             ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
             ->orderByDesc('order_histories.created_at')
             ->orderByDesc('order_histories.id')
-            ->select('order_histories.*')
             ->first();
     }
 

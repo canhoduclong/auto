@@ -119,6 +119,31 @@
     .js-draft-fees .form-check-input { flex: 0 0 auto; width: 1em; height: 1em; margin: 0; }
     .js-draft-fees .input-group { flex-wrap: nowrap; }
     .js-draft-fees .input-group > .form-control { width: 1%; min-width: 0; }
+    .js-draft-packing { padding: 12px !important; }
+    .js-draft-packing-product { padding: 10px 0; border-bottom: 1px dashed #dce6f1; }
+    .js-draft-packing-product:last-child { border-bottom: 0; }
+    .js-draft-packing-option {
+        display: inline-flex !important;
+        min-height: 34px;
+        align-items: center;
+        gap: 7px !important;
+        margin: 0 8px 8px 0 !important;
+        padding: 6px 9px;
+        border: 1px solid #dce6f1;
+        border-radius: 7px;
+        background: #fff;
+        color: #334155;
+        font-size: .82rem !important;
+        font-weight: 700;
+        line-height: 1.3;
+    }
+    .js-draft-packing-option .form-check-input {
+        flex: 0 0 18px;
+        width: 18px;
+        height: 18px;
+        margin: 0 !important;
+    }
+    .js-draft-packing-option:has(.form-check-input:checked) { border-color: #6ee7b7; background: #ecfdf5; }
     .draft-edit-footer-actions { align-items: center; }
     .draft-edit-footer-actions .btn { white-space: nowrap; }
     .draft-edit-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 4px 0; border-top: 1px solid #dce6f1; }
@@ -174,6 +199,8 @@
     $variantCatalog = $variants->map(fn ($variant) => [
         'id' => $variant->id,
         'product_id' => $variant->product_id,
+        'variant_name' => $variant->name,
+        'sku' => $variant->sku,
         'label' => ($variant->size ?: ($variant->name ?: $variant->sku)) . ($variant->sku ? ' · ' . $variant->sku : ''),
         'size' => (float) $variant->size,
         'kg' => (float) ($variant->kg ?: $variant->size ?: 1),
@@ -790,7 +817,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const size = Number(v.size);
                 if (seenSizes.has(size)) return;
                 seenSizes.add(size);
-                sizeOptions.push({size, label: v.label, inDraft: ids.includes(Number(v.id))});
+                const details = [
+                    v.variant_name ? String(v.variant_name).trim() : '',
+                    v.sku ? 'SKU: ' + String(v.sku).trim() : '',
+                    'Size: ' + new Intl.NumberFormat('vi-VN', {maximumFractionDigits: 3}).format(size),
+                ].filter(Boolean);
+                sizeOptions.push({size, label: details.join(' · '), inDraft: ids.includes(Number(v.id))});
             });
             const orderedSizes = productVariants.filter(v => ids.includes(Number(v.id)) && Number(v.size) > 0).map(v => Number(v.size));
             state[productId] ||= {quantity: false, sizes: []};
@@ -805,7 +837,7 @@ document.addEventListener('DOMContentLoaded', () => {
             section.append(title);
             const checkbox = (labelText, checked, disabled, onChange) => {
                 const label = document.createElement('label');
-                label.className = 'd-inline-flex align-items-center gap-1 me-3 mb-1 small';
+                label.className = 'js-draft-packing-option';
                 const input = document.createElement('input');
                 input.type = 'checkbox';
                 input.className = 'form-check-input m-0';
@@ -816,14 +848,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 section.append(label);
                 return input;
             };
-            checkbox('1. Số lượng', policy.quantity === true || policy.quantity === 1 || policy.quantity === '1', false, input => policy.quantity = input.checked);
+            checkbox('Cho phép điều chỉnh số lượng', policy.quantity === true || policy.quantity === 1 || policy.quantity === '1', false, input => policy.quantity = input.checked);
             if (sizeOptions.length) {
                 section.append(document.createElement('br'));
                 const variantInputs = [];
                 const syncPolicySizes = () => {
                     policy.sizes = [...new Set([...orderedSizes, ...variantInputs.filter(i => i.checked && !i.disabled).map(i => Number(i.dataset.size))])];
                 };
-                const allInput = checkbox('2. Chọn tất cả (All)', sizeOptions.every(option => (policy.sizes || []).map(Number).includes(option.size)), false, input => {
+                const allInput = checkbox('Chọn tất cả biến thể', sizeOptions.every(option => (policy.sizes || []).map(Number).includes(option.size)), false, input => {
                     variantInputs.forEach(i => { if (!i.disabled) i.checked = input.checked; });
                     syncPolicySizes();
                 });

@@ -157,6 +157,51 @@ class ShipperAssignmentWorkflowTest extends TestCase
             ->assertSee('disabled', false);
     }
 
+    public function test_manager_page_marks_completed_orders_from_legacy_confirmed_schedule(): void
+    {
+        $manager = User::factory()->create();
+        $manager->roles()->attach(Role::create(['name' => 'manager_shipper']));
+        $shipper = User::factory()->create([
+            'name' => 'Shipper lịch sử cũ',
+            'show_in_shipper_assignment' => true,
+        ]);
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
+        $customer = Customer::create(['name' => 'Khách đã hoàn thành', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $manager->id,
+            'shipper_id' => $shipper->id,
+            'code' => 'LEGACY-COMPLETED-ORDER',
+            'status' => Order::STATUS_DELIVERED,
+            'daily_sequence' => 1,
+            'delivered_at' => now(),
+        ]);
+        $snapshot = [[
+            'order_id' => $order->id,
+            'daily_sequence' => 1,
+            'delivery_date' => $order->delivery_date?->toDateString(),
+            'delivery_time' => $order->delivery_time,
+        ]];
+        $order->histories()->create([
+            'action' => 'schedule_confirmed',
+            'user_id' => $shipper->id,
+            'role' => 'shipper',
+            'schedule_snapshot_hash' => hash('sha256', json_encode($snapshot)),
+            'schedule_snapshot' => json_encode($snapshot),
+        ]);
+
+        // Legacy schedules have no shipper_dispatch_histories record.
+        $this->assertDatabaseCount('shipper_dispatch_histories', 0);
+
+        $this->actingAs($manager)
+            ->get(route('shipper.manage-assignments', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('LEGACY-COMPLETED-ORDER')
+            ->assertSee('Shipper đã xác nhận')
+            ->assertSee('trip-order-completed', false)
+            ->assertSee('Đã giao / Hoàn thành');
+    }
+
     public function test_confirmed_ready_order_is_visible_in_shippers_my_orders(): void
     {
         $shipperRole = Role::create(['name' => 'shipper']);
