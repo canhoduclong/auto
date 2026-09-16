@@ -155,6 +155,7 @@ class ShipperApiController extends BaseApiController
 
         $dispatchesByDate = ShipperDispatchHistory::query()
             ->whereBetween('schedule_date', [$fromDate, $toDate])
+            ->whereNull('revoked_at')
             ->orderByDesc('version')
             ->orderByDesc('id')
             ->get()
@@ -255,7 +256,7 @@ class ShipperApiController extends BaseApiController
                         ->filter(fn (Order $order) => (bool) ($order->charge_shipping_fee ?? true))
                         ->sum('shipping_fee'),
                 ];
-            })->values();
+            })->reject(fn (array $route) => $route['status'] === 'revoked')->values();
 
         return $this->ok($routes);
     }
@@ -899,6 +900,7 @@ class ShipperApiController extends BaseApiController
         if ($preferLatestPublished && $shipperId) {
             $latestPublishedDate = ShipperDispatchHistory::query()
                 ->whereDate('schedule_date', '<=', Carbon::today()->toDateString())
+                ->whereNull('revoked_at')
                 ->orderByDesc('schedule_date')
                 ->orderByDesc('version')
                 ->orderByDesc('id')
@@ -1022,7 +1024,7 @@ class ShipperApiController extends BaseApiController
 
         return OrderHistory::query()
             ->whereIn('order_id', $orderIds)
-            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
+            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected', 'schedule_revoked'])
             ->orderByDesc('order_histories.created_at')
             ->orderByDesc('order_histories.id')
             ->select('order_histories.*')
@@ -1033,6 +1035,7 @@ class ShipperApiController extends BaseApiController
     {
         $dispatch = ShipperDispatchHistory::query()
             ->whereDate('schedule_date', $selectedDate)
+            ->whereNull('revoked_at')
             ->orderByDesc('version')->orderByDesc('id')->first();
         $plan = collect($dispatch?->route_plan ?? [])
             ->first(fn ($item) => (int) ($item['shipper_id'] ?? 0) === $shipperId);
@@ -1045,6 +1048,10 @@ class ShipperApiController extends BaseApiController
     {
         if (! $latestHistory) {
             return 'none';
+        }
+
+        if ($latestHistory->action === 'schedule_revoked') {
+            return 'revoked';
         }
 
         if ($latestHistory->action === 'schedule_confirmed' && $latestHistory->schedule_snapshot_hash === $currentSnapshotHash) {

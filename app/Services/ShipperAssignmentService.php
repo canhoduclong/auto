@@ -128,7 +128,7 @@ class ShipperAssignmentService
                     $dateQuery->orWhere('orders.skip_auto_cancel', true);
                 }
             })
-            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
+            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected', 'schedule_revoked'])
             ->orderByDesc('order_histories.created_at')
             ->orderByDesc('order_histories.id')
             ->select('order_histories.*')
@@ -238,7 +238,7 @@ class ShipperAssignmentService
                     $dateQuery->orWhere('orders.skip_auto_cancel', true);
                 }
             })
-            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
+            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected', 'schedule_revoked'])
             ->orderByDesc('order_histories.created_at')
             ->orderByDesc('order_histories.id')
             ->select('order_histories.*')

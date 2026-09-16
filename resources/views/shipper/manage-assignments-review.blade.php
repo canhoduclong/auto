@@ -227,7 +227,7 @@
                 <select id="historyVersion" name="history_id" class="form-select form-select-sm" style="min-width: 230px;">
                     @foreach($historyVersions as $historyVersion)
                         <option value="{{ $historyVersion->id }}" @selected($selectedHistory?->id === $historyVersion->id)>
-                            Lần {{ $historyVersion->version }} · {{ $historyVersion->published_at?->format('H:i d/m/Y') }}
+                            Lần {{ $historyVersion->version }} · {{ $historyVersion->published_at?->format('H:i d/m/Y') }}{{ $historyVersion->revoked_at ? ' · Đã thu hồi' : '' }}
                         </option>
                     @endforeach
                 </select>
@@ -236,6 +236,17 @@
         <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-search me-1"></i>Xem lịch sử</button>
         @if($selectedHistory)
             <a class="btn btn-success btn-sm" href="{{ route('shipper.manage-assignments.history', ['date' => $selectedDate, 'history_id' => $selectedHistory->id, 'download' => 'excel']) }}">Tải Excel điều phối tổng</a>
+            @if(!$selectedHistory->revoked_at && $latestActiveHistory?->id === $selectedHistory->id)
+                <form method="POST" action="{{ route('shipper.manage-assignments.history.revoke', $selectedHistory) }}" onsubmit="return confirm('Thu hồi lộ trình này? Shipper sẽ không còn thấy yêu cầu xác nhận.');">
+                    @csrf
+                    <button class="btn btn-warning btn-sm"><i class="bi bi-arrow-counterclockwise me-1"></i>Thu hồi lộ trình</button>
+                </form>
+            @else
+                <form method="POST" action="{{ route('shipper.manage-assignments.history.destroy', $selectedHistory) }}" onsubmit="return confirm('Xóa vĩnh viễn lộ trình cũ này khỏi lịch sử?');">
+                    @csrf @method('DELETE')
+                    <button class="btn btn-outline-danger btn-sm"><i class="bi bi-trash me-1"></i>Xóa lộ trình cũ</button>
+                </form>
+            @endif
         @endif
         <a href="{{ route('shipper.manage-assignments', ['date' => $selectedDate]) }}" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left me-1"></i>Về trang điều phối
@@ -252,6 +263,10 @@
             <div class="small mt-1 text-muted">
                 Phiên bản {{ $selectedHistory->version }} · Lưu lúc {{ $selectedHistory->published_at?->format('H:i d/m/Y') }}
                 · Người gửi: {{ $selectedHistory->creator?->name ?? 'Hệ thống' }}
+                @if($selectedHistory->revoked_at)
+                    · <span class="text-danger fw-bold">Đã thu hồi {{ $selectedHistory->revoked_at->format('H:i d/m/Y') }}</span>
+                    bởi {{ $selectedHistory->revoker?->name ?? 'Hệ thống' }}
+                @endif
             </div>
         @endif
         @if($notes)

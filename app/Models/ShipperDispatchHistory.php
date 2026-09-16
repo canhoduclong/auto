@@ -20,6 +20,8 @@ class ShipperDispatchHistory extends Model
         'total_fee',
         'created_by',
         'published_at',
+        'revoked_at',
+        'revoked_by',
     ];
 
     protected $casts = [
@@ -27,10 +29,16 @@ class ShipperDispatchHistory extends Model
         'route_plan' => 'array',
         'total_fee' => 'decimal:2',
         'published_at' => 'datetime',
+        'revoked_at' => 'datetime',
     ];
 
     public function creator()
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function revoker()
+    {
+        return $this->belongsTo(User::class, 'revoked_by');
     }
 }

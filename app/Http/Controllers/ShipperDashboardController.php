@@ -138,7 +138,7 @@ class ShipperDashboardController extends Controller
                         select oh2.id
                         from order_histories as oh2
                         where oh2.order_id = orders.id
-                          and oh2.action in ("schedule_created", "schedule_confirmed", "schedule_rejected")
+                          and oh2.action in ("schedule_created", "schedule_confirmed", "schedule_rejected", "schedule_revoked")
                         order by oh2.created_at desc, oh2.id desc
                         limit 1
                     )'
@@ -2584,7 +2584,7 @@ class ShipperDashboardController extends Controller
             : ($latestDate ?: Carbon::today()->toDateString());
 
         $versions = ShipperDispatchHistory::query()
-            ->with('creator:id,name')
+            ->with(['creator:id,name', 'revoker:id,name'])
             ->whereDate('schedule_date', $selectedDate)
             ->orderByDesc('version')
             ->get();
@@ -2593,6 +2593,7 @@ class ShipperDashboardController extends Controller
             ? $versions->firstWhere('id', (int) $request->input('history_id'))
             : $versions->first();
         $selectedHistory ??= $versions->first();
+        $latestActiveHistory = $versions->first(fn (ShipperDispatchHistory $history) => $history->revoked_at === null);
         $routePlan = $selectedHistory?->route_plan ?? [];
 
         if ($request->input('download') === 'excel') {
@@ -2612,7 +2613,65 @@ class ShipperDashboardController extends Controller
             'readOnly' => true,
             'historyVersions' => $versions,
             'selectedHistory' => $selectedHistory,
+            'latestActiveHistory' => $latestActiveHistory,
         ]);
+    }
+
+    public function revokeAssignmentHistory(ShipperDispatchHistory $dispatch)
+    {
+        $this->authorizeManagerShipper();
+
+        abort_if($dispatch->revoked_at !== null, 422, 'Lộ trình này đã được thu hồi trước đó.');
+        $latestActive = ShipperDispatchHistory::query()
+            ->whereDate('schedule_date', $dispatch->schedule_date)
+            ->whereNull('revoked_at')
+            ->orderByDesc('version')->orderByDesc('id')->first();
+        abort_unless($latestActive?->is($dispatch), 422, 'Chỉ có thể thu hồi lộ trình đang được gửi cho shipper.');
+
+        $orderIds = $this->dispatchOrderIds($dispatch);
+        $orders = Order::query()->whereIn('id', $orderIds)->get();
+        $completed = Order::query()->whereIn('id', $orderIds)
+            ->where(function ($query): void {
+                $query->whereIn('status', [
+                    Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_RETURNED_COMPLETED,
+                ])->orWhereHas('histories', fn ($history) => $history->whereIn('action', $this->customerDeliveryCompletionActions()));
+            })->count();
+        abort_if($orders->isNotEmpty() && $completed === $orders->count(), 422, 'Lộ trình đã hoàn tất nên không thể thu hồi.');
+
+        DB::transaction(function () use ($dispatch, $orders): void {
+            $dispatch->update(['revoked_at' => now(), 'revoked_by' => Auth::id()]);
+            foreach ($orders as $order) {
+                OrderHistory::create([
+                    'order_id' => $order->id,
+                    'action' => 'schedule_revoked',
+                    'user_id' => Auth::id(),
+                    'role' => 'manager_shipper',
+                    'status_before' => $order->status,
+                    'status_after' => $order->status,
+                    'note' => 'Manager shipper đã thu hồi lộ trình giao hàng phiên bản '.$dispatch->version.'.',
+                ]);
+            }
+        });
+
+        return redirect()->route('shipper.manage-assignments.history', ['date' => $dispatch->schedule_date->toDateString()])
+            ->with('success', 'Đã thu hồi lộ trình. Shipper sẽ không còn thấy yêu cầu xác nhận này.');
+    }
+
+    public function destroyAssignmentHistory(ShipperDispatchHistory $dispatch)
+    {
+        $this->authorizeManagerShipper();
+
+        $latestActive = ShipperDispatchHistory::query()
+            ->whereDate('schedule_date', $dispatch->schedule_date)
+            ->whereNull('revoked_at')
+            ->orderByDesc('version')->orderByDesc('id')->first();
+        abort_if($latestActive?->is($dispatch), 422, 'Hãy thu hồi lộ trình đang gửi trước khi xóa.');
+
+        $date = $dispatch->schedule_date->toDateString();
+        $dispatch->delete();
+
+        return redirect()->route('shipper.manage-assignments.history', ['date' => $date])
+            ->with('success', 'Đã xóa lộ trình cũ khỏi lịch sử.');
     }
 
     /**
@@ -2880,7 +2939,7 @@ class ShipperDashboardController extends Controller
 
         return OrderHistory::query()
             ->whereIn('order_id', $orderIds)
-            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
+            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected', 'schedule_revoked'])
             ->orderByDesc('order_histories.created_at')
             ->orderByDesc('order_histories.id')
             ->first();
@@ -2940,6 +2999,7 @@ class ShipperDashboardController extends Controller
     {
         return ShipperDispatchHistory::query()
             ->whereDate('schedule_date', $selectedDate)
+            ->whereNull('revoked_at')
             ->orderByDesc('version')
             ->orderByDesc('id')
             ->first();
@@ -2993,7 +3053,7 @@ class ShipperDashboardController extends Controller
 
         $latestActions = OrderHistory::query()
             ->whereIn('order_id', $orders->pluck('id'))
-            ->whereIn('action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
+            ->whereIn('action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected', 'schedule_revoked'])
             ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->get(['order_id', 'action'])
@@ -3023,6 +3083,10 @@ class ShipperDashboardController extends Controller
     private function deliveryScheduleStatus(?OrderHistory $latestHistory, string $currentSnapshotHash, array $currentSnapshot = []): string
     {
         if (! $latestHistory) {
+            return 'none';
+        }
+
+        if ($latestHistory->action === 'schedule_revoked') {
             return 'none';
         }
 
