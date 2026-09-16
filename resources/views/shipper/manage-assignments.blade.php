@@ -820,17 +820,20 @@
                                     $scheduleBadgeClass = match ($scheduleStatus) {
                                         'confirmed' => 'bg-success',
                                         'rejected' => 'bg-danger',
-                                        'draft' => 'bg-secondary',
+                                        'changed' => 'bg-info text-dark',
+                                        'none' => 'bg-secondary',
                                         default => 'bg-warning text-dark',
                                     };
                                     $scheduleLabel = match ($scheduleStatus) {
-                                        'confirmed' => 'Shipper đã xác nhận',
+                                        'confirmed' => 'Đã Xác Nhận, lúc ' . ($shipperScheduleConfirmedAt[$shipperId] ?? '—'),
                                         'rejected' => 'Từ chối',
-                                        'draft' => 'Chưa gửi',
-                                        default => 'Đã gửi · Chờ xác nhận',
+                                        'changed' => 'Lộ trình đã thay đổi',
+                                        'none' => 'Chưa gửi',
+                                        default => 'Đã gửi cho Ship, Chờ xác nhận',
                                     };
+                                    $canSendShipperSchedule = in_array($scheduleStatus, ['none', 'changed', 'rejected'], true);
                                 @endphp
-                                <div class="route-zone-card {{ $scheduleStatus === 'confirmed' ? 'is-confirmed' : ($scheduleStatus === 'waiting' ? 'is-sent' : '') }}">
+                                <div class="route-zone-card {{ $scheduleStatus === 'confirmed' ? 'is-confirmed' : ($scheduleStatus === 'waiting' ? 'is-sent' : '') }}" data-schedule-status="{{ $scheduleStatus }}">
                                     <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
                                         <div>
                                             <div class="fw-semibold text-dark">{{ $shipper?->name ?? 'Shipper #' . $shipperId }}</div>
@@ -842,10 +845,19 @@
                                                 <span class="badge bg-primary rounded-pill  me-2" style="white-space: nowrap;">{{ $shipperOrders->count() }}</span>
                                                 <span class="fw-bold text-danger me-2 js-shipper-trip-total" style="white-space: nowrap;">0 đ</span>
                                                 <div class="ma-shipper-meta">
-                                                    <span class="badge {{ $scheduleBadgeClass }}">{{ $scheduleLabel }}</span>
+                                                    <span class="badge {{ $scheduleBadgeClass }} js-shipper-schedule-label">{{ $scheduleLabel }}</span>
                                                 </div>
                                                 
                                             </div>
+                                            <form method="POST" action="{{ route('shipper.create-delivery-schedule') }}" class="js-send-shipper-schedule {{ $canSendShipperSchedule ? '' : 'd-none' }}">
+                                                @csrf
+                                                <input type="hidden" name="date" value="{{ $selectedDate }}">
+                                                <input type="hidden" name="shipper_id" value="{{ $shipperId }}">
+                                                <input type="hidden" name="route_plan" class="js-shipper-route-plan">
+                                                <button type="submit" class="btn btn-sm btn-primary text-nowrap">
+                                                    <i class="bi bi-send me-1"></i>Gửi Ship Xác Nhận
+                                                </button>
+                                            </form>
                                             <form method="POST" action="{{ route('shipper.bulk-transfer-assignments') }}" class="d-flex gap-1" style="width: 220px;">
                                                 @csrf
                                                 <input type="hidden" name="date" value="{{ $selectedDate }}">
@@ -1166,6 +1178,19 @@ document.addEventListener('DOMContentLoaded', function () {
         button.classList.remove('btn-secondary');
         button.classList.add('btn-success');
         button.title = 'Lộ trình có thay đổi mới — mở trang xem lại trước khi gửi';
+    }
+
+    function markShipperScheduleChanged(shipperBlock) {
+        const card = shipperBlock?.closest('.route-zone-card');
+        if (!card || card.dataset.scheduleStatus === 'none') return;
+        card.dataset.scheduleStatus = 'changed';
+        card.classList.remove('is-confirmed', 'is-sent');
+        const label = card.querySelector('.js-shipper-schedule-label');
+        if (label) {
+            label.className = 'badge bg-info text-dark js-shipper-schedule-label';
+            label.textContent = 'Lộ trình đã thay đổi';
+        }
+        card.querySelector('.js-send-shipper-schedule')?.classList.remove('d-none');
     }
 
     function escapeHtml(value) {
@@ -1866,6 +1891,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         if (!event.target.closest('.js-trip-shipper')) return;
         enableRouteReviewAfterChange();
+        markShipperScheduleChanged(event.target.closest('.js-trip-shipper'));
         if (event.target.matches('.js-order-shipping-fee')) {
             collectTripPlan(false);
             saveTripState();
@@ -1889,12 +1915,14 @@ document.addEventListener('DOMContentLoaded', function () {
     document.addEventListener('change', function (event) {
         if (!event.target.closest('.js-trip-shipper')) return;
         enableRouteReviewAfterChange();
+        markShipperScheduleChanged(event.target.closest('.js-trip-shipper'));
         refreshTripBlocks();
     });
 
     document.addEventListener('click', function (event) {
         if (event.target.closest('.js-add-trip, .js-remove-trip, .js-popup-add-trip')) {
             enableRouteReviewAfterChange();
+            markShipperScheduleChanged(event.target.closest('.js-trip-shipper'));
         }
     });
 
@@ -1917,6 +1945,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 notify('Vui lòng chọn ít nhất một đơn để tạo chuyến.', true);
             }
             return;
+        }
+        if (form.classList.contains('js-send-shipper-schedule')) {
+            const plan = collectTripPlan(false);
+            const routePlanInput = form.querySelector('.js-shipper-route-plan');
+            if (routePlanInput) routePlanInput.value = JSON.stringify(plan);
+            if (!plan.length) {
+                event.preventDefault();
+                notify('Shipper chưa có đơn trong lộ trình.', true);
+                return;
+            }
+            if (!confirm('Gửi toàn bộ lộ trình hiện tại cho shipper này xác nhận?')) {
+                event.preventDefault();
+                return;
+            }
         }
         if (form.id === 'shipperPickerForm') {
             const orderId = document.getElementById('shipperPickerOrderId')?.value;

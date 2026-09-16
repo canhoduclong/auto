@@ -180,7 +180,7 @@ class ShipperAssignmentWorkflowTest extends TestCase
             ->get(route('shipper.manage-assignments', ['date' => now()->toDateString()]))
             ->assertOk()
             ->assertSee('CONFIRMED-DAILY-ORDER')
-            ->assertSee('Shipper đã xác nhận')
+            ->assertSee('Đã Xác Nhận, lúc')
             ->assertSee('route-zone-card is-confirmed', false)
             ->assertSee('id="routeReviewButton"', false)
             ->assertSee('disabled', false);
@@ -226,7 +226,7 @@ class ShipperAssignmentWorkflowTest extends TestCase
             ->get(route('shipper.manage-assignments', ['date' => now()->toDateString()]))
             ->assertOk()
             ->assertSee('LEGACY-COMPLETED-ORDER')
-            ->assertSee('Shipper đã xác nhận')
+            ->assertSee('Đã Xác Nhận, lúc')
             ->assertSee('trip-order-completed', false)
             ->assertSee('Đã giao / Hoàn thành');
     }

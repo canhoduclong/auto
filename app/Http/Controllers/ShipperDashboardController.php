@@ -2415,8 +2415,9 @@ class ShipperDashboardController extends Controller
             ->orderBy('name')
             ->get();
 
-        $shipperScheduleStatuses = $this->resolveShipperScheduleStatuses($selectedDate, $assignedOrders);
-        $hasUnpublishedSchedules = collect($shipperScheduleStatuses)->contains('draft');
+        $shipperScheduleConfirmedAt = [];
+        $shipperScheduleStatuses = $this->resolveShipperScheduleStatuses($selectedDate, $assignedOrders, $shipperScheduleConfirmedAt);
+        $hasUnpublishedSchedules = collect($shipperScheduleStatuses)->contains(fn ($status) => in_array($status, ['none', 'changed', 'rejected'], true));
 
         $warehouses = Warehouse::query()->orderBy('name')->get();
         $historyCount = ShipperDispatchHistory::query()
@@ -2435,6 +2436,7 @@ class ShipperDashboardController extends Controller
             'unassignedOrdersCount',
             'totalOrdersCount',
             'shipperScheduleStatuses',
+            'shipperScheduleConfirmedAt',
             'hasUnpublishedSchedules',
             'warehouses',
             'historyCount'
@@ -2489,11 +2491,14 @@ class ShipperDashboardController extends Controller
             ];
             $isDelivering = in_array($order->status, [Order::STATUS_DELIVERING, Order::STATUS_IN_DELIVERY, Order::STATUS_SHIPPING, Order::STATUS_DELIVERED, Order::STATUS_COMPLETED], true);
             $isCompleted = in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_RETURNED_COMPLETED], true) || $completed !== null;
+            $targetWarehouseName = $receivedTransfer?->targetWarehouse?->name
+                ?: $transfers->last()?->targetWarehouse?->name
+                ?: 'Kho nhận';
 
             $order->setAttribute('assignment_timeline', [
                 $milestone('Đã lấy hàng', $pickedTransfer !== null, $pickedTransfer?->picked_up_at, $transferLabel($pickedTransfer)),
                 $milestone('Được điều chuyển', $deliveredTransfer !== null, $deliveredTransfer?->delivered_at, $transferLabel($deliveredTransfer)),
-                $milestone('Đã nhập kho khác', $receivedTransfer !== null, $receivedTransfer?->received_at, $receivedTransfer?->targetWarehouse?->name),
+                $milestone($targetWarehouseName, $receivedTransfer !== null, $receivedTransfer?->received_at, 'Đã nhập kho'),
                 $milestone('Ship đã lấy đi giao', $deliveryPickup !== null || $isDelivering, $deliveryPickup?->created_at),
                 $milestone('Hoàn thành', $isCompleted, $completed?->created_at ?? $order->delivered_at),
             ]);
@@ -2768,7 +2773,7 @@ class ShipperDashboardController extends Controller
         });
     }
 
-    private function resolveShipperScheduleStatuses(string $selectedDate, $assignedOrders): array
+    private function resolveShipperScheduleStatuses(string $selectedDate, $assignedOrders, array &$confirmedAtByShipperId): array
     {
         $statusByShipperId = [];
 
@@ -2780,9 +2785,10 @@ class ShipperDashboardController extends Controller
                 $selectedDate,
                 $orders->pluck('id')->map(fn ($id) => (int) $id)->all()
             );
-            $statusByShipperId[(int) $shipperId] = $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot);
-            if (in_array($statusByShipperId[(int) $shipperId], ['none', 'changed'], true)) {
-                $statusByShipperId[(int) $shipperId] = 'draft';
+            $status = $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot);
+            $statusByShipperId[(int) $shipperId] = $status;
+            if ($status === 'confirmed') {
+                $confirmedAtByShipperId[(int) $shipperId] = $latestHistory?->created_at?->format('d/m/Y H:i');
             }
         }
 
@@ -3265,6 +3271,7 @@ class ShipperDashboardController extends Controller
             'notes' => ['nullable', 'string', 'max:500'],
             'date' => ['nullable', 'date'],
             'route_plan' => ['nullable', 'string'],
+            'shipper_id' => ['nullable', 'integer', 'exists:users,id'],
         ]);
 
         $date = $this->assignmentOrderingDate($request);
@@ -3300,7 +3307,9 @@ class ShipperDashboardController extends Controller
             ->filter(fn ($shipperId) => (int) $shipperId > 0)
             ->map(fn ($shipperId) => (int) $shipperId)
             ->unique()
-            ->filter(fn ($shipperId) => in_array((int) $shipperId, $changedShipperIds, true))
+            ->filter(fn ($shipperId) => isset($validated['shipper_id'])
+                ? (int) $shipperId === (int) $validated['shipper_id']
+                : in_array((int) $shipperId, $changedShipperIds, true))
             ->values()
             ->toArray();
 
