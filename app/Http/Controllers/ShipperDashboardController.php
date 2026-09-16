@@ -2674,6 +2674,47 @@ class ShipperDashboardController extends Controller
             ->with('success', 'Đã xóa lộ trình cũ khỏi lịch sử.');
     }
 
+    public function completeAssignmentHistory(ShipperDispatchHistory $dispatch)
+    {
+        $this->authorizeManagerShipper();
+        abort_if($dispatch->revoked_at !== null, 422, 'Lộ trình đã thu hồi không thể đánh dấu hoàn tất.');
+
+        $latestActive = ShipperDispatchHistory::query()
+            ->whereDate('schedule_date', $dispatch->schedule_date)
+            ->whereNull('revoked_at')
+            ->orderByDesc('version')->orderByDesc('id')->first();
+        abort_unless($latestActive?->is($dispatch), 422, 'Chỉ có thể hoàn tất lộ trình đang hoạt động.');
+
+        $orders = Order::query()->whereIn('id', $this->dispatchOrderIds($dispatch))
+            ->whereNotIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_RETURNED_COMPLETED, 'cancelled', 'canceled'])
+            ->get();
+        abort_if($orders->isEmpty(), 422, 'Lộ trình không còn đơn cần đánh dấu hoàn tất.');
+
+        DB::transaction(function () use ($orders, $dispatch): void {
+            foreach ($orders as $order) {
+                $before = $order->status;
+                $order->forceFill([
+                    'status' => Order::STATUS_DELIVERED,
+                    'delivered_at' => $order->delivered_at ?? now(),
+                ])->save();
+                OrderHistory::create([
+                    'order_id' => $order->id,
+                    'action' => 'manager_route_completed',
+                    'user_id' => Auth::id(),
+                    'role' => 'manager_shipper',
+                    'status_before' => $before,
+                    'status_after' => Order::STATUS_DELIVERED,
+                    'note' => 'Manager shipper đánh dấu hoàn tất thủ công từ lộ trình phiên bản '.$dispatch->version.'.',
+                ]);
+            }
+        });
+
+        return redirect()->route('shipper.manage-assignments.history', [
+            'date' => $dispatch->schedule_date->toDateString(),
+            'history_id' => $dispatch->id,
+        ])->with('success', 'Đã đánh dấu hoàn tất '.$orders->count().' đơn còn lại trong lộ trình.');
+    }
+
     /**
      * Review the latest published dispatch plan and print its delivery notes.
      */

@@ -1,8 +1,8 @@
 {
-  "version": "1.1.20",
-  "version_code": 63,
+  "version": "1.1.21",
+  "version_code": 64,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": true,
-  "message": "Bản cập nhật 1.1.20: Hiển thị toàn bộ lộ trình chờ xác nhận, xác nhận trực tiếp và tự hoàn tất lộ trình khi tất cả đơn đã giao."
+  "message": "Bản cập nhật 1.1.21: Hiển thị lý do khi lộ trình không thể đồng bộ; không cho xác nhận lộ trình 0 đơn và hỗ trợ Điều phối xử lý lộ trình không thể hoàn thành."
 }

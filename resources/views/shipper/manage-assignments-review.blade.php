@@ -237,9 +237,13 @@
         @if($selectedHistory)
             <a class="btn btn-success btn-sm" href="{{ route('shipper.manage-assignments.history', ['date' => $selectedDate, 'history_id' => $selectedHistory->id, 'download' => 'excel']) }}">Tải Excel điều phối tổng</a>
             @if(!$selectedHistory->revoked_at && $latestActiveHistory?->id === $selectedHistory->id)
+                <form method="POST" action="{{ route('shipper.manage-assignments.history.complete', $selectedHistory) }}" onsubmit="return confirm('Đánh dấu tất cả đơn chưa hoàn tất trong lộ trình là Đã giao? Thao tác này sẽ cập nhật trạng thái đơn.');">
+                    @csrf
+                    <button class="btn btn-success btn-sm"><i class="bi bi-check2-all me-1"></i>Hoàn tất các đơn còn lại</button>
+                </form>
                 <form method="POST" action="{{ route('shipper.manage-assignments.history.revoke', $selectedHistory) }}" onsubmit="return confirm('Thu hồi lộ trình này? Shipper sẽ không còn thấy yêu cầu xác nhận.');">
                     @csrf
-                    <button class="btn btn-warning btn-sm"><i class="bi bi-arrow-counterclockwise me-1"></i>Thu hồi lộ trình</button>
+                    <button class="btn btn-warning btn-sm"><i class="bi bi-arrow-counterclockwise me-1"></i>Loại lộ trình khỏi app shipper</button>
                 </form>
             @else
                 <form method="POST" action="{{ route('shipper.manage-assignments.history.destroy', $selectedHistory) }}" onsubmit="return confirm('Xóa vĩnh viễn lộ trình cũ này khỏi lịch sử?');">

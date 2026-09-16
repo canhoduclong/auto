@@ -131,6 +131,11 @@ class ShipperApiController extends BaseApiController
         if ($status === 'changed') {
             $status = 'changing';
         }
+        $syncReason = null;
+        if ($status !== 'completed' && $orders->isEmpty() && $plannedOrderIds !== []) {
+            $status = 'invalid';
+            $syncReason = 'Lộ trình không còn đơn hợp lệ để xác nhận. Vui lòng liên hệ Điều phối để đánh dấu hoàn tất hoặc xóa lộ trình.';
+        }
         $pendingOrders = $status === 'waiting' ? $orders : collect();
 
         return $this->ok([
@@ -143,6 +148,7 @@ class ShipperApiController extends BaseApiController
             'orders_count' => $pendingOrders->count(),
             'total_cod' => (float) $pendingOrders->sum('total'),
             'orders' => $pendingOrders->values(),
+            'sync_reason' => $syncReason,
         ]);
     }
 
@@ -222,6 +228,13 @@ class ShipperApiController extends BaseApiController
                 if ($status === 'changed') {
                     $status = 'changing';
                 }
+                $syncReason = null;
+                if (! $isCompleted && $confirmableOrders->isEmpty()) {
+                    $status = 'invalid';
+                    $syncReason = $plannedIds->isEmpty()
+                        ? 'Không tìm thấy dữ liệu lộ trình đã phát hành để đồng bộ.'
+                        : 'Các đơn trong lộ trình không còn hợp lệ để xác nhận nhưng chưa được ghi nhận hoàn tất. Vui lòng liên hệ Điều phối.';
+                }
                 $removedOrders = $removedOrderIds->isEmpty()
                     ? collect()
                     : Order::with('customer:id,name')->whereIn('id', $removedOrderIds)->get();
@@ -251,6 +264,7 @@ class ShipperApiController extends BaseApiController
                     'change_message' => ! $isCompleted && $membershipChanged
                         ? 'Lộ trình đang bị thay đổi. Đang chờ Kho Gửi xác nhận và gửi lại cho bạn.'
                         : null,
+                    'sync_reason' => $syncReason,
                     'is_completed' => $isCompleted,
                     'amount_earned' => (float) $dateOrders
                         ->filter(fn (Order $order) => (bool) ($order->charge_shipping_fee ?? true))
