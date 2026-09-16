@@ -89,4 +89,34 @@ class WarehouseAssignmentReviewTest extends TestCase
             ])
             ->assertForbidden();
     }
+
+    public function test_review_includes_warehouse_orders_not_present_in_latest_dispatch(): void
+    {
+        $warehouseRole = Role::query()->create(['name' => 'warehouse']);
+        $warehouse = Warehouse::query()->create(['name' => 'Kho nguồn', 'status' => true]);
+        $warehouseUser = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $warehouseUser->roles()->attach($warehouseRole);
+        $customer = Customer::query()->create(['name' => 'Khách nhận', 'status' => 'active']);
+        $order = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $warehouseUser->id,
+            'warehouse_id' => $warehouse->id,
+            'delivery_date' => now()->toDateString(),
+            'code' => 'WAREHOUSE-NOT-IN-DISPATCH',
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+
+        $this->actingAs($warehouseUser)
+            ->get(route('warehouse.assignment-review.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('WAREHOUSE-NOT-IN-DISPATCH');
+
+        $this->actingAs($warehouseUser)
+            ->post(route('warehouse.assignment-review.print'), [
+                'date' => now()->toDateString(),
+                'order_ids' => [$order->id],
+            ])
+            ->assertOk()
+            ->assertSee('PHIẾU GIAO HÀNG');
+    }
 }

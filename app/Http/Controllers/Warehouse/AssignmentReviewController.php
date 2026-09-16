@@ -27,15 +27,19 @@ class AssignmentReviewController extends Controller
             return [
                 'date' => $date,
                 'label' => Carbon::parse($date)->format('d/m'),
-                'count' => $dispatch ? $this->warehouseOrders($this->dispatchOrderIds($dispatch))->count() : 0,
+                'count' => $this->warehouseOrders(
+                    $dispatch ? $this->dispatchOrderIds($dispatch) : [],
+                    $date
+                )->count(),
             ];
         });
 
         $dispatch = $this->latestDispatch($selectedDate);
         $routeMeta = $dispatch ? $this->dispatchOrderMeta($dispatch) : [];
-        $orders = $dispatch
-            ? $this->warehouseOrders($this->dispatchOrderIds($dispatch))
-            : collect();
+        $orders = $this->warehouseOrders(
+            $dispatch ? $this->dispatchOrderIds($dispatch) : [],
+            $selectedDate
+        );
         $printHistories = OrderHistory::query()
             ->with('user:id,name')
             ->whereIn('order_id', $orders->pluck('id'))
@@ -63,9 +67,10 @@ class AssignmentReviewController extends Controller
 
         $selectedDate = Carbon::parse($validated['date'])->toDateString();
         $dispatch = $this->latestDispatch($selectedDate);
-        abort_unless($dispatch, 404, 'Ngày này chưa có lộ trình đã phát hành.');
-
-        $allowedOrders = $this->warehouseOrders($this->dispatchOrderIds($dispatch));
+        $allowedOrders = $this->warehouseOrders(
+            $dispatch ? $this->dispatchOrderIds($dispatch) : [],
+            $selectedDate
+        );
         $requestedIds = collect($validated['order_ids'])->map(fn ($id) => (int) $id)->values();
         abort_if(
             $requestedIds->diff($allowedOrders->pluck('id')->map(fn ($id) => (int) $id))->isNotEmpty(),
@@ -113,14 +118,20 @@ class AssignmentReviewController extends Controller
             ->all();
     }
 
-    private function warehouseOrders(array $orderIds): Collection
+    private function warehouseOrders(array $orderIds, string $date): Collection
     {
         $user = Auth::user();
         $warehouseId = (int) (Auth::user()?->warehouse_id ?? 0);
 
         return Order::query()
             ->with(['customer', 'shipper:id,name,phone', 'user:id,name', 'warehouse:id,name', 'items.product', 'items.variant.product'])
-            ->whereIn('id', $orderIds)
+            ->where(function ($query) use ($orderIds, $date) {
+                $query->whereDate('delivery_date', $date);
+                if ($orderIds !== []) {
+                    $query->orWhereIn('id', $orderIds);
+                }
+            })
+            ->whereNull('trash_at')
             ->when(
                 ! $user?->hasRole('admin'),
                 fn ($query) => $warehouseId > 0
@@ -128,7 +139,13 @@ class AssignmentReviewController extends Controller
                     : $query->whereRaw('1 = 0')
             )
             ->get()
-            ->sortBy(fn (Order $order) => array_search((int) $order->id, $orderIds, true))
+            ->sortBy(function (Order $order) use ($orderIds) {
+                $routePosition = array_search((int) $order->id, $orderIds, true);
+
+                return $routePosition === false
+                    ? PHP_INT_MAX - (int) $order->id
+                    : $routePosition;
+            })
             ->values();
     }
 
