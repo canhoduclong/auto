@@ -141,6 +141,54 @@ class ShipperDeliveryScheduleDateFilterTest extends TestCase
         $this->assertSame('Khách mobile lộ trình', $payload['data'][0]['orders'][0]['customer']['name']);
     }
 
+    public function test_mobile_schedule_detail_without_date_uses_latest_published_route(): void
+    {
+        Carbon::setTestNow('2026-09-16 08:00:00');
+        $shipper = User::factory()->create();
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
+        $customer = Customer::create(['name' => 'Khách app', 'status' => 'active']);
+        $order = Order::create([
+            'user_id' => $shipper->id,
+            'shipper_id' => $shipper->id,
+            'customer_id' => $customer->id,
+            'code' => 'APP-PUBLISHED-YESTERDAY',
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $order->forceFill(['created_at' => '2026-09-15 07:00:00'])->saveQuietly();
+        $snapshot = [[
+            'order_id' => $order->id,
+            'daily_sequence' => null,
+            'delivery_date' => null,
+            'delivery_time' => null,
+        ]];
+        $order->histories()->create([
+            'action' => 'schedule_created',
+            'user_id' => $shipper->id,
+            'role' => 'manager_shipper',
+            'schedule_snapshot_hash' => hash('sha256', json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)),
+            'schedule_snapshot' => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
+        ShipperDispatchHistory::create([
+            'schedule_date' => '2026-09-15',
+            'published_at' => now(),
+            'version' => 1,
+            'created_by' => $shipper->id,
+            'route_plan' => [[
+                'shipper_id' => $shipper->id,
+                'routes' => [['name' => 'Tuyến app', 'orders' => [['order_id' => $order->id]]]],
+            ]],
+        ]);
+
+        $request = Request::create('/api/mobile/shipper/delivery-schedules', 'GET');
+        $request->setUserResolver(fn () => $shipper->load('roles'));
+        $payload = app(ShipperApiController::class)->deliverySchedules($request)->getData(true);
+
+        $this->assertTrue($payload['success']);
+        $this->assertSame('2026-09-15', $payload['data']['date']);
+        $this->assertSame('waiting', $payload['data']['status']);
+        $this->assertSame('APP-PUBLISHED-YESTERDAY', $payload['data']['orders'][0]['code']);
+    }
+
     public function test_mobile_available_orders_use_the_confirmed_schedule_workflow_date(): void
     {
         Carbon::setTestNow('2026-09-09 10:00:00');

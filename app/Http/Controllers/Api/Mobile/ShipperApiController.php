@@ -114,7 +114,11 @@ class ShipperApiController extends BaseApiController
     {
         $this->ensureShipperRole($request);
         $userId = (int) $request->user()->id;
-        $selectedDate = $this->scheduleDate($request);
+        // The mobile client may open the schedule detail without a date. In
+        // that case, use the shipper's latest published route instead of
+        // blindly looking at today (which returned an empty route after
+        // midnight even though the web schedule was still visible).
+        $selectedDate = $this->scheduleDate($request, $userId, true);
 
         $orders = $this->deliveryScheduleOrdersForShipper($userId, $selectedDate)->get();
         $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
@@ -870,11 +874,29 @@ class ShipperApiController extends BaseApiController
         return $this->ok(null, $successMessage);
     }
 
-    private function scheduleDate(Request $request): string
+    private function scheduleDate(Request $request, ?int $shipperId = null, bool $preferLatestPublished = false): string
     {
-        return $request->filled('date')
-            ? Carbon::parse($request->input('date'))->toDateString()
-            : Carbon::today()->toDateString();
+        if ($request->filled('date')) {
+            return Carbon::parse($request->input('date'))->toDateString();
+        }
+
+        if ($preferLatestPublished && $shipperId) {
+            $latestPublishedDate = ShipperDispatchHistory::query()
+                ->whereDate('schedule_date', '<=', Carbon::today()->toDateString())
+                ->orderByDesc('schedule_date')
+                ->orderByDesc('version')
+                ->orderByDesc('id')
+                ->get()
+                ->first(fn (ShipperDispatchHistory $dispatch) => collect($dispatch->route_plan ?? [])
+                    ->contains(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId))
+                ?->schedule_date?->toDateString();
+
+            if ($latestPublishedDate) {
+                return $latestPublishedDate;
+            }
+        }
+
+        return Carbon::today()->toDateString();
     }
 
     private function deliveryScheduleOrdersForShipper(int $shipperId, string $selectedDate)
