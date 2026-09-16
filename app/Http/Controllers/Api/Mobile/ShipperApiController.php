@@ -216,7 +216,7 @@ class ShipperApiController extends BaseApiController
                 return [
                     'date' => $date,
                     'id' => $history?->id,
-                    'code' => $this->deliveryScheduleCode((int) $dateOrders->first()->shipper_id, $date, $history),
+                    'code' => $this->deliveryScheduleCode($shipperId, $date, $history),
                     'status' => $status,
                     'orders_count' => $dateOrders->count(),
                     'order_ids' => $orderIds,

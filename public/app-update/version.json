@@ -1,8 +1,8 @@
 {
-  "version": "1.1.17",
-  "version_code": 60,
+  "version": "1.1.18",
+  "version_code": 61,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
-  "force_update": false,
-  "message": "Bản cập nhật 1.1.17: Hiển thị rõ lộ trình đang thay đổi, đơn bị loại/thêm và chỉ cho shipper xác nhận sau khi lộ trình mới được gửi lại."
+  "force_update": true,
+  "message": "Bản cập nhật 1.1.18: Khắc phục lỗi shipper không thấy đơn hàng và lộ trình đã được điều phối; tải độc lập từng nhóm dữ liệu để ứng dụng không còn hiển thị trắng khi một kết nối gặp lỗi."
 }
