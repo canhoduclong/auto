@@ -3372,6 +3372,30 @@ class ShipperDashboardController extends Controller
         return $this->assignmentMutationResponse($request, $message);
     }
 
+    public function resumeOverdueDelivery(Request $request, Order $order)
+    {
+        $this->authorizeManagerShipper();
+
+        try {
+            $restoredStatus = app(ShipperAssignmentService::class)->resumeOverdueOrder(
+                $order->id,
+                (int) Auth::id(),
+                'manager_shipper'
+            );
+        } catch (\RuntimeException $exception) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => $exception->getMessage()], 422);
+            }
+
+            return back()->with('error', $exception->getMessage());
+        }
+
+        return $this->assignmentMutationResponse(
+            $request,
+            'Đã cho phép đơn #'.($order->code ?: $order->id).' tiếp tục giao từ công đoạn '.$restoredStatus.'.'
+        );
+    }
+
     private function routePlanHasChangesForShipper(string $date, array $routePlan, ?int $shipperId): bool
     {
         if ($shipperId === null) {

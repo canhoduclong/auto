@@ -181,9 +181,15 @@ class ShipperApiController extends BaseApiController
                         ->when($plannedIds->isNotEmpty(), fn ($q) => $q->orWhereIn('id', $plannedIds)))
                     ->orderBy('daily_sequence')->orderBy('id')->get();
                 $history = $this->latestDeliveryScheduleHistoryForShipperOnDate($shipperId, $date);
-                $currentOrderIds = $dateOrders->pluck('id')->map(fn ($id) => (int) $id)->unique()->values();
-                $removedOrderIds = $plannedIds->diff($currentOrderIds)->values();
-                $addedOrderIds = $currentOrderIds->diff($plannedIds)->values();
+                // Compare the published plan only with orders which can still
+                // belong to a route. Completed orders outside this dispatch
+                // must not make the mobile app report a phantom change.
+                $currentRouteOrderIds = $dateOrders
+                    ->filter(fn (Order $order) => $plannedIds->contains((int) $order->id)
+                        || in_array($order->status, $this->assignmentStatuses(), true))
+                    ->pluck('id')->map(fn ($id) => (int) $id)->unique()->values();
+                $removedOrderIds = $plannedIds->diff($currentRouteOrderIds)->values();
+                $addedOrderIds = $currentRouteOrderIds->diff($plannedIds)->values();
                 $membershipChanged = $dispatch !== null
                     && ($removedOrderIds->isNotEmpty() || $addedOrderIds->isNotEmpty());
                 $confirmableOrders = $dateOrders
@@ -923,6 +929,7 @@ class ShipperApiController extends BaseApiController
     private function assignmentStatuses(): array
     {
         return [
+            Order::STATUS_OVERDUE_DELIVERY,
             Order::STATUS_APPROVED,
             Order::STATUS_READY_TO_PACK,
             Order::STATUS_PACKING,

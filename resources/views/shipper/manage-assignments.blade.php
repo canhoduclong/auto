@@ -556,6 +556,12 @@
             <a href="{{ route('shipper.manage-assignments') }}" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-arrow-clockwise me-1"></i>Đặt lại
             </a>
+            <a href="{{ route('shipper.manage-assignments', ['date' => $selectedDate, 'refresh' => now()->timestamp]) }}"
+                class="btn btn-sm btn-outline-primary"
+                onclick="localStorage.removeItem(@js('shipperTripPlan:' . $selectedDate))"
+                title="Bỏ bản chỉnh sửa cục bộ và tải lại dữ liệu mới nhất của ngày đang chọn">
+                <i class="bi bi-arrow-repeat me-1"></i>Tải mới
+            </a>
             <a href="{{ route('shipper.manage-assignments.history', ['date' => $selectedDate]) }}"
                 class="btn btn-sm {{ $historyCount > 0 ? 'btn-outline-primary' : 'btn-outline-secondary' }}">
                 <i class="bi bi-clock-history me-1"></i>Lịch sử{{ $historyCount > 0 ? ' (' . $historyCount . ')' : '' }}
@@ -748,6 +754,12 @@
                                             <div class="fw-bold text-dark">{{ $customerName }}</div>
                                             @if($order->status === \App\Models\Order::STATUS_OVERDUE_DELIVERY)
                                                 <span class="badge bg-warning text-dark">Giao trễ — chờ điều phối tiếp</span>
+                                                <form method="POST" action="{{ route('shipper.orders.resume-overdue-delivery', $order) }}" class="d-inline ms-1" onsubmit="return confirm('Cho phép đơn này tiếp tục giao hàng?')">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-sm btn-warning py-0 px-2">
+                                                        <i class="bi bi-play-fill"></i> Giao tiếp
+                                                    </button>
+                                                </form>
                                             @endif
                                             <div class="text-muted small">#{{ $order->code ?: $order->id }}</div>
                                             <div class="order-meta-line">
@@ -971,6 +983,12 @@
                                                                 @endif
                                                                 @if($order->status === \App\Models\Order::STATUS_OVERDUE_DELIVERY)
                                                                     <span class="badge bg-warning text-dark">Giao trễ — chờ điều phối tiếp</span>
+                                                                    <form method="POST" action="{{ route('shipper.orders.resume-overdue-delivery', $order) }}" class="d-inline ms-1" onsubmit="return confirm('Cho phép đơn này tiếp tục giao hàng?')">
+                                                                        @csrf
+                                                                        <button type="submit" class="btn btn-sm btn-warning py-0 px-2">
+                                                                            <i class="bi bi-play-fill"></i> Giao tiếp
+                                                                        </button>
+                                                                    </form>
                                                                 @endif
                                                                 <div class="trip-order-subline">
                                                                     <span class="trip-products-cell">{{ $productSummary ?: ($order->code ?: ('ORD-' . $order->id)) }}</span>
