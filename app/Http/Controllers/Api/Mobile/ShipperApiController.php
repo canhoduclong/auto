@@ -124,7 +124,10 @@ class ShipperApiController extends BaseApiController
         $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
         $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
         $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
-        $status = $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot);
+        $plannedOrderIds = $this->plannedOrderIdsForShipperOnDate($userId, $selectedDate);
+        $status = $this->areAllOrdersCompleted($plannedOrderIds)
+            ? 'completed'
+            : $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot);
         if ($status === 'changed') {
             $status = 'changing';
         }
@@ -194,11 +197,14 @@ class ShipperApiController extends BaseApiController
                     && ($removedOrderIds->isNotEmpty() || $addedOrderIds->isNotEmpty());
                 $confirmableOrders = $dateOrders
                     ->whereIn('status', $this->assignmentStatuses())
+                    ->reject(fn (Order $order) => $this->orderWasDelivered($order))
                     ->values();
                 $orderIds = $confirmableOrders->pluck('id')->map(fn ($id) => (int) $id)->values();
-                $completedStatuses = ['delivered', 'completed', 'returned_completed'];
+                $isCompleted = $this->areAllOrdersCompleted($plannedIds->all());
                 $snapshot = $this->buildDeliveryScheduleSnapshot($confirmableOrders);
-                $status = $membershipChanged
+                $status = $isCompleted
+                    ? 'completed'
+                    : ($membershipChanged
                     ? 'changing'
                     : ($confirmableOrders->isEmpty()
                     ? match ($history?->action) {
@@ -211,13 +217,17 @@ class ShipperApiController extends BaseApiController
                         $history,
                         $this->hashDeliveryScheduleSnapshot($snapshot),
                         $snapshot
-                    ));
+                    )));
                 if ($status === 'changed') {
                     $status = 'changing';
                 }
                 $removedOrders = $removedOrderIds->isEmpty()
                     ? collect()
                     : Order::with('customer:id,name')->whereIn('id', $removedOrderIds)->get();
+
+                $dateOrders->each(function (Order $order): void {
+                    $order->setAttribute('is_delivered_in_route', $this->orderWasDelivered($order));
+                });
 
                 return [
                     'date' => $date,
@@ -237,10 +247,10 @@ class ShipperApiController extends BaseApiController
                         'code' => (string) ($order->code ?: '#'.$order->id),
                         'customer_name' => (string) ($order->customer?->name ?? 'Khách hàng'),
                     ])->values(),
-                    'change_message' => $membershipChanged
+                    'change_message' => ! $isCompleted && $membershipChanged
                         ? 'Lộ trình đang bị thay đổi. Đang chờ Kho Gửi xác nhận và gửi lại cho bạn.'
                         : null,
-                    'is_completed' => $dateOrders->every(fn (Order $order) => in_array($order->status, $completedStatuses, true)),
+                    'is_completed' => $isCompleted,
                     'amount_earned' => (float) $dateOrders
                         ->filter(fn (Order $order) => (bool) ($order->charge_shipping_fee ?? true))
                         ->sum('shipping_fee'),
@@ -913,6 +923,7 @@ class ShipperApiController extends BaseApiController
             ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
             ->where('shipper_id', $shipperId)
             ->whereIn('status', $this->assignmentStatuses())
+            ->whereDoesntHave('histories', fn ($history) => $history->whereIn('action', $this->deliveryCompletionActions()))
             ->where(function ($dateQuery) use ($selectedDate, $plannedOrderIds): void {
                 $dateQuery->whereDate('created_at', $selectedDate);
                 if ($plannedOrderIds !== []) {
@@ -936,6 +947,51 @@ class ShipperApiController extends BaseApiController
             Order::STATUS_PACKED,
             Order::STATUS_READY_TO_SHIP,
         ];
+    }
+
+    private function areAllOrdersCompleted(array $orderIds): bool
+    {
+        $orderIds = collect($orderIds)->map(fn ($id) => (int) $id)->filter()->unique()->values();
+        if ($orderIds->isEmpty()) {
+            return false;
+        }
+
+        $completedIds = Order::query()
+            ->whereIn('id', $orderIds->all())
+            ->where(function ($query): void {
+                $query->whereIn('status', [
+                    Order::STATUS_DELIVERED,
+                    Order::STATUS_COMPLETED,
+                    Order::STATUS_RETURNED_COMPLETED,
+                ])->orWhereHas('histories', fn ($history) => $history->whereIn('action', $this->deliveryCompletionActions()));
+            })
+            ->pluck('id')->map(fn ($id) => (int) $id)->unique();
+
+        return $orderIds->diff($completedIds)->isEmpty();
+    }
+
+    private function orderWasDelivered(Order $order): bool
+    {
+        if (in_array($order->status, [
+            Order::STATUS_DELIVERED,
+            Order::STATUS_COMPLETED,
+            Order::STATUS_RETURNED_COMPLETED,
+        ], true)) {
+            return true;
+        }
+
+        if ($order->relationLoaded('histories')) {
+            return $order->histories->contains(
+                fn (OrderHistory $history) => in_array($history->action, $this->deliveryCompletionActions(), true)
+            );
+        }
+
+        return $order->histories()->whereIn('action', $this->deliveryCompletionActions())->exists();
+    }
+
+    private function deliveryCompletionActions(): array
+    {
+        return ['delivered', 'mobile_delivered', 'shipper_delivered_bulk', 'mobile_complete_delivery'];
     }
 
     private function buildDeliveryScheduleSnapshot($orders): array

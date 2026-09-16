@@ -2785,7 +2785,33 @@ class ShipperDashboardController extends Controller
         $statusByShipperId = [];
 
         foreach ($assignedOrders as $shipperId => $orders) {
-            $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
+            $allOrdersCompleted = $orders->isNotEmpty() && $orders->every(
+                fn (Order $order) => in_array($order->status, [
+                    Order::STATUS_DELIVERED,
+                    Order::STATUS_COMPLETED,
+                    Order::STATUS_RETURNED_COMPLETED,
+                ], true) || $order->histories?->contains(
+                    fn (OrderHistory $history) => in_array($history->action, $this->customerDeliveryCompletionActions(), true)
+                )
+            );
+            if ($allOrdersCompleted) {
+                $statusByShipperId[(int) $shipperId] = 'completed';
+                continue;
+            }
+
+            // The published confirmation snapshot contains only stops that
+            // still need delivery. Keep completed stops visible in the route,
+            // but do not make them look like a newly changed assignment.
+            $confirmableOrders = $orders->reject(
+                fn (Order $order) => in_array($order->status, [
+                    Order::STATUS_DELIVERED,
+                    Order::STATUS_COMPLETED,
+                    Order::STATUS_RETURNED_COMPLETED,
+                ], true) || $order->histories?->contains(
+                    fn (OrderHistory $history) => in_array($history->action, $this->customerDeliveryCompletionActions(), true)
+                )
+            )->values();
+            $snapshot = $this->buildDeliveryScheduleSnapshot($confirmableOrders);
             $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
             $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate(
                 (int) $shipperId,

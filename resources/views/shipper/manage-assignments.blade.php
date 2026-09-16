@@ -830,7 +830,7 @@
                                 @php
                                     $scheduleStatus = $shipperScheduleStatuses[$shipperId] ?? 'waiting';
                                     $scheduleBadgeClass = match ($scheduleStatus) {
-                                        'confirmed' => 'bg-success',
+                                        'confirmed', 'completed' => 'bg-success',
                                         'rejected' => 'bg-danger',
                                         'changed' => 'bg-info text-dark',
                                         'none' => 'bg-secondary',
@@ -838,6 +838,7 @@
                                     };
                                     $scheduleLabel = match ($scheduleStatus) {
                                         'confirmed' => 'Đã Xác Nhận, lúc ' . ($shipperScheduleConfirmedAt[$shipperId] ?? '—'),
+                                        'completed' => 'Lộ trình đã hoàn tất',
                                         'rejected' => 'Từ chối',
                                         'changed' => 'Lộ trình đã thay đổi',
                                         'none' => 'Chưa gửi',
@@ -845,7 +846,7 @@
                                     };
                                     $canSendShipperSchedule = in_array($scheduleStatus, ['none', 'changed', 'rejected'], true);
                                 @endphp
-                                <div class="route-zone-card {{ $scheduleStatus === 'confirmed' ? 'is-confirmed' : ($scheduleStatus === 'waiting' ? 'is-sent' : '') }}" data-schedule-status="{{ $scheduleStatus }}">
+                                <div class="route-zone-card {{ in_array($scheduleStatus, ['confirmed', 'completed'], true) ? 'is-confirmed' : ($scheduleStatus === 'waiting' ? 'is-sent' : '') }}" data-schedule-status="{{ $scheduleStatus }}">
                                     <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
                                         <div>
                                             <div class="fw-semibold text-dark">{{ $shipper?->name ?? 'Shipper #' . $shipperId }}</div>

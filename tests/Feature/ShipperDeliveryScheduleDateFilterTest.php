@@ -141,6 +141,99 @@ class ShipperDeliveryScheduleDateFilterTest extends TestCase
         $this->assertSame('Khách mobile lộ trình', $payload['data'][0]['orders'][0]['customer']['name']);
     }
 
+    public function test_mobile_route_keeps_delivered_stops_visible_but_only_confirms_remaining_stops(): void
+    {
+        Carbon::setTestNow('2026-09-16 10:00:00');
+        $shipper = User::factory()->create();
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
+        $customer = Customer::create(['name' => 'Khách trong tuyến', 'status' => 'active']);
+        $delivered = Order::create([
+            'user_id' => $shipper->id,
+            'shipper_id' => $shipper->id,
+            'customer_id' => $customer->id,
+            'code' => 'ROUTE-DELIVERED',
+            // Simulate legacy data whose status was not advanced.
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $pending = Order::create([
+            'user_id' => $shipper->id,
+            'shipper_id' => $shipper->id,
+            'customer_id' => $customer->id,
+            'code' => 'ROUTE-PENDING',
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $delivered->histories()->create([
+            'action' => 'delivered',
+            'user_id' => $shipper->id,
+            'role' => 'shipper',
+            'status_before' => Order::STATUS_DELIVERING,
+            'status_after' => Order::STATUS_DELIVERED,
+        ]);
+        $snapshot = [[
+            'order_id' => $pending->id,
+            'daily_sequence' => null,
+            'delivery_date' => null,
+            'delivery_time' => null,
+        ]];
+        $pending->histories()->create([
+            'action' => 'schedule_created',
+            'user_id' => $shipper->id,
+            'role' => 'manager_shipper',
+            'schedule_snapshot_hash' => hash('sha256', json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)),
+            'schedule_snapshot' => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
+        ShipperDispatchHistory::create([
+            'schedule_date' => '2026-09-16',
+            'published_at' => now(),
+            'version' => 1,
+            'created_by' => $shipper->id,
+            'route_plan' => [[
+                'shipper_id' => $shipper->id,
+                'routes' => [['orders' => [
+                    ['order_id' => $delivered->id],
+                    ['order_id' => $pending->id],
+                ]]],
+            ]],
+        ]);
+
+        $request = Request::create('/api/mobile/shipper/delivery-schedules/list', 'GET');
+        $request->setUserResolver(fn () => $shipper->load('roles'));
+        $route = app(ShipperApiController::class)->deliveryScheduleList($request)->getData(true)['data'][0];
+
+        $this->assertSame('waiting', $route['status']);
+        $this->assertSame([$pending->id], $route['order_ids']);
+        $this->assertSame([$delivered->id, $pending->id], collect($route['orders'])->pluck('id')->all());
+        $this->assertTrue((bool) $route['orders'][0]['is_delivered_in_route']);
+        $this->assertFalse((bool) $route['orders'][1]['is_delivered_in_route']);
+
+        $confirm = Request::create('/api/mobile/shipper/delivery-schedules/confirm', 'POST', [
+            'date' => '2026-09-16',
+            'order_ids' => [$pending->id],
+        ]);
+        $confirm->setUserResolver(fn () => $shipper->load('roles'));
+        $response = app(ShipperApiController::class)->confirmDeliverySchedule($confirm)->getData(true);
+
+        $this->assertTrue($response['success']);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $pending->id,
+            'action' => 'schedule_confirmed',
+        ]);
+
+        $pending->histories()->create([
+            'action' => 'mobile_delivered',
+            'user_id' => $shipper->id,
+            'role' => 'shipper',
+            'status_before' => Order::STATUS_DELIVERING,
+            'status_after' => Order::STATUS_DELIVERED,
+        ]);
+        $completedRequest = Request::create('/api/mobile/shipper/delivery-schedules/list', 'GET');
+        $completedRequest->setUserResolver(fn () => $shipper->load('roles'));
+        $completedRoute = app(ShipperApiController::class)->deliveryScheduleList($completedRequest)->getData(true)['data'][0];
+
+        $this->assertSame('completed', $completedRoute['status']);
+        $this->assertTrue($completedRoute['is_completed']);
+    }
+
     public function test_mobile_schedule_detail_without_date_uses_latest_published_route(): void
     {
         Carbon::setTestNow('2026-09-16 08:00:00');
