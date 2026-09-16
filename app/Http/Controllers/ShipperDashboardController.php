@@ -1085,7 +1085,7 @@ class ShipperDashboardController extends Controller
 
     public function pickupWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
     {
-        $this->authorizeWarehouseTransferShipper($transfer);
+        $this->authorizeWarehouseTransferShipper($transfer, $request);
 
         if ($transfer->status !== WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP) {
             $message = 'Phiếu điều chuyển không ở trạng thái chờ shipper nhận hàng.';
@@ -1232,7 +1232,7 @@ class ShipperDashboardController extends Controller
      */
     public function resumeWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
     {
-        $this->authorizeWarehouseTransferShipper($transfer);
+        $this->authorizeWarehouseTransferShipper($transfer, $request);
 
         $validated = $request->validate([
             'resume_note' => ['nullable', 'string', 'max:1000'],
@@ -1287,7 +1287,7 @@ class ShipperDashboardController extends Controller
 
     public function deliverWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
     {
-        $this->authorizeWarehouseTransferShipper($transfer);
+        $this->authorizeWarehouseTransferShipper($transfer, $request);
 
         if ($transfer->status !== WarehouseTransfer::STATUS_IN_TRANSIT) {
             $message = 'Phiếu điều chuyển không ở trạng thái đang vận chuyển.';
@@ -2276,7 +2276,7 @@ class ShipperDashboardController extends Controller
         $this->syncVariantStockFromInventories((int) $item->product_variant_id);
     }
 
-    private function authorizeWarehouseTransferShipper(WarehouseTransfer $transfer): void
+    private function authorizeWarehouseTransferShipper(WarehouseTransfer $transfer, ?Request $request = null): void
     {
         $user = Auth::user();
         if (! $user) {
@@ -2284,6 +2284,13 @@ class ShipperDashboardController extends Controller
         }
 
         if ($user->hasRole('admin') || $user->hasRole('manager_shipper')) {
+            return;
+        }
+
+        if ($request?->attributes->get('warehouse_direct_receipt') === true
+            && $user->hasRole('warehouse')
+            && (int) $user->warehouse_id === (int) $transfer->target_warehouse_id
+        ) {
             return;
         }
 

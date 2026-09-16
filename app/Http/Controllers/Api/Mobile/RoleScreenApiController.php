@@ -850,12 +850,17 @@ class RoleScreenApiController extends BaseApiController
         $transfers = WarehouseTransfer::query()
             ->with(['order.customer', 'sourceWarehouse', 'targetWarehouse', 'shipper'])
             ->when($warehouseId, fn ($q) => $q->where('target_warehouse_id', $warehouseId))
-            ->whereIn('status', [WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE, WarehouseTransfer::STATUS_RECEIVED_COMPLETED])
-            ->orderByRaw("CASE WHEN status = 'delivered_waiting_receive' THEN 0 ELSE 1 END")
+            ->whereIn('status', [
+                WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                WarehouseTransfer::STATUS_IN_TRANSIT,
+                WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+            ])
+            ->orderByRaw("CASE status WHEN 'delivered_waiting_receive' THEN 0 WHEN 'in_transit' THEN 1 WHEN 'pending_shipper_pickup' THEN 2 ELSE 3 END")
             ->latest('delivered_at')
             ->get();
 
-        return $this->transferScreenResponse($transfers, now()->toDateString());
+        return $this->transferScreenResponse($transfers, now()->toDateString(), true);
     }
 
     private function shipperWarehouseTransfers(Request $request, string $date): JsonResponse
@@ -880,9 +885,9 @@ class RoleScreenApiController extends BaseApiController
         return $this->transferScreenResponse($transfers, $date);
     }
 
-    private function transferScreenResponse($transfers, string $date): JsonResponse
+    private function transferScreenResponse($transfers, string $date, bool $warehouseReceiving = false): JsonResponse
     {
-        $items = $transfers->values()->map(function (WarehouseTransfer $transfer, int $index) {
+        $items = $transfers->values()->map(function (WarehouseTransfer $transfer, int $index) use ($warehouseReceiving) {
             $deliveryTime = $transfer->order?->delivery_time ?: $transfer->order?->customer?->delivery_time;
             $dispatchEntry = $transfer->dispatchEntry;
             $dispatchSlip = $dispatchEntry?->slip;
@@ -902,12 +907,24 @@ class RoleScreenApiController extends BaseApiController
                 'transfer_code' => (string) ($dispatchSlip?->code ?? ('DC-'.str_pad((string) $transfer->id, 6, '0', STR_PAD_LEFT))),
                 'quantity' => $quantity,
                 'weight' => (float) ($transfer->packed_total_weight ?? 0),
-                'can_pickup' => $transfer->status === WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
-                'can_deliver' => $transfer->status === WarehouseTransfer::STATUS_IN_TRANSIT,
-                'can_rollback' => $transfer->status === WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                'can_pickup' => ! $warehouseReceiving && $transfer->status === WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                'can_deliver' => ! $warehouseReceiving && $transfer->status === WarehouseTransfer::STATUS_IN_TRANSIT,
+                'can_rollback' => ! $warehouseReceiving && $transfer->status === WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                'can_confirm_ship_delivery' => $warehouseReceiving && $transfer->status === WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                'can_receive_directly' => $warehouseReceiving && in_array($transfer->status, [
+                    WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                    WarehouseTransfer::STATUS_IN_TRANSIT,
+                ], true),
+                'is_imported' => $transfer->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
                 'updated_at' => optional($transfer->updated_at)->toIso8601String(),
             ];
         });
+
+        if ($warehouseReceiving && $items->contains(fn ($item) => $item['can_confirm_ship_delivery'])) {
+            $first = $items->first();
+            $first['show_confirm_all'] = true;
+            $items->put(0, $first);
+        }
 
         return $this->ok([
             'selected_date' => $date,

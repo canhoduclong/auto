@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseDispatchSlip;
 use App\Models\WarehouseTransfer;
+use App\Models\ShipperDispatchHistory;
 use App\Services\ShipperAssignmentService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -120,7 +121,10 @@ class ShipperApiController extends BaseApiController
         $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
         $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
         $status = $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot);
-        $pendingOrders = in_array($status, ['waiting', 'changed'], true) ? $orders : collect();
+        if ($status === 'changed') {
+            $status = 'changing';
+        }
+        $pendingOrders = $status === 'waiting' ? $orders : collect();
 
         return $this->ok([
             'date' => $selectedDate,
@@ -142,53 +146,96 @@ class ShipperApiController extends BaseApiController
         $fromDate = Carbon::today()->subDays(90)->toDateString();
         $toDate = Carbon::today()->addDays(30)->toDateString();
 
-        $orders = Order::query()
-            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
-            ->where('shipper_id', $shipperId)
-            ->whereNotIn('status', ['cancelled', 'canceled'])
-            ->whereBetween(DB::raw('DATE(created_at)'), [$fromDate, $toDate])
-            ->orderByDesc('created_at')
-            ->get();
-
-        $historyByDate = OrderHistory::query()
-            ->join('orders', 'orders.id', '=', 'order_histories.order_id')
-            ->where('orders.shipper_id', $shipperId)
-            ->whereBetween(DB::raw('DATE(orders.created_at)'), [$fromDate, $toDate])
-            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
-            ->orderByDesc('order_histories.created_at')
-            ->orderByDesc('order_histories.id')
-            ->select('order_histories.*', DB::raw('DATE(orders.created_at) as schedule_date'))
+        $dispatchesByDate = ShipperDispatchHistory::query()
+            ->whereBetween('schedule_date', [$fromDate, $toDate])
+            ->orderByDesc('version')
+            ->orderByDesc('id')
             ->get()
-            ->groupBy('schedule_date')
-            ->map(fn ($items) => $items->first());
+            ->unique(fn ($dispatch) => $dispatch->schedule_date->toDateString())
+            ->filter(fn ($dispatch) => collect($dispatch->route_plan ?? [])
+                ->contains(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId))
+            ->keyBy(fn ($dispatch) => $dispatch->schedule_date->toDateString());
+        $orderDates = Order::query()
+            ->where('shipper_id', $shipperId)
+            ->whereBetween(DB::raw('DATE(created_at)'), [$fromDate, $toDate])
+            ->selectRaw('DATE(created_at) as route_date')
+            ->distinct()
+            ->pluck('route_date');
+        $dates = $orderDates->merge($dispatchesByDate->keys())->filter()->unique()->sortDesc()->values();
 
-        $routes = $orders->groupBy(fn (Order $order) => $order->created_at->toDateString())
-            ->map(function ($dateOrders, string $date) use ($historyByDate): array {
-                $history = $historyByDate->get($date);
-                $orderIds = $dateOrders->pluck('id')->map(fn ($id) => (int) $id)->values();
+        $routes = $dates->map(function (string $date) use ($shipperId, $dispatchesByDate): array {
+                $dispatch = $dispatchesByDate->get($date);
+                $plannedIds = collect($dispatch?->route_plan ?? [])
+                    ->first(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId)['routes'] ?? [];
+                $plannedIds = collect($plannedIds)->flatMap(fn ($route) => $route['orders'] ?? [])
+                    ->pluck('order_id')->map(fn ($id) => (int) $id)->filter()->unique()->values();
+                $dateOrders = Order::query()
+                    ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
+                    ->where('shipper_id', $shipperId)
+                    ->whereNotIn('status', ['cancelled', 'canceled'])
+                    ->where(fn ($query) => $query->whereDate('created_at', $date)
+                        ->when($plannedIds->isNotEmpty(), fn ($q) => $q->orWhereIn('id', $plannedIds)))
+                    ->orderBy('daily_sequence')->orderBy('id')->get();
+                $history = $this->latestDeliveryScheduleHistoryForShipperOnDate($shipperId, $date);
+                $currentOrderIds = $dateOrders->pluck('id')->map(fn ($id) => (int) $id)->unique()->values();
+                $removedOrderIds = $plannedIds->diff($currentOrderIds)->values();
+                $addedOrderIds = $currentOrderIds->diff($plannedIds)->values();
+                $membershipChanged = $dispatch !== null
+                    && ($removedOrderIds->isNotEmpty() || $addedOrderIds->isNotEmpty());
+                $confirmableOrders = $dateOrders
+                    ->whereIn('status', $this->assignmentStatuses())
+                    ->values();
+                $orderIds = $confirmableOrders->pluck('id')->map(fn ($id) => (int) $id)->values();
                 $completedStatuses = ['delivered', 'completed', 'returned_completed'];
+                $snapshot = $this->buildDeliveryScheduleSnapshot($confirmableOrders);
+                $status = $membershipChanged
+                    ? 'changing'
+                    : ($confirmableOrders->isEmpty()
+                    ? match ($history?->action) {
+                        'schedule_confirmed' => 'confirmed',
+                        'schedule_rejected' => 'rejected',
+                        'schedule_created' => 'waiting',
+                        default => 'none',
+                    }
+                    : $this->deliveryScheduleStatus(
+                        $history,
+                        $this->hashDeliveryScheduleSnapshot($snapshot),
+                        $snapshot
+                    ));
+                if ($status === 'changed') {
+                    $status = 'changing';
+                }
+                $removedOrders = $removedOrderIds->isEmpty()
+                    ? collect()
+                    : Order::with('customer:id,name')->whereIn('id', $removedOrderIds)->get();
 
                 return [
                     'date' => $date,
                     'id' => $history?->id,
                     'code' => $this->deliveryScheduleCode((int) $dateOrders->first()->shipper_id, $date, $history),
-                    'status' => match ($history?->action) {
-                        'schedule_confirmed' => 'confirmed',
-                        'schedule_rejected' => 'rejected',
-                        'schedule_created' => 'waiting',
-                        default => 'none',
-                    },
+                    'status' => $status,
                     'orders_count' => $dateOrders->count(),
                     'order_ids' => $orderIds,
                     'orders' => $dateOrders->values(),
+                    'removed_orders' => $removedOrders->map(fn (Order $order) => [
+                        'id' => (int) $order->id,
+                        'code' => (string) ($order->code ?: '#'.$order->id),
+                        'customer_name' => (string) ($order->customer?->name ?? 'Khách hàng'),
+                    ])->values(),
+                    'added_orders' => $dateOrders->whereIn('id', $addedOrderIds)->map(fn (Order $order) => [
+                        'id' => (int) $order->id,
+                        'code' => (string) ($order->code ?: '#'.$order->id),
+                        'customer_name' => (string) ($order->customer?->name ?? 'Khách hàng'),
+                    ])->values(),
+                    'change_message' => $membershipChanged
+                        ? 'Lộ trình đang bị thay đổi. Đang chờ Kho Gửi xác nhận và gửi lại cho bạn.'
+                        : null,
                     'is_completed' => $dateOrders->every(fn (Order $order) => in_array($order->status, $completedStatuses, true)),
                     'amount_earned' => (float) $dateOrders
                         ->filter(fn (Order $order) => (bool) ($order->charge_shipping_fee ?? true))
                         ->sum('shipping_fee'),
                 ];
-            })
-            ->sortKeysDesc()
-            ->values();
+            })->values();
 
         return $this->ok($routes);
     }
@@ -777,11 +824,28 @@ class ShipperApiController extends BaseApiController
             ->get();
 
         if ($orders->count() !== count(array_unique($requestedOrderIds))) {
-            return $this->fail('Co don khong thuoc lo trinh cua ban.', 403);
+            $validIds = $orders->pluck('id')->map(fn ($id) => (int) $id);
+            $removed = Order::query()->with('customer:id,name')
+                ->whereIn('id', collect($requestedOrderIds)->diff($validIds))
+                ->get()
+                ->map(fn (Order $order) => ($order->code ?: '#'.$order->id).' - '.($order->customer?->name ?? 'Khách hàng'));
+
+            return $this->fail(
+                'Lộ trình đang bị thay đổi và chưa được gửi lại. Đơn đã bị loại: '.($removed->implode(', ') ?: 'không xác định').'. Vui lòng chờ Kho Gửi xác nhận lộ trình mới.',
+                409,
+                ['removed_orders' => $removed->values()]
+            );
         }
 
         $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
         $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
+        $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
+        if ($this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot) !== 'waiting') {
+            return $this->fail(
+                'Lộ trình đang bị thay đổi hoặc chưa được Kho Gửi gửi lại. Vui lòng chờ lộ trình mới trước khi xác nhận.',
+                409
+            );
+        }
 
         $decisionNote = $historyAction === 'schedule_rejected'
             ? 'Shipper '.$user->name.' tu choi lo trinh giao hang qua mobile app. Ly do: '.trim((string) $validated['reason'])
@@ -815,11 +879,18 @@ class ShipperApiController extends BaseApiController
 
     private function deliveryScheduleOrdersForShipper(int $shipperId, string $selectedDate)
     {
+        $plannedOrderIds = $this->plannedOrderIdsForShipperOnDate($shipperId, $selectedDate);
+
         return Order::query()
             ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
             ->where('shipper_id', $shipperId)
             ->whereIn('status', $this->assignmentStatuses())
-            ->whereDate('created_at', $selectedDate)
+            ->where(function ($dateQuery) use ($selectedDate, $plannedOrderIds): void {
+                $dateQuery->whereDate('created_at', $selectedDate);
+                if ($plannedOrderIds !== []) {
+                    $dateQuery->orWhereIn('id', $plannedOrderIds);
+                }
+            })
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence', 'asc')
             ->orderBy('delivery_time', 'asc')
@@ -833,6 +904,7 @@ class ShipperApiController extends BaseApiController
             Order::STATUS_APPROVED,
             Order::STATUS_READY_TO_PACK,
             Order::STATUS_PACKING,
+            Order::STATUS_PACKED,
             Order::STATUS_READY_TO_SHIP,
         ];
     }
@@ -856,15 +928,32 @@ class ShipperApiController extends BaseApiController
 
     private function latestDeliveryScheduleHistoryForShipperOnDate(int $shipperId, string $selectedDate): ?OrderHistory
     {
+        $orderIds = collect($this->plannedOrderIdsForShipperOnDate($shipperId, $selectedDate))
+            ->merge(Order::query()->where('shipper_id', $shipperId)->whereDate('created_at', $selectedDate)->pluck('id'))
+            ->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
+        if ($orderIds === []) {
+            return null;
+        }
+
         return OrderHistory::query()
-            ->join('orders', 'orders.id', '=', 'order_histories.order_id')
-            ->where('orders.shipper_id', $shipperId)
-            ->whereDate('orders.created_at', $selectedDate)
+            ->whereIn('order_id', $orderIds)
             ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
             ->orderByDesc('order_histories.created_at')
             ->orderByDesc('order_histories.id')
             ->select('order_histories.*')
             ->first();
+    }
+
+    private function plannedOrderIdsForShipperOnDate(int $shipperId, string $selectedDate): array
+    {
+        $dispatch = ShipperDispatchHistory::query()
+            ->whereDate('schedule_date', $selectedDate)
+            ->orderByDesc('version')->orderByDesc('id')->first();
+        $plan = collect($dispatch?->route_plan ?? [])
+            ->first(fn ($item) => (int) ($item['shipper_id'] ?? 0) === $shipperId);
+
+        return collect($plan['routes'] ?? [])->flatMap(fn ($route) => $route['orders'] ?? [])
+            ->pluck('order_id')->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
     }
 
     private function deliveryScheduleStatus(?OrderHistory $latestHistory, string $currentSnapshotHash, array $currentSnapshot = []): string

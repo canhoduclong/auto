@@ -79,7 +79,11 @@ class WarehouseApiController extends BaseApiController
             'completed_tasks' => 0,
             'transfers_incoming' => WarehouseTransfer::query()
                 ->where('target_warehouse_id', $warehouseId)
-                ->where('status', WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE)
+                ->whereIn('status', [
+                    WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                    WarehouseTransfer::STATUS_IN_TRANSIT,
+                    WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                ])
                 ->count(),
             'transfers_completed' => WarehouseTransfer::query()
                 ->where('target_warehouse_id', $warehouseId)
@@ -759,6 +763,105 @@ class WarehouseApiController extends BaseApiController
             ->values();
 
         return $this->ok($items);
+    }
+
+    public function confirmTransferReceipt(Request $request, WarehouseTransfer $transfer): JsonResponse
+    {
+        return $this->receiveWarehouseTransfer($request, $transfer, false);
+    }
+
+    public function receiveTransferDirectly(Request $request, WarehouseTransfer $transfer): JsonResponse
+    {
+        return $this->receiveWarehouseTransfer($request, $transfer, true);
+    }
+
+    public function confirmAllTransferReceipts(Request $request): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $warehouseId = (int) ($request->user()?->warehouse_id ?? 0);
+        abort_if($warehouseId <= 0 && ! $request->user()?->hasRole('admin'), 403, 'Tài khoản chưa được gán kho nhận.');
+
+        $transfers = WarehouseTransfer::query()
+            ->where('target_warehouse_id', $warehouseId)
+            ->where('status', WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE)
+            ->get();
+        $completed = 0;
+        $errors = [];
+        foreach ($transfers as $transfer) {
+            $response = $this->receiveWarehouseTransfer($request, $transfer, false);
+            if ($response->getStatusCode() < 300) {
+                $completed++;
+            } else {
+                $errors[] = '#'.$transfer->id;
+            }
+        }
+
+        return $this->ok([
+            'completed' => $completed,
+            'total' => $transfers->count(),
+            'failed' => $errors,
+        ], "Đã xác nhận và nhập kho {$completed}/{$transfers->count()} phiếu điều chuyển.");
+    }
+
+    private function receiveWarehouseTransfer(Request $request, WarehouseTransfer $transfer, bool $direct): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $user = $request->user();
+        if (! $user->hasRole('admin') && (int) $user->warehouse_id !== (int) $transfer->target_warehouse_id) {
+            return $this->fail('Bạn chỉ có thể xác nhận hàng về kho mình quản lý.', 403);
+        }
+        if ($transfer->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED) {
+            return $this->ok(null, 'Phiếu điều chuyển đã nhập kho trước đó.');
+        }
+
+        Auth::setUser($user);
+        Auth::guard('web')->setUser($user);
+        $request->setUserResolver(fn () => $user);
+        $request->headers->set('Accept', 'application/json');
+        $request->attributes->set('warehouse_direct_receipt', true);
+        $shipperController = app(\App\Http\Controllers\ShipperDashboardController::class);
+
+        if ($transfer->status === WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP) {
+            if (! $direct) {
+                return $this->fail('Shipper chưa nhận hàng từ kho gửi.', 422);
+            }
+            $shipperController->pickupWarehouseTransfer($request, $transfer);
+            $transfer->refresh();
+        }
+        if ($transfer->status === WarehouseTransfer::STATUS_IN_TRANSIT) {
+            if (! $direct) {
+                return $this->fail('Shipper chưa bàn giao hàng tới kho nhận.', 422);
+            }
+            $shipperController->deliverWarehouseTransfer($request, $transfer);
+            $transfer->refresh();
+        }
+        if ($transfer->status !== WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE) {
+            return $this->fail('Phiếu điều chuyển chưa sẵn sàng để nhập kho.', 422);
+        }
+
+        $transfer->loadMissing('order.items');
+        if (! $transfer->order) {
+            return $this->fail('Không tìm thấy đơn hàng của phiếu điều chuyển.', 422);
+        }
+        $request->merge([
+            'item_weights' => $transfer->order->items->map(fn ($item) => [
+                'order_item_id' => (int) $item->id,
+                'received_weight' => (float) ($item->packed_weight ?? $item->total_weight ?? $item->actual_weight ?? 0),
+            ])->values()->all(),
+            'receive_note' => $direct
+                ? 'Kho nhận xác nhận đã nhận bằng phương tiện khác.'
+                : 'Kho nhận xác nhận shipper đã giao hàng.',
+        ]);
+        app(WarehouseDashboardController::class)->confirmTransferReceipt($request, $transfer);
+        $transfer->refresh();
+        if ($transfer->status !== WarehouseTransfer::STATUS_RECEIVED_COMPLETED) {
+            return $this->fail('Không thể nhập kho phiếu điều chuyển.', 422);
+        }
+
+        return $this->ok([
+            'transfer_id' => (int) $transfer->id,
+            'status' => $transfer->status,
+        ], $direct ? 'Đã nhận và nhập kho.' : 'Đã xác nhận shipper giao hàng và nhập kho.');
     }
 
     private function ensureWarehouseRole(Request $request): void

@@ -87,6 +87,9 @@ Route::prefix('mobile')->group(function () {
             Route::get('/tasks', [WarehouseApiController::class, 'tasks']);
             Route::get('/scan-lookup', [WarehouseApiController::class, 'scanLookup']);
             Route::get('/notifications', [WarehouseApiController::class, 'notifications']);
+            Route::post('/transfers/confirm-all', [WarehouseApiController::class, 'confirmAllTransferReceipts']);
+            Route::post('/transfers/{transfer}/confirm-ship-delivery', [WarehouseApiController::class, 'confirmTransferReceipt']);
+            Route::post('/transfers/{transfer}/receive', [WarehouseApiController::class, 'receiveTransferDirectly']);
         });
 
         Route::prefix('sale')->group(function () {
