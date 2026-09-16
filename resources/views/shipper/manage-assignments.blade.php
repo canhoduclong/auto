@@ -196,6 +196,53 @@
     }
     .trip-order-completed { background: #ecfdf5 !important; }
     .trip-order-completed td { border-color: #a7f3d0 !important; }
+    .order-progress-timeline {
+        display: flex;
+        gap: 0;
+        margin-top: .55rem;
+    }
+    .order-progress-step {
+        position: relative;
+        flex: 1;
+        padding-top: 15px;
+        color: #94a3b8;
+        font-size: .68rem;
+        line-height: 1.2;
+        text-align: center;
+    }
+    .order-progress-step::before {
+        content: '';
+        position: absolute;
+        z-index: 2;
+        top: 1px;
+        left: 50%;
+        width: 10px;
+        height: 10px;
+        border: 2px solid #cbd5e1;
+        border-radius: 50%;
+        background: #fff;
+        transform: translateX(-50%);
+    }
+    .order-progress-step::after {
+        content: '';
+        position: absolute;
+        top: 5px;
+        right: 50%;
+        width: 100%;
+        height: 2px;
+        background: #e2e8f0;
+    }
+    .order-progress-step:first-child::after { display: none; }
+    .order-progress-step.is-done { color: #166534; font-weight: 600; }
+    .order-progress-step.is-done::before { border-color: #22c55e; background: #22c55e; }
+    .order-progress-step.is-done::after { background: #86efac; }
+    .order-progress-meta {
+        display: block;
+        margin-top: 2px;
+        color: #64748b;
+        font-size: .62rem;
+        font-weight: 400;
+    }
     .route-line-title {
         color: #0f766e;
         font-weight: 800;
@@ -915,6 +962,17 @@
                                                                 @endif
                                                                 <div class="trip-order-subline">
                                                                     <span class="trip-products-cell">{{ $productSummary ?: ($order->code ?: ('ORD-' . $order->id)) }}</span>
+                                                                </div>
+                                                                <div class="order-progress-timeline" aria-label="Tiến trình đơn hàng {{ $order->code ?: $order->id }}">
+                                                                    @foreach($order->assignment_timeline ?? [] as $milestone)
+                                                                        <div class="order-progress-step {{ $milestone['done'] ? 'is-done' : '' }}"
+                                                                            title="{{ collect([$milestone['detail'], $milestone['at']])->filter()->join(' · ') }}">
+                                                                            {{ $milestone['label'] }}
+                                                                            @if($milestone['at'])
+                                                                                <span class="order-progress-meta">{{ $milestone['at'] }}</span>
+                                                                            @endif
+                                                                        </div>
+                                                                    @endforeach
                                                                 </div>
                                                                 <input type="hidden" class="js-order-trip" value="{{ $defaultTripCode }}">
                                                             </td>

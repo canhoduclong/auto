@@ -2328,16 +2328,22 @@ class ShipperDashboardController extends Controller
             'user',
             'warehouse',
             'warehouseTransfers' => fn ($query) => $query
-                ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
-                ->with('targetWarehouse:id,name')
-                ->orderByDesc('received_at')
+                ->with(['sourceWarehouse:id,name', 'targetWarehouse:id,name'])
+                ->orderByDesc('created_at')
                 ->orderByDesc('id'),
             'histories' => fn ($query) => $query
                 ->whereIn('action', [
                     'start_packing',
                     'complete_packing',
+                    'shipper_pickup_warehouse_transfer',
+                    'shipper_deliver_warehouse_transfer',
                     'warehouse_transfer_received',
                     'undo_start_packing',
+                    'shipper_accepted',
+                    'shipper_pickup',
+                    'shipper_start_shipping',
+                    'mobile_update_delivery_status',
+                    'mobile_complete_delivery',
                     ...$this->customerDeliveryCompletionActions(),
                 ])
                 ->with('user.warehouse:id,name')
@@ -2375,12 +2381,14 @@ class ShipperDashboardController extends Controller
             ->withQueryString();
 
         $this->attachAssignmentOriginWarehouses($unassignedOrders->getCollection());
+        $this->attachAssignmentTimelines($unassignedOrders->getCollection());
 
         $assignedOrderCollection = (clone $ordersQuery)
             ->whereNotNull('shipper_id')
             ->get();
 
         $this->attachAssignmentOriginWarehouses($assignedOrderCollection);
+        $this->attachAssignmentTimelines($assignedOrderCollection);
 
         $assignedOrders = $assignedOrderCollection
             ->groupBy('shipper_id')
@@ -2442,6 +2450,56 @@ class ShipperDashboardController extends Controller
         }
     }
 
+    private function attachAssignmentTimelines($orders): void
+    {
+        foreach ($orders as $order) {
+            $transfers = $order->warehouseTransfers->sortBy('created_at');
+            $pickedTransfer = $transfers->first(fn (WarehouseTransfer $transfer) =>
+                $transfer->picked_up_at !== null
+                || in_array($transfer->status, [WarehouseTransfer::STATUS_IN_TRANSIT, WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE, WarehouseTransfer::STATUS_RECEIVED_COMPLETED], true)
+            );
+            $deliveredTransfer = $transfers->first(fn (WarehouseTransfer $transfer) =>
+                $transfer->delivered_at !== null
+                || in_array($transfer->status, [WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE, WarehouseTransfer::STATUS_RECEIVED_COMPLETED], true)
+            );
+            $receivedTransfer = $transfers->first(fn (WarehouseTransfer $transfer) =>
+                $transfer->received_at !== null || $transfer->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED
+            );
+            $historyFor = fn (array $actions) => $order->histories
+                ->whereIn('action', $actions)
+                ->sortBy('created_at')
+                ->first();
+            $deliveryPickup = $historyFor(['shipper_accepted', 'shipper_pickup', 'shipper_start_shipping', 'mobile_update_delivery_status']);
+            $completed = $historyFor($this->customerDeliveryCompletionActions())
+                ?? $historyFor(['mobile_complete_delivery']);
+            $transferLabel = function (?WarehouseTransfer $transfer): ?string {
+                if (! $transfer) {
+                    return null;
+                }
+                $from = $transfer->sourceWarehouse?->name;
+                $to = $transfer->targetWarehouse?->name;
+
+                return $from && $to ? $from.' → '.$to : ($to ?: $from);
+            };
+            $milestone = fn (string $label, bool $done, $at = null, ?string $detail = null) => [
+                'label' => $label,
+                'done' => $done,
+                'at' => $at ? Carbon::parse($at)->format('d/m H:i') : null,
+                'detail' => $detail,
+            ];
+            $isDelivering = in_array($order->status, [Order::STATUS_DELIVERING, Order::STATUS_IN_DELIVERY, Order::STATUS_SHIPPING, Order::STATUS_DELIVERED, Order::STATUS_COMPLETED], true);
+            $isCompleted = in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_RETURNED_COMPLETED], true) || $completed !== null;
+
+            $order->setAttribute('assignment_timeline', [
+                $milestone('Đã lấy hàng', $pickedTransfer !== null, $pickedTransfer?->picked_up_at, $transferLabel($pickedTransfer)),
+                $milestone('Được điều chuyển', $deliveredTransfer !== null, $deliveredTransfer?->delivered_at, $transferLabel($deliveredTransfer)),
+                $milestone('Đã nhập kho khác', $receivedTransfer !== null, $receivedTransfer?->received_at, $receivedTransfer?->targetWarehouse?->name),
+                $milestone('Ship đã lấy đi giao', $deliveryPickup !== null || $isDelivering, $deliveryPickup?->created_at),
+                $milestone('Hoàn thành', $isCompleted, $completed?->created_at ?? $order->delivered_at),
+            ]);
+        }
+    }
+
     private function archivedPlannedOrderIdsForDate(string $selectedDate): array
     {
         $dispatchOrderIds = collect($this->latestDispatchForDate($selectedDate)?->route_plan ?? [])
@@ -2479,6 +2537,7 @@ class ShipperDashboardController extends Controller
         }
 
         $latestWarehouseHistory = $order->histories
+            ->whereIn('action', ['start_packing', 'complete_packing', 'warehouse_transfer_received', 'undo_start_packing'])
             ->sortByDesc(fn (OrderHistory $history) => sprintf(
                 '%s-%020d',
                 $history->created_at?->format('YmdHis.u') ?? '',
@@ -3232,6 +3291,7 @@ class ShipperDashboardController extends Controller
 
         // The reviewed route plan is the source of truth. Re-querying every
         // order by created_at here used to silently drop restored late orders.
+        $changedShipperIds = $this->changedShipperIdsForRoutePlan($date, $routePlan);
         $shipperIds = collect($routePlan)
             ->filter(fn ($shipperPlan) => collect($shipperPlan['routes'] ?? [])
                 ->flatMap(fn ($route) => $route['orders'] ?? [])
@@ -3240,6 +3300,7 @@ class ShipperDashboardController extends Controller
             ->filter(fn ($shipperId) => (int) $shipperId > 0)
             ->map(fn ($shipperId) => (int) $shipperId)
             ->unique()
+            ->filter(fn ($shipperId) => in_array((int) $shipperId, $changedShipperIds, true))
             ->values()
             ->toArray();
 
@@ -3280,6 +3341,35 @@ class ShipperDashboardController extends Controller
         $message = 'Đã gửi lịch trình giao hàng cho '.count($processedShippers).' shipper ('.$totalOrdersCount.' đơn): '.$shipperList.'. Các shipper sẽ nhận được thông báo xác nhận.';
 
         return $this->assignmentMutationResponse($request, $message);
+    }
+
+    private function changedShipperIdsForRoutePlan(string $date, array $routePlan): array
+    {
+        $previousPlan = collect($this->latestDispatchForDate($date)?->route_plan ?? [])
+            ->keyBy(fn ($plan) => (int) ($plan['shipper_id'] ?? 0));
+
+        return collect($routePlan)
+            ->filter(function ($plan) use ($previousPlan): bool {
+                $shipperId = (int) ($plan['shipper_id'] ?? 0);
+                if ($shipperId <= 0) {
+                    return false;
+                }
+                $previous = $previousPlan->get($shipperId);
+
+                return $previous === null
+                    || $this->canonicalShipperRoutePlan($previous) !== $this->canonicalShipperRoutePlan($plan);
+            })
+            ->pluck('shipper_id')
+            ->map(fn ($shipperId) => (int) $shipperId)
+            ->values()
+            ->all();
+    }
+
+    private function canonicalShipperRoutePlan(array $plan): string
+    {
+        unset($plan['shipper_name']);
+
+        return json_encode($plan, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     private function archiveDeliverySchedule(string $date, array $routePlan, ?string $notes): ShipperDispatchHistory

@@ -18,6 +18,35 @@ class ShipperAssignmentWorkflowTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_only_shipper_with_changed_route_is_selected_for_resend(): void
+    {
+        $firstPlan = [
+            ['shipper_id' => 10, 'shipper_name' => 'Ship A', 'routes' => [['name' => 'Tuyến A', 'orders' => [['order_id' => 101]]]]],
+            ['shipper_id' => 20, 'shipper_name' => 'Ship B', 'routes' => [['name' => 'Tuyến B', 'orders' => [['order_id' => 202]]]]],
+        ];
+        \App\Models\ShipperDispatchHistory::create([
+            'schedule_date' => '2026-09-15',
+            'version' => 1,
+            'route_plan' => $firstPlan,
+            'orders_count' => 2,
+            'published_at' => now(),
+        ]);
+        $changedPlan = $firstPlan;
+        $changedPlan[1]['routes'][0]['orders'][] = ['order_id' => 203];
+
+        $method = new \ReflectionMethod(
+            app(\App\Http\Controllers\ShipperDashboardController::class),
+            'changedShipperIdsForRoutePlan'
+        );
+        $changedShipperIds = $method->invoke(
+            app(\App\Http\Controllers\ShipperDashboardController::class),
+            '2026-09-15',
+            $changedPlan
+        );
+
+        $this->assertSame([20], $changedShipperIds);
+    }
+
     public function test_manager_can_review_and_print_published_delivery_notes(): void
     {
         $manager = User::factory()->create(['name' => 'Quản lý in phiếu']);
