@@ -14,6 +14,64 @@ class ShipperDispatchHistoryTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_resending_one_shipper_keeps_delivered_stops_without_sending_them_again(): void
+    {
+        $manager = User::factory()->create(['name' => 'Quản lý']);
+        $manager->roles()->attach(Role::create(['name' => 'manager_shipper']));
+        $shipper = User::factory()->create(['name' => 'Shipper A']);
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
+        $customer = Customer::create(['name' => 'Khách tuyến cũ', 'status' => 'active']);
+        $date = now()->toDateString();
+        $delivered = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $manager->id,
+            'shipper_id' => $shipper->id,
+            'code' => 'DELIVERED-STOP',
+            'status' => Order::STATUS_DELIVERED,
+        ]);
+        $pending = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $manager->id,
+            'shipper_id' => $shipper->id,
+            'code' => 'PENDING-STOP',
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $oldPlan = [[
+            'shipper_id' => $shipper->id,
+            'shipper_name' => $shipper->name,
+            'routes' => [['name' => 'Tuyến cũ', 'orders' => [['order_id' => $delivered->id], ['order_id' => $pending->id]]]],
+        ]];
+        \App\Models\ShipperDispatchHistory::create([
+            'schedule_date' => $date,
+            'version' => 1,
+            'route_plan' => $oldPlan,
+            'orders_count' => 2,
+            'published_at' => now(),
+        ]);
+        $editedPlan = $oldPlan;
+        $editedPlan[0]['routes'][0]['name'] = 'Tuyến đã chỉnh';
+
+        $this->actingAs($manager)->postJson(route('shipper.create-delivery-schedule'), [
+            'date' => $date,
+            'shipper_id' => $shipper->id,
+            'route_plan' => json_encode($editedPlan, JSON_UNESCAPED_UNICODE),
+        ])->assertOk()->assertJsonPath(
+            'message',
+            'Đã gửi lịch trình giao hàng cho 1 shipper (1 đơn): Shipper A (1 đơn). Các shipper sẽ nhận được thông báo xác nhận.'
+        );
+
+        $this->assertDatabaseMissing('order_histories', [
+            'order_id' => $delivered->id,
+            'action' => 'schedule_created',
+        ]);
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $pending->id,
+            'action' => 'schedule_created',
+        ]);
+        $latest = \App\Models\ShipperDispatchHistory::query()->latest('version')->firstOrFail();
+        $this->assertSame([$delivered->id, $pending->id], collect($latest->route_plan[0]['routes'][0]['orders'])->pluck('order_id')->all());
+    }
+
     public function test_invalid_route_message_identifies_order_customer_and_reason(): void
     {
         $managerRole = Role::create(['name' => 'manager_shipper']);

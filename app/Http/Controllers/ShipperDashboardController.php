@@ -3283,11 +3283,23 @@ class ShipperDashboardController extends Controller
 
         $date = $this->assignmentOrderingDate($request);
         $routePlan = $this->decodeRoutePlan($validated['route_plan'] ?? null);
-        if (! $this->routePlanHasChanges($date, $routePlan)) {
+        $requestedShipperId = isset($validated['shipper_id']) ? (int) $validated['shipper_id'] : null;
+        if (! $this->routePlanHasChangesForShipper($date, $routePlan, $requestedShipperId)) {
             return $this->assignmentMutationResponse($request, 'Lộ trình hiện tại đã được gửi, không có thay đổi mới.');
         }
+
+        // A published route remains the historical record after some stops are
+        // delivered. Keep those stops in the archived plan, but never include
+        // them in a replacement notification or fee update.
+        $publishRoutePlan = $this->routePlanWithoutCompletedOrders($routePlan, $date);
+        if ($requestedShipperId !== null) {
+            $publishRoutePlan = collect($publishRoutePlan)
+                ->filter(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $requestedShipperId)
+                ->values()
+                ->all();
+        }
         try {
-            $this->applyRoutePlanFees($routePlan, $date);
+            $this->applyRoutePlanFees($publishRoutePlan, $date);
         } catch (HttpExceptionInterface $exception) {
             if ($exception->getStatusCode() !== 422) {
                 throw $exception;
@@ -3306,7 +3318,7 @@ class ShipperDashboardController extends Controller
         // The reviewed route plan is the source of truth. Re-querying every
         // order by created_at here used to silently drop restored late orders.
         $changedShipperIds = $this->changedShipperIdsForRoutePlan($date, $routePlan);
-        $shipperIds = collect($routePlan)
+        $shipperIds = collect($publishRoutePlan)
             ->filter(fn ($shipperPlan) => collect($shipperPlan['routes'] ?? [])
                 ->flatMap(fn ($route) => $route['orders'] ?? [])
                 ->isNotEmpty())
@@ -3314,8 +3326,8 @@ class ShipperDashboardController extends Controller
             ->filter(fn ($shipperId) => (int) $shipperId > 0)
             ->map(fn ($shipperId) => (int) $shipperId)
             ->unique()
-            ->filter(fn ($shipperId) => isset($validated['shipper_id'])
-                ? (int) $shipperId === (int) $validated['shipper_id']
+            ->filter(fn ($shipperId) => $requestedShipperId !== null
+                ? (int) $shipperId === $requestedShipperId
                 : in_array((int) $shipperId, $changedShipperIds, true))
             ->values()
             ->toArray();
@@ -3328,7 +3340,7 @@ class ShipperDashboardController extends Controller
         $processedShippers = [];
         foreach ($shipperIds as $shipperId) {
             $shipper = User::query()->findOrFail($shipperId);
-            $ordersCount = collect($routePlan)
+            $ordersCount = collect($publishRoutePlan)
                 ->first(fn ($shipperPlan) => (int) ($shipperPlan['shipper_id'] ?? 0) === (int) $shipperId);
             $ordersCount = collect($ordersCount['routes'] ?? [])->sum(
                 fn ($route) => count($route['orders'] ?? [])
@@ -3339,7 +3351,7 @@ class ShipperDashboardController extends Controller
                 (int) Auth::id(),
                 Auth::user()?->hasRole(['account', 'accountant', 'accounting']) ? 'accounting' : 'manager_shipper',
                 $validated['notes'] ?? null,
-                $routePlan,
+                $publishRoutePlan,
             )) {
                 $totalOrdersCount += $ordersCount;
                 $processedShippers[] = $shipper->name.' ('.$ordersCount.' đơn)';
@@ -3353,10 +3365,92 @@ class ShipperDashboardController extends Controller
         }
 
         $shipperList = implode(', ', $processedShippers);
-        $this->archiveDeliverySchedule($date, $routePlan, $validated['notes'] ?? null);
+        $archivedRoutePlan = $this->routePlanForPartialDispatch($date, $routePlan, $requestedShipperId);
+        $this->archiveDeliverySchedule($date, $archivedRoutePlan, $validated['notes'] ?? null);
         $message = 'Đã gửi lịch trình giao hàng cho '.count($processedShippers).' shipper ('.$totalOrdersCount.' đơn): '.$shipperList.'. Các shipper sẽ nhận được thông báo xác nhận.';
 
         return $this->assignmentMutationResponse($request, $message);
+    }
+
+    private function routePlanHasChangesForShipper(string $date, array $routePlan, ?int $shipperId): bool
+    {
+        if ($shipperId === null) {
+            return $this->routePlanHasChanges($date, $routePlan);
+        }
+
+        $current = collect($routePlan)->first(
+            fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId
+        );
+        $previous = collect($this->latestDispatchForDate($date)?->route_plan ?? [])->first(
+            fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId
+        );
+
+        return is_array($current)
+            && (! is_array($previous)
+                || $this->canonicalShipperRoutePlan($current) !== $this->canonicalShipperRoutePlan($previous));
+    }
+
+    private function routePlanForPartialDispatch(string $date, array $routePlan, ?int $shipperId): array
+    {
+        if ($shipperId === null) {
+            return $routePlan;
+        }
+
+        $selectedPlan = collect($routePlan)->first(
+            fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId
+        );
+        $publishedPlans = collect($this->latestDispatchForDate($date)?->route_plan ?? [])
+            ->reject(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId);
+
+        return $publishedPlans
+            ->when(is_array($selectedPlan), fn ($plans) => $plans->push($selectedPlan))
+            ->values()
+            ->all();
+    }
+
+    private function routePlanWithoutCompletedOrders(array $routePlan, string $date): array
+    {
+        $orderIds = collect($routePlan)->flatMap(fn ($plan) => collect($plan['routes'] ?? [])
+            ->flatMap(fn ($route) => collect($route['orders'] ?? [])->pluck('order_id')))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $previouslyPublishedIds = collect($this->latestDispatchForDate($date)?->route_plan ?? [])
+            ->flatMap(fn ($plan) => collect($plan['routes'] ?? [])
+                ->flatMap(fn ($route) => collect($route['orders'] ?? [])->pluck('order_id')))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->all();
+
+        $completedIds = Order::query()
+            ->whereIn('id', $orderIds->intersect($previouslyPublishedIds)->all())
+            ->where(function ($query): void {
+                $query->whereIn('status', [
+                    Order::STATUS_DELIVERED,
+                    Order::STATUS_COMPLETED,
+                    Order::STATUS_RETURNED_COMPLETED,
+                ])->orWhereHas('histories', fn ($history) => $history
+                    ->whereIn('action', $this->customerDeliveryCompletionActions()));
+            })
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        return collect($routePlan)->map(function (array $plan) use ($completedIds): array {
+            $plan['routes'] = collect($plan['routes'] ?? [])->map(function (array $route) use ($completedIds): array {
+                $route['orders'] = collect($route['orders'] ?? [])
+                    ->reject(fn ($order) => in_array((int) ($order['order_id'] ?? 0), $completedIds, true))
+                    ->values()
+                    ->all();
+
+                return $route;
+            })->filter(fn ($route) => ! empty($route['orders']))->values()->all();
+
+            return $plan;
+        })->values()->all();
     }
 
     private function changedShipperIdsForRoutePlan(string $date, array $routePlan): array
