@@ -119,4 +119,33 @@ class WarehouseAssignmentReviewTest extends TestCase
             ->assertOk()
             ->assertSee('PHIẾU GIAO HÀNG');
     }
+
+    public function test_review_only_shows_orders_that_finished_packing_and_are_not_cancelled(): void
+    {
+        $warehouseRole = Role::query()->create(['name' => 'warehouse']);
+        $warehouse = Warehouse::query()->create(['name' => 'Kho lọc đóng hàng', 'status' => true]);
+        $warehouseUser = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $warehouseUser->roles()->attach($warehouseRole);
+        $customer = Customer::query()->create(['name' => 'Khách lọc', 'status' => 'active']);
+
+        foreach ([
+            ['code' => 'PACKING-NOT-DONE', 'status' => Order::STATUS_PACKING],
+            ['code' => 'PACKING-DONE', 'status' => Order::STATUS_READY_TO_SHIP],
+            ['code' => 'PACKING-CANCELLED', 'status' => Order::STATUS_CANCELLED],
+        ] as $data) {
+            Order::query()->create($data + [
+                'customer_id' => $customer->id,
+                'user_id' => $warehouseUser->id,
+                'warehouse_id' => $warehouse->id,
+                'delivery_date' => now()->toDateString(),
+            ]);
+        }
+
+        $this->actingAs($warehouseUser)
+            ->get(route('warehouse.assignment-review.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('PACKING-DONE')
+            ->assertDontSee('PACKING-NOT-DONE')
+            ->assertDontSee('PACKING-CANCELLED');
+    }
 }

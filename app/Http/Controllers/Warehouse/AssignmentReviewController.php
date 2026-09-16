@@ -101,6 +101,7 @@ class AssignmentReviewController extends Controller
     {
         return ShipperDispatchHistory::query()
             ->whereDate('schedule_date', $date)
+            ->whereNull('revoked_at')
             ->latest('version')
             ->latest('id')
             ->first();
@@ -132,6 +133,27 @@ class AssignmentReviewController extends Controller
                 }
             })
             ->whereNull('trash_at')
+            ->whereNotIn('status', [Order::STATUS_CANCELLED, 'canceled'])
+            ->where(function ($query): void {
+                // Include legacy orders already beyond packing even when an
+                // old record is missing its packing-completion history.
+                $query->whereIn('status', [
+                    Order::STATUS_PACKED,
+                    Order::STATUS_READY_TO_SHIP,
+                    Order::STATUS_DELIVERING,
+                    Order::STATUS_IN_DELIVERY,
+                    Order::STATUS_SHIPPING,
+                    'picked_up',
+                    Order::STATUS_DELIVERED,
+                    Order::STATUS_COMPLETED,
+                    Order::STATUS_RETURNING,
+                    Order::STATUS_RETURNED_COMPLETED,
+                    Order::STATUS_RETURNED,
+                ])->orWhereHas('histories', fn ($history) => $history->whereIn('action', [
+                    'complete_packing',
+                    'warehouse_complete_packing',
+                ]));
+            })
             ->when(
                 ! $user?->hasRole('admin'),
                 fn ($query) => $warehouseId > 0
