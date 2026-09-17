@@ -457,6 +457,54 @@ class WarehousePackingSizeAllocationTest extends TestCase
         ])->assertSessionHasNoErrors()->assertSessionHas('success');
     }
 
+    public function test_stale_saved_mix_is_rebuilt_to_current_order_quantity_with_two_end_setting(): void
+    {
+        [$user, $order, $item, $variants] = $this->fixture(25);
+        $warehouse = Warehouse::query()->findOrFail($order->warehouse_id);
+        $warehouse->update(['expand_packing_size_bounds' => true]);
+        $variants['2.4']->update(['sort_order' => 10]);
+        $variants['2.5']->update(['sort_order' => 20]);
+        $variants['2.6']->update(['sort_order' => 30]);
+        $size27 = ProductVariant::query()->create([
+            'product_id' => $item->product_id,
+            'name' => '2.7 kg',
+            'sku' => 'SIZE-2.7-STALE',
+            'size' => 2.7,
+            'kg' => 2.7,
+            'sort_order' => 40,
+        ]);
+        Inventory::query()->create([
+            'warehouse_id' => $warehouse->id,
+            'product_variant_id' => $size27->id,
+            'quantity' => 75,
+            'reserved_quantity' => 0,
+        ]);
+        $order->update(['warehouse_allowed_sizes' => ['2.5', '2.6']]);
+        $this->actingAs($user)->post(route('warehouse.orders.packing-size-allocation', $order), [
+            'order_item_id' => $item->id,
+            'allocations' => [$variants['2.5']->id => 25],
+        ])->assertSessionHasNoErrors();
+
+        $item->update(['quantity' => 9]);
+
+        $this->get(route('warehouse.orders', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('name="allocations['.$variants['2.5']->id.']"', false)
+            ->assertSee('value="9"', false);
+
+        $this->post(route('warehouse.orders.packing-size-allocation', $order), [
+            'order_item_id' => $item->id,
+            'allocations' => [
+                $variants['2.5']->id => 7,
+                $size27->id => 2,
+            ],
+        ])->assertSessionHasNoErrors()->assertSessionHas('success');
+
+        $this->assertSame(9, (int) $item->packingSizeAllocations()->sum('quantity'));
+        $this->assertSame(7, (int) $variants['2.5']->inventories()->where('warehouse_id', $warehouse->id)->value('reserved_quantity'));
+        $this->assertSame(2, (int) $size27->inventories()->where('warehouse_id', $warehouse->id)->value('reserved_quantity'));
+    }
+
     public function test_warehouse_header_exposes_and_updates_two_end_packing_setting(): void
     {
         [$user, $order] = $this->fixture(10);

@@ -2303,12 +2303,25 @@ class WarehouseDashboardController extends Controller
         $this->authorizePackingOrderAccess($order);
 
         if (! empty($order->warehouse_allowed_sizes) || $order->warehouse_product_permissions !== null) {
-            $order->loadMissing('items.variant', 'items.packingSizeAllocations.variant');
+            $order->loadMissing('items.variant.product', 'items.packingSizeAllocations.variant');
+            $packingWarehouseId = (int) ($request->user()?->warehouse_id ?: $order->warehouse_id ?: 0);
+            $expandPackingSizeBounds = $packingWarehouseId > 0
+                && (bool) Warehouse::query()->whereKey($packingWarehouseId)->value('expand_packing_size_bounds');
             foreach ($order->items as $item) {
                 $mix = $item->packingSizeAllocations;
+                $permittedVariantIds = $this->packingVariantIdsForItem(
+                    $order,
+                    $item,
+                    ProductVariant::query()->where('product_id', (int) $item->product_id)->get(),
+                    $expandPackingSizeBounds
+                );
                 $hasValidMix = $mix->isNotEmpty()
                     && (int) $mix->sum('quantity') === (int) $item->quantity
-                    && $mix->every(fn ($allocation) => $order->allowsPackingSize((float) $allocation->variant?->size, (int) $item->product_id));
+                    && $mix->every(fn ($allocation) => in_array(
+                        (int) $allocation->product_variant_id,
+                        $permittedVariantIds,
+                        true
+                    ));
                 if (! empty($order->packingSizesForProduct((int) $item->product_id)) && (float) $item->variant?->size > 0 && ! $order->allowsPackingSize((float) $item->variant->size, (int) $item->product_id) && ! $hasValidMix) {
                     throw \Illuminate\Validation\ValidationException::withMessages([
                         'allocations' => 'Vui lòng lưu cơ cấu theo size Sale cho phép trước khi bắt đầu đóng hàng.',
@@ -2725,6 +2738,34 @@ class WarehouseDashboardController extends Controller
                 })
                 ->sortBy(fn (array $option) => (int) ($variantRank[$option['variant_id']] ?? PHP_INT_MAX))
                 ->values();
+
+            // An order can be edited after a mix was saved. Do not preload a
+            // stale mix whose total no longer matches the current order qty;
+            // doing so leaves the form at e.g. 27/9 and disables its Save button.
+            $savedIsValid = (int) $saved->sum() === (int) $item->quantity
+                && $saved->keys()->every(fn ($variantId) => in_array((int) $variantId, $permittedVariantIds, true));
+            if (! $savedIsValid) {
+                $remaining = (int) $item->quantity;
+                $options = $options->map(function (array $option): array {
+                    $option['quantity'] = 0;
+
+                    return $option;
+                });
+
+                // Fill Sale-approved sizes first; boundary sizes are fallbacks.
+                foreach ([false, true] as $boundaryExtension) {
+                    $options = $options->map(function (array $option) use (&$remaining, $boundaryExtension): array {
+                        if ($remaining <= 0 || (bool) $option['is_boundary_extension'] !== $boundaryExtension) {
+                            return $option;
+                        }
+                        $take = min($remaining, max(0, (int) $option['available']));
+                        $option['quantity'] = $take;
+                        $remaining -= $take;
+
+                        return $option;
+                    });
+                }
+            }
 
             return $options->isNotEmpty() ? [(int) $item->id => $options] : [];
         })->all();
