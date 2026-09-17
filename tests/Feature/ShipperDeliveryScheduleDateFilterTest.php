@@ -172,7 +172,7 @@ class ShipperDeliveryScheduleDateFilterTest extends TestCase
         $snapshot = [[
             'order_id' => $pending->id,
             'daily_sequence' => null,
-            'delivery_date' => null,
+            'delivery_date' => $pending->delivery_date?->toDateString(),
             'delivery_time' => null,
         ]];
         $pending->histories()->create([
@@ -232,6 +232,83 @@ class ShipperDeliveryScheduleDateFilterTest extends TestCase
 
         $this->assertSame('completed', $completedRoute['status']);
         $this->assertTrue($completedRoute['is_completed']);
+    }
+
+    public function test_mobile_keeps_confirmed_route_confirmed_when_one_order_is_being_delivered(): void
+    {
+        Carbon::setTestNow('2026-09-17 13:35:00');
+        $shipper = User::factory()->create();
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
+        $customer = Customer::create(['name' => 'Khách tuyến đang chạy', 'status' => 'active']);
+        $orders = collect([1, 2, 3, 4])->map(function (int $sequence) use ($shipper, $customer) {
+            $order = Order::create([
+                'user_id' => $shipper->id,
+                'shipper_id' => $shipper->id,
+                'customer_id' => $customer->id,
+                'code' => 'ACTIVE-ROUTE-'.$sequence,
+                'status' => $sequence === 4 ? Order::STATUS_DELIVERING : Order::STATUS_READY_TO_SHIP,
+                'daily_sequence' => $sequence,
+            ]);
+            $order->forceFill(['created_at' => '2026-09-16 08:00:00'])->saveQuietly();
+
+            return $order;
+        });
+        $snapshot = $orders->map(fn (Order $order) => [
+            'order_id' => $order->id,
+            'daily_sequence' => $order->daily_sequence,
+            'delivery_date' => $order->delivery_date?->toDateString(),
+            'delivery_time' => null,
+        ])->all();
+        foreach ($orders as $order) {
+            $order->histories()->create([
+                'action' => 'schedule_confirmed',
+                'user_id' => $shipper->id,
+                'role' => 'shipper',
+                'schedule_snapshot_hash' => hash('sha256', json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)),
+                'schedule_snapshot' => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+        }
+        ShipperDispatchHistory::create([
+            'schedule_date' => '2026-09-16',
+            'published_at' => now(),
+            'version' => 1,
+            'created_by' => $shipper->id,
+            'route_plan' => [[
+                'shipper_id' => $shipper->id,
+                'routes' => [['orders' => $orders->map(fn (Order $order) => ['order_id' => $order->id])->all()]],
+            ]],
+        ]);
+
+        $request = Request::create('/api/mobile/shipper/delivery-schedules/list', 'GET');
+        $request->setUserResolver(fn () => $shipper->load('roles'));
+        $route = app(ShipperApiController::class)->deliveryScheduleList($request)->getData(true)['data'][0];
+
+        $this->assertSame('confirmed', $route['status']);
+        $this->assertCount(4, $route['order_ids']);
+        $this->assertNull($route['change_message']);
+    }
+
+    public function test_mobile_hides_empty_invalid_route_cards(): void
+    {
+        Carbon::setTestNow('2026-09-17 13:35:00');
+        $shipper = User::factory()->create();
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
+        ShipperDispatchHistory::create([
+            'schedule_date' => '2026-08-20',
+            'published_at' => now(),
+            'version' => 1,
+            'created_by' => $shipper->id,
+            'route_plan' => [[
+                'shipper_id' => $shipper->id,
+                'routes' => [['orders' => []]],
+            ]],
+        ]);
+
+        $request = Request::create('/api/mobile/shipper/delivery-schedules/list', 'GET');
+        $request->setUserResolver(fn () => $shipper->load('roles'));
+        $routes = app(ShipperApiController::class)->deliveryScheduleList($request)->getData(true)['data'];
+
+        $this->assertSame([], $routes);
     }
 
     public function test_mobile_schedule_detail_without_date_uses_latest_published_route(): void

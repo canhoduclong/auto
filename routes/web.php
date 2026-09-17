@@ -399,6 +399,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/dispatch-slips/{dispatchSlip}/print-export', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'printExport'])->name('dispatch-slips.print-export');
         Route::get('/dispatch-slips/{dispatchSlip}/print-import', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'printImport'])->name('dispatch-slips.print-import');
         Route::get('/', [WarehouseDashboardController::class, 'index'])->name('dashboard');
+        Route::post('/settings/packing-size-bounds', [WarehouseDashboardController::class, 'updatePackingSizeBoundsSetting'])
+            ->name('settings.packing-size-bounds');
         Route::get('/production-dashboard', [WarehouseDashboardController::class, 'productionDashboard'])->name('production-dashboard');
         Route::get('/order-adjustments', [\App\Http\Controllers\OrderAdjustmentController::class, 'warehouseIndex'])->name('order-adjustments.index');
         Route::get('/cutting/{variant}', [WarehouseDashboardController::class, 'cuttingForm'])->name('cutting.form');

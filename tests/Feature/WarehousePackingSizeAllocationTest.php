@@ -457,6 +457,25 @@ class WarehousePackingSizeAllocationTest extends TestCase
         ])->assertSessionHasNoErrors()->assertSessionHas('success');
     }
 
+    public function test_warehouse_header_exposes_and_updates_two_end_packing_setting(): void
+    {
+        [$user, $order] = $this->fixture(10);
+
+        $this->actingAs($user)->get(route('warehouse.dashboard'))
+            ->assertOk()
+            ->assertSee('Cấu hình cơ cấu đóng hàng chặn 2 đầu')
+            ->assertSee('Đang tắt');
+
+        $this->post(route('warehouse.settings.packing-size-bounds'), ['enabled' => 1])
+            ->assertRedirect()
+            ->assertSessionHas('success', 'Đã bật cơ cấu đóng hàng chặn 2 đầu.');
+
+        $this->assertTrue((bool) Warehouse::query()->findOrFail($order->warehouse_id)->expand_packing_size_bounds);
+        $this->get(route('warehouse.dashboard'))
+            ->assertOk()
+            ->assertSee('Đang bật');
+    }
+
     public function test_empty_sale_size_selection_hides_mix_and_rejects_allocations(): void
     {
         [$user, $order, $item, $variants, $inventories] = $this->fixture(10);

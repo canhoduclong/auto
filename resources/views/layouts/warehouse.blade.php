@@ -77,6 +77,15 @@
         .wh-topbar .breadcrumb { margin-bottom: 0; font-size: .95rem; }
         .wh-topbar h6 { font-size: 1.08rem; }
         .wh-topbar .small { font-size: .93rem !important; }
+        .wh-packing-setting-button {
+            width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 50%; border: 1px solid #cbd5e1; background: #fff; color: #64748b;
+        }
+        .wh-packing-setting-button.is-enabled {
+            color: #fff; border-color: var(--theme-primary); background: var(--theme-primary);
+            box-shadow: 0 0 0 3px rgba(15,118,110,.12);
+        }
+        .wh-packing-setting-menu { width: min(360px, calc(100vw - 2rem)); }
         .wh-mobile-logout-btn {
             display: inline-flex;
             align-items: center;
@@ -422,6 +431,8 @@
         <header class="wh-topbar">
             @php
                 $currentUser = auth()->user();
+                $headerWarehouse = $currentUser?->warehouse;
+                $recentWarehouseNotifications = $currentUser ? getWarehouseNotifications($currentUser, 7) : collect();
                 $layoutSwitchTargets = collect($currentUser?->roles ?? [])
                     ->map(function ($role) {
                         $roleName = strtolower((string) $role->name);
@@ -469,12 +480,39 @@
                 </div>
             </div>
             <div class="d-flex align-items-center gap-3">
+                @if($headerWarehouse)
+                    <div class="dropdown">
+                        <button type="button"
+                                class="wh-packing-setting-button {{ $headerWarehouse->expand_packing_size_bounds ? 'is-enabled' : '' }}"
+                                data-bs-toggle="dropdown" aria-expanded="false"
+                                title="Cấu hình cơ cấu đóng hàng chặn 2 đầu">
+                            <i class="bi bi-arrows-expand fs-5"></i>
+                            <span class="visually-hidden">Cấu hình cơ cấu đóng hàng chặn 2 đầu</span>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end shadow-sm p-3 wh-packing-setting-menu">
+                            <div class="d-flex gap-2 align-items-start mb-2">
+                                <i class="bi bi-arrows-expand fs-4 text-primary"></i>
+                                <div>
+                                    <div class="fw-bold">Cơ cấu đóng hàng chặn 2 đầu</div>
+                                    <div class="small text-muted">Mở thêm một biến thể trước và sau dải size Sale cho phép, theo thứ tự Admin.</div>
+                                </div>
+                            </div>
+                            <div class="alert {{ $headerWarehouse->expand_packing_size_bounds ? 'alert-success' : 'alert-secondary' }} py-2 small mb-2">
+                                Trạng thái: <strong>{{ $headerWarehouse->expand_packing_size_bounds ? 'Đang bật' : 'Đang tắt' }}</strong>
+                            </div>
+                            <form method="POST" action="{{ route('warehouse.settings.packing-size-bounds') }}">
+                                @csrf
+                                <input type="hidden" name="enabled" value="{{ $headerWarehouse->expand_packing_size_bounds ? 0 : 1 }}">
+                                <button type="submit" class="btn {{ $headerWarehouse->expand_packing_size_bounds ? 'btn-outline-danger' : 'btn-primary' }} btn-sm w-100">
+                                    <i class="bi bi-{{ $headerWarehouse->expand_packing_size_bounds ? 'toggle-off' : 'toggle-on' }} me-1"></i>
+                                    {{ $headerWarehouse->expand_packing_size_bounds ? 'Tắt tính năng' : 'Bật tính năng' }}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                @endif
                 <!-- Chuông thông báo động (giả lập) -->
                 <div class="dropdown me-2">
-                    @php
-                        $user = auth()->user();
-                        $recentWarehouseNotifications = $user ? getWarehouseNotifications($user, 7) : collect();
-                    @endphp
                     <a href="#" class="position-relative" id="dropdownNotification" data-bs-toggle="dropdown" aria-expanded="false" title="Thông báo">
                         <i class="bi bi-bell fs-4"></i>
                         @if($recentWarehouseNotifications->count() || ($warehouseAdjustmentQueueCount ?? 0) > 0)

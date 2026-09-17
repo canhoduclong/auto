@@ -42,6 +42,28 @@ use Illuminate\Support\Facades\Schema;
 
 class WarehouseDashboardController extends Controller
 {
+    public function updatePackingSizeBoundsSetting(Request $request)
+    {
+        $validated = $request->validate([
+            'enabled' => ['required', 'boolean'],
+        ]);
+        $warehouseId = (int) ($request->user()?->warehouse_id ?? 0);
+        if ($warehouseId <= 0) {
+            return back()->with('error', 'Tài khoản chưa được gán kho nên không thể lưu cấu hình đóng hàng.');
+        }
+
+        $warehouse = Warehouse::query()->findOrFail($warehouseId);
+        $warehouse->update(['expand_packing_size_bounds' => (bool) $validated['enabled']]);
+        $request->user()?->setRelation('warehouse', $warehouse->fresh());
+
+        return back()->with(
+            'success',
+            $warehouse->expand_packing_size_bounds
+                ? 'Đã bật cơ cấu đóng hàng chặn 2 đầu.'
+                : 'Đã tắt cơ cấu đóng hàng chặn 2 đầu.'
+        );
+    }
+
     /**
      * Trang điều chuyển đơn hàng (batch order transfer)
      */

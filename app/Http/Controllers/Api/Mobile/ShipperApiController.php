@@ -210,7 +210,11 @@ class ShipperApiController extends BaseApiController
                     ->reject(fn (Order $order) => $this->orderWasDelivered($order))
                     ->values();
                 $orderIds = $confirmableOrders->pluck('id')->map(fn ($id) => (int) $id)->values();
-                $isCompleted = $this->areAllOrdersCompleted($plannedIds->all());
+                $isCompleted = $plannedIds->isNotEmpty()
+                    ? $this->areAllOrdersCompleted($plannedIds->all())
+                    : ($dateOrders->isNotEmpty() && $dateOrders->every(
+                        fn (Order $order) => $this->orderWasDelivered($order)
+                    ));
                 $snapshot = $this->buildDeliveryScheduleSnapshot($confirmableOrders);
                 $completedOrderIds = $dateOrders
                     ->filter(fn (Order $order) => $this->orderWasDelivered($order))
@@ -277,7 +281,8 @@ class ShipperApiController extends BaseApiController
                         ->filter(fn (Order $order) => (bool) ($order->charge_shipping_fee ?? true))
                         ->sum('shipping_fee'),
                 ];
-            })->reject(fn (array $route) => $route['status'] === 'revoked')->values();
+            })->reject(fn (array $route) => in_array($route['status'], ['revoked', 'invalid'], true)
+                || (int) $route['orders_count'] === 0)->values();
 
         return $this->ok($routes);
     }
@@ -969,6 +974,9 @@ class ShipperApiController extends BaseApiController
             Order::STATUS_PACKING,
             Order::STATUS_PACKED,
             Order::STATUS_READY_TO_SHIP,
+            Order::STATUS_DELIVERING,
+            Order::STATUS_SHIPPING,
+            Order::STATUS_IN_DELIVERY,
         ];
     }
 
