@@ -379,22 +379,9 @@ class OrderTransferController extends Controller
             ->whereNull('order_transfer_id')
             ->whereIn('status', ['ready_to_ship', 'packed', 'packed_waiting_pickup'])
             ->whereNotNull('warehouse_id')
-            ->whereNotExists(function ($historyQuery): void {
-                $historyQuery->selectRaw('1')
-                    ->from('order_histories as latest_schedule_history')
-                    ->whereColumn('latest_schedule_history.order_id', 'orders.id')
-                    ->whereIn('latest_schedule_history.action', ['schedule_created', 'schedule_confirmed'])
-                    ->whereRaw(
-                        'latest_schedule_history.id = (
-                            select oh2.id
-                            from order_histories as oh2
-                            where oh2.order_id = orders.id
-                              and oh2.action in ("schedule_created", "schedule_confirmed", "schedule_rejected")
-                            order by oh2.created_at desc, oh2.id desc
-                            limit 1
-                        )'
-                    );
-            })
+            // Điều chuyển kho và lộ trình đi giao là hai nghiệp vụ độc lập.
+            // Một đơn đã có lịch giao vẫn phải xuất hiện để tạo điều chuyển;
+            // sau khi kho đích tiếp nhận, đơn tiếp tục lộ trình giao hiện có.
             ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId));
     }
 

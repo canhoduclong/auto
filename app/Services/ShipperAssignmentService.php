@@ -55,6 +55,12 @@ class ShipperAssignmentService
             Order::STATUS_PACKING,
             Order::STATUS_PACKED,
             Order::STATUS_READY_TO_SHIP,
+            // Once a shipper has accepted a stop it remains part of the
+            // published route. Refreshing dispatch must not make an active
+            // delivery disappear or turn the whole schedule into "changed".
+            Order::STATUS_DELIVERING,
+            Order::STATUS_SHIPPING,
+            Order::STATUS_IN_DELIVERY,
         ];
     }
 
@@ -115,7 +121,6 @@ class ShipperAssignmentService
             'daily_sequence' => $order->daily_sequence !== null ? (int) $order->daily_sequence : null,
             'delivery_date' => optional($order->delivery_date)->toDateString(),
             'delivery_time' => $order->delivery_time,
-            'updated_at' => optional($order->updated_at)->toDateTimeString(),
         ])->values()->all();
         $snapshotHash = hash('sha256', json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
@@ -134,7 +139,21 @@ class ShipperAssignmentService
             ->select('order_histories.*')
             ->first();
 
-        return !$latestHistory || $latestHistory->schedule_snapshot_hash !== $snapshotHash;
+        if (! $latestHistory) {
+            return true;
+        }
+
+        $savedSnapshot = json_decode((string) $latestHistory->schedule_snapshot, true);
+        $normalize = static fn (array $rows): array => collect($rows)
+            ->filter(fn ($row) => is_array($row) && (int) ($row['order_id'] ?? 0) > 0)
+            ->map(fn ($row) => [
+                'order_id' => (int) $row['order_id'],
+                'daily_sequence' => isset($row['daily_sequence']) ? (int) $row['daily_sequence'] : null,
+                'delivery_date' => $row['delivery_date'] ?? null,
+                'delivery_time' => $row['delivery_time'] ?? null,
+            ])->values()->all();
+
+        return ! is_array($savedSnapshot) || $normalize($savedSnapshot) !== $normalize($snapshot);
     }
 
     public function publishDailySchedule(
@@ -214,17 +233,20 @@ class ShipperAssignmentService
         $shipperRoutePlan = collect($routePlan)
             ->first(fn ($shipperPlan) => (int) ($shipperPlan['shipper_id'] ?? 0) === $shipperId);
 
+        // This payload must stay identical to the snapshot used by the web
+        // and mobile status checks. Runtime fields (updated_at) and route UI
+        // metadata made a freshly published schedule look changed instantly.
         $snapshot = $orders->map(fn (Order $order) => [
             'order_id' => (int) $order->id,
             'daily_sequence' => $order->daily_sequence !== null ? (int) $order->daily_sequence : null,
             'delivery_date' => optional($order->delivery_date)->toDateString(),
             'delivery_time' => $order->delivery_time,
-            'updated_at' => optional($order->updated_at)->toDateTimeString(),
         ])->values()->all();
+        // Preserve route grouping/name in the publication hash so a real
+        // route-layout edit can be resent. Status readers deliberately
+        // normalize this metadata away when comparing the order snapshot.
         if ($shipperRoutePlan) {
-            $snapshot[] = [
-                'route_plan' => $shipperRoutePlan,
-            ];
+            $snapshot[] = ['route_plan' => $shipperRoutePlan];
         }
         $snapshotJson = json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $snapshotHash = hash('sha256', $snapshotJson);

@@ -859,6 +859,11 @@
                                                 <span class="fw-bold text-danger me-2 js-shipper-trip-total" style="white-space: nowrap;">0 đ</span>
                                                 <div class="ma-shipper-meta">
                                                     <span class="badge {{ $scheduleBadgeClass }} js-shipper-schedule-label">{{ $scheduleLabel }}</span>
+                                                    @if($scheduleStatus === 'changed' && filled($shipperScheduleChanges[$shipperId] ?? null))
+                                                        <div class="small text-danger mt-1" style="max-width: 420px;">
+                                                            Chưa gửi Ship: {{ $shipperScheduleChanges[$shipperId] }}
+                                                        </div>
+                                                    @endif
                                                 </div>
                                                 
                                             </div>
@@ -960,6 +965,11 @@
                                                             ], true) || $order->histories->contains(
                                                                 fn ($history) => in_array($history->action, ['delivered', 'mobile_delivered', 'shipper_delivered_bulk'], true)
                                                             );
+                                                            $isDeliveryActive = in_array($order->status, [
+                                                                \App\Models\Order::STATUS_DELIVERING,
+                                                                \App\Models\Order::STATUS_SHIPPING,
+                                                                \App\Models\Order::STATUS_IN_DELIVERY,
+                                                            ], true);
                                                         @endphp
                                                         <tr id="order-{{ $order->id }}"
                                                             class="js-trip-order {{ $isDeliveryCompleted ? 'trip-order-completed' : '' }}"
@@ -981,6 +991,9 @@
                                                                 <span class="trip-order-customer">{{ $customerName }}</span>
                                                                 @if($isDeliveryCompleted)
                                                                     <span class="badge bg-success ms-1"><i class="bi bi-check-circle me-1"></i>Đã giao / Hoàn thành</span>
+                                                                @endif
+                                                                @if($isDeliveryActive)
+                                                                    <span class="badge bg-primary ms-1"><i class="bi bi-truck me-1"></i>Đang thực hiện — giữ nguyên khi tải mới</span>
                                                                 @endif
                                                                 @if($order->status === \App\Models\Order::STATUS_OVERDUE_DELIVERY)
                                                                     <span class="badge bg-warning text-dark">Giao trễ — chờ điều phối tiếp</span>
@@ -1041,11 +1054,11 @@
                                                                         data-order-code="{{ $order->code ?: $order->id }}"
                                                                         data-customer-name="{{ $customerName }}"
                                                                         data-set-default="0"
-                                                                        @disabled($isDeliveryCompleted)
-                                                                        @if($isDeliveryCompleted) title="Đơn đã giao/hoàn thành, không thể đổi shipper" @endif>
+                                                                        @disabled($isDeliveryCompleted || $isDeliveryActive)
+                                                                        @if($isDeliveryCompleted || $isDeliveryActive) title="Đơn đã nhận/đang giao, không thể đổi shipper" @endif>
                                                                         <i class="bi bi-arrow-left-right"></i>
                                                                     </button>
-                                                                    @unless($isDeliveryCompleted)
+                                                                    @unless($isDeliveryCompleted || $isDeliveryActive)
                                                                         <form action="{{ route('shipper.unassign-order', [$order->id]) }}" method="POST">
                                                                             @csrf
                                                                             @method('DELETE')

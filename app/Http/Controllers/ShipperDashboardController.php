@@ -2423,7 +2423,13 @@ class ShipperDashboardController extends Controller
             ->get();
 
         $shipperScheduleConfirmedAt = [];
-        $shipperScheduleStatuses = $this->resolveShipperScheduleStatuses($selectedDate, $assignedOrders, $shipperScheduleConfirmedAt);
+        $shipperScheduleChanges = [];
+        $shipperScheduleStatuses = $this->resolveShipperScheduleStatuses(
+            $selectedDate,
+            $assignedOrders,
+            $shipperScheduleConfirmedAt,
+            $shipperScheduleChanges
+        );
         $hasUnpublishedSchedules = collect($shipperScheduleStatuses)->contains(fn ($status) => in_array($status, ['none', 'changed', 'rejected'], true));
 
         $warehouses = Warehouse::query()->orderBy('name')->get();
@@ -2444,6 +2450,7 @@ class ShipperDashboardController extends Controller
             'totalOrdersCount',
             'shipperScheduleStatuses',
             'shipperScheduleConfirmedAt',
+            'shipperScheduleChanges',
             'hasUnpublishedSchedules',
             'warehouses',
             'historyCount'
@@ -2880,7 +2887,12 @@ class ShipperDashboardController extends Controller
         });
     }
 
-    private function resolveShipperScheduleStatuses(string $selectedDate, $assignedOrders, array &$confirmedAtByShipperId): array
+    private function resolveShipperScheduleStatuses(
+        string $selectedDate,
+        $assignedOrders,
+        array &$confirmedAtByShipperId,
+        array &$changesByShipperId = []
+    ): array
     {
         $statusByShipperId = [];
 
@@ -2920,12 +2932,45 @@ class ShipperDashboardController extends Controller
             );
             $status = $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot);
             $statusByShipperId[(int) $shipperId] = $status;
+            if ($status === 'changed') {
+                $changesByShipperId[(int) $shipperId] = $this->deliveryScheduleChangeSummary(
+                    $latestHistory,
+                    $snapshot,
+                    $orders
+                );
+            }
             if ($status === 'confirmed') {
                 $confirmedAtByShipperId[(int) $shipperId] = $latestHistory?->created_at?->format('d/m/Y H:i');
             }
         }
 
         return $statusByShipperId;
+    }
+
+    private function deliveryScheduleChangeSummary(?OrderHistory $history, array $currentSnapshot, $orders): string
+    {
+        $saved = json_decode((string) $history?->schedule_snapshot, true);
+        if (! is_array($saved)) {
+            return 'Chưa có dữ liệu lộ trình cũ để đối chiếu.';
+        }
+
+        $old = collect($this->normalizeDeliveryScheduleSnapshot($saved))->keyBy('order_id');
+        $new = collect($this->normalizeDeliveryScheduleSnapshot($currentSnapshot))->keyBy('order_id');
+        $codes = collect($orders)->keyBy(fn (Order $order) => (int) $order->id)
+            ->map(fn (Order $order) => (string) ($order->code ?: '#'.$order->id));
+        $label = fn (int $id): string => (string) ($codes->get($id) ?: '#'.$id);
+        $parts = [];
+        $added = $new->keys()->diff($old->keys())->map(fn ($id) => $label((int) $id))->values();
+        $removed = $old->keys()->diff($new->keys())->map(fn ($id) => $label((int) $id))->values();
+        $updated = $new->keys()->intersect($old->keys())->filter(
+            fn ($id) => $new->get($id) !== $old->get($id)
+        )->map(fn ($id) => $label((int) $id))->values();
+
+        if ($added->isNotEmpty()) $parts[] = 'Thêm: '.$added->implode(', ');
+        if ($removed->isNotEmpty()) $parts[] = 'Gỡ: '.$removed->implode(', ');
+        if ($updated->isNotEmpty()) $parts[] = 'Đổi thứ tự/ngày/giờ: '.$updated->implode(', ');
+
+        return $parts !== [] ? implode(' · ', $parts) : 'Cách chia lộ trình hoặc thông tin chuyến đã thay đổi.';
     }
 
     private function buildDeliveryScheduleSnapshot($orders): array
@@ -3195,7 +3240,7 @@ class ShipperDashboardController extends Controller
             'date' => 'nullable|date',
         ]);
 
-        abort_if(! $this->isAssignmentEligible($order), 422, 'Đơn chưa ở trạng thái có thể gán shipper.');
+        abort_if(! $this->isAssignmentAdjustable($order), 422, 'Đơn đã được shipper nhận/đang giao nên không thể đổi shipper.');
         abort_if(! ($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper')), 422, 'Người dùng không phải shipper.');
 
         $previousShipper = $order->shipper;
@@ -3256,6 +3301,7 @@ class ShipperDashboardController extends Controller
                 ->where('customer_id', $customer->id)
                 ->where('shipper_id', $previousShipperId)
                 ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
+                ->whereNotIn('status', $this->activeDeliveryStatuses())
                 ->lockForUpdate()
                 ->get();
 
@@ -3307,6 +3353,7 @@ class ShipperDashboardController extends Controller
         $ordersQuery = Order::query()
             ->where('shipper_id', $fromShipper->id)
             ->where(fn ($query) => $this->constrainAssignmentStatuses($query))
+            ->whereNotIn('status', $this->activeDeliveryStatuses())
             ->whereDate('orders.created_at', $date);
 
         $orders = DB::transaction(function () use ($ordersQuery, $fromShipper, $toShipper, $validated) {
@@ -3345,7 +3392,7 @@ class ShipperDashboardController extends Controller
     {
         $this->authorizeManagerShipper();
 
-        abort_if(! $this->isAssignmentEligible($order), 422, 'Đơn chưa ở trạng thái có thể gỡ ra.');
+        abort_if(! $this->isAssignmentAdjustable($order), 422, 'Đơn đã được shipper nhận/đang giao nên không thể gỡ khỏi lộ trình.');
         abort_if(! $order->shipper_id, 422, 'Đơn chưa được gán cho shipper nào.');
 
         $previousShipper = $order->shipper;
@@ -4287,6 +4334,9 @@ class ShipperDashboardController extends Controller
             Order::STATUS_PACKING,
             Order::STATUS_PACKED,
             Order::STATUS_READY_TO_SHIP,
+            Order::STATUS_DELIVERING,
+            Order::STATUS_SHIPPING,
+            Order::STATUS_IN_DELIVERY,
         ];
     }
 
@@ -4313,6 +4363,17 @@ class ShipperDashboardController extends Controller
             || ($order->status === Order::STATUS_COMPLETED
                 && $order->accounting_sales_import_batch_id !== null
                 && (bool) $order->needs_operational_completion));
+    }
+
+    private function activeDeliveryStatuses(): array
+    {
+        return [Order::STATUS_DELIVERING, Order::STATUS_SHIPPING, Order::STATUS_IN_DELIVERY];
+    }
+
+    private function isAssignmentAdjustable(Order $order): bool
+    {
+        return $this->isAssignmentEligible($order)
+            && ! in_array($order->status, $this->activeDeliveryStatuses(), true);
     }
 
     private function customerDeliveryCompletionActions(): array

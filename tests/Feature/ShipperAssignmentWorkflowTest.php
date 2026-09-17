@@ -11,12 +11,84 @@ use App\Models\Role;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseTransfer;
+use App\Services\ShipperAssignmentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ShipperAssignmentWorkflowTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_freshly_published_schedule_is_waiting_instead_of_immediately_changed(): void
+    {
+        $manager = User::factory()->create();
+        $shipper = User::factory()->create();
+        $customer = Customer::create(['name' => 'Khách kiểm tra snapshot', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $manager->id,
+            'shipper_id' => $shipper->id,
+            'code' => 'SNAPSHOT-WAITING-001',
+            'status' => Order::STATUS_READY_TO_SHIP,
+            'daily_sequence' => 1,
+        ]);
+        $plan = [[
+            'shipper_id' => $shipper->id,
+            'routes' => [['name' => 'Lộ trình 1', 'orders' => [['order_id' => $order->id]]]],
+        ]];
+
+        $this->assertTrue(app(ShipperAssignmentService::class)->publishDailySchedule(
+            $shipper->id, now()->toDateString(), $manager->id, 'manager_shipper', null, $plan
+        ));
+
+        $history = $order->histories()->where('action', 'schedule_created')->latest('id')->firstOrFail();
+        $controller = app(\App\Http\Controllers\ShipperDashboardController::class);
+        $snapshotMethod = new \ReflectionMethod($controller, 'buildDeliveryScheduleSnapshot');
+        $statusMethod = new \ReflectionMethod($controller, 'deliveryScheduleStatus');
+        $snapshot = $snapshotMethod->invoke($controller, collect([$order->fresh()]));
+        $hash = hash('sha256', json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        $savedSnapshot = json_decode($history->schedule_snapshot, true);
+        $this->assertSame($snapshot, array_values(array_filter($savedSnapshot, fn ($row) => isset($row['order_id']))));
+        $this->assertSame('waiting', $statusMethod->invoke($controller, $history, $hash, $snapshot));
+    }
+
+    public function test_active_delivery_remains_eligible_when_dispatch_is_refreshed(): void
+    {
+        $order = new Order(['status' => Order::STATUS_DELIVERING]);
+        $controller = app(\App\Http\Controllers\ShipperDashboardController::class);
+        $method = new \ReflectionMethod($controller, 'isAssignmentEligible');
+
+        $this->assertTrue($method->invoke($controller, $order));
+        $this->assertContains(Order::STATUS_DELIVERING, app(ShipperAssignmentService::class)->assignmentStatuses());
+    }
+
+    public function test_packed_order_with_delivery_schedule_is_still_available_for_warehouse_transfer(): void
+    {
+        $warehouse = Warehouse::create(['name' => 'Kho nguồn']);
+        $user = User::factory()->create();
+        $customer = Customer::create(['name' => 'Khách điều chuyển', 'status' => 'active']);
+        $order = Order::create([
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'warehouse_id' => $warehouse->id,
+            'code' => 'TRANSFER-WITH-ROUTE-001',
+            'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $order->histories()->create([
+            'action' => 'schedule_created',
+            'user_id' => $user->id,
+            'role' => 'manager_shipper',
+            'status_before' => $order->status,
+            'status_after' => $order->status,
+        ]);
+
+        $controller = app(\App\Http\Controllers\Warehouse\OrderTransferController::class);
+        $method = new \ReflectionMethod($controller, 'transferableOrders');
+        $query = $method->invoke($controller, $warehouse->id);
+
+        $this->assertTrue($query->whereKey($order->id)->exists());
+    }
 
     public function test_only_shipper_with_changed_route_is_selected_for_resend(): void
     {
