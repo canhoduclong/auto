@@ -416,6 +416,47 @@ class WarehousePackingSizeAllocationTest extends TestCase
         ])->assertOk();
     }
 
+    public function test_warehouse_can_expand_one_variant_at_both_ends_by_admin_sort_order(): void
+    {
+        [$user, $order, $item, $variants] = $this->fixture(10);
+        $warehouse = Warehouse::query()->findOrFail($order->warehouse_id);
+        $warehouse->update(['expand_packing_size_bounds' => true]);
+        $variants['2.4']->update(['sort_order' => 10]);
+        $variants['2.5']->update(['sort_order' => 20]);
+        $variants['2.6']->update(['sort_order' => 30]);
+        $size27 = ProductVariant::query()->create([
+            'product_id' => $item->product_id,
+            'name' => '2.7 kg',
+            'sku' => 'SIZE-2.7',
+            'size' => 2.7,
+            'kg' => 2.7,
+            'sort_order' => 40,
+        ]);
+        Inventory::query()->create([
+            'warehouse_id' => $warehouse->id,
+            'product_variant_id' => $size27->id,
+            'quantity' => 10,
+            'reserved_quantity' => 0,
+        ]);
+        $order->update(['warehouse_allowed_sizes' => ['2.5', '2.6']]);
+
+        $this->actingAs($user)->get(route('warehouse.orders', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('name="allocations['.$variants['2.4']->id.']"', false)
+            ->assertSee('name="allocations['.$variants['2.5']->id.']"', false)
+            ->assertSee('name="allocations['.$variants['2.6']->id.']"', false)
+            ->assertSee('name="allocations['.$size27->id.']"', false)
+            ->assertSee('Chặn đầu');
+
+        $this->post(route('warehouse.orders.packing-size-allocation', $order), [
+            'order_item_id' => $item->id,
+            'allocations' => [
+                $variants['2.4']->id => 5,
+                $size27->id => 5,
+            ],
+        ])->assertSessionHasNoErrors()->assertSessionHas('success');
+    }
+
     public function test_empty_sale_size_selection_hides_mix_and_rejects_allocations(): void
     {
         [$user, $order, $item, $variants, $inventories] = $this->fixture(10);

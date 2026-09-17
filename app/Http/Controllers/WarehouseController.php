@@ -34,9 +34,10 @@ class WarehouseController extends Controller
             'address' => 'nullable|string',
             'phone' => 'nullable|string|max:255',
             'status' => 'required|boolean',
+            'expand_packing_size_bounds' => 'required|boolean',
         ]);
 
-        Warehouse::create($request->all());
+        Warehouse::create($request->only(['name', 'address', 'phone', 'status', 'expand_packing_size_bounds']));
 
         return redirect()->route('warehouses.index')
             ->with('success', 'Warehouse created successfully.');
@@ -68,9 +69,10 @@ class WarehouseController extends Controller
             'address' => 'nullable|string',
             'phone' => 'nullable|string|max:255',
             'status' => 'required|boolean',
+            'expand_packing_size_bounds' => 'required|boolean',
         ]);
 
-        $warehouse->update($request->all());
+        $warehouse->update($request->only(['name', 'address', 'phone', 'status', 'expand_packing_size_bounds']));
 
         return redirect()->route('warehouses.index')
             ->with('success', 'Warehouse updated successfully.');

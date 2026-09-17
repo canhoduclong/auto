@@ -418,8 +418,9 @@
                                         <input type="text" name="variants[{{ $variant->id }}][size]" class="form-control" value="{{ old('variants.'.$variant->id.'.size', $variant->size) }}">
                                     </div>
                                     <div class="variant-cell">
-                                        <label class="variant-cell-label">Thứ tự</label>
+                                        <label class="variant-cell-label">Thứ tự chặn size</label>
                                         <input type="number" name="variants[{{ $variant->id }}][sort_order]" class="form-control" min="0" step="1" value="{{ old('variants.'.$variant->id.'.sort_order', $variant->sort_order ?? 0) }}">
+                                        <div class="form-text">Số nhỏ đứng trước; Kho dùng thứ tự này để mở thêm 2 đầu.</div>
                                     </div>
                                     <div class="variant-cell">
                                         <label class="variant-cell-label">Số Kg quy đổi</label>

@@ -591,6 +591,9 @@
                                                                 <div class="col-6 col-md-2">
                                                                     <label class="form-label small mb-1 fw-semibold">
                                                                         Size {{ $formatCompactDecimal((float)$sizeOption['size']) }}
+                                                                        @if($sizeOption['is_boundary_extension'] ?? false)
+                                                                            <span class="badge bg-primary" title="Size chặn 2 đầu do cấu hình kho mở thêm">Chặn đầu</span>
+                                                                        @endif
                                                                         <span class="d-block text-primary fw-normal js-packing-size-ratio">Tỷ lệ: 0%</span>
                                                                         <span class="d-block text-muted fw-normal">Khả dụng: {{ number_format((int)$sizeOption['available']) }}</span>
                                                                     </label>

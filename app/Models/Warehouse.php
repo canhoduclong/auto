@@ -14,10 +14,12 @@ class Warehouse extends Model
         'address',
         'phone',
         'status',
+        'expand_packing_size_bounds',
     ];
 
     protected $casts = [
         'status' => 'boolean',
+        'expand_packing_size_bounds' => 'boolean',
     ];
 
     public function inventories()

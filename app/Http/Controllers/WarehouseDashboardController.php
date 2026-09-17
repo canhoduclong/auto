@@ -2650,6 +2650,9 @@ class WarehouseDashboardController extends Controller
             ->whereIn('product_id', $productIds->all())
             ->get()
             ->groupBy('product_id');
+        $expandPackingSizeBounds = $warehouseId
+            ? (bool) Warehouse::query()->whereKey($warehouseId)->value('expand_packing_size_bounds')
+            : false;
 
         $reservedByInventory = InventoryReservation::query()
             ->whereIn('inventory_id', $variantsByProduct->flatten()->flatMap(fn ($variant) => $variant->inventories->pluck('id')))
@@ -2662,13 +2665,21 @@ class WarehouseDashboardController extends Controller
             ->groupBy('order_item_id')
             ->map(fn ($rows) => $rows->pluck('quantity', 'inventory_id'));
 
-        return $eligibleItems->mapWithKeys(function ($item) use ($variantsByProduct, $reservationByItemAndInventory, $reservedByInventory, $warehouseId) {
+        return $eligibleItems->mapWithKeys(function ($item) use ($variantsByProduct, $reservationByItemAndInventory, $reservedByInventory, $warehouseId, $expandPackingSizeBounds) {
+            $productVariants = collect($variantsByProduct->get((int) $item->variant->product_id, collect()));
+            $permittedVariantIds = $this->packingVariantIdsForItem(
+                $item->order,
+                $item,
+                $productVariants,
+                $expandPackingSizeBounds
+            );
             $fifoAvailable = $this->packingSizeFifoAvailability($item, (int) $warehouseId,
-                $variantsByProduct->get((int) $item->variant->product_id, collect())->pluck('id')->all());
+                $productVariants->pluck('id')->all());
             $saved = $item->packingSizeAllocations->pluck('quantity', 'product_variant_id');
             $mainSize = (float) $item->variant->size;
-            $options = collect($variantsByProduct->get((int) $item->variant->product_id, collect()))
-                ->filter(fn (ProductVariant $variant) => (float) $variant->size > 0 && $item->order->allowsPackingSize((float) $variant->size, (int) $item->product_id))
+            $variantRank = collect($permittedVariantIds)->flip();
+            $options = $productVariants
+                ->filter(fn (ProductVariant $variant) => in_array((int) $variant->id, $permittedVariantIds, true))
                 ->map(function (ProductVariant $variant) use ($item, $saved, $reservationByItemAndInventory, $reservedByInventory, $fifoAvailable) {
                     $inventories = $variant->inventories;
                     $available = (int) $inventories->sum(function (Inventory $inventory) use ($item, $reservationByItemAndInventory, $reservedByInventory) {
@@ -2682,15 +2693,66 @@ class WarehouseDashboardController extends Controller
                         'variant_id' => (int) $variant->id,
                         'size' => (float) $variant->size,
                         'name' => (string) ($variant->name ?: $variant->sku),
+                        'is_boundary_extension' => ! $item->order->allowsPackingSize(
+                            (float) $variant->size,
+                            (int) $item->product_id
+                        ),
                         'available' => min($available, (int) ($fifoAvailable[$variant->id] ?? 0)),
                         'quantity' => (int) ($saved[$variant->id] ?? ((int) $variant->id === (int) $item->product_variant_id ? $item->quantity : 0)),
                     ];
                 })
-                ->sortBy('size')
+                ->sortBy(fn (array $option) => (int) ($variantRank[$option['variant_id']] ?? PHP_INT_MAX))
                 ->values();
 
             return $options->isNotEmpty() ? [(int) $item->id => $options] : [];
         })->all();
+    }
+
+    /**
+     * Resolve the Sale-approved variants and optionally open one ordered
+     * variant immediately before and after that approved range.
+     */
+    private function packingVariantIdsForItem(
+        Order $order,
+        $item,
+        Collection $productVariants,
+        bool $expandBounds
+    ): array {
+        $ordered = $productVariants
+            ->filter(fn (ProductVariant $variant) => (bool) ($variant->status ?? true) && (float) $variant->size > 0)
+            ->sortBy(fn (ProductVariant $variant) => [
+                (int) ($variant->sort_order ?? 0),
+                (int) $variant->id,
+            ])->values();
+        $saleSizes = $order->packingSizesForProduct((int) $item->product_id);
+        if ($saleSizes === null) {
+            return $ordered->pluck('id')->map(fn ($id) => (int) $id)->all();
+        }
+
+        $approvedIndexes = $ordered->keys()->filter(function (int $index) use ($ordered, $saleSizes): bool {
+            $size = (float) $ordered[$index]->size;
+
+            return collect($saleSizes)->contains(fn ($allowed) => abs((float) $allowed - $size) < 0.0001);
+        })->values();
+        if ($approvedIndexes->isEmpty()) {
+            return [];
+        }
+
+        $selectedIndexes = $approvedIndexes;
+        if ($expandBounds) {
+            $first = (int) $approvedIndexes->min();
+            $last = (int) $approvedIndexes->max();
+            if ($first > 0) {
+                $selectedIndexes->push($first - 1);
+            }
+            if ($last + 1 < $ordered->count()) {
+                $selectedIndexes->push($last + 1);
+            }
+        }
+
+        return $selectedIndexes->unique()->sort()->map(
+            fn (int $index) => (int) $ordered[$index]->id
+        )->values()->all();
     }
 
     private function packingSizeFifoAvailability($item, int $warehouseId, array $variantIds): array
@@ -3386,8 +3448,26 @@ class WarehouseDashboardController extends Controller
             throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Chỉ được dùng size chính '.$mainSizeLabel.' hoặc size khác của cùng sản phẩm.']);
         }
 
-        if ($variants->contains(fn (ProductVariant $variant) => ! $order->allowsPackingSize((float) $variant->size, (int) $item->product_id))) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Chỉ được đóng các size Sale đã cho phép trong đơn hàng.']);
+        $warehouseId = (int) ($request->user()?->warehouse_id ?: $order->warehouse_id ?: 0);
+        if ($warehouseId <= 0) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Không xác định được kho đang đóng hàng.']);
+        }
+        $allProductVariants = ProductVariant::query()
+            ->where('product_id', (int) $item->variant->product_id)
+            ->get();
+        $expandPackingSizeBounds = (bool) Warehouse::query()->whereKey($warehouseId)
+            ->value('expand_packing_size_bounds');
+        $permittedVariantIds = $this->packingVariantIdsForItem(
+            $order,
+            $item,
+            $allProductVariants,
+            $expandPackingSizeBounds
+        );
+        if ($variants->keys()->contains(fn ($variantId) => ! in_array((int) $variantId, $permittedVariantIds, true))) {
+            $message = $expandPackingSizeBounds
+                ? 'Chỉ được đóng size Sale cho phép và một biến thể chặn ở mỗi đầu theo thứ tự Admin.'
+                : 'Chỉ được đóng các size Sale đã cho phép trong đơn hàng.';
+            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => $message]);
         }
 
         $orderedQuantity = (int) $item->quantity;
@@ -3404,10 +3484,6 @@ class WarehouseDashboardController extends Controller
             ->map(fn (int $quantity, int $variantId) => $quantity * (float) $variants[$variantId]->size)
             ->sum() / $orderedQuantity;
 
-        $warehouseId = (int) ($request->user()?->warehouse_id ?: $order->warehouse_id ?: 0);
-        if ($warehouseId <= 0) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Không xác định được kho đang đóng hàng.']);
-        }
 
         try {
             DB::transaction(function () use ($item, $allocationInput, $warehouseId): void {

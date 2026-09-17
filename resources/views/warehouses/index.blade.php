@@ -14,6 +14,7 @@
                 <th>Address</th>
                 <th>Phone</th>
                 <th>Status</th>
+                <th class="text-center">Cơ cấu chặn 2 đầu</th>
                 <th>Created At</th>
                 <th>Actions</th>
             </tr>
@@ -31,6 +32,13 @@
                     @else
                         <span class="badge bg-danger">Inactive</span>
                     @endif
+                </td>
+                <td class="text-center">
+                    <a href="{{ route('warehouses.edit', $warehouse) }}" class="btn btn-sm {{ $warehouse->expand_packing_size_bounds ? 'btn-primary' : 'btn-outline-secondary' }}"
+                       title="Cấu hình cơ cấu đóng hàng chặn 2 đầu">
+                        <i class="bi bi-arrows-expand"></i>
+                        {{ $warehouse->expand_packing_size_bounds ? 'Đang bật' : 'Đang tắt' }}
+                    </a>
                 </td>
                 <td>{{ $warehouse->created_at }}</td>
                 <td>
