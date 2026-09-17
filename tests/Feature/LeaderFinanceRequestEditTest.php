@@ -54,6 +54,19 @@ class LeaderFinanceRequestEditTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_payment_proposal_prints_the_requesting_users_name(): void
+    {
+        $leader = $this->leader();
+        $transaction = $this->requestFor($leader);
+        $transaction->update(['request_form_type' => Transaction::REQUEST_FORM_PAYMENT]);
+
+        $this->actingAs($leader)
+            ->get(route('leader.finance-requests.print', $transaction))
+            ->assertOk()
+            ->assertSee('Họ và tên người đề nghị thanh toán:')
+            ->assertSee($leader->name);
+    }
+
     public function test_approved_request_cannot_be_edited(): void
     {
         $leader = $this->leader();

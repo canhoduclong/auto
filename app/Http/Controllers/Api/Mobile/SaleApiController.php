@@ -95,6 +95,7 @@ class SaleApiController extends BaseApiController
 
         return $this->ok([
             'stats' => $payload['dashboardStats'] ?? [],
+            'manager_dashboard' => $payload['managerDashboard'] ?? null,
             'pending_adjustments' => $adjustments,
             'today_orders' => $todayOrders,
             'recent_orders' => $recentOrders,

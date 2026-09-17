@@ -860,7 +860,40 @@ class RoleScreenApiController extends BaseApiController
             ->latest('delivered_at')
             ->get();
 
-        return $this->transferScreenResponse($transfers, now()->toDateString(), true);
+        $response = $this->transferScreenResponse($transfers, now()->toDateString(), true)->getData(true);
+        $inventoryItems = WarehouseInventoryTransfer::query()
+            ->with(['sourceWarehouse', 'targetWarehouse', 'requester', 'items.productVariant.product'])
+            ->when($warehouseId, fn ($query) => $query->where('target_warehouse_id', $warehouseId))
+            ->where('status', WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)
+            ->latest('requested_at')
+            ->get()
+            ->map(fn (WarehouseInventoryTransfer $transfer): array => [
+                'id' => (int) $transfer->id,
+                'type' => 'inventory_transfer',
+                'title' => 'Hàng điều chuyển '.$transfer->code,
+                'subtitle' => trim(implode(' → ', array_filter([
+                    $transfer->sourceWarehouse?->name,
+                    $transfer->targetWarehouse?->name,
+                ]))),
+                'status' => (string) $transfer->status,
+                'transfer_code' => (string) $transfer->code,
+                'quantity' => (float) $transfer->items->sum('quantity'),
+                'requester_name' => (string) ($transfer->requester?->name ?? ''),
+                'can_receive_inventory' => true,
+                'updated_at' => optional($transfer->updated_at)->toIso8601String(),
+            ])->values()->all();
+
+        $response['data']['items'] = collect($response['data']['items'] ?? [])
+            ->map(fn (array $item) => array_merge(['type' => 'order_transfer'], $item))
+            ->concat($inventoryItems)
+            ->values()
+            ->all();
+        $response['data']['cards'] = [
+            ['label' => 'Đơn chờ tiếp nhận', 'value' => $transfers->where('status', WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE)->count()],
+            ['label' => 'Hàng chờ tiếp nhận', 'value' => count($inventoryItems)],
+        ];
+
+        return response()->json($response);
     }
 
     private function shipperWarehouseTransfers(Request $request, string $date): JsonResponse

@@ -103,13 +103,29 @@ class MyDashboardLayoutTest extends TestCase
             ->assertSee('dashboard-main', false)
             ->assertSee('manager-board', false)
             ->assertSee('Bảng điều hành phòng kinh doanh')
+            ->assertSee('Hôm nay')
             ->assertSee('Doanh thu bán hàng')
+            ->assertSee('Đơn hàng')
+            ->assertSee('Hoa hồng')
             ->assertSee('Sản lượng bán theo size')
             ->assertSee('Danh sách mặt hàng bán chạy')
             ->assertSee('Top khách hàng')
             ->assertSee('Xếp hạng sale bán nhiều')
             ->assertSee('KPI tổng hợp')
             ->assertSee('Bảng báo giá sản phẩm');
+    }
+
+    public function test_leader_uses_the_sales_management_dashboard(): void
+    {
+        $role = Role::query()->create(['name' => 'leader']);
+        $leader = User::factory()->create();
+        $leader->roles()->attach($role);
+
+        $this->actingAs($leader)->withSession(['active_role' => 'leader'])
+            ->get(route('pages.my_dashboard', ['period' => 'today']))
+            ->assertOk()
+            ->assertSee('Bảng điều hành phòng kinh doanh')
+            ->assertSee('Hôm nay');
     }
 
     public function test_dashboard_order_scope_is_all_sales_for_leaders_managers_and_admins(): void

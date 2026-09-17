@@ -429,7 +429,9 @@ class MyDashboardController extends Controller
 
         $memberIds = $this->resolveScopedUserIds($user);
         $dashboardRole = $this->resolveDashboardRole($user);
-        $isManagerDashboard = in_array($dashboardRole, ['manager', 'manager_sale', 'sale_manager'], true);
+        $isManagerDashboard = in_array($dashboardRole, [
+            'leader', 'leader_sale', 'manager', 'manager_sale', 'sale_manager',
+        ], true);
         $pendingApprovalAdjustments = $this->buildPendingApprovalAdjustments($user, $dashboardRole);
 
         $ordersBaseQuery = Order::query()->whereIn('user_id', $memberIds);
@@ -712,12 +714,17 @@ class MyDashboardController extends Controller
     {
         $today = now()->startOfDay();
         try {
-            $from = $request?->filled('from')
+            $todayOnly = $request?->input('period') === 'today';
+            $from = $todayOnly
+                ? $today->copy()
+                : ($request?->filled('from')
                 ? Carbon::createFromFormat('Y-m-d', (string) $request->input('from'))->startOfDay()
-                : $today->copy()->startOfWeek();
-            $to = $request?->filled('to')
+                : $today->copy()->startOfWeek());
+            $to = $todayOnly
+                ? $today->copy()->endOfDay()
+                : ($request?->filled('to')
                 ? Carbon::createFromFormat('Y-m-d', (string) $request->input('to'))->endOfDay()
-                : $today->copy()->endOfWeek();
+                : $today->copy()->endOfWeek());
         } catch (\Throwable) {
             $from = $today->copy()->startOfWeek();
             $to = $today->copy()->endOfWeek();
@@ -820,6 +827,12 @@ class MyDashboardController extends Controller
             ? (float) $returnRows->sum('return_shipping_fee')
             : 0.0;
         $shippingCost = $deliveryShippingCost + $returnShippingCost;
+        $commission = Schema::hasTable('order_commissions')
+            ? (float) DB::table('order_commissions')
+                ->whereIn('sale_user_id', $memberIds)
+                ->whereBetween('confirmed_at', [$from, $to])
+                ->sum('commission_amount')
+            : 0.0;
 
         $summary = [
             'customers' => (int) $salesBreakdown['customer_count'],
@@ -832,6 +845,7 @@ class MyDashboardController extends Controller
             'defect_rate' => $quantity > 0 ? round($returnedQuantity * 100 / $quantity, 2) : 0.0,
             'receivables' => $receivables,
             'shipping_cost' => $shippingCost,
+            'commission' => $commission,
         ];
 
         if (!$withDetails) {
@@ -950,15 +964,49 @@ class MyDashboardController extends Controller
                 ?: $right['quantity'] <=> $left['quantity'])
             ->values();
 
+        $sizeBuckets = [
+            ['label' => 'Size 2.0 - 2.4', 'min' => 2.0, 'max' => 2.4],
+            ['label' => 'Size 2.5 - 2.6', 'min' => 2.5, 'max' => 2.6],
+            ['label' => 'Size 2.7 - 2.8', 'min' => 2.7, 'max' => 2.8],
+            ['label' => 'Size > 2.8 - 3.0', 'min' => 2.800001, 'max' => 3.0],
+            ['label' => 'Size > 3.0', 'min' => 3.000001, 'max' => PHP_FLOAT_MAX],
+        ];
         $products = $productRows
             ->groupBy(fn ($row) => trim((string) ($row->product_name ?? '')) ?: 'Sản phẩm')
-            ->map(fn (Collection $rows, string $name): array => [
-                'name' => $name,
-                'orders' => $rows->pluck('order_id')->unique()->count(),
-                'quantity' => (float) $rows->sum('quantity'),
-                'weight' => (float) $rows->sum('total_quantity'),
-                'revenue' => (float) $rows->sum('total_amount'),
-            ])
+            ->map(function (Collection $rows, string $name) use ($sizeBuckets): array {
+                $quantity = (float) $rows->sum('quantity');
+                $revenue = (float) $rows->sum('total_amount');
+                $sizeRows = collect($sizeBuckets)->map(function (array $bucket) use ($rows): array {
+                    $matched = $rows->filter(function ($row) use ($bucket): bool {
+                        $size = (float) ($row->unit_weight ?? 0);
+                        return $size >= $bucket['min'] && $size <= $bucket['max'];
+                    });
+                    $bucketQuantity = (float) $matched->sum('quantity');
+                    $priceBasis = (float) $matched->sum('total_quantity');
+                    $weightedPrice = (float) $matched->sum(fn ($row) =>
+                        (float) ($row->unit_price ?? 0) * (float) ($row->total_quantity ?? 0)
+                    );
+                    return [
+                        'label' => $bucket['label'],
+                        'quantity' => $bucketQuantity,
+                        'average_price' => $priceBasis > 0 ? $weightedPrice / $priceBasis : 0,
+                    ];
+                })->filter(fn (array $row) => $row['quantity'] > 0)->values()->all();
+                $priceBasis = (float) $rows->sum('total_quantity');
+                $weightedPrice = (float) $rows->sum(fn ($row) =>
+                    (float) ($row->unit_price ?? 0) * (float) ($row->total_quantity ?? 0)
+                );
+
+                return [
+                    'name' => $name,
+                    'orders' => $rows->pluck('order_id')->unique()->count(),
+                    'quantity' => $quantity,
+                    'weight' => (float) $rows->sum('total_quantity'),
+                    'revenue' => $revenue,
+                    'average_price' => $priceBasis > 0 ? $weightedPrice / $priceBasis : 0,
+                    'sizes' => $sizeRows,
+                ];
+            })
             ->sort(fn (array $left, array $right) => $right['revenue'] <=> $left['revenue']
                 ?: $right['quantity'] <=> $left['quantity'])
             ->take(10)

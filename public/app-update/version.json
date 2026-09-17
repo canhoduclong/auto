@@ -1,8 +1,8 @@
 {
-  "version": "1.1.21",
-  "version_code": 64,
+  "version": "1.1.22",
+  "version_code": 65,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": true,
-  "message": "Bản cập nhật 1.1.21: Hiển thị lý do khi lộ trình không thể đồng bộ; không cho xác nhận lộ trình 0 đơn và hỗ trợ Điều phối xử lý lộ trình không thể hoàn thành."
+  "message": "Bản cập nhật 1.1.22: Gộp Tiếp nhận đơn và hàng cho Kho; bổ sung bộ lọc Hôm nay/Từ ngày/Đến ngày cùng báo cáo doanh thu, khách hàng, đơn hàng, sản phẩm theo size, hoa hồng và chi phí ship cho Leader/Manager."
 }

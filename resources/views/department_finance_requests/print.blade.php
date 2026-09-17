@@ -408,6 +408,7 @@
             <div class="signature-box">
                 <div class="signature-title">{{ $isPaymentProposal ? 'Người đề nghị' : 'Người lập phiếu' }}</div>
                 <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
+                <div style="margin-top:42px;font-weight:700">{{ $transaction->submitter?->name ?: '-' }}</div>
             </div>
             <div class="signature-box">
                 <div class="signature-title">Trưởng bộ phận</div>

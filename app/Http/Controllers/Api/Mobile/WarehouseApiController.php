@@ -116,17 +116,11 @@ class WarehouseApiController extends BaseApiController
             ],
             [
                 'key' => 'incoming_transfers',
-                'label' => 'Tiếp nhận Đơn',
-                'total' => ($stats['transfers_incoming'] ?? 0) + ($stats['transfers_completed'] ?? 0),
-                'done' => $stats['transfers_completed'] ?? 0,
+                'label' => 'Tiếp nhận',
+                'total' => ($stats['transfers_incoming'] ?? 0) + ($stats['transfers_completed'] ?? 0)
+                    + ($stats['receiving'] ?? 0) + ($stats['received'] ?? 0),
+                'done' => ($stats['transfers_completed'] ?? 0) + ($stats['received'] ?? 0),
                 'route_key' => 'incoming_transfers',
-            ],
-            [
-                'key' => 'incoming_inventory_transfers',
-                'label' => 'Tiếp nhận hàng',
-                'total' => ($stats['receiving'] ?? 0) + ($stats['received'] ?? 0),
-                'done' => $stats['received'] ?? 0,
-                'route_key' => 'incoming_inventory_transfers',
             ],
             [
                 'key' => 'returns',

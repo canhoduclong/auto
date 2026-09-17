@@ -241,7 +241,9 @@
     .manager-date-filter { display: flex; align-items: end; gap: 5px; padding: 6px; border: 1px solid var(--dashboard-border); border-radius: 7px; background: #fff; }
     .manager-date-filter label span { display: block; margin-bottom: 2px; color: #64748b; font-size: .58rem; }
     .manager-date-filter input { width: 112px; border: 0; color: #334155; font-size: .67rem; outline: 0; }
-    .manager-date-filter button { width: 29px; height: 29px; border: 0; border-radius: 5px; background: #17376e; color: #fff; }
+    .manager-date-filter button { min-width: 29px; height: 29px; padding: 0 9px; border: 0; border-radius: 5px; background: #17376e; color: #fff; }
+    .manager-date-filter .manager-today-button { width: auto; white-space: nowrap; background: #087f73; font-size: .68rem; font-weight: 700; }
+    .manager-product-size-row td { color: #64748b; font-size: .66rem; background: #f8fafc; }
     .manager-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
     .manager-summary-card { min-height: 120px; padding: 12px 11px 10px; border: 1px solid var(--dashboard-border); border-radius: 8px; background: #fff; box-shadow: 0 2px 7px rgba(15,23,42,.035); }
     .manager-summary-label { display: flex; align-items: center; gap: 7px; font-size: .65rem; font-weight: 800; text-transform: uppercase; }

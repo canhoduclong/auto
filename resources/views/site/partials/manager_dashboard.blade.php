@@ -31,9 +31,10 @@
             <p>Doanh thu và sản lượng đối soát theo Nhật ký bán hàng đã giao/hoàn tất</p>
         </div>
         <form method="GET" action="{{ route('pages.my_dashboard') }}" class="manager-date-filter">
+            <button type="submit" name="period" value="today" class="manager-today-button">Hôm nay</button>
             <label><span>Từ ngày</span><input type="date" name="from" value="{{ $manager['from'] ?? '' }}"></label>
             <label><span>Đến ngày</span><input type="date" name="to" value="{{ $manager['to'] ?? '' }}"></label>
-            <button type="submit" aria-label="Áp dụng khoảng ngày"><i class="bi bi-arrow-clockwise"></i></button>
+            <button type="submit" aria-label="Lọc dữ liệu"><i class="bi bi-funnel-fill"></i><span class="visually-hidden">Lọc</span></button>
         </form>
     </header>
 
@@ -46,8 +47,8 @@
         </article>
         @php $quantityTrend = $trend('quantity'); @endphp
         <article class="manager-summary-card tone-blue">
-            <div class="manager-summary-label"><i class="bi bi-box-seam-fill"></i><span>Sản lượng bán</span></div>
-            <strong>{{ number_format($summary['quantity'] ?? 0, 0, ',', '.') }} <em>con</em></strong>
+            <div class="manager-summary-label"><i class="bi bi-receipt"></i><span>Đơn hàng</span></div>
+            <strong>{{ number_format($summary['orders'] ?? 0, 0, ',', '.') }} <em>đơn</em></strong>
             <small class="{{ $quantityTrend['class'] }}">{{ $quantityTrend['icon'] }} {{ $quantityTrend['text'] }}</small>
         </article>
         @php $revenueTrend = $trend('revenue'); @endphp
@@ -73,6 +74,11 @@
             <div class="manager-summary-label"><i class="bi bi-truck"></i><span>Chi phí ship</span></div>
             <strong>{{ number_format($summary['shipping_cost'] ?? 0, 0, ',', '.') }}đ</strong>
             <small class="{{ $shipTrend['class'] }}">{{ $shipTrend['icon'] }} {{ $shipTrend['text'] }}</small>
+        </article>
+        <article class="manager-summary-card tone-orange">
+            <div class="manager-summary-label"><i class="bi bi-award-fill"></i><span>Hoa hồng</span></div>
+            <strong>{{ number_format($summary['commission'] ?? 0, 0, ',', '.') }}đ</strong>
+            <small>Đã xác nhận trong kỳ lọc</small>
         </article>
     </div>
 
@@ -135,16 +141,23 @@
             <h2>Danh sách mặt hàng bán chạy</h2>
             <div class="table-responsive">
                 <table>
-                    <thead><tr><th>#</th><th>Mặt hàng</th><th>Đơn</th><th>SL</th><th>Tổng KL</th><th>Doanh thu</th></tr></thead>
+                    <thead><tr><th>#</th><th>Sản phẩm / Size</th><th>Đơn</th><th>Số lượng</th><th>Giá TB</th><th>Doanh thu</th></tr></thead>
                     <tbody>
                     @forelse(($manager['products'] ?? []) as $index => $product)
                         <tr>
                             <td>{{ $index + 1 }}</td><td>{{ $product['name'] }}</td>
                             <td>{{ number_format($product['orders'], 0, ',', '.') }}</td>
                             <td>{{ number_format($product['quantity'], 0, ',', '.') }}</td>
-                            <td>{{ number_format($product['weight'], 1, ',', '.') }}</td>
+                            <td>{{ number_format($product['average_price'] ?? 0, 0, ',', '.') }}đ</td>
                             <td>{{ number_format($product['revenue'], 0, ',', '.') }}đ</td>
                         </tr>
+                        @foreach(($product['sizes'] ?? []) as $size)
+                            <tr class="manager-product-size-row">
+                                <td></td><td>↳ {{ $size['label'] }}</td><td>—</td>
+                                <td>{{ number_format($size['quantity'], 0, ',', '.') }}</td>
+                                <td>{{ number_format($size['average_price'], 0, ',', '.') }}đ</td><td>—</td>
+                            </tr>
+                        @endforeach
                     @empty
                         <tr><td colspan="6" class="manager-table-empty">Chưa có mặt hàng bán trong khoảng ngày đã chọn.</td></tr>
                     @endforelse
