@@ -69,7 +69,7 @@
                                     <span class="badge text-bg-warning">Chờ xác nhận</span>
                                 @endif
                             </td>
-                            <td class="text-end fw-bold">{{ number_format((float) $requestTx->amount) }} d</td>
+                            <td class="text-end fw-bold">{{ number_format((float) ($requestTx->request_total ?? $requestTx->amount), 0, ',', '.') }}đ</td>
                             <td>{{ $requestTx->submitter?->name ?: '-' }}</td>
                             <td>{{ optional($requestTx->created_at)->format('d/m/Y H:i') }}</td>
                             <td class="text-end">
@@ -333,7 +333,7 @@
                             -
                         @endif
                     </td>
-                    <td class="fw-semibold">{{ number_format($tx->amount) }} d</td>
+                    <td class="fw-semibold">{{ number_format((float) $tx->amount, 0, ',', '.') }}đ</td>
                     <td>
                         @if($tx->status === \App\Models\Transaction::STATUS_APPROVED)
                             <span class="badge text-bg-success">Da duyet</span>

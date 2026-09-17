@@ -110,6 +110,10 @@
             <a href="{{ route('package.order-changes') }}" class="pkg-nav-link {{ request()->routeIs('package.order-changes') ? 'active' : '' }}">
                 <i class="bi bi-pencil-square"></i> Yêu cầu thay đổi đơn
             </a>
+            <div class="pkg-nav-section">Tài chính</div>
+            <a href="{{ route('package.finance-requests.index') }}" class="pkg-nav-link {{ request()->routeIs('package.finance-requests.*') ? 'active' : '' }}">
+                <i class="bi bi-file-earmark-text"></i> Phiếu yêu cầu
+            </a>
 
         </nav>
     </aside>

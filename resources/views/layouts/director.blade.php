@@ -311,6 +311,9 @@
             <a href="{{ route('director.cashflow', ['focus' => 'requests']) }}" class="director-nav-link {{ (request()->routeIs('director.cashflow') && request('focus') === 'requests') || request()->routeIs('director.cashflow.show', 'director.transactions.*') ? 'active' : '' }}">
                 <i class="bi bi-check2-square"></i> Duyệt phiếu yêu cầu
             </a>
+            <a href="{{ route('director.finance-requests.index') }}" class="director-nav-link {{ request()->routeIs('director.finance-requests.*') ? 'active' : '' }}">
+                <i class="bi bi-file-earmark-plus"></i> Tạo phiếu yêu cầu
+            </a>
             <a href="{{ route('director.financial-reports') }}" class="director-nav-link {{ request()->routeIs('director.financial-reports') ? 'active' : '' }}">
                 <i class="bi bi-graph-up-arrow"></i> Báo cáo tài chính
             </a>

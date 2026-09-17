@@ -819,12 +819,14 @@ class AccountingDashboardController extends Controller
 
     public function cashflowShow(Transaction $transaction)
     {
+        $this->synchronizeFinanceRequestAmount($transaction);
         $transaction->load([
             'customer:id,name',
             'order:id,code,total',
             'submitter:id,name',
             'approver:id,name',
             'rejecter:id,name',
+            'transferProofUploader:id,name',
             'expenseType:id,name',
             'payeeUser:id,name',
             'transactionCategory:id,code,name,flow_direction',
@@ -2307,6 +2309,7 @@ class AccountingDashboardController extends Controller
 
     public function transactionEdit(Transaction $transaction)
     {
+        abort_if($transaction->request_source, 403, 'Số tiền phiếu yêu cầu phải được sửa từ nội dung chi tiết của phiếu.');
         $transaction->load(['transactionCategory:id,code,name,flow_direction', 'order.customer:id,name', 'customer:id,name', 'account:id,name,type,balance,warning_threshold']);
 
         $transactionCategories = \App\Models\TransactionCategory::active()->orderBy('sort_order')->get();
@@ -2371,6 +2374,7 @@ class AccountingDashboardController extends Controller
 
     public function transactionUpdate(Request $request, Transaction $transaction)
     {
+        abort_if($transaction->request_source, 403, 'Không được sửa trực tiếp số tiền của phiếu yêu cầu trong giao dịch kế toán.');
         $previousAccountId = $transaction->account_id;
         $previousOrderId = $transaction->order_id;
 
@@ -2409,6 +2413,7 @@ class AccountingDashboardController extends Controller
 
     public function transactionApprove(Request $request, Transaction $transaction)
     {
+        $this->synchronizeFinanceRequestAmount($transaction);
         $user = auth()->user();
         $approvalService = app(\App\Services\ApprovalService::class);
         if ($transaction->status === Transaction::STATUS_PENDING_APPROVAL && $transaction->request_source) {
@@ -2428,6 +2433,22 @@ class AccountingDashboardController extends Controller
         $currentStep = $approvalService->getCurrentPendingTransactionStep($transaction);
         $currentRole = strtolower((string) ($currentStep?->step?->role_slug ?? ''));
         $isAccountingStep = in_array($currentRole, $approvalService->financeAccountingRoleSlugs(), true);
+
+        $approvalRules = ['note' => ['nullable', 'string', 'max:1000']];
+        if ($transaction->request_source && $currentRole === 'director' && ! $transaction->transfer_proof_path) {
+            $approvalRules['transfer_proof'] = ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'];
+        }
+        $request->validate($approvalRules);
+
+        if ($request->hasFile('transfer_proof')) {
+            if (! $transaction->request_source || $currentRole !== 'director' || $transaction->transfer_proof_path) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'transfer_proof' => 'Không thể thay thế chứng từ chuyển khoản đã được tải lên.',
+                ]);
+            }
+
+            $this->storeTransferProof($request, $transaction, $user->id);
+        }
 
         if ($transaction->request_source && $isAccountingStep) {
             $validated = $request->validate([
@@ -2497,6 +2518,7 @@ class AccountingDashboardController extends Controller
 
     public function transactionComplete(Request $request, Transaction $transaction)
     {
+        $this->synchronizeFinanceRequestAmount($transaction);
         $user = auth()->user();
 
         abort_unless(
@@ -2508,8 +2530,15 @@ class AccountingDashboardController extends Controller
             return back()->with('error', 'Phiếu không ở trạng thái chờ kế toán hoàn thành.');
         }
 
-        $validated = $request->validate([
-            'note' => ['nullable', 'string', 'max:1000'],
+        $completionRules = ['note' => ['nullable', 'string', 'max:1000']];
+        if ($transaction->transfer_proof_path) {
+            $completionRules['transfer_proof'] = ['prohibited'];
+        } else {
+            $completionRules['transfer_proof'] = ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'];
+        }
+        $validated = $request->validate($completionRules, [
+            'transfer_proof.required' => 'Vui lòng tải chứng từ chuyển khoản trước khi hoàn thành phiếu.',
+            'transfer_proof.prohibited' => 'Director đã tải chứng từ; kế toán không cần và không thể tải lại.',
         ]);
 
         if (! $transaction->transaction_category_id || ! $transaction->account_id) {
@@ -2520,6 +2549,10 @@ class AccountingDashboardController extends Controller
 
         $note = trim((string) ($validated['note'] ?? ''));
         $currentNote = trim((string) $transaction->note);
+
+        if (! $transaction->transfer_proof_path) {
+            $this->storeTransferProof($request, $transaction, $user->id);
+        }
 
         DB::transaction(function () use ($transaction, $note, $currentNote): void {
             $transaction->forceFill([
@@ -2532,6 +2565,17 @@ class AccountingDashboardController extends Controller
         });
 
         return back()->with('success', 'Đã hoàn thành phiếu #'.$transaction->id.' và ghi nhận chuyển tiền thực tế.');
+    }
+
+    private function storeTransferProof(Request $request, Transaction $transaction, int $userId): void
+    {
+        $path = $request->file('transfer_proof')->store('transactions/transfer-proofs', 'public');
+
+        $transaction->forceFill([
+            'transfer_proof_path' => $path,
+            'transfer_proof_uploaded_by' => $userId,
+            'transfer_proof_uploaded_at' => now(),
+        ])->save();
     }
 
     public function transactionReject(Request $request, Transaction $transaction)
@@ -3205,6 +3249,31 @@ class AccountingDashboardController extends Controller
 
         if ($transaction->order_id) {
             $this->refreshOrderFinancialState($transaction->order);
+        }
+    }
+
+    private function synchronizeFinanceRequestAmount(Transaction $transaction): void
+    {
+        $amounts = $transaction->calculatedRequestAmounts();
+        if ($amounts === null) {
+            return;
+        }
+
+        if (abs((float) $transaction->amount - $amounts['total']) < 0.005
+            && abs((float) ($transaction->request_total ?? 0) - $amounts['total']) < 0.005
+            && abs((float) ($transaction->request_subtotal ?? 0) - $amounts['subtotal']) < 0.005) {
+            return;
+        }
+
+        $transaction->forceFill([
+            'amount' => $amounts['total'],
+            'request_subtotal' => $amounts['subtotal'],
+            'request_vat' => $amounts['vat'],
+            'request_total' => $amounts['total'],
+        ])->saveQuietly();
+
+        if ($transaction->status === Transaction::STATUS_APPROVED) {
+            $this->syncTransactionAccountingState($transaction, $transaction->account_id, $transaction->order_id);
         }
     }
 

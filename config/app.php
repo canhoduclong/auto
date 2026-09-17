@@ -67,6 +67,9 @@ return [
 
     'timezone' => 'UTC',
 
+    // Database timestamps stay in UTC; user-facing business dates use Vietnam time.
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', 'Asia/Ho_Chi_Minh'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration

@@ -476,7 +476,7 @@
                                     <span class="text-muted">Đang chờ duyệt</span>
                                 @endif
                             </td>
-                            <td>{{ optional($requestItem->created_at)->format('d/m/Y H:i') }}</td>
+                            <td>{{ $requestItem->created_at?->copy()->timezone(config('app.display_timezone'))->format('d/m/Y H:i') ?: '-' }}</td>
                             <td class="text-end">
                                 @php
                                     $canEditLeaderRequest = $source === 'leader'

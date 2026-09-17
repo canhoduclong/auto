@@ -14,9 +14,11 @@
                 <i class="bi bi-printer me-1"></i> In phiếu
             </a>
         @endif
-        <a href="{{ accounting_route('transactions.edit', $transaction) }}" class="btn btn-outline-warning btn-sm">
-            <i class="bi bi-pencil me-1"></i> Sửa giao dịch
-        </a>
+        @unless($transaction->request_source)
+            <a href="{{ accounting_route('transactions.edit', $transaction) }}" class="btn btn-outline-warning btn-sm">
+                <i class="bi bi-pencil me-1"></i> Sửa giao dịch
+            </a>
+        @endunless
         @if($transaction->status === \App\Models\Transaction::STATUS_APPROVED)
             <span class="badge text-bg-success">Đã duyệt</span>
         @elseif($transaction->status === \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION)
@@ -69,7 +71,7 @@
                     </div>
                     <div class="col-md-4">
                         <div class="text-muted small">Số tiền</div>
-                        <div class="fw-bold">{{ number_format($transaction->amount) }} d</div>
+                        <div class="fw-bold">{{ number_format((float) $transaction->amount, 0, ',', '.') }}đ</div>
                     </div>
                     <div class="col-md-4">
                         <div class="text-muted small">Loại chi</div>
@@ -146,7 +148,7 @@
                     </div>
                     <div class="col-md-4">
                         <div class="text-muted small">Ngày tạo</div>
-                        <div>{{ optional($transaction->created_at)->format('d/m/Y H:i') }}</div>
+                        <div>{{ $transaction->created_at?->copy()->timezone(config('app.display_timezone'))->format('d/m/Y H:i') ?: '-' }}</div>
                     </div>
                     <div class="col-md-4">
                         <div class="text-muted small">Trạng thái</div>
@@ -156,6 +158,22 @@
                         <div class="text-muted small">Nội dung</div>
                         <div>{{ $transaction->note ?: '-' }}</div>
                     </div>
+                    @if($transaction->transfer_proof_path)
+                        <div class="col-12">
+                            <div class="text-muted small">Chứng từ chuyển khoản</div>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mt-1">
+                                <a class="btn btn-sm btn-outline-primary" href="{{ Storage::disk('public')->url($transaction->transfer_proof_path) }}" target="_blank" rel="noopener">
+                                    <i class="bi bi-file-earmark-check me-1"></i> Xem / tải chứng từ
+                                </a>
+                                <span class="small text-muted">
+                                    {{ $transaction->transferProofUploader?->name ?: 'Người xử lý' }}
+                                    @if($transaction->transfer_proof_uploaded_at)
+                                        · {{ $transaction->transfer_proof_uploaded_at->copy()->timezone(config('app.display_timezone'))->format('d/m/Y H:i') }}
+                                    @endif
+                                </span>
+                            </div>
+                        </div>
+                    @endif
                     @if($transaction->status === \App\Models\Transaction::STATUS_REJECTED)
                         <div class="col-12">
                             <div class="text-muted small">Lý do từ chối</div>
@@ -213,24 +231,24 @@
                                         <td class="text-center">{{ $index + 1 }}</td>
                                         <td>{{ $item['content'] ?? '-' }}</td>
                                         <td class="text-center">{{ $item['unit'] ?? '-' }}</td>
-                                        <td class="text-end">{{ number_format((float) ($item['quantity'] ?? 0), 2) }}</td>
-                                        <td class="text-end">{{ number_format((float) ($item['unit_price'] ?? 0)) }} d</td>
-                                        <td class="text-end fw-semibold">{{ number_format((float) ($item['line_total'] ?? 0)) }} d</td>
+                                        <td class="text-end">{{ rtrim(rtrim(number_format((float) ($item['quantity'] ?? 0), 2, ',', '.'), '0'), ',') }}</td>
+                                        <td class="text-end">{{ number_format((float) ($item['unit_price'] ?? 0), 0, ',', '.') }}đ</td>
+                                        <td class="text-end fw-semibold">{{ number_format((float) ($item['line_total'] ?? 0), 0, ',', '.') }}đ</td>
                                     </tr>
                                 @endforeach
                             </tbody>
                             <tfoot>
                                 <tr>
                                     <th colspan="5" class="text-end">Tổng tiền</th>
-                                    <th class="text-end">{{ number_format($requestSubtotal) }} d</th>
+                                    <th class="text-end">{{ number_format($requestSubtotal, 0, ',', '.') }}đ</th>
                                 </tr>
                                 <tr>
                                     <th colspan="5" class="text-end">VAT</th>
-                                    <th class="text-end">{{ number_format($requestVat) }} d</th>
+                                    <th class="text-end">{{ number_format($requestVat, 0, ',', '.') }}đ</th>
                                 </tr>
                                 <tr>
                                     <th colspan="5" class="text-end">Tổng cộng</th>
-                                    <th class="text-end text-primary fs-6">{{ number_format($requestTotal) }} d</th>
+                                    <th class="text-end text-primary fs-6">{{ number_format($requestTotal, 0, ',', '.') }}đ</th>
                                 </tr>
                             </tfoot>
                         </table>
@@ -272,7 +290,7 @@
         <div class="acc-card h-100">
             <div class="card-body">
                 <h6 class="mb-3">{{ $isAccountingStep ? 'Xác nhận hồ sơ' : 'Duyệt giao dịch' }}</h6>
-                <form method="POST" action="{{ accounting_route('transactions.approve', $transaction) }}">
+                <form method="POST" action="{{ accounting_route('transactions.approve', $transaction) }}" enctype="multipart/form-data">
                     @csrf
                     @if($isAccountingStep)
                         <div class="mb-2">
@@ -296,6 +314,17 @@
                                     </option>
                                 @endforeach
                             </select>
+                        </div>
+                    @endif
+                    @if($transaction->request_source && $currentRole === 'director' && !$transaction->transfer_proof_path)
+                        <div class="mb-2">
+                            <label class="form-label">Chứng từ chuyển khoản <span class="text-muted">(tùy chọn)</span></label>
+                            <input type="file" name="transfer_proof" class="form-control" accept="image/jpeg,image/png,image/webp,application/pdf">
+                            <div class="form-text">Director có thể tải ảnh hoặc PDF. Nếu chưa tải, kế toán sẽ phải bổ sung khi hoàn thành.</div>
+                        </div>
+                    @elseif($transaction->request_source && $currentRole === 'director')
+                        <div class="alert alert-success py-2">
+                            <i class="bi bi-check-circle me-1"></i> Phiếu đã có chứng từ chuyển khoản; không thể tải thay thế.
                         </div>
                     @endif
                     <div class="mb-2">
@@ -334,7 +363,7 @@
         <div class="acc-card h-100 border-success">
             <div class="card-body">
                 <h6 class="mb-3">Hoàn thành chuyển tiền</h6>
-                <form method="POST" action="{{ accounting_route('transactions.complete', $transaction) }}">
+                <form method="POST" action="{{ accounting_route('transactions.complete', $transaction) }}" enctype="multipart/form-data">
                     @csrf
                     <div class="mb-2 p-2 rounded border bg-light">
                         <div class="small text-muted">Danh mục kế toán</div>
@@ -342,6 +371,19 @@
                         <div class="small text-muted mt-2">Tài khoản thực hiện</div>
                         <div class="fw-semibold">{{ $transaction->account?->name ?: 'Chưa chọn' }}</div>
                     </div>
+                    @if($transaction->transfer_proof_path)
+                        <div class="alert alert-success py-2">
+                            <i class="bi bi-check-circle me-1"></i>
+                            Director đã tải chứng từ. Kế toán chỉ cần kiểm tra và hoàn thành phiếu.
+                            <a class="alert-link ms-1" href="{{ Storage::disk('public')->url($transaction->transfer_proof_path) }}" target="_blank" rel="noopener">Xem chứng từ</a>
+                        </div>
+                    @else
+                        <div class="mb-2">
+                            <label class="form-label">Chứng từ chuyển khoản <span class="text-danger">*</span></label>
+                            <input type="file" name="transfer_proof" class="form-control" accept="image/jpeg,image/png,image/webp,application/pdf" required>
+                            <div class="form-text">Bắt buộc tải ảnh hoặc PDF trước khi hoàn thành.</div>
+                        </div>
+                    @endif
                     <div class="mb-2">
                         <label class="form-label">Ghi chú thực thi</label>
                         <textarea name="note" class="form-control" rows="3" placeholder="VD: Đã chuyển khoản mã GD..., đã chi tiền mặt..."></textarea>

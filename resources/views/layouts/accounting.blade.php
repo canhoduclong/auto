@@ -412,6 +412,9 @@
             <a href="{{ route('accounting.cashflow') }}" class="{{ request()->routeIs('accounting.cashflow') ? 'active' : '' }}">
                 <i class="bi bi-cash-stack"></i> Thu chi
             </a>
+            <a href="{{ route('accounting.finance-requests.index') }}" class="{{ request()->routeIs('accounting.finance-requests.*') ? 'active' : '' }}">
+                <i class="bi bi-file-earmark-text"></i> Phiếu yêu cầu của tôi
+            </a>
             <a href="{{ route('accounting.transactions.create') }}" class="{{ request()->routeIs('accounting.transactions.create') ? 'active' : '' }}">
                 <i class="bi bi-plus-circle"></i> Tạo giao dịch
             </a>

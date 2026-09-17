@@ -2470,16 +2470,13 @@ class ShipperDashboardController extends Controller
     {
         foreach ($orders as $order) {
             $transfers = $order->warehouseTransfers->sortBy('created_at');
-            $pickedTransfer = $transfers->first(fn (WarehouseTransfer $transfer) =>
-                $transfer->picked_up_at !== null
+            $pickedTransfer = $transfers->first(fn (WarehouseTransfer $transfer) => $transfer->picked_up_at !== null
                 || in_array($transfer->status, [WarehouseTransfer::STATUS_IN_TRANSIT, WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE, WarehouseTransfer::STATUS_RECEIVED_COMPLETED], true)
             );
-            $deliveredTransfer = $transfers->first(fn (WarehouseTransfer $transfer) =>
-                $transfer->delivered_at !== null
+            $deliveredTransfer = $transfers->first(fn (WarehouseTransfer $transfer) => $transfer->delivered_at !== null
                 || in_array($transfer->status, [WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE, WarehouseTransfer::STATUS_RECEIVED_COMPLETED], true)
             );
-            $receivedTransfer = $transfers->first(fn (WarehouseTransfer $transfer) =>
-                $transfer->received_at !== null || $transfer->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED
+            $receivedTransfer = $transfers->first(fn (WarehouseTransfer $transfer) => $transfer->received_at !== null || $transfer->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED
             );
             $historyFor = fn (array $actions) => $order->histories
                 ->whereIn('action', $actions)
@@ -2892,8 +2889,7 @@ class ShipperDashboardController extends Controller
         $assignedOrders,
         array &$confirmedAtByShipperId,
         array &$changesByShipperId = []
-    ): array
-    {
+    ): array {
         $statusByShipperId = [];
 
         foreach ($assignedOrders as $shipperId => $orders) {
@@ -2908,6 +2904,7 @@ class ShipperDashboardController extends Controller
             );
             if ($allOrdersCompleted) {
                 $statusByShipperId[(int) $shipperId] = 'completed';
+
                 continue;
             }
 
@@ -2955,8 +2952,7 @@ class ShipperDashboardController extends Controller
         array $currentSnapshot,
         $orders,
         array $ignoredOrderIds = []
-    ): string
-    {
+    ): string {
         $saved = json_decode((string) $history?->schedule_snapshot, true);
         if (! is_array($saved)) {
             return 'Chưa có dữ liệu lộ trình cũ để đối chiếu.';
@@ -2974,9 +2970,15 @@ class ShipperDashboardController extends Controller
             fn ($id) => $new->get($id) !== $old->get($id)
         )->map(fn ($id) => $label((int) $id))->values();
 
-        if ($added->isNotEmpty()) $parts[] = 'Thêm: '.$added->implode(', ');
-        if ($removed->isNotEmpty()) $parts[] = 'Gỡ: '.$removed->implode(', ');
-        if ($updated->isNotEmpty()) $parts[] = 'Đổi thứ tự/ngày/giờ: '.$updated->implode(', ');
+        if ($added->isNotEmpty()) {
+            $parts[] = 'Thêm: '.$added->implode(', ');
+        }
+        if ($removed->isNotEmpty()) {
+            $parts[] = 'Gỡ: '.$removed->implode(', ');
+        }
+        if ($updated->isNotEmpty()) {
+            $parts[] = 'Đổi ngày/giờ: '.$updated->implode(', ');
+        }
 
         return $parts !== [] ? implode(' · ', $parts) : 'Cách chia lộ trình hoặc thông tin chuyến đã thay đổi.';
     }
@@ -2986,11 +2988,10 @@ class ShipperDashboardController extends Controller
         return $orders->map(function ($order) {
             return [
                 'order_id' => (int) $order->id,
-                'daily_sequence' => $order->daily_sequence !== null ? (int) $order->daily_sequence : null,
                 'delivery_date' => optional($order->delivery_date)->toDateString(),
                 'delivery_time' => $order->delivery_time,
             ];
-        })->values()->all();
+        })->sortBy('order_id')->values()->all();
     }
 
     private function hashDeliveryScheduleSnapshot(array $snapshot): string
@@ -3002,8 +3003,7 @@ class ShipperDashboardController extends Controller
         int $shipperId,
         string $selectedDate,
         array $visibleOrderIds = []
-    ): ?OrderHistory
-    {
+    ): ?OrderHistory {
         $plannedOrderIds = $this->archivedPlannedOrderIdsForShipperOnDate($shipperId, $selectedDate);
         $orderIds = collect($plannedOrderIds)
             ->merge($visibleOrderIds)
@@ -3179,8 +3179,7 @@ class ShipperDashboardController extends Controller
         string $currentSnapshotHash,
         array $currentSnapshot = [],
         array $ignoredOrderIds = []
-    ): string
-    {
+    ): string {
         if (! $latestHistory) {
             return 'none';
         }
@@ -3227,11 +3226,10 @@ class ShipperDashboardController extends Controller
         return collect($snapshot)->filter(fn ($order) => is_array($order)
             && (int) ($order['order_id'] ?? 0) > 0
             && ! in_array((int) $order['order_id'], $ignoredOrderIds, true))->map(fn (array $order) => [
-            'order_id' => (int) ($order['order_id'] ?? 0),
-            'daily_sequence' => isset($order['daily_sequence']) ? (int) $order['daily_sequence'] : null,
-            'delivery_date' => $order['delivery_date'] ?? null,
-            'delivery_time' => $order['delivery_time'] ?? null,
-        ])->values()->all();
+                'order_id' => (int) ($order['order_id'] ?? 0),
+                'delivery_date' => $order['delivery_date'] ?? null,
+                'delivery_time' => $order['delivery_time'] ?? null,
+            ])->sortBy('order_id')->values()->all();
     }
 
     /**
@@ -3460,8 +3458,7 @@ class ShipperDashboardController extends Controller
         $latestPlan = $this->latestDispatchForDate($selectedDate)?->route_plan;
 
         return ! is_array($latestPlan)
-            || json_encode($latestPlan, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-                !== json_encode($routePlan, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            || $this->canonicalRoutePlan($latestPlan) !== $this->canonicalRoutePlan($routePlan);
     }
 
     public function createDeliverySchedule(Request $request)
@@ -3697,7 +3694,31 @@ class ShipperDashboardController extends Controller
     {
         unset($plan['shipper_name']);
 
+        $plan['routes'] = collect($plan['routes'] ?? [])->map(function (array $route): array {
+            $route['orders'] = collect($route['orders'] ?? [])->map(function (array $order): array {
+                // The display sequence is operational UI state, not a route
+                // confirmation change. Keep all other editable trip fields.
+                unset($order['sequence'], $order['daily_sequence']);
+
+                return $order;
+            })->sortBy(fn (array $order) => (int) ($order['order_id'] ?? 0))->values()->all();
+
+            return $route;
+        })->values()->all();
+
         return json_encode($plan, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    private function canonicalRoutePlan(array $routePlan): string
+    {
+        return collect($routePlan)
+            ->map(fn (array $plan) => [
+                'shipper_id' => (int) ($plan['shipper_id'] ?? 0),
+                'plan' => $this->canonicalShipperRoutePlan($plan),
+            ])
+            ->sortBy('shipper_id')
+            ->values()
+            ->toJson(JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     private function archiveDeliverySchedule(string $date, array $routePlan, ?string $notes): ShipperDispatchHistory

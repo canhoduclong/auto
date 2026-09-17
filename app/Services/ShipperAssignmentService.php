@@ -118,10 +118,9 @@ class ShipperAssignmentService
 
         $snapshot = $orders->map(fn (Order $order) => [
             'order_id' => (int) $order->id,
-            'daily_sequence' => $order->daily_sequence !== null ? (int) $order->daily_sequence : null,
             'delivery_date' => optional($order->delivery_date)->toDateString(),
             'delivery_time' => $order->delivery_time,
-        ])->values()->all();
+        ])->sortBy('order_id')->values()->all();
         $snapshotHash = hash('sha256', json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 
         $latestHistory = OrderHistory::query()
@@ -148,10 +147,9 @@ class ShipperAssignmentService
             ->filter(fn ($row) => is_array($row) && (int) ($row['order_id'] ?? 0) > 0)
             ->map(fn ($row) => [
                 'order_id' => (int) $row['order_id'],
-                'daily_sequence' => isset($row['daily_sequence']) ? (int) $row['daily_sequence'] : null,
                 'delivery_date' => $row['delivery_date'] ?? null,
                 'delivery_time' => $row['delivery_time'] ?? null,
-            ])->values()->all();
+            ])->sortBy('order_id')->values()->all();
 
         return ! is_array($savedSnapshot) || $normalize($savedSnapshot) !== $normalize($snapshot);
     }
@@ -238,15 +236,14 @@ class ShipperAssignmentService
         // metadata made a freshly published schedule look changed instantly.
         $snapshot = $orders->map(fn (Order $order) => [
             'order_id' => (int) $order->id,
-            'daily_sequence' => $order->daily_sequence !== null ? (int) $order->daily_sequence : null,
             'delivery_date' => optional($order->delivery_date)->toDateString(),
             'delivery_time' => $order->delivery_time,
-        ])->values()->all();
+        ])->sortBy('order_id')->values()->all();
         // Preserve route grouping/name in the publication hash so a real
         // route-layout edit can be resent. Status readers deliberately
         // normalize this metadata away when comparing the order snapshot.
         if ($shipperRoutePlan) {
-            $snapshot[] = ['route_plan' => $shipperRoutePlan];
+            $snapshot[] = ['route_plan' => $this->canonicalRoutePlan($shipperRoutePlan)];
         }
         $snapshotJson = json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         $snapshotHash = hash('sha256', $snapshotJson);
@@ -278,7 +275,7 @@ class ShipperAssignmentService
             ? 'Manager đã cập nhật lộ trình giao hàng. Vui lòng kiểm tra và xác nhận.'
             : 'Manager đã gửi lộ trình giao hàng. Vui lòng kiểm tra và xác nhận.';
         if (filled($notes)) {
-            $note .= ' Ghi chú: ' . trim($notes);
+            $note .= ' Ghi chú: '.trim($notes);
         }
 
         foreach ($orders as $order) {
@@ -299,5 +296,22 @@ class ShipperAssignmentService
         $shipper?->notify(new ShipperDeliveryScheduleUpdated($dateString, $orders->count(), $routeChanged));
 
         return true;
+    }
+
+    private function canonicalRoutePlan(array $plan): array
+    {
+        unset($plan['shipper_name']);
+
+        $plan['routes'] = collect($plan['routes'] ?? [])->map(function (array $route): array {
+            $route['orders'] = collect($route['orders'] ?? [])->map(function (array $order): array {
+                unset($order['sequence'], $order['daily_sequence']);
+
+                return $order;
+            })->sortBy(fn (array $order) => (int) ($order['order_id'] ?? 0))->values()->all();
+
+            return $route;
+        })->values()->all();
+
+        return $plan;
     }
 }

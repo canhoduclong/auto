@@ -35,6 +35,9 @@ class Transaction extends Model
         'note',
         'receipt_image_path',
         'delivery_image_path',
+        'transfer_proof_path',
+        'transfer_proof_uploaded_by',
+        'transfer_proof_uploaded_at',
         'status',
         'submitted_by',
         'approved_by',
@@ -55,6 +58,7 @@ class Transaction extends Model
     protected $casts = [
         'approved_at' => 'datetime',
         'rejected_at' => 'datetime',
+        'transfer_proof_uploaded_at' => 'datetime',
         'request_items' => 'array',
         'request_subtotal' => 'decimal:2',
         'request_vat' => 'decimal:2',
@@ -72,9 +76,32 @@ class Transaction extends Model
     public function submitter() { return $this->belongsTo(User::class, 'submitted_by'); }
     public function approver() { return $this->belongsTo(User::class, 'approved_by'); }
     public function rejecter() { return $this->belongsTo(User::class, 'rejected_by'); }
+    public function transferProofUploader() { return $this->belongsTo(User::class, 'transfer_proof_uploaded_by'); }
 
     public function approvalSteps()
     {
         return $this->hasMany(ApprovalOrder::class, 'transaction_id');
+    }
+
+    /** The request detail is authoritative; accounting must never diverge from it. */
+    public function calculatedRequestAmounts(): ?array
+    {
+        if (! $this->request_source) {
+            return null;
+        }
+
+        $items = collect($this->request_items ?: []);
+        if ($items->isEmpty()) {
+            $total = (float) ($this->request_total ?? $this->amount);
+
+            return ['subtotal' => max(0, $total - (float) ($this->request_vat ?? 0)), 'vat' => (float) ($this->request_vat ?? 0), 'total' => $total];
+        }
+
+        $subtotal = round((float) $items->sum(fn (array $item) =>
+            (float) ($item['quantity'] ?? 0) * (float) ($item['unit_price'] ?? 0)
+        ), 2);
+        $vat = round((float) ($this->request_vat ?? 0), 2);
+
+        return ['subtotal' => $subtotal, 'vat' => $vat, 'total' => round($subtotal + $vat, 2)];
     }
 }

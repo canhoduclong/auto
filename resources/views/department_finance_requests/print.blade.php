@@ -16,7 +16,7 @@
     $subtotal = (float) ($transaction->request_subtotal ?? $items->sum('line_total'));
     $vat = (float) ($transaction->request_vat ?? 0);
     $total = (float) ($transaction->request_total ?? $transaction->amount);
-    $createdAt = $transaction->created_at ?: now();
+    $createdAt = ($transaction->created_at ?: now())->copy()->timezone(config('app.display_timezone'));
     $flow = $transaction->transactionCategory?->flow_direction === 'in' || $transaction->type === 'extra_income' ? 'Thu' : 'Chi';
     $isPaymentProposal = $transaction->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT;
     $documentTitle = $isPaymentProposal ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu ' . mb_strtolower($flow);

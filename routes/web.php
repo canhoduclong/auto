@@ -122,6 +122,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/{order}/transfer-request', [OrderPackingController::class, 'createTransferRequest'])->name('orders.transfer-request');
         Route::post('/orders/{order}/return-to-ready', [OrderPackingController::class, 'returnToReadyToPack'])->name('orders.return-to-ready');
         Route::post('/orders/{order}/reopen-packing', [OrderPackingController::class, 'reopenPacking'])->name('orders.reopen-packing');
+        Route::get('/requests', [DepartmentFinanceRequestController::class, 'packageIndex'])->name('finance-requests.index');
+        Route::post('/requests', [DepartmentFinanceRequestController::class, 'packageStore'])->name('finance-requests.store');
+        Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'packagePrint'])->name('finance-requests.print');
         Route::get('/orders/{order}', [OrderPackingController::class, 'show'])->name('orders.detail');
         Route::get('/returns', [ReturnController::class, 'index'])->name('returns');
         Route::get('/incoming-orders', [ReceivingController::class, 'incomingOrders'])->name('incoming-orders');
@@ -343,6 +346,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::put('/accounts/{account}', [\App\Http\Controllers\AccountController::class, 'update'])->name('accounts.update');
         Route::post('/accounts/{account}/deposit', [\App\Http\Controllers\AccountController::class, 'deposit'])->name('accounts.deposit');
         Route::post('/accounts/{account}/withdraw', [\App\Http\Controllers\AccountController::class, 'withdraw'])->name('accounts.withdraw');
+        Route::get('/requests', [DepartmentFinanceRequestController::class, 'accountingIndex'])->name('finance-requests.index');
+        Route::post('/requests', [DepartmentFinanceRequestController::class, 'accountingStore'])->name('finance-requests.store');
+        Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'accountingPrint'])->name('finance-requests.print');
     });
 
     Route::prefix('admin/accounting')->name('admin.accounting.')->middleware('role:admin')->group(function () {

@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\Customer;
 use App\Models\AccountingSalesImportBatch;
+use App\Models\Customer;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\OrderReturn;
@@ -88,6 +88,59 @@ class ShipperAssignmentWorkflowTest extends TestCase
         $this->assertStringNotContainsString('Gỡ:', $summaryMethod->invoke(
             $controller, $history, $currentSnapshot, collect(), [501]
         ));
+    }
+
+    public function test_reordering_or_renumbering_stops_does_not_require_schedule_confirmation_again(): void
+    {
+        $savedSnapshot = [
+            ['order_id' => 501, 'daily_sequence' => 1, 'delivery_date' => null, 'delivery_time' => '10:00'],
+            ['order_id' => 502, 'daily_sequence' => 2, 'delivery_date' => null, 'delivery_time' => '08:00'],
+        ];
+        $currentSnapshot = [
+            ['order_id' => 502, 'daily_sequence' => 20, 'delivery_date' => null, 'delivery_time' => '08:00'],
+            ['order_id' => 501, 'daily_sequence' => 10, 'delivery_date' => null, 'delivery_time' => '10:00'],
+        ];
+        $history = new OrderHistory([
+            'action' => 'schedule_confirmed',
+            'schedule_snapshot_hash' => hash('sha256', json_encode($savedSnapshot)),
+            'schedule_snapshot' => json_encode($savedSnapshot),
+        ]);
+        $controller = app(\App\Http\Controllers\ShipperDashboardController::class);
+        $statusMethod = new \ReflectionMethod($controller, 'deliveryScheduleStatus');
+
+        $this->assertSame('confirmed', $statusMethod->invoke(
+            $controller,
+            $history,
+            hash('sha256', json_encode($currentSnapshot)),
+            $currentSnapshot
+        ));
+    }
+
+    public function test_route_plan_comparison_ignores_stop_sequence_and_array_order(): void
+    {
+        $oldPlan = [[
+            'shipper_id' => 10,
+            'shipper_name' => 'Ship A',
+            'routes' => [['name' => 'Tuyến A', 'orders' => [
+                ['order_id' => 101, 'sequence' => 1, 'final_fee' => 10000],
+                ['order_id' => 102, 'sequence' => 2, 'final_fee' => 20000],
+            ]]],
+        ]];
+        $renumberedPlan = [[
+            'shipper_id' => 10,
+            'shipper_name' => 'Ship A đổi tên hiển thị',
+            'routes' => [['name' => 'Tuyến A', 'orders' => [
+                ['order_id' => 102, 'sequence' => 20, 'final_fee' => 20000],
+                ['order_id' => 101, 'sequence' => 10, 'final_fee' => 10000],
+            ]]],
+        ]];
+        $controller = app(\App\Http\Controllers\ShipperDashboardController::class);
+        $canonical = new \ReflectionMethod($controller, 'canonicalRoutePlan');
+
+        $this->assertSame(
+            $canonical->invoke($controller, $oldPlan),
+            $canonical->invoke($controller, $renumberedPlan)
+        );
     }
 
     public function test_packed_order_with_delivery_schedule_is_still_available_for_warehouse_transfer(): void
@@ -492,7 +545,7 @@ class ShipperAssignmentWorkflowTest extends TestCase
         $managerRole = Role::create(['name' => 'manager_shipper']);
         $shipperRole = Role::create(['name' => 'shipper']);
 
-        $manager = User::factory()->create(['name' => 'Manager Ship']) ;
+        $manager = User::factory()->create(['name' => 'Manager Ship']);
         $manager->roles()->attach($managerRole->id);
 
         $shipper = User::factory()->create(['name' => 'Shipper A']);

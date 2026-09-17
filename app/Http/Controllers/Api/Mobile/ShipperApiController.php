@@ -9,11 +9,11 @@ use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\OrderReturn;
 use App\Models\ReturnItem;
+use App\Models\ShipperDispatchHistory;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseDispatchSlip;
 use App\Models\WarehouseTransfer;
-use App\Models\ShipperDispatchHistory;
 use App\Services\ShipperAssignmentService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -181,108 +181,108 @@ class ShipperApiController extends BaseApiController
         $dates = $orderDates->merge($dispatchesByDate->keys())->filter()->unique()->sortDesc()->values();
 
         $routes = $dates->map(function (string $date) use ($shipperId, $dispatchesByDate): array {
-                $dispatch = $dispatchesByDate->get($date);
-                $plannedIds = collect($dispatch?->route_plan ?? [])
-                    ->first(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId)['routes'] ?? [];
-                $plannedIds = collect($plannedIds)->flatMap(fn ($route) => $route['orders'] ?? [])
-                    ->pluck('order_id')->map(fn ($id) => (int) $id)->filter()->unique()->values();
-                $dateOrders = Order::query()
-                    ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
-                    ->where('shipper_id', $shipperId)
-                    ->whereNotIn('status', ['cancelled', 'canceled'])
-                    ->where(fn ($query) => $query->whereDate('created_at', $date)
-                        ->when($plannedIds->isNotEmpty(), fn ($q) => $q->orWhereIn('id', $plannedIds)))
-                    ->orderBy('daily_sequence')->orderBy('id')->get();
-                $history = $this->latestDeliveryScheduleHistoryForShipperOnDate($shipperId, $date);
-                // Compare the published plan only with orders which can still
-                // belong to a route. Completed orders outside this dispatch
-                // must not make the mobile app report a phantom change.
-                $currentRouteOrderIds = $dateOrders
-                    ->filter(fn (Order $order) => $plannedIds->contains((int) $order->id)
-                        || in_array($order->status, $this->assignmentStatuses(), true))
-                    ->pluck('id')->map(fn ($id) => (int) $id)->unique()->values();
-                $removedOrderIds = $plannedIds->diff($currentRouteOrderIds)->values();
-                $addedOrderIds = $currentRouteOrderIds->diff($plannedIds)->values();
-                $membershipChanged = $dispatch !== null
-                    && ($removedOrderIds->isNotEmpty() || $addedOrderIds->isNotEmpty());
-                $confirmableOrders = $dateOrders
-                    ->whereIn('status', $this->assignmentStatuses())
-                    ->reject(fn (Order $order) => $this->orderWasDelivered($order))
-                    ->values();
-                $orderIds = $confirmableOrders->pluck('id')->map(fn ($id) => (int) $id)->values();
-                $isCompleted = $plannedIds->isNotEmpty()
-                    ? $this->areAllOrdersCompleted($plannedIds->all())
-                    : ($dateOrders->isNotEmpty() && $dateOrders->every(
-                        fn (Order $order) => $this->orderWasDelivered($order)
-                    ));
-                $snapshot = $this->buildDeliveryScheduleSnapshot($confirmableOrders);
-                $completedOrderIds = $dateOrders
-                    ->filter(fn (Order $order) => $this->orderWasDelivered($order))
-                    ->pluck('id')->map(fn ($id) => (int) $id)->all();
-                $status = $isCompleted
-                    ? 'completed'
-                    : ($membershipChanged
-                    ? 'changing'
-                    : ($confirmableOrders->isEmpty()
-                    ? match ($history?->action) {
-                        'schedule_confirmed' => 'confirmed',
-                        'schedule_rejected' => 'rejected',
-                        'schedule_created' => 'waiting',
-                        default => 'none',
-                    }
+            $dispatch = $dispatchesByDate->get($date);
+            $plannedIds = collect($dispatch?->route_plan ?? [])
+                ->first(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId)['routes'] ?? [];
+            $plannedIds = collect($plannedIds)->flatMap(fn ($route) => $route['orders'] ?? [])
+                ->pluck('order_id')->map(fn ($id) => (int) $id)->filter()->unique()->values();
+            $dateOrders = Order::query()
+                ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
+                ->where('shipper_id', $shipperId)
+                ->whereNotIn('status', ['cancelled', 'canceled'])
+                ->where(fn ($query) => $query->whereDate('created_at', $date)
+                    ->when($plannedIds->isNotEmpty(), fn ($q) => $q->orWhereIn('id', $plannedIds)))
+                ->orderBy('daily_sequence')->orderBy('id')->get();
+            $history = $this->latestDeliveryScheduleHistoryForShipperOnDate($shipperId, $date);
+            // Compare the published plan only with orders which can still
+            // belong to a route. Completed orders outside this dispatch
+            // must not make the mobile app report a phantom change.
+            $currentRouteOrderIds = $dateOrders
+                ->filter(fn (Order $order) => $plannedIds->contains((int) $order->id)
+                    || in_array($order->status, $this->assignmentStatuses(), true))
+                ->pluck('id')->map(fn ($id) => (int) $id)->unique()->values();
+            $removedOrderIds = $plannedIds->diff($currentRouteOrderIds)->values();
+            $addedOrderIds = $currentRouteOrderIds->diff($plannedIds)->values();
+            $membershipChanged = $dispatch !== null
+                && ($removedOrderIds->isNotEmpty() || $addedOrderIds->isNotEmpty());
+            $confirmableOrders = $dateOrders
+                ->whereIn('status', $this->assignmentStatuses())
+                ->reject(fn (Order $order) => $this->orderWasDelivered($order))
+                ->values();
+            $orderIds = $confirmableOrders->pluck('id')->map(fn ($id) => (int) $id)->values();
+            $isCompleted = $plannedIds->isNotEmpty()
+                ? $this->areAllOrdersCompleted($plannedIds->all())
+                : ($dateOrders->isNotEmpty() && $dateOrders->every(
+                    fn (Order $order) => $this->orderWasDelivered($order)
+                ));
+            $snapshot = $this->buildDeliveryScheduleSnapshot($confirmableOrders);
+            $completedOrderIds = $dateOrders
+                ->filter(fn (Order $order) => $this->orderWasDelivered($order))
+                ->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $status = $isCompleted
+                ? 'completed'
+                : ($membershipChanged
+                ? 'changing'
+                : ($confirmableOrders->isEmpty()
+                ? match ($history?->action) {
+                    'schedule_confirmed' => 'confirmed',
+                    'schedule_rejected' => 'rejected',
+                    'schedule_created' => 'waiting',
+                    default => 'none',
+                }
                     : $this->deliveryScheduleStatus(
                         $history,
                         $this->hashDeliveryScheduleSnapshot($snapshot),
                         $snapshot,
                         $completedOrderIds
                     )));
-                if ($status === 'changed') {
-                    $status = 'changing';
-                }
-                $syncReason = null;
-                if (! $isCompleted && $confirmableOrders->isEmpty()) {
-                    $status = 'invalid';
-                    $syncReason = $plannedIds->isEmpty()
-                        ? 'Không tìm thấy dữ liệu lộ trình đã phát hành để đồng bộ.'
-                        : 'Các đơn trong lộ trình không còn hợp lệ để xác nhận nhưng chưa được ghi nhận hoàn tất. Vui lòng liên hệ Điều phối.';
-                }
-                $removedOrders = $removedOrderIds->isEmpty()
-                    ? collect()
-                    : Order::with('customer:id,name')->whereIn('id', $removedOrderIds)->get();
+            if ($status === 'changed') {
+                $status = 'changing';
+            }
+            $syncReason = null;
+            if (! $isCompleted && $confirmableOrders->isEmpty()) {
+                $status = 'invalid';
+                $syncReason = $plannedIds->isEmpty()
+                    ? 'Không tìm thấy dữ liệu lộ trình đã phát hành để đồng bộ.'
+                    : 'Các đơn trong lộ trình không còn hợp lệ để xác nhận nhưng chưa được ghi nhận hoàn tất. Vui lòng liên hệ Điều phối.';
+            }
+            $removedOrders = $removedOrderIds->isEmpty()
+                ? collect()
+                : Order::with('customer:id,name')->whereIn('id', $removedOrderIds)->get();
 
-                $dateOrders->each(function (Order $order): void {
-                    $order->setAttribute('is_delivered_in_route', $this->orderWasDelivered($order));
-                });
+            $dateOrders->each(function (Order $order): void {
+                $order->setAttribute('is_delivered_in_route', $this->orderWasDelivered($order));
+            });
 
-                return [
-                    'date' => $date,
-                    'id' => $history?->id,
-                    'code' => $this->deliveryScheduleCode($shipperId, $date, $history),
-                    'status' => $status,
-                    'orders_count' => $dateOrders->count(),
-                    'order_ids' => $orderIds,
-                    'orders' => $dateOrders->values(),
-                    'removed_orders' => $removedOrders->map(fn (Order $order) => [
-                        'id' => (int) $order->id,
-                        'code' => (string) ($order->code ?: '#'.$order->id),
-                        'customer_name' => (string) ($order->customer?->name ?? 'Khách hàng'),
-                    ])->values(),
-                    'added_orders' => $dateOrders->whereIn('id', $addedOrderIds)->map(fn (Order $order) => [
-                        'id' => (int) $order->id,
-                        'code' => (string) ($order->code ?: '#'.$order->id),
-                        'customer_name' => (string) ($order->customer?->name ?? 'Khách hàng'),
-                    ])->values(),
-                    'change_message' => ! $isCompleted && $membershipChanged
-                        ? 'Lộ trình đang bị thay đổi. Đang chờ Kho Gửi xác nhận và gửi lại cho bạn.'
-                        : null,
-                    'sync_reason' => $syncReason,
-                    'is_completed' => $isCompleted,
-                    'amount_earned' => (float) $dateOrders
-                        ->filter(fn (Order $order) => (bool) ($order->charge_shipping_fee ?? true))
-                        ->sum('shipping_fee'),
-                ];
-            })->reject(fn (array $route) => in_array($route['status'], ['revoked', 'invalid'], true)
-                || (int) $route['orders_count'] === 0)->values();
+            return [
+                'date' => $date,
+                'id' => $history?->id,
+                'code' => $this->deliveryScheduleCode($shipperId, $date, $history),
+                'status' => $status,
+                'orders_count' => $dateOrders->count(),
+                'order_ids' => $orderIds,
+                'orders' => $dateOrders->values(),
+                'removed_orders' => $removedOrders->map(fn (Order $order) => [
+                    'id' => (int) $order->id,
+                    'code' => (string) ($order->code ?: '#'.$order->id),
+                    'customer_name' => (string) ($order->customer?->name ?? 'Khách hàng'),
+                ])->values(),
+                'added_orders' => $dateOrders->whereIn('id', $addedOrderIds)->map(fn (Order $order) => [
+                    'id' => (int) $order->id,
+                    'code' => (string) ($order->code ?: '#'.$order->id),
+                    'customer_name' => (string) ($order->customer?->name ?? 'Khách hàng'),
+                ])->values(),
+                'change_message' => ! $isCompleted && $membershipChanged
+                    ? 'Lộ trình đang bị thay đổi. Đang chờ Kho Gửi xác nhận và gửi lại cho bạn.'
+                    : null,
+                'sync_reason' => $syncReason,
+                'is_completed' => $isCompleted,
+                'amount_earned' => (float) $dateOrders
+                    ->filter(fn (Order $order) => (bool) ($order->charge_shipping_fee ?? true))
+                    ->sum('shipping_fee'),
+            ];
+        })->reject(fn (array $route) => in_array($route['status'], ['revoked', 'invalid'], true)
+            || (int) $route['orders_count'] === 0)->values();
 
         return $this->ok($routes);
     }
@@ -1030,11 +1030,10 @@ class ShipperApiController extends BaseApiController
         return $orders->map(function ($order) {
             return [
                 'order_id' => (int) $order->id,
-                'daily_sequence' => $order->daily_sequence !== null ? (int) $order->daily_sequence : null,
                 'delivery_date' => optional($order->delivery_date)->toDateString(),
                 'delivery_time' => $order->delivery_time,
             ];
-        })->values()->all();
+        })->sortBy('order_id')->values()->all();
     }
 
     private function hashDeliveryScheduleSnapshot(array $snapshot): string
@@ -1078,8 +1077,7 @@ class ShipperApiController extends BaseApiController
         string $currentSnapshotHash,
         array $currentSnapshot = [],
         array $ignoredOrderIds = []
-    ): string
-    {
+    ): string {
         if (! $latestHistory) {
             return 'none';
         }
@@ -1124,11 +1122,10 @@ class ShipperApiController extends BaseApiController
         return collect($snapshot)->filter(fn ($order) => is_array($order)
             && (int) ($order['order_id'] ?? 0) > 0
             && ! in_array((int) $order['order_id'], $ignoredOrderIds, true))->map(fn (array $order) => [
-            'order_id' => (int) ($order['order_id'] ?? 0),
-            'daily_sequence' => isset($order['daily_sequence']) ? (int) $order['daily_sequence'] : null,
-            'delivery_date' => $order['delivery_date'] ?? null,
-            'delivery_time' => $order['delivery_time'] ?? null,
-        ])->values()->all();
+                'order_id' => (int) ($order['order_id'] ?? 0),
+                'delivery_date' => $order['delivery_date'] ?? null,
+                'delivery_time' => $order['delivery_time'] ?? null,
+            ])->sortBy('order_id')->values()->all();
     }
 
     private function constrainConfirmedDeliverySchedule($query): void

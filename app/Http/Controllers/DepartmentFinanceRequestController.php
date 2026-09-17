@@ -20,6 +20,20 @@ class DepartmentFinanceRequestController extends Controller
             'route_prefix' => 'warehouse.finance-requests',
             'role' => 'warehouse,admin',
         ],
+        'package' => [
+            'label' => 'Đóng hàng',
+            'layout' => 'layouts.package',
+            'route_prefix' => 'package.finance-requests',
+            'role' => 'package,admin',
+            'own_only' => true,
+        ],
+        'accounting' => [
+            'label' => 'Kế toán',
+            'layout' => 'layouts.accounting',
+            'route_prefix' => 'accounting.finance-requests',
+            'role' => 'account,accountant,accounting,admin',
+            'own_only' => true,
+        ],
         'ceo' => [
             'label' => 'CEO',
             'layout' => 'layouts.ceo',
@@ -84,6 +98,14 @@ class DepartmentFinanceRequestController extends Controller
     {
         return $this->printRequest($transaction, 'warehouse');
     }
+
+    public function packageIndex(Request $request) { return $this->index($request, 'package'); }
+    public function packageStore(Request $request) { return $this->store($request, 'package'); }
+    public function packagePrint(Transaction $transaction) { return $this->printRequest($transaction, 'package'); }
+
+    public function accountingIndex(Request $request) { return $this->index($request, 'accounting'); }
+    public function accountingStore(Request $request) { return $this->store($request, 'accounting'); }
+    public function accountingPrint(Transaction $transaction) { return $this->printRequest($transaction, 'accounting'); }
 
     public function ceoIndex(Request $request)
     {
