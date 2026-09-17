@@ -2923,6 +2923,8 @@ class ShipperDashboardController extends Controller
                     fn (OrderHistory $history) => in_array($history->action, $this->customerDeliveryCompletionActions(), true)
                 )
             )->values();
+            $completedOrderIds = $orders->diff($confirmableOrders)
+                ->pluck('id')->map(fn ($id) => (int) $id)->all();
             $snapshot = $this->buildDeliveryScheduleSnapshot($confirmableOrders);
             $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
             $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate(
@@ -2930,13 +2932,14 @@ class ShipperDashboardController extends Controller
                 $selectedDate,
                 $orders->pluck('id')->map(fn ($id) => (int) $id)->all()
             );
-            $status = $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot);
+            $status = $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot, $completedOrderIds);
             $statusByShipperId[(int) $shipperId] = $status;
             if ($status === 'changed') {
                 $changesByShipperId[(int) $shipperId] = $this->deliveryScheduleChangeSummary(
                     $latestHistory,
                     $snapshot,
-                    $orders
+                    $orders,
+                    $completedOrderIds
                 );
             }
             if ($status === 'confirmed') {
@@ -2947,15 +2950,20 @@ class ShipperDashboardController extends Controller
         return $statusByShipperId;
     }
 
-    private function deliveryScheduleChangeSummary(?OrderHistory $history, array $currentSnapshot, $orders): string
+    private function deliveryScheduleChangeSummary(
+        ?OrderHistory $history,
+        array $currentSnapshot,
+        $orders,
+        array $ignoredOrderIds = []
+    ): string
     {
         $saved = json_decode((string) $history?->schedule_snapshot, true);
         if (! is_array($saved)) {
             return 'Chưa có dữ liệu lộ trình cũ để đối chiếu.';
         }
 
-        $old = collect($this->normalizeDeliveryScheduleSnapshot($saved))->keyBy('order_id');
-        $new = collect($this->normalizeDeliveryScheduleSnapshot($currentSnapshot))->keyBy('order_id');
+        $old = collect($this->normalizeDeliveryScheduleSnapshot($saved, $ignoredOrderIds))->keyBy('order_id');
+        $new = collect($this->normalizeDeliveryScheduleSnapshot($currentSnapshot, $ignoredOrderIds))->keyBy('order_id');
         $codes = collect($orders)->keyBy(fn (Order $order) => (int) $order->id)
             ->map(fn (Order $order) => (string) ($order->code ?: '#'.$order->id));
         $label = fn (int $id): string => (string) ($codes->get($id) ?: '#'.$id);
@@ -3166,7 +3174,12 @@ class ShipperDashboardController extends Controller
         })->all();
     }
 
-    private function deliveryScheduleStatus(?OrderHistory $latestHistory, string $currentSnapshotHash, array $currentSnapshot = []): string
+    private function deliveryScheduleStatus(
+        ?OrderHistory $latestHistory,
+        string $currentSnapshotHash,
+        array $currentSnapshot = [],
+        array $ignoredOrderIds = []
+    ): string
     {
         if (! $latestHistory) {
             return 'none';
@@ -3188,7 +3201,8 @@ class ShipperDashboardController extends Controller
         // their hash even though the approved route itself was unchanged.
         $savedSnapshot = json_decode((string) $latestHistory->schedule_snapshot, true);
         $sameRoute = is_array($savedSnapshot) && $currentSnapshot !== []
-            && $this->normalizeDeliveryScheduleSnapshot($savedSnapshot) === $this->normalizeDeliveryScheduleSnapshot($currentSnapshot);
+            && $this->normalizeDeliveryScheduleSnapshot($savedSnapshot, $ignoredOrderIds)
+                === $this->normalizeDeliveryScheduleSnapshot($currentSnapshot, $ignoredOrderIds);
         if ($latestHistory->action === 'schedule_confirmed' && $sameRoute) {
             return 'confirmed';
         }
@@ -3208,9 +3222,11 @@ class ShipperDashboardController extends Controller
         return 'changed';
     }
 
-    private function normalizeDeliveryScheduleSnapshot(array $snapshot): array
+    private function normalizeDeliveryScheduleSnapshot(array $snapshot, array $ignoredOrderIds = []): array
     {
-        return collect($snapshot)->filter(fn ($order) => is_array($order) && (int) ($order['order_id'] ?? 0) > 0)->map(fn (array $order) => [
+        return collect($snapshot)->filter(fn ($order) => is_array($order)
+            && (int) ($order['order_id'] ?? 0) > 0
+            && ! in_array((int) $order['order_id'], $ignoredOrderIds, true))->map(fn (array $order) => [
             'order_id' => (int) ($order['order_id'] ?? 0),
             'daily_sequence' => isset($order['daily_sequence']) ? (int) $order['daily_sequence'] : null,
             'delivery_date' => $order['delivery_date'] ?? null,

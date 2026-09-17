@@ -63,6 +63,33 @@ class ShipperAssignmentWorkflowTest extends TestCase
         $this->assertContains(Order::STATUS_DELIVERING, app(ShipperAssignmentService::class)->assignmentStatuses());
     }
 
+    public function test_completed_stop_is_not_reported_as_removed_from_route(): void
+    {
+        $savedSnapshot = [
+            ['order_id' => 501, 'daily_sequence' => 1, 'delivery_date' => null, 'delivery_time' => null],
+            ['order_id' => 502, 'daily_sequence' => 2, 'delivery_date' => null, 'delivery_time' => '09:00'],
+        ];
+        $currentSnapshot = [
+            ['order_id' => 502, 'daily_sequence' => 2, 'delivery_date' => null, 'delivery_time' => '09:00'],
+        ];
+        $history = new OrderHistory([
+            'action' => 'schedule_confirmed',
+            'schedule_snapshot_hash' => hash('sha256', json_encode($savedSnapshot)),
+            'schedule_snapshot' => json_encode($savedSnapshot),
+        ]);
+        $controller = app(\App\Http\Controllers\ShipperDashboardController::class);
+        $statusMethod = new \ReflectionMethod($controller, 'deliveryScheduleStatus');
+        $summaryMethod = new \ReflectionMethod($controller, 'deliveryScheduleChangeSummary');
+        $currentHash = hash('sha256', json_encode($currentSnapshot));
+
+        $this->assertSame('confirmed', $statusMethod->invoke(
+            $controller, $history, $currentHash, $currentSnapshot, [501]
+        ));
+        $this->assertStringNotContainsString('Gỡ:', $summaryMethod->invoke(
+            $controller, $history, $currentSnapshot, collect(), [501]
+        ));
+    }
+
     public function test_packed_order_with_delivery_schedule_is_still_available_for_warehouse_transfer(): void
     {
         $warehouse = Warehouse::create(['name' => 'Kho nguồn']);

@@ -125,9 +125,12 @@ class ShipperApiController extends BaseApiController
         $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
         $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
         $plannedOrderIds = $this->plannedOrderIdsForShipperOnDate($userId, $selectedDate);
+        $completedOrderIds = Order::query()->whereIn('id', $plannedOrderIds)->get()
+            ->filter(fn (Order $order) => $this->orderWasDelivered($order))
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
         $status = $this->areAllOrdersCompleted($plannedOrderIds)
             ? 'completed'
-            : $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot);
+            : $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot, $completedOrderIds);
         if ($status === 'changed') {
             $status = 'changing';
         }
@@ -209,6 +212,9 @@ class ShipperApiController extends BaseApiController
                 $orderIds = $confirmableOrders->pluck('id')->map(fn ($id) => (int) $id)->values();
                 $isCompleted = $this->areAllOrdersCompleted($plannedIds->all());
                 $snapshot = $this->buildDeliveryScheduleSnapshot($confirmableOrders);
+                $completedOrderIds = $dateOrders
+                    ->filter(fn (Order $order) => $this->orderWasDelivered($order))
+                    ->pluck('id')->map(fn ($id) => (int) $id)->all();
                 $status = $isCompleted
                     ? 'completed'
                     : ($membershipChanged
@@ -223,7 +229,8 @@ class ShipperApiController extends BaseApiController
                     : $this->deliveryScheduleStatus(
                         $history,
                         $this->hashDeliveryScheduleSnapshot($snapshot),
-                        $snapshot
+                        $snapshot,
+                        $completedOrderIds
                     )));
                 if ($status === 'changed') {
                     $status = 'changing';
@@ -1058,7 +1065,12 @@ class ShipperApiController extends BaseApiController
             ->pluck('order_id')->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
     }
 
-    private function deliveryScheduleStatus(?OrderHistory $latestHistory, string $currentSnapshotHash, array $currentSnapshot = []): string
+    private function deliveryScheduleStatus(
+        ?OrderHistory $latestHistory,
+        string $currentSnapshotHash,
+        array $currentSnapshot = [],
+        array $ignoredOrderIds = []
+    ): string
     {
         if (! $latestHistory) {
             return 'none';
@@ -1078,7 +1090,8 @@ class ShipperApiController extends BaseApiController
 
         $savedSnapshot = json_decode((string) $latestHistory->schedule_snapshot, true);
         $sameRoute = is_array($savedSnapshot) && $currentSnapshot !== []
-            && $this->normalizeDeliveryScheduleSnapshot($savedSnapshot) === $this->normalizeDeliveryScheduleSnapshot($currentSnapshot);
+            && $this->normalizeDeliveryScheduleSnapshot($savedSnapshot, $ignoredOrderIds)
+                === $this->normalizeDeliveryScheduleSnapshot($currentSnapshot, $ignoredOrderIds);
         if ($latestHistory->action === 'schedule_confirmed' && $sameRoute) {
             return 'confirmed';
         }
@@ -1098,9 +1111,11 @@ class ShipperApiController extends BaseApiController
         return 'changed';
     }
 
-    private function normalizeDeliveryScheduleSnapshot(array $snapshot): array
+    private function normalizeDeliveryScheduleSnapshot(array $snapshot, array $ignoredOrderIds = []): array
     {
-        return collect($snapshot)->filter(fn ($order) => is_array($order) && (int) ($order['order_id'] ?? 0) > 0)->map(fn (array $order) => [
+        return collect($snapshot)->filter(fn ($order) => is_array($order)
+            && (int) ($order['order_id'] ?? 0) > 0
+            && ! in_array((int) $order['order_id'], $ignoredOrderIds, true))->map(fn (array $order) => [
             'order_id' => (int) ($order['order_id'] ?? 0),
             'daily_sequence' => isset($order['daily_sequence']) ? (int) $order['daily_sequence'] : null,
             'delivery_date' => $order['delivery_date'] ?? null,
