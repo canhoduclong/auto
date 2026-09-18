@@ -239,6 +239,15 @@ class ShipperApiController extends BaseApiController
             if ($status === 'changed') {
                 $status = 'changing';
             }
+            $overdueOrders = $dateOrders
+                ->where('status', Order::STATUS_OVERDUE_DELIVERY)
+                ->values();
+            // A delivery becoming overdue changes the schedule snapshot, but it
+            // is not a warehouse route change. Keep it as a separate state so
+            // the shipper is directed to Dispatch instead of Warehouse.
+            if (! $isCompleted && ! $membershipChanged && $overdueOrders->isNotEmpty()) {
+                $status = 'overdue';
+            }
             $syncReason = null;
             if (! $isCompleted && $confirmableOrders->isEmpty()) {
                 $status = 'invalid';
@@ -272,6 +281,7 @@ class ShipperApiController extends BaseApiController
                     'code' => (string) ($order->code ?: '#'.$order->id),
                     'customer_name' => (string) ($order->customer?->name ?? 'Khách hàng'),
                 ])->values(),
+                'overdue_order_ids' => $overdueOrders->pluck('id')->map(fn ($id) => (int) $id)->values(),
                 'change_message' => ! $isCompleted && $membershipChanged
                     ? 'Lộ trình đang bị thay đổi. Đang chờ Kho Gửi xác nhận và gửi lại cho bạn.'
                     : null,
