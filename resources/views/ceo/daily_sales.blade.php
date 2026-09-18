@@ -20,7 +20,7 @@
 
 /* ── product stats ── */
 .ds-prod-grid { display:grid; gap:6px; margin-top:8px; }
-.ds-prod-row  { display:grid; grid-template-columns:32px 2fr 80px 80px 100px 60px; gap:6px; border-radius:8px; padding:5px 8px; font-size:.78rem; align-items:center; }
+.ds-prod-row  { display:grid; grid-template-columns:32px 2fr repeat(6, minmax(72px,1fr)) 60px; gap:6px; border-radius:8px; padding:5px 8px; font-size:.78rem; align-items:center; min-width:900px; }
 .ds-prod-head { background:#eef2f7; font-weight:700; font-size:.7rem; text-transform:uppercase; color:#64748b; letter-spacing:.03em; }
 .ds-prod-body { background:#f8fafc; border:1px solid #e5edf7; }
 @media (max-width:768px){
@@ -185,9 +185,9 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
         <div class="sub">Đã áp dụng điều chỉnh được duyệt</div>
     </div>
     <div class="ds-kpi-item">
-        <div class="lbl">Tổng số lượng</div>
-        <div class="val text-primary">{{ $fmtN((float)($summary->grand_qty ?? 0)) }}</div>
-        <div class="sub">Tất cả sản phẩm</div>
+        <div class="lbl">Thực tế</div>
+        <div class="val text-primary">{{ number_format((float)($summary->actual_total ?? 0), 0, ',', '.') }}đ</div>
+        <div class="sub">Doanh thu kế toán đã xác nhận</div>
     </div>
     <div class="ds-kpi-item">
         <div class="lbl">Tổng khối lượng</div>
@@ -209,7 +209,7 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div class="fw-semibold text-muted small text-uppercase" style="letter-spacing:.06em;">
-                        Hàng - Số lượng
+                        Hàng - Số lượng / Thực giao
                         <span class="fw-normal">({{ $productStats->count() }} sản phẩm)</span>
                     </div>
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleProdStats">
@@ -225,6 +225,9 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
                             <div>Số lượng</div>
                             <div class="hide-sm">Khối lượng</div>
                             <div>Thành tiền</div>
+                            <div>Thực giao</div>
+                            <div>Khối lượng TG</div>
+                            <div>Số tiền thực giao</div>
                             <div class="hide-sm">ĐVT</div>
                         </div>
                         @foreach($productStats as $i => $ps)
@@ -238,6 +241,9 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
                                 {{ $fmtN((float)$ps->total_weight) }}
                             </div>
                             <div class="fw-semibold">{{ number_format((float)$ps->total_amount, 0, ',', '.') }}đ</div>
+                            <div class="text-primary fw-bold">{{ $fmtN((float)$ps->actual_qty) }}</div>
+                            <div class="text-muted">{{ $fmtN((float)$ps->actual_weight) }}</div>
+                            <div class="fw-semibold text-success">{{ number_format((float)$ps->actual_amount, 0, ',', '.') }}đ</div>
                             <div class="text-muted hide-sm">{{ \App\Enums\ProductUnit::tryFrom($ps->product_unit ?? '')?->label() ?? 'Cái' }}</div>
                         </div>
                         @endforeach
@@ -320,6 +326,7 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
                                     </a>
                                 </th>
                                 <th>Size</th>
+                                <th>Trạng thái</th>
                                 <th class="text-center">
                                     <a href="{{ request()->fullUrlWithQuery(['sort' => $sort === 'qty_asc' ? 'qty_desc' : 'qty_asc', 'page' => 1]) }}"
                                     class="sort-link {{ in_array($sort, ['qty_asc','qty_desc']) ? 'active' : '' }}">
@@ -343,6 +350,9 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
                                         <i class="bi bi-{{ $sort === 'amount_asc' ? 'sort-up' : ($sort === 'amount_desc' ? 'sort-down' : 'sort') }}"></i>
                                     </a>
                                 </th>
+                                <th class="text-center">Thực giao</th>
+                                <th class="text-center">Khối lượng TG</th>
+                                <th class="text-end">Số tiền thực giao</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -363,6 +373,20 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
                                 // Display weight: show kg if priced by kg or weight > 0
                                 $showWeight = $effWeight > 0 ? $fmtN($effWeight) : '—';
                                 $showQty    = $fmtN($effQty);
+                                $actualQty = (float) $row->actual_qty;
+                                $actualWeight = (float) $row->actual_weight;
+                                $actualTotal = (float) $row->actual_total;
+                                $isAccountingConfirmed = $row->reconciliation_status === 'confirmed';
+                                $statusLabel = $isAccountingConfirmed
+                                    ? 'Kế toán xác nhận'
+                                    : (\App\Models\Order::statusOptions()[$row->order_status] ?? $row->order_status);
+                                $statusClass = $isAccountingConfirmed ? 'bg-success' : match ($row->order_status) {
+                                    'cancelled', 'rejected' => 'bg-danger',
+                                    'returned', 'returning', 'returned_completed' => 'bg-warning text-dark',
+                                    'delivered', 'completed' => 'bg-info text-dark',
+                                    'delivering', 'in_delivery', 'shipping' => 'bg-primary',
+                                    default => 'bg-secondary',
+                                };
 
                                 // Short customer name: use customer_code if exists, else first 2 words of name
                                 $custShort = trim($row->customer_code ?? '');
@@ -407,6 +431,7 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
                                 <td class="text-muted small">
                                     {{ $row->variant_size ?: '—' }}
                                 </td>
+                                <td><span class="badge {{ $statusClass }}">{{ $statusLabel }}</span></td>
                                 <td class="text-center text-primary fw-bold">
                                     <span class="fw-semibold">{{ $showQty }}</span>
                                 </td>
@@ -418,10 +443,13 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
                                 <td class="text-end fw-bold text-success">
                                     {{ number_format($effTotal, 0, ',', '.') }}
                                 </td>
+                                <td class="text-center fw-bold">{{ $actualQty > 0 ? $fmtN($actualQty) : '—' }}</td>
+                                <td class="text-center text-muted">{{ $actualWeight > 0 ? $fmtN($actualWeight) : '—' }}</td>
+                                <td class="text-end fw-bold text-success">{{ $actualTotal > 0 ? number_format($actualTotal, 0, ',', '.').'đ' : '—' }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="12" class="text-center text-muted py-4">
+                                <td colspan="16" class="text-center text-muted py-4">
                                     <i class="bi bi-inbox fs-4 d-block mb-2"></i>
                                     Không có dữ liệu cho bộ lọc này.
                                 </td>
@@ -431,7 +459,7 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
                         @if($items->isNotEmpty())
                         <tfoot class="table-light fw-semibold">
                             <tr>
-                                <td colspan="7" class="text-end text-muted small">Tổng trang này:</td>
+                                <td colspan="8" class="text-end text-muted small">Tổng trang này:</td>
                                 <td class="text-end">
                                     {{ $fmtN((float)$items->sum('eff_qty')) }}
                                 </td>
@@ -443,6 +471,9 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
                                 <td class="text-end text-success">
                                     {{ number_format($items->sum('eff_total'), 0, ',', '.') }}đ
                                 </td>
+                                <td class="text-end">{{ $fmtN((float)$items->sum('actual_qty')) }}</td>
+                                <td class="text-end">{{ $fmtN((float)$items->sum('actual_weight')) }}</td>
+                                <td class="text-end text-success">{{ number_format($items->sum('actual_total'), 0, ',', '.') }}đ</td>
                             </tr>
                         </tfoot>
                         @endif

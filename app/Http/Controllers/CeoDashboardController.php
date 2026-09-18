@@ -1678,9 +1678,9 @@ class CeoDashboardController extends Controller
                 ->leftJoin('product_variants', 'order_items.product_variant_id', '=', 'product_variants.id')
                 ->leftJoin('customers', 'orders.customer_id', '=', 'customers.id')
                 ->leftJoin('users', 'orders.user_id', '=', 'users.id')
+                ->leftJoin('accounting_reconciliations as ar', 'ar.order_id', '=', 'orders.id')
                 ->leftJoinSub($approvedAdjSub, 'adj_max', 'adj_max.order_item_id', '=', 'order_items.id')
                 ->leftJoin('order_adjustment_items as adj', 'adj.id', '=', 'adj_max.adj_item_id')
-                ->whereNotIn('orders.status', ['rejected', 'cancelled'])
                 ->whereBetween('orders.created_at', [$from, $to])
                 ->when($saleId > 0, fn ($q) => $q->where('orders.user_id', $saleId))
                 ->when($customerId > 0, fn ($q) => $q->where('orders.customer_id', $customerId));
@@ -1694,6 +1694,8 @@ class CeoDashboardController extends Controller
             'orders.code as order_code',
             'orders.daily_sequence',
             'orders.status as order_status',
+            'ar.status as reconciliation_status',
+            'ar.recognized_revenue',
             'products.name as product_name',
             'products.unit as product_unit',
             DB::raw("COALESCE(product_variants.size, '') as variant_size"),
@@ -1716,6 +1718,21 @@ class CeoDashboardController extends Controller
                             ELSE COALESCE(adj.adjusted_quantity, order_items.quantity)   * COALESCE(adj.adjusted_price, order_items.price)
                         END
                      ELSE order_items.total END as eff_total'),
+            DB::raw("CASE
+                WHEN ar.status = 'confirmed' AND orders.status NOT IN ('cancelled','rejected','returned','returning','returned_completed')
+                    THEN COALESCE(order_items.packed_quantity, adj.adjusted_quantity, order_items.quantity)
+                ELSE 0 END as actual_qty"),
+            DB::raw("CASE
+                WHEN ar.status = 'confirmed' AND orders.status NOT IN ('cancelled','rejected','returned','returning','returned_completed')
+                    THEN COALESCE(order_items.actual_weight, order_items.packed_weight, adj.adjusted_weight, order_items.total_weight)
+                ELSE 0 END as actual_weight"),
+            DB::raw("CASE
+                WHEN ar.status = 'confirmed' AND orders.status NOT IN ('cancelled','rejected','returned','returning','returned_completed')
+                    THEN CASE WHEN order_items.is_priced_by_kg = 1
+                        THEN COALESCE(order_items.actual_weight, order_items.packed_weight, adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price)
+                        ELSE COALESCE(order_items.packed_quantity, adj.adjusted_quantity, order_items.quantity) * COALESCE(adj.adjusted_price, order_items.price)
+                    END
+                ELSE 0 END as actual_total"),
         ]);
 
         match ($sort) {
@@ -1749,6 +1766,14 @@ class CeoDashboardController extends Controller
             SUM({$effTotalExpr})                                                                     as grand_total
         ")->first();
 
+        $summary->actual_total = (float) DB::table('orders')
+            ->join('accounting_reconciliations as ar', 'ar.order_id', '=', 'orders.id')
+            ->where('ar.status', 'confirmed')
+            ->whereBetween('orders.created_at', [$from, $to])
+            ->when($saleId > 0, fn ($query) => $query->where('orders.user_id', $saleId))
+            ->when($customerId > 0, fn ($query) => $query->where('orders.customer_id', $customerId))
+            ->sum('ar.recognized_revenue');
+
         // ── Product stats ──────────────────────────────────────────────
         $productStats = $makeBase()->select([
             'products.id as product_id',
@@ -1757,6 +1782,9 @@ class CeoDashboardController extends Controller
             DB::raw('SUM(COALESCE(adj.adjusted_quantity,  order_items.quantity))         as total_qty'),
             DB::raw('SUM(COALESCE(adj.adjusted_weight,    order_items.total_weight))     as total_weight'),
             DB::raw("SUM({$effTotalExpr})                                                as total_amount"),
+            DB::raw("SUM(CASE WHEN ar.status = 'confirmed' AND orders.status NOT IN ('cancelled','rejected','returned','returning','returned_completed') THEN COALESCE(order_items.packed_quantity, adj.adjusted_quantity, order_items.quantity) ELSE 0 END) as actual_qty"),
+            DB::raw("SUM(CASE WHEN ar.status = 'confirmed' AND orders.status NOT IN ('cancelled','rejected','returned','returning','returned_completed') THEN COALESCE(order_items.actual_weight, order_items.packed_weight, adj.adjusted_weight, order_items.total_weight) ELSE 0 END) as actual_weight"),
+            DB::raw("SUM(CASE WHEN ar.status = 'confirmed' AND orders.status NOT IN ('cancelled','rejected','returned','returning','returned_completed') THEN CASE WHEN order_items.is_priced_by_kg = 1 THEN COALESCE(order_items.actual_weight, order_items.packed_weight, adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price) ELSE COALESCE(order_items.packed_quantity, adj.adjusted_quantity, order_items.quantity) * COALESCE(adj.adjusted_price, order_items.price) END ELSE 0 END) as actual_amount"),
         ])->groupBy('products.id', 'products.name', 'products.unit')
             ->orderByDesc('total_amount')
             ->get();
