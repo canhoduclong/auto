@@ -1,4 +1,4 @@
-@extends('layouts.warehouse')
+@extends($stocktakeLayout ?? 'layouts.warehouse')
 
 @section('title', 'Kiểm Kê Kho')
 @section('subtitle', 'Đối chiếu tồn đầu hoặc tồn cuối với số thực tế và lưu lịch sử điều chỉnh')
@@ -26,7 +26,7 @@
 </style>
 @endpush
 
-@section('content')
+@section($stocktakeContentSection ?? 'content')
 @if($errors->any())
     <div class="alert alert-danger">
         <div class="fw-semibold mb-1">Không thể chốt kiểm kê</div>
@@ -53,7 +53,7 @@
 
 <div class="stocktake-card mb-3">
     <div class="p-3 border-bottom">
-        <form method="GET" action="{{ route('warehouse.stocktakes.index') }}" class="row g-2 align-items-end">
+        <form method="GET" action="{{ route(($stocktakeRoutePrefix ?? 'warehouse').'.stocktakes.index') }}" class="row g-2 align-items-end">
             @if($warehouses->count() > 1)
                 <div class="col-lg-3 col-md-4">
                     <label class="form-label small fw-semibold mb-1">Kho kiểm kê</label>
@@ -84,12 +84,12 @@
             </div>
             <div class="col-lg-2 col-md-3 d-flex gap-2">
                 <button class="btn btn-primary btn-sm flex-fill"><i class="bi bi-arrow-clockwise me-1"></i>Tải tồn</button>
-                <a href="{{ route('warehouse.stocktakes.index', ['warehouse_id' => $warehouse->id]) }}" class="btn btn-outline-secondary btn-sm">Đặt lại</a>
+                <a href="{{ route(($stocktakeRoutePrefix ?? 'warehouse').'.stocktakes.index', ['warehouse_id' => $warehouse->id]) }}" class="btn btn-outline-secondary btn-sm">Đặt lại</a>
             </div>
             @if($stocktakeType === 'closing')
                 <div class="col-12 d-flex justify-content-end">
                     <a class="btn btn-outline-success btn-sm"
-                       href="{{ route('warehouse.stocktakes.index', ['warehouse_id' => $warehouse->id, 'inventory_date' => $inventoryDate->toDateString(), 'stocktake_type' => 'closing', 'search' => $search, 'load_sheet_closing' => 1]) }}">
+                       href="{{ route(($stocktakeRoutePrefix ?? 'warehouse').'.stocktakes.index', ['warehouse_id' => $warehouse->id, 'inventory_date' => $inventoryDate->toDateString(), 'stocktake_type' => 'closing', 'search' => $search, 'load_sheet_closing' => 1]) }}">
                         <i class="bi bi-file-earmark-spreadsheet me-1"></i>Nạp Tồn cuối từ Google Sheet
                     </a>
                 </div>
@@ -97,7 +97,7 @@
         </form>
     </div>
 
-    <form method="POST" action="{{ route('warehouse.stocktakes.store') }}" id="stocktakeForm">
+    <form method="POST" action="{{ route(($stocktakeRoutePrefix ?? 'warehouse').'.stocktakes.store') }}" id="stocktakeForm">
         @csrf
         <input type="hidden" name="warehouse_id" value="{{ $warehouse->id }}">
         <input type="hidden" name="counted_at" value="{{ $countedAt->format('Y-m-d H:i:s') }}">

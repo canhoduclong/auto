@@ -296,6 +296,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::delete('/reconciliation/{order}/exclude', [AccountingDashboardController::class, 'excludeInvalidReconciliationOrder'])->name('reconciliation.exclude');
         Route::delete('/reconciliation/missing-orders/{deletedOrderId}', [AccountingDashboardController::class, 'excludeMissingReconciliationOrder'])->name('reconciliation.exclude-missing');
         Route::get('/inventory', [AccountingDashboardController::class, 'inventory'])->name('inventory');
+        Route::get('/stocktakes', [WarehouseStocktakeController::class, 'index'])->name('stocktakes.index');
+        Route::post('/stocktakes', [WarehouseStocktakeController::class, 'store'])->name('stocktakes.store');
         Route::get('/shippers', [ShipperDashboardController::class, 'manageAssignments'])->name('shippers');
         Route::post('/shippers/assign-order/{order}', [ShipperDashboardController::class, 'assignSelectedOrder'])->name('shippers.assign-order.selected');
         Route::post('/shippers/customers/{customer}/default-shipper', [ShipperDashboardController::class, 'updateCustomerDefaultShipper'])->name('shippers.customers.default-shipper.update');

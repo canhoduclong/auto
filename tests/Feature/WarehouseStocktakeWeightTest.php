@@ -15,6 +15,53 @@ class WarehouseStocktakeWeightTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_accountant_can_choose_a_warehouse_and_complete_stocktake_from_accounting_menu(): void
+    {
+        Warehouse::factory()->create(['name' => 'Kho Kế Toán A', 'status' => true]);
+        $warehouse = Warehouse::factory()->create(['name' => 'Kho Kế Toán B', 'status' => true]);
+        $accountant = User::factory()->create(['warehouse_id' => null]);
+        $accountant->roles()->attach(Role::create(['name' => 'accounting']));
+        $variant = ProductVariant::factory()->create(['stock' => 10, 'kg' => 2.5]);
+        $inventory = Inventory::factory()->create([
+            'warehouse_id' => $warehouse->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 10,
+            'weight_kg' => 25,
+            'reserved_quantity' => 0,
+        ]);
+
+        $this->actingAs($accountant)
+            ->get(route('accounting.stocktakes.index', ['warehouse_id' => $warehouse->id]))
+            ->assertOk()
+            ->assertSee('Kiểm Kê Kho')
+            ->assertSee('value="'.$warehouse->id.'"', false)
+            ->assertSee(route('accounting.stocktakes.store'), false);
+
+        $this->actingAs($accountant)
+            ->post(route('accounting.stocktakes.store'), [
+                'warehouse_id' => $warehouse->id,
+                'counted_at' => now()->subMinute()->format('Y-m-d H:i:s'),
+                'items' => [$inventory->id => [
+                    'expected_quantity' => 10,
+                    'expected_weight_kg' => 25,
+                    'counted_quantity' => 9,
+                    'counted_weight_kg' => 22.5,
+                ]],
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('accounting.stocktakes.index', ['warehouse_id' => $warehouse->id]));
+
+        $this->assertDatabaseHas('inventory_stocktakes', [
+            'warehouse_id' => $warehouse->id,
+            'created_by' => $accountant->id,
+        ]);
+        $this->assertDatabaseHas('inventories', [
+            'id' => $inventory->id,
+            'quantity' => 9,
+            'weight_kg' => 22.5,
+        ]);
+    }
+
     public static function wholeQuantityInputs(): array
     {
         return [['9'], ['9.000']];

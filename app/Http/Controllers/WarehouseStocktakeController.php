@@ -112,9 +112,17 @@ class WarehouseStocktakeController extends Controller
             ->limit(10)
             ->get();
 
-        $warehouses = Auth::user()?->hasRole('admin')
-            ? Warehouse::query()->where('status', true)->orderBy('name')->get(['id', 'name'])
+        $warehouses = $this->canSelectAnyWarehouse($request)
+            ? Warehouse::query()->orderBy('name')->get(['id', 'name'])
             : collect([$warehouse]);
+
+        $stocktakeRoutePrefix = $this->stocktakeRoutePrefix($request);
+        $stocktakeLayout = $stocktakeRoutePrefix === 'accounting'
+            ? 'layouts.accounting'
+            : 'layouts.warehouse';
+        $stocktakeContentSection = $stocktakeRoutePrefix === 'accounting'
+            ? 'accounting_content'
+            : 'content';
 
         return view('warehouse.stocktakes.index', compact(
             'warehouse',
@@ -126,7 +134,10 @@ class WarehouseStocktakeController extends Controller
             'inventoryDate',
             'stocktakeType',
             'sheetLoadError',
-            'sheetUnmatchedRows'
+            'sheetUnmatchedRows',
+            'stocktakeRoutePrefix',
+            'stocktakeLayout',
+            'stocktakeContentSection'
         ));
     }
 
@@ -269,7 +280,7 @@ class WarehouseStocktakeController extends Controller
             $redirectParameters['stocktake_type'] = $stocktakeType;
         }
 
-        return redirect()->route('warehouse.stocktakes.index', $redirectParameters)
+        return redirect()->route($this->stocktakeRoutePrefix($request).'.stocktakes.index', $redirectParameters)
             ->with('success', 'Đã hoàn tất phiếu kiểm kê '.$stocktake->code.' và cập nhật tồn kho.');
     }
 
@@ -287,11 +298,11 @@ class WarehouseStocktakeController extends Controller
         $user = Auth::user();
         $assignedWarehouseId = (int) ($user?->warehouse_id ?? 0);
 
-        if ($assignedWarehouseId > 0) {
+        if (! $this->canSelectAnyWarehouse($request) && $assignedWarehouseId > 0) {
             return Warehouse::query()->findOrFail($assignedWarehouseId);
         }
 
-        abort_unless($user?->hasRole('admin'), 403, 'Tài khoản chưa được gán kho quản lý.');
+        abort_unless($this->canSelectAnyWarehouse($request), 403, 'Tài khoản chưa được gán kho quản lý.');
 
         $warehouseId = (int) $request->input('warehouse_id', 0);
         $warehouse = $warehouseId > 0
@@ -301,6 +312,24 @@ class WarehouseStocktakeController extends Controller
         abort_unless($warehouse, 404, 'Không có kho để kiểm kê.');
 
         return $warehouse;
+    }
+
+    private function canSelectAnyWarehouse(Request $request): bool
+    {
+        if ($this->stocktakeRoutePrefix($request) === 'accounting') {
+            return true;
+        }
+
+        $user = Auth::user();
+
+        return $user !== null && $user->hasRole('admin');
+    }
+
+    private function stocktakeRoutePrefix(Request $request): string
+    {
+        return str_starts_with((string) $request->route()?->getName(), 'accounting.')
+            ? 'accounting'
+            : 'warehouse';
     }
 
     private function guardUnchangedInventory(Collection $countedRows, Collection $balancesAtCount): void

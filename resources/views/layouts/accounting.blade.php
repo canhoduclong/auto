@@ -460,6 +460,9 @@
             <a href="{{ route('accounting.inventory') }}" class="{{ request()->routeIs('accounting.inventory') ? 'active' : '' }}">
                 <i class="bi bi-boxes"></i> Thống kê kho
             </a>
+            <a href="{{ route('accounting.stocktakes.index') }}" class="{{ request()->routeIs('accounting.stocktakes.*') ? 'active' : '' }}">
+                <i class="bi bi-clipboard2-check"></i> Kiểm kê kho
+            </a>
         </nav>
 
         <div class="acc-sidebar-footer">
