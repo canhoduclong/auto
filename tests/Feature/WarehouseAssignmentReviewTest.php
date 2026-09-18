@@ -15,7 +15,7 @@ class WarehouseAssignmentReviewTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_warehouse_review_and_print_are_scoped_and_tracked_independently(): void
+    public function test_warehouse_can_review_and_print_orders_from_all_warehouses(): void
     {
         $warehouseRole = Role::query()->create(['name' => 'warehouse']);
         $warehouse = Warehouse::query()->create(['name' => 'Kho A', 'status' => true]);
@@ -61,7 +61,7 @@ class WarehouseAssignmentReviewTest extends TestCase
             ->assertOk()
             ->assertSee('Review &amp; In ấn của Kho', false)
             ->assertSee('WAREHOUSE-PRINT-OWN')
-            ->assertDontSee('WAREHOUSE-PRINT-OTHER')
+            ->assertSee('WAREHOUSE-PRINT-OTHER')
             ->assertSee('Kho chưa in');
 
         $this->actingAs($warehouseUser)
@@ -87,7 +87,8 @@ class WarehouseAssignmentReviewTest extends TestCase
                 'date' => now()->toDateString(),
                 'order_ids' => [$otherOrder->id],
             ])
-            ->assertForbidden();
+            ->assertOk()
+            ->assertSee('PHIẾU GIAO HÀNG');
     }
 
     public function test_review_includes_warehouse_orders_not_present_in_latest_dispatch(): void
@@ -120,7 +121,7 @@ class WarehouseAssignmentReviewTest extends TestCase
             ->assertSee('PHIẾU GIAO HÀNG');
     }
 
-    public function test_review_only_shows_orders_that_finished_packing_and_are_not_cancelled(): void
+    public function test_review_includes_orders_not_entered_into_warehouse_and_excludes_cancelled_orders(): void
     {
         $warehouseRole = Role::query()->create(['name' => 'warehouse']);
         $warehouse = Warehouse::query()->create(['name' => 'Kho lọc đóng hàng', 'status' => true]);
@@ -129,14 +130,14 @@ class WarehouseAssignmentReviewTest extends TestCase
         $customer = Customer::query()->create(['name' => 'Khách lọc', 'status' => 'active']);
 
         foreach ([
-            ['code' => 'PACKING-NOT-DONE', 'status' => Order::STATUS_PACKING],
+            ['code' => 'PACKING-NOT-DONE', 'status' => Order::STATUS_PACKING, 'warehouse_id' => null],
             ['code' => 'PACKING-DONE', 'status' => Order::STATUS_READY_TO_SHIP],
             ['code' => 'PACKING-CANCELLED', 'status' => Order::STATUS_CANCELLED],
         ] as $data) {
             Order::query()->create($data + [
                 'customer_id' => $customer->id,
                 'user_id' => $warehouseUser->id,
-                'warehouse_id' => $warehouse->id,
+                'warehouse_id' => $data['warehouse_id'] ?? $warehouse->id,
                 'delivery_date' => now()->toDateString(),
             ]);
         }
@@ -145,7 +146,16 @@ class WarehouseAssignmentReviewTest extends TestCase
             ->get(route('warehouse.assignment-review.index', ['date' => now()->toDateString()]))
             ->assertOk()
             ->assertSee('PACKING-DONE')
-            ->assertDontSee('PACKING-NOT-DONE')
+            ->assertSee('PACKING-NOT-DONE')
             ->assertDontSee('PACKING-CANCELLED');
+
+        $orderWithoutWarehouse = Order::query()->where('code', 'PACKING-NOT-DONE')->firstOrFail();
+        $this->actingAs($warehouseUser)
+            ->post(route('warehouse.assignment-review.print'), [
+                'date' => now()->toDateString(),
+                'order_ids' => [$orderWithoutWarehouse->id],
+            ])
+            ->assertOk()
+            ->assertSee('PHIẾU GIAO HÀNG');
     }
 }

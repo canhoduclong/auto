@@ -27,7 +27,7 @@ class AssignmentReviewController extends Controller
             return [
                 'date' => $date,
                 'label' => Carbon::parse($date)->format('d/m'),
-                'count' => $this->warehouseOrders(
+                'count' => $this->printableOrders(
                     $dispatch ? $this->dispatchOrderIds($dispatch) : [],
                     $date
                 )->count(),
@@ -36,7 +36,7 @@ class AssignmentReviewController extends Controller
 
         $dispatch = $this->latestDispatch($selectedDate);
         $routeMeta = $dispatch ? $this->dispatchOrderMeta($dispatch) : [];
-        $orders = $this->warehouseOrders(
+        $orders = $this->printableOrders(
             $dispatch ? $this->dispatchOrderIds($dispatch) : [],
             $selectedDate
         );
@@ -67,7 +67,7 @@ class AssignmentReviewController extends Controller
 
         $selectedDate = Carbon::parse($validated['date'])->toDateString();
         $dispatch = $this->latestDispatch($selectedDate);
-        $allowedOrders = $this->warehouseOrders(
+        $allowedOrders = $this->printableOrders(
             $dispatch ? $this->dispatchOrderIds($dispatch) : [],
             $selectedDate
         );
@@ -75,7 +75,7 @@ class AssignmentReviewController extends Controller
         abort_if(
             $requestedIds->diff($allowedOrders->pluck('id')->map(fn ($id) => (int) $id))->isNotEmpty(),
             403,
-            'Có phiếu không thuộc kho của bạn hoặc không thuộc lộ trình ngày đã chọn.'
+            'Có phiếu không thuộc ngày giao hoặc lộ trình đã chọn.'
         );
         $ordersById = $allowedOrders->keyBy('id');
         $orders = $requestedIds->map(fn (int $id) => $ordersById->get($id))->filter()->values();
@@ -119,11 +119,8 @@ class AssignmentReviewController extends Controller
             ->all();
     }
 
-    private function warehouseOrders(array $orderIds, string $date): Collection
+    private function printableOrders(array $orderIds, string $date): Collection
     {
-        $user = Auth::user();
-        $warehouseId = (int) (Auth::user()?->warehouse_id ?? 0);
-
         return Order::query()
             ->with(['customer', 'shipper:id,name,phone', 'user:id,name', 'warehouse:id,name', 'items.product', 'items.variant.product'])
             ->where(function ($query) use ($orderIds, $date) {
@@ -134,32 +131,6 @@ class AssignmentReviewController extends Controller
             })
             ->whereNull('trash_at')
             ->whereNotIn('status', [Order::STATUS_CANCELLED, 'canceled'])
-            ->where(function ($query): void {
-                // Include legacy orders already beyond packing even when an
-                // old record is missing its packing-completion history.
-                $query->whereIn('status', [
-                    Order::STATUS_PACKED,
-                    Order::STATUS_READY_TO_SHIP,
-                    Order::STATUS_DELIVERING,
-                    Order::STATUS_IN_DELIVERY,
-                    Order::STATUS_SHIPPING,
-                    'picked_up',
-                    Order::STATUS_DELIVERED,
-                    Order::STATUS_COMPLETED,
-                    Order::STATUS_RETURNING,
-                    Order::STATUS_RETURNED_COMPLETED,
-                    Order::STATUS_RETURNED,
-                ])->orWhereHas('histories', fn ($history) => $history->whereIn('action', [
-                    'complete_packing',
-                    'warehouse_complete_packing',
-                ]));
-            })
-            ->when(
-                ! $user?->hasRole('admin'),
-                fn ($query) => $warehouseId > 0
-                    ? $query->where('warehouse_id', $warehouseId)
-                    : $query->whereRaw('1 = 0')
-            )
             ->get()
             ->sortBy(function (Order $order) use ($orderIds) {
                 $routePosition = array_search((int) $order->id, $orderIds, true);
