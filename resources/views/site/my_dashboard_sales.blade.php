@@ -244,6 +244,18 @@
     .manager-date-filter button { min-width: 29px; height: 29px; padding: 0 9px; border: 0; border-radius: 5px; background: #17376e; color: #fff; }
     .manager-date-filter .manager-today-button { width: auto; white-space: nowrap; background: #087f73; font-size: .68rem; font-weight: 700; }
     .manager-product-size-row td { color: #64748b; font-size: .66rem; background: #f8fafc; }
+    .manager-product-summary { min-width: 0; }
+    .manager-product-block + .manager-product-block { margin-top: 22px; padding-top: 18px; border-top: 1px solid #dbe6e8; }
+    .manager-product-heading { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 10px; color:#113f43; }
+    .manager-product-heading strong { font-size:.9rem; }
+    .manager-product-heading span { color:#148a89; font-size:.82rem; font-weight:800; white-space:nowrap; }
+    .manager-product-table { width:100%; border-collapse:collapse; font-size:.82rem; text-align:center; }
+    .manager-product-table th { padding:8px; color:#064e52; background:#dff3f4; border-top:1px solid #77b9bc; border-bottom:1px solid #77b9bc; font-weight:800; }
+    .manager-product-table th + th, .manager-product-table td + td { border-left:1px solid #a8ccce; }
+    .manager-product-table td { padding:7px 8px; border-bottom:1px solid #d5d9da; }
+    .manager-product-table tbody tr:nth-child(even) td { background:#f2f2f2; }
+    .manager-product-table tfoot td { color:#064e52; background:#fff; border-bottom:0; font-weight:900; }
+    .manager-product-table tfoot td:not(:first-child) { text-decoration:underline; text-decoration-color:#b9e1e2; text-decoration-thickness:6px; text-underline-offset:-2px; }
     .manager-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
     .manager-summary-card { min-height: 120px; padding: 12px 11px 10px; border: 1px solid var(--dashboard-border); border-radius: 8px; background: #fff; box-shadow: 0 2px 7px rgba(15,23,42,.035); }
     .manager-summary-label { display: flex; align-items: center; gap: 7px; font-size: .65rem; font-weight: 800; text-transform: uppercase; }

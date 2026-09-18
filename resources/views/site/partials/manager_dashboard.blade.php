@@ -137,33 +137,35 @@
     </div>
 
     <div class="manager-detail-grid">
-        <article class="manager-panel manager-performance panel-blue">
-            <h2>Danh sách mặt hàng bán chạy</h2>
-            <div class="table-responsive">
-                <table>
-                    <thead><tr><th>#</th><th>Sản phẩm / Size</th><th>Đơn</th><th>Số lượng</th><th>Giá TB</th><th>Doanh thu</th></tr></thead>
-                    <tbody>
-                    @forelse(($manager['products'] ?? []) as $index => $product)
-                        <tr>
-                            <td>{{ $index + 1 }}</td><td>{{ $product['name'] }}</td>
-                            <td>{{ number_format($product['orders'], 0, ',', '.') }}</td>
-                            <td>{{ number_format($product['quantity'], 0, ',', '.') }}</td>
-                            <td>{{ number_format($product['average_price'] ?? 0, 0, ',', '.') }}đ</td>
-                            <td>{{ number_format($product['revenue'], 0, ',', '.') }}đ</td>
-                        </tr>
-                        @foreach(($product['sizes'] ?? []) as $size)
-                            <tr class="manager-product-size-row">
-                                <td></td><td>↳ {{ $size['label'] }}</td><td>—</td>
-                                <td>{{ number_format($size['quantity'], 0, ',', '.') }}</td>
-                                <td>{{ number_format($size['average_price'], 0, ',', '.') }}đ</td><td>—</td>
-                            </tr>
-                        @endforeach
-                    @empty
-                        <tr><td colspan="6" class="manager-table-empty">Chưa có mặt hàng bán trong khoảng ngày đã chọn.</td></tr>
-                    @endforelse
-                    </tbody>
-                </table>
-            </div>
+        <article class="manager-panel manager-product-summary panel-blue">
+            <h2>Sản phẩm · Số lượng · Giá TB</h2>
+            @forelse(($manager['products'] ?? []) as $index => $product)
+                <section class="manager-product-block">
+                    <div class="manager-product-heading">
+                        <strong>{{ $index + 1 }}. {{ $product['name'] }}</strong>
+                        <span>Doanh thu: {{ number_format($product['revenue'], 0, ',', '.') }} đ</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="manager-product-table">
+                            <thead><tr><th>Size</th><th>Giá TB</th><th>Số lượng</th></tr></thead>
+                            <tbody>
+                            @forelse(($product['sizes'] ?? []) as $size)
+                                <tr>
+                                    <td>{{ \Illuminate\Support\Str::after($size['label'], 'Size ') }}</td>
+                                    <td>{{ number_format($size['average_price'], 0, ',', '.') }} đ</td>
+                                    <td>{{ number_format($size['quantity'], 0, ',', '.') }}</td>
+                                </tr>
+                            @empty
+                                <tr><td>—</td><td>{{ number_format($product['average_price'] ?? 0, 0, ',', '.') }} đ</td><td>{{ number_format($product['quantity'], 0, ',', '.') }}</td></tr>
+                            @endforelse
+                            </tbody>
+                            <tfoot><tr><td></td><td>{{ number_format($product['average_price'] ?? 0, 0, ',', '.') }} đ</td><td>{{ number_format($product['quantity'], 0, ',', '.') }}</td></tr></tfoot>
+                        </table>
+                    </div>
+                </section>
+            @empty
+                <div class="manager-table-empty">Chưa có mặt hàng bán trong khoảng ngày đã chọn.</div>
+            @endforelse
         </article>
 
         <article class="manager-panel manager-performance panel-green">

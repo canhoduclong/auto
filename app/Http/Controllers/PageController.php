@@ -2417,9 +2417,7 @@ class PageController extends Controller
             abort(403, 'Bạn không có quyền truy cập trang duyệt đơn của team.');
         }
 
-        $roleNames = $user->roles->pluck('name')
-            ->map(fn ($role) => strtolower((string) $role))
-            ->values();
+        $roleNames = $this->normalizedRoleNames($user);
 
         $query = Order::with([
             'customer',
@@ -2619,9 +2617,7 @@ class PageController extends Controller
         $fromDate = $request->input('from_date', now()->toDateString());
         $toDate = $request->input('to_date', now()->toDateString());
 
-        $roleNames = $user->roles->pluck('name')
-            ->map(fn ($role) => strtolower((string) $role))
-            ->values();
+        $roleNames = $this->normalizedRoleNames($user);
 
         $query = Order::with(['items', 'approvals.step', 'user.roles', 'customer.type'])
             ->when(!$user->hasRole('admin'), function ($q) use ($user) {
@@ -2811,11 +2807,9 @@ class PageController extends Controller
             abort(403, 'Bạn không có quyền truy cập trang duyệt đơn PKD.');
         }
 
-        $roleNames = $user->roles->pluck('name')
-            ->map(fn ($role) => strtolower((string) $role))
-            ->values();
+        $roleNames = $this->normalizedRoleNames($user);
 
-        $allowedCreatorRoles = ['sale', 'leader', 'leader_sale', 'sale_manager'];
+        $allowedCreatorRoles = ['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale'];
 
         $query = Order::with(['customer', 'user.roles', 'user.team', 'approvals.step'])
             ->whereHas('user.roles', function ($q) use ($allowedCreatorRoles) {
@@ -3167,14 +3161,26 @@ class PageController extends Controller
             ->map(fn ($role) => strtolower((string) $role))
             ->values();
 
+        $leaderRoles = collect(['leader', 'leader_sale', 'sale_manager']);
+        $managerRoles = collect(['manager', 'manager_sale', 'director']);
+
+        // Approval workflows may use any alias for the same business stage.
+        // Expand the signed-in user's aliases so queues and action buttons use
+        // the same rules as ApprovalService::canApproveCurrentStep().
+        if ($roleNames->intersect($leaderRoles)->isNotEmpty()) {
+            $roleNames = $roleNames->merge($leaderRoles);
+        }
+        if ($roleNames->intersect($managerRoles)->isNotEmpty()) {
+            $roleNames = $roleNames->merge($managerRoles);
+        }
+
         if ($roleNames->contains('admin')) {
             $roleNames = $roleNames
                 ->merge(['leader', 'leader_sale', 'sale_manager', 'manager_sale', 'manager', 'director'])
-                ->unique()
-                ->values();
+                ->unique();
         }
 
-        return $roleNames;
+        return $roleNames->unique()->values();
     }
 
     private function applyApprovalDateRange(Builder $query, string $fromDate, string $toDate): Builder

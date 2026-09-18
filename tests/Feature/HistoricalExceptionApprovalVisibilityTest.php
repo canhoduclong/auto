@@ -98,6 +98,44 @@ class HistoricalExceptionApprovalVisibilityTest extends TestCase
             ->assertSee('EXCEPTION-20260823');
     }
 
+    public function test_role_aliases_can_see_and_approve_canonical_leader_and_manager_steps(): void
+    {
+        $team = Team::query()->create(['name' => 'Team alias duyệt']);
+        $saleRole = Role::query()->create(['name' => 'sale']);
+        $leaderRole = Role::query()->create(['name' => 'leader_sale']);
+        $managerRole = Role::query()->create(['name' => 'manager_sale']);
+        $sale = User::factory()->create(['team_id' => $team->id]);
+        $leader = User::factory()->create(['team_id' => $team->id]);
+        $manager = User::factory()->create();
+        $sale->roles()->attach($saleRole);
+        $leader->roles()->attach($leaderRole);
+        $manager->roles()->attach($managerRole);
+
+        $workflow = ApprovalWorkflow::query()->create([
+            'code' => 'alias-order-approval', 'name' => 'Duyệt đơn bằng alias',
+            'is_active' => true, 'applies_to' => [ApprovalWorkflow::ACTIVITY_ORDER_CREATE],
+        ]);
+        ApprovalStep::query()->create(['approval_flow_id' => $workflow->id, 'step_order' => 1, 'role_slug' => 'leader']);
+        ApprovalStep::query()->create(['approval_flow_id' => $workflow->id, 'step_order' => 2, 'role_slug' => 'manager']);
+        $customer = Customer::query()->create(['name' => 'Khách alias', 'status' => 'active']);
+        $order = Order::query()->create([
+            'customer_id' => $customer->id, 'user_id' => $sale->id,
+            'code' => 'ALIAS-APPROVAL', 'status' => 'pending',
+        ]);
+        app(ApprovalService::class)->initOrderApproval($order);
+
+        $this->actingAs($leader)
+            ->get(route('pages.my_team_orders', ['pending_only' => 1]))
+            ->assertOk()->assertSee('ALIAS-APPROVAL');
+        $this->post(route('site.orders.approve', $order))->assertRedirect();
+
+        $this->actingAs($manager)
+            ->get(route('pages.all_team_orders', ['pending_only' => 1]))
+            ->assertOk()->assertSee('ALIAS-APPROVAL');
+        $this->post(route('site.orders.approve', $order))->assertRedirect();
+        $this->assertSame(Order::STATUS_APPROVED, $order->fresh()->status);
+    }
+
     protected function tearDown(): void
     {
         Carbon::setTestNow();
