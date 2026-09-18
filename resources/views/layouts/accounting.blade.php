@@ -378,9 +378,6 @@
             </a>
 
             <div class="nav-section">Đơn hàng</div>
-            <a href="{{ route('accounting.workflow-simulation.index') }}" class="{{ request()->routeIs('accounting.workflow-simulation.*') ? 'active' : '' }}">
-                <i class="bi bi-diagram-3-fill"></i> Mô phỏng quy trình
-            </a>
             <a href="{{ route('accounting.orders') }}" class="{{ request()->routeIs('accounting.orders*') ? 'active' : '' }}">
                 <i class="bi bi-bag-check"></i> Danh sách đơn hàng
             </a>
@@ -392,9 +389,6 @@
             </a>
             <a href="{{ route('accounting.reconciliation') }}" class="{{ request()->routeIs('accounting.reconciliation') ? 'active' : '' }}">
                 <i class="bi bi-check2-square"></i> Đối soát đơn hàng
-            </a>
-            <a href="{{ route('accounting.sales-ledger.index') }}" class="{{ request()->routeIs('accounting.sales-ledger.*') ? 'active' : '' }}">
-                <i class="bi bi-table"></i> Sổ doanh số kế toán
             </a>
             <a href="{{ route('admin.imported-sales-orders.index') }}" class="{{ request()->routeIs('admin.imported-sales-orders.*') ? 'active' : '' }}">
                 <i class="bi bi-clipboard-check"></i> Hoàn chỉnh đơn lịch sử
