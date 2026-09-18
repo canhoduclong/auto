@@ -2138,8 +2138,16 @@
                                                     <input class="form-control form-control-sm" id="monitorEditPhone{{ $order->id }}" name="recipient_phone" value="{{ $order->recipient_phone ?: ($order->customer?->phone ?? '') }}" required>
                                                 </div>
                                                 <div>
-                                                    <label for="monitorEditDelivery{{ $order->id }}">Giờ giao hàng</label>
-                                                    <input class="form-control form-control-sm" id="monitorEditDelivery{{ $order->id }}" name="delivery_time" value="{{ $order->delivery_time }}">
+                                                    <label for="monitorEditDelivery{{ $order->id }}">Giờ giao hàng <span class="text-danger">*</span></label>
+                                                    <input type="time" class="form-control form-control-sm @error('delivery_time') is-invalid @enderror" id="monitorEditDelivery{{ $order->id }}" name="delivery_time" value="{{ old('delivery_time', $order->delivery_time ?: $order->customer?->delivery_time) }}" required>
+                                                    @error('delivery_time')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                                    @if(!$order->delivery_time && !$order->customer?->delivery_time)
+                                                        <div class="form-text text-warning">Đơn cũ chưa có giờ giao cụ thể. Vui lòng chọn giờ trước khi lưu.</div>
+                                                    @endif
+                                                </div>
+                                                <div>
+                                                    <label for="monitorEditDeliveryNote{{ $order->id }}">Ghi chú giờ giao</label>
+                                                    <input class="form-control form-control-sm" id="monitorEditDeliveryNote{{ $order->id }}" name="delivery_time_note" value="{{ old('delivery_time_note', $order->delivery_time_note ?: $order->customer?->delivery_time_note) }}">
                                                 </div>
                                                 <div class="is-wide">
                                                     <label for="monitorEditAddress{{ $order->id }}">Địa chỉ nhận hàng</label>

@@ -5262,6 +5262,9 @@ public function apiTruckRoutes(Request $request)
             'items' => ['required', 'array', 'min:1'],
             'items.*.variant_id' => ['required', 'integer', 'exists:product_variants,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
+        ], [
+            'delivery_time.required' => 'Vui lòng chọn giờ giao hàng trước khi lưu đơn.',
+            'delivery_time.date_format' => 'Giờ giao hàng phải đúng định dạng HH:mm.',
         ]);
 
         $itemsInput = collect($validated['items'] ?? [])->values();
