@@ -387,14 +387,14 @@
             </a>
             <!--a href="{{ route('admin.imported-sales-orders.index') }}" class="wh-nav-link {{ request()->routeIs('admin.imported-sales-orders.*') ? 'active' : '' }}">
                 <i class="bi bi-clipboard-check"></i><span class="wh-nav-label">Hoàn chỉnh đơn lịch sử</span>
-            </a>
+            </a-->
 
             <div class="wh-nav-section">Tài chính</div>
             <a href="{{ route('warehouse.finance-requests.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.finance-requests.*') ? 'active' : '' }}">
                 <i class="bi bi-file-earmark-text"></i><span class="wh-nav-label">Phiếu yêu cầu</span>
             </a>
 
-            <div class="wh-nav-section">Nhiệm vụ & Trả hàng</div>
+            <!--div class="wh-nav-section">Nhiệm vụ & Trả hàng</div>
             <a href="{{ route('tasks.my-tasks') }}" class="wh-nav-link {{ request()->routeIs('tasks.my-tasks') || request()->routeIs('task-assignments.assigned-to-me') ? 'active' : '' }}">
                 <i class="bi bi-list-task"></i><span class="wh-nav-label">Nhiệm vụ</span>
             </a>

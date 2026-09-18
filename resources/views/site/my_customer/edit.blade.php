@@ -359,10 +359,14 @@ document.addEventListener('DOMContentLoaded', function () {
                                                 <input type="text" class="form-control mc-form-control" id="name" name="name" value="{{ old('name', $customer->name) }}" required>
                                             </div>
                                             <div class="col-12 col-md-3">
-                                                <label for="delivery_time" class="form-label mc-form-label">Giờ giao hàng</label>
-                                                <input type="text" class="form-control mc-form-control" id="delivery_time" name="delivery_time"
-                                                    value="{{ old('delivery_time', $customer->delivery_time) }}" placeholder="VD: 8h-10h, sau 17h">
+                                                <label for="delivery_time" class="form-label mc-form-label">Giờ giao hàng <span class="text-danger">*</span></label>
+                                                <input type="time" class="form-control mc-form-control" id="delivery_time" name="delivery_time"
+                                                    value="{{ old('delivery_time', $customer->delivery_time) }}" required>
                                                 <div class="mc-help mt-1">Dùng mặc định khi tạo đơn.</div>
+                                            </div>
+                                            <div class="col-12">
+                                                <label class="form-label mc-form-label">Ghi chú giờ giao</label>
+                                                <input type="text" class="form-control mc-form-control" name="delivery_time_note" value="{{ old('delivery_time_note', $customer->delivery_time_note) }}" placeholder="Ví dụ: gọi trước khi giao">
                                             </div>
 
                                             <div class="col-12 col-md-6">

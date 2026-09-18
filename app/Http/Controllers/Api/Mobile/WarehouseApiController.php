@@ -251,7 +251,7 @@ class WarehouseApiController extends BaseApiController
 
         $query = Order::query()
             ->with([
-                'customer:id,name,phone,address,delivery_time',
+                'customer:id,name,phone,address,delivery_time,delivery_time_note',
                 'warehouse:id,name',
                 'histories:id,order_id,action,user_id',
                 'items.product:id,name,unit,product_type,allow_adjacent_packing_sizes',
@@ -923,6 +923,7 @@ class WarehouseApiController extends BaseApiController
             ],
             'shipping_address' => (string) ($order->recipient_address ?: $order->customer?->address ?: ''),
             'delivery_time' => (string) ($order->delivery_time ?: $order->customer?->delivery_time ?: ''),
+            'delivery_time_note' => (string) ($order->delivery_time_note ?: $order->customer?->delivery_time_note ?: ''),
             'delivery_date' => optional($order->delivery_date)->toDateString(),
             'created_at' => optional($order->created_at)->toIso8601String(),
             'updated_at' => optional($order->updated_at)->toIso8601String(),

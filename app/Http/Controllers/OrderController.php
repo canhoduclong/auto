@@ -414,7 +414,8 @@ class OrderController extends Controller
             'items.*.variant_id' => 'required|exists:product_variants,id',
             'items.*.quantity' => 'required|integer|min:1',
             'customer_id' => 'required|exists:customers,id',
-            'delivery_time' => 'nullable|string|max:255',
+            'delivery_time' => 'required|date_format:H:i',
+            'delivery_time_note' => 'nullable|string|max:1000',
             'item_discount' => 'nullable|array',
             'item_discount.*' => 'nullable|numeric|min:0',
             'item_discount_type' => 'nullable|array',
@@ -459,6 +460,7 @@ class OrderController extends Controller
                     'customer_id' => $customerId,
                     'user_id' => auth()->id(),
                     'delivery_time' => $orderDeliveryTime,
+                    'delivery_time_note' => $request->input('delivery_time_note') ?: Customer::query()->whereKey($customerId)->value('delivery_time_note'),
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,
@@ -484,7 +486,8 @@ class OrderController extends Controller
             'items.*.variant_id' => 'required|exists:product_variants,id',
             'items.*.quantity' => 'required|integer|min:1',
             'customer_id' => 'required|exists:customers,id',
-            'delivery_time' => 'nullable|string|max:255',
+            'delivery_time' => 'required|date_format:H:i',
+            'delivery_time_note' => 'nullable|string|max:1000',
             'item_discount' => 'nullable|array',
             'item_discount.*' => 'nullable|numeric|min:0',
             'item_discount_type' => 'nullable|array',
@@ -522,6 +525,7 @@ class OrderController extends Controller
                     'customer_id' => $customerId,
                     'user_id' => auth()->id(),
                     'delivery_time' => $orderDeliveryTime,
+                    'delivery_time_note' => $request->input('delivery_time_note') ?: Customer::query()->whereKey($customerId)->value('delivery_time_note'),
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,
@@ -549,7 +553,8 @@ class OrderController extends Controller
             'recipient_address' => 'required|string|max:1000',
             'recipient_email' => 'nullable|email|max:255',
             'customer_id' => 'nullable|integer|exists:customers,id',
-            'delivery_time' => 'nullable|string|max:255',
+            'delivery_time' => 'required|date_format:H:i',
+            'delivery_time_note' => 'nullable|string|max:1000',
             'item_discount' => 'nullable|array',
             'item_discount.*' => 'nullable|numeric|min:0',
             'item_discount_type' => 'nullable|array',
@@ -664,6 +669,7 @@ class OrderController extends Controller
                     'recipient_phone' => $request->recipient_phone,
                     'recipient_address' => $request->recipient_address,
                     'delivery_time' => $orderDeliveryTime,
+                    'delivery_time_note' => $request->input('delivery_time_note') ?: $customer->delivery_time_note,
                     'note' => $request->note,
                     'order_discount' => (float) $request->input('order_discount', 0),
                     'order_discount_type' => $this->normalizeDiscountType($request->input('order_discount_type')),
@@ -843,12 +849,14 @@ class OrderController extends Controller
         }
 
         $request->validate([
-            'delivery_time' => 'nullable|string|max:255',
+            'delivery_time' => 'required|date_format:H:i',
+            'delivery_time_note' => 'nullable|string|max:1000',
         ]);
 
         $statusBefore = (string) $order->status;
         $order->update($this->filterExistingColumns('orders', [
             'delivery_time' => $request->input('delivery_time'),
+            'delivery_time_note' => $request->input('delivery_time_note'),
         ]));
 
         $this->logOrderHistory(

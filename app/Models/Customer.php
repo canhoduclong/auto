@@ -99,6 +99,7 @@ class Customer extends Model
         'note',
         'next_appointment',
         'delivery_time',
+        'delivery_time_note',
         'size',
         'production',
         'brand',

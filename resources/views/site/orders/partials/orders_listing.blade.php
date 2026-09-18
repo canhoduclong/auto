@@ -197,8 +197,9 @@
                                     ?? (($order->item_discount_total ?? 0) + ($order->extra_discount_total ?? 0)));
                                 $deliveryAddress = $order->recipient_address ?: ($order->customer?->address ?: 'Chưa có địa chỉ');
                                 $deliveryTime = $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật');
+                                $deliveryTimeNote = $order->delivery_time_note ?: $order->customer?->delivery_time_note;
                             @endphp
-
+                                @if($deliveryTimeNote)<div class="small text-muted"><i class="bi bi-chat-left-text me-1"></i>Ghi chú giờ giao: {{ $deliveryTimeNote }}</div>@endif
                             <div class="wh-order-head">
                                 <div class="d-flex align-items-start gap-3">
                                     @if($isTodayOrdersView)
@@ -282,6 +283,9 @@
                                                 <i class="bi bi-clock me-1"></i>
                                                 Giờ giao: {{ $deliveryTime }}
                                             </div>
+                                            @if($deliveryTimeNote)
+                                                <div class="small text-muted mb-1"><i class="bi bi-chat-left-text me-1"></i>Ghi chú giờ giao: {{ $deliveryTimeNote }}</div>
+                                            @endif
                                         </div>
                                     </div>
 

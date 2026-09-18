@@ -146,9 +146,14 @@
     </div>
 
     <div class="col-md-4">
-        <label class="form-label">{{ __('customers.form.delivery_time') }}</label>
-        <input type="text" name="delivery_time" class="form-control" value="{{ old('delivery_time', $customer->delivery_time ?? '') }}" placeholder="{{ __('customers.form.delivery_time_placeholder') }}">
+        <label class="form-label">{{ __('customers.form.delivery_time') }} <span class="text-danger">*</span></label>
+        <input type="time" name="delivery_time" class="form-control" value="{{ old('delivery_time', $customer->delivery_time ?? '') }}" required>
         @error('delivery_time') <div class="text-danger small">{{ $message }}</div> @enderror
+    </div>
+    <div class="col-md-8">
+        <label class="form-label">Ghi chú giờ giao</label>
+        <input type="text" name="delivery_time_note" class="form-control" value="{{ old('delivery_time_note', $customer->delivery_time_note ?? '') }}" placeholder="Ví dụ: giao trước giờ nghỉ trưa, gọi trước khi giao">
+        @error('delivery_time_note') <div class="text-danger small">{{ $message }}</div> @enderror
     </div>
     <div class="col-md-4">
         <label class="form-label">{{ __('customers.form.foam_box_required') }}</label>

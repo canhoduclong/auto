@@ -263,7 +263,7 @@
 
             <div class="sp-nav-section">Tài chính</div>
             <a href="{{ route('shipper.finance-requests.index') }}" class="sp-nav-link {{ request()->routeIs('shipper.finance-requests.*') ? 'active' : '' }}">
-                <i class="bi bi-file-earmark-text"></i> Phiếu yêu cầu của tôi
+                <i class="bi bi-file-earmark-text"></i> Phiếu yêu cầu
             </a>
 
             @if(auth()->user()->hasRole('manager_shipper') || auth()->user()->hasRole('admin'))

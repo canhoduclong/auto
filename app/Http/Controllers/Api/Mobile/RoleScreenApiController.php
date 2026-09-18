@@ -1039,7 +1039,7 @@ class RoleScreenApiController extends BaseApiController
             ->values();
         $orders = Order::query()
             ->with([
-                'customer:id,name,phone,address,default_shipper_id,delivery_time,truck_station_id,truck_route_id,shipping_fee',
+                'customer:id,name,phone,address,default_shipper_id,delivery_time,delivery_time_note,truck_station_id,truck_route_id,shipping_fee',
                 'customer.defaultShipper:id,name,phone',
                 'customer.truckStation:id,name,address,phone',
                 'customer.truckRoute:id,name',
@@ -1149,6 +1149,7 @@ class RoleScreenApiController extends BaseApiController
             'default_shipper_id' => $customer?->default_shipper_id ? (int) $customer->default_shipper_id : null,
             'default_shipper_name' => (string) ($customer?->defaultShipper?->name ?? ''),
             'delivery_time' => (string) ($deliveryTime ?? ''),
+            'delivery_time_note' => (string) ($order->delivery_time_note ?? $customer?->delivery_time_note ?? ''),
             'delivery_date' => optional($order->delivery_date)->toDateString(),
             'created_date' => optional($order->created_at)->toDateString(),
             'items_count' => (int) $order->items->sum('quantity'),

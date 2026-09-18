@@ -422,6 +422,9 @@
                                 <i class="bi bi-clock me-1"></i>
                                 Giờ giao: {{ $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật') }}
                             </div>
+                            @if($order->delivery_time_note ?: $order->customer?->delivery_time_note)
+                                <div class="small text-muted mt-1"><i class="bi bi-chat-left-text me-1"></i>Ghi chú giờ giao: {{ $order->delivery_time_note ?: $order->customer?->delivery_time_note }}</div>
+                            @endif
                             @if(trim((string) $order->note) !== '')
                                 <div class="alert alert-warning mt-2 mb-0" role="note">
                                     <div class="fw-semibold"><i class="bi bi-sticky me-1"></i>Ghi chú đơn hàng</div>

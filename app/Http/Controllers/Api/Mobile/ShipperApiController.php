@@ -1032,6 +1032,7 @@ class ShipperApiController extends BaseApiController
                 'order_id' => (int) $order->id,
                 'delivery_date' => optional($order->delivery_date)->toDateString(),
                 'delivery_time' => $order->delivery_time,
+                'delivery_time_note' => $order->delivery_time_note ?: $order->customer?->delivery_time_note,
             ];
         })->sortBy('order_id')->values()->all();
     }

@@ -444,8 +444,12 @@
                                     </div>
                                 @endif
                                 <div class="col-md-6 mb-3">
-                                    <label class="form-label fw-bold">Giờ giao hàng</label>
-                                    <input type="text" name="delivery_time" id="delivery_time" class="form-control" value="{{ old('delivery_time', $customer->delivery_time) }}" placeholder="Ví dụ: 9h-11h hoặc sau 17h">
+                                    <label class="form-label fw-bold">Giờ giao hàng <span class="text-danger">*</span></label>
+                                    <input type="time" name="delivery_time" id="delivery_time" class="form-control" value="{{ old('delivery_time', $customer->delivery_time) }}" required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label fw-bold">Ghi chú giờ giao</label>
+                                    <input type="text" name="delivery_time_note" class="form-control" value="{{ old('delivery_time_note', $customer->delivery_time_note) }}">
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label fw-bold">Tên người nhận</label>

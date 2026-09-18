@@ -26,7 +26,7 @@ class Order extends Model
         'charge_foam_box_fee', 'foam_box_price',
         'amount_paid', 'amount_due', 'payment_method', 'payment_status',
         'qr_code', 'packed_image_path', 'package_count', 'packing_specification', 'delivered_image_path', 'has_return_order',
-        'collected_amount', 'delivered_at', 'return_reason', 'proof_images', 'shipper_note', 'delivery_time', 'delivery_date',
+        'collected_amount', 'delivered_at', 'return_reason', 'proof_images', 'shipper_note', 'delivery_time', 'delivery_time_note', 'delivery_date',
         'use_truck_station', 'truck_station_id', 'truck_station_name', 'truck_station_address',
         'truck_station_phone', 'truck_receive_time',
         'customer_feedback_status', 'customer_feedback_note', 'customer_feedback_sale_review',

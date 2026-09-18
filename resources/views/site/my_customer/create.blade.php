@@ -281,8 +281,12 @@
                                     </div>
                                 </div>
                                 <div class="col-12 col-md-3">
-                                    <label class="form-label mc-form-label" style="font-size:0.82rem;">Giờ giao hàng</label>
-                                    <input type="text" class="form-control mc-form-control" name="delivery_time" id="delivery_time" value="{{ old('delivery_time') }}" placeholder="VD: 8h-10h">
+                                    <label class="form-label mc-form-label" style="font-size:0.82rem;">Giờ giao hàng <span class="text-danger">*</span></label>
+                                    <input type="time" class="form-control mc-form-control" name="delivery_time" id="delivery_time" value="{{ old('delivery_time') }}" required>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label mc-form-label">Ghi chú giờ giao</label>
+                                    <input type="text" class="form-control mc-form-control" name="delivery_time_note" value="{{ old('delivery_time_note') }}" placeholder="Ví dụ: gọi trước khi giao">
                                 </div>
                                 
                                 <div class="col-12 col-md-6">

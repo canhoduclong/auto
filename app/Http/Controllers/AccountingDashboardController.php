@@ -1825,7 +1825,7 @@ class AccountingDashboardController extends Controller
 
         $query = Order::query()
             ->with([
-                'customer:id,name,address,delivery_time',
+                'customer:id,name,address,delivery_time,delivery_time_note',
                 'user:id,name',
                 'shipper:id,name',
                 'warehouse:id,name',

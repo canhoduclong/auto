@@ -917,6 +917,7 @@ class SaleApiController extends BaseApiController
             'status' => (string) ($customer->status ?? ''),
             'customer_status' => (string) ($customer->customer_status ?? ''),
             'delivery_time' => (string) ($customer->delivery_time ?? ''),
+            'delivery_time_note' => (string) ($customer->delivery_time_note ?? ''),
             'size' => (string) ($customer->size ?? ''),
             'production' => (string) ($customer->production ?? ''),
             'company_name' => (string) ($customer->company_name ?? ''),
@@ -1007,6 +1008,7 @@ class SaleApiController extends BaseApiController
             $payload['recipient_email'] = (string) ($order->recipient_email ?? $order->customer?->email ?? '');
             $payload['recipient_address'] = (string) ($order->recipient_address ?? $order->customer?->address ?? '');
             $payload['delivery_time'] = (string) ($order->delivery_time ?? '');
+            $payload['delivery_time_note'] = (string) ($order->delivery_time_note ?? $order->customer?->delivery_time_note ?? '');
             $payload['note'] = (string) ($order->note ?? '');
             $payload['use_truck_station'] = (bool) ($order->use_truck_station ?? false);
             $payload['truck_station_name'] = (string) ($order->truck_station_name ?? $order->customer?->truck_station_name ?? '');

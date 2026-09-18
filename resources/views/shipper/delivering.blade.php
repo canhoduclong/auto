@@ -188,6 +188,7 @@
         $deliveryAddress = $order->recipient_address ?: ($order->customer?->address ?? null);
         $customerMainAddress = $order->customer?->address;
         $customerDeliveryTime = $order->delivery_time ?: $order->customer?->delivery_time;
+        $deliveryTimeNote = $order->delivery_time_note ?: $order->customer?->delivery_time_note;
         $sourceWarehouseName = $order->warehouse?->name;
 
         if (!$sourceWarehouseName) {
@@ -279,6 +280,7 @@
                         <div class="text-muted"><i class="bi bi-pin-map me-1"></i>Địa chỉ KH khác: {{ $alternateAddress }}</div>
                     @endif
                     <div class="text-muted"><i class="bi bi-clock me-1"></i>Giờ giao hàng: {{ $customerDeliveryTime ?: 'Chưa cập nhật' }}</div>
+                    @if($deliveryTimeNote)<div class="text-muted"><i class="bi bi-chat-left-text me-1"></i>Ghi chú giờ giao: {{ $deliveryTimeNote }}</div>@endif
                     <div class="text-muted"><i class="bi bi-box-seam me-1"></i>Từ kho: {{ $sourceWarehouseName ?: 'Chưa xác định' }}</div>
                 </div>
  

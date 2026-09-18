@@ -2,6 +2,7 @@
     $customer = $order->customer;
     $address = $order->recipient_address ?: $customer?->address;
     $deliveryTime = $order->delivery_time ?: $customer?->delivery_time ?: 'Chưa cập nhật';
+    $deliveryTimeNote = $order->delivery_time_note ?: $customer?->delivery_time_note;
     $customerName = $customer?->name ?? $order->recipient_name;
     $priorityNumber = $order->daily_sequence ?: '—';
     $orderTotal = (float) ($order->total ?? 0);
@@ -139,6 +140,7 @@
         <div class="d-flex align-items-start justify-content-between gap-2">
             <div class="d-flex align-items-start gap-2 min-w-0 flex-grow-1">
                 <span class="ma-delivery-time">{{ $deliveryTime }}</span>
+                @if($deliveryTimeNote)<span class="d-block small text-muted mt-1">Ghi chú giờ giao: {{ $deliveryTimeNote }}</span>@endif
                 <span class="ma-priority-circle" title="Số thứ tự ưu tiên">{{ $priorityNumber }}</span>
                 <div class="min-w-0">
                     <div class="fw-semibold text-dark">{{ $customerName }}</div>

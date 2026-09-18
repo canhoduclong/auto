@@ -4198,6 +4198,7 @@ public function apiTruckRoutes(Request $request)
                 'province_id' => $defaultAddress?->province_id,
                 'ward_id' => $defaultAddress?->ward_id,
                 'delivery_time' => $duplicate->delivery_time,
+                'delivery_time_note' => $duplicate->delivery_time_note,
                 'size' => $duplicate->size,
                 'production' => $duplicate->production,
                 'company_name' => $duplicate->company_name,
@@ -4301,7 +4302,10 @@ public function apiTruckRoutes(Request $request)
             $rules['address'] = ['nullable', 'string', 'max:1000'];
         }
         if ($request->has('delivery_time')) {
-            $rules['delivery_time'] = ['nullable', 'string', 'max:255'];
+            $rules['delivery_time'] = ['required', 'date_format:H:i'];
+        }
+        if ($request->has('delivery_time_note')) {
+            $rules['delivery_time_note'] = ['nullable', 'string', 'max:1000'];
         }
         if ($request->has('size')) {
             $rules['size'] = ['nullable', 'string', 'max:255'];
@@ -5232,7 +5236,8 @@ public function apiTruckRoutes(Request $request)
             'recipient_phone' => ['required', 'string', 'max:50'],
             'recipient_email' => ['nullable', 'email', 'max:255'],
             'recipient_address' => ['required', 'string', 'max:1000'],
-            'delivery_time' => ['nullable', 'string', 'max:255'],
+            'delivery_time' => ['required', 'date_format:H:i'],
+            'delivery_time_note' => ['nullable', 'string', 'max:1000'],
             'note' => ['nullable', 'string', 'max:1000'],
             'shipper_note' => ['nullable', 'string', 'max:1000'],
             'order_discount' => ['nullable', 'numeric', 'min:0'],
@@ -5449,6 +5454,7 @@ public function apiTruckRoutes(Request $request)
                 'recipient_email' => $validated['recipient_email'] ?? null,
                 'recipient_address' => $validated['recipient_address'],
                 'delivery_time' => $validated['delivery_time'] ?? null,
+                'delivery_time_note' => $validated['delivery_time_note'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'shipper_note' => $validated['shipper_note'] ?? null,
                 'subtotal_amount' => $subtotalAmount,
@@ -5697,6 +5703,7 @@ public function apiTruckRoutes(Request $request)
                         'email' => $emailForCreate,
                         'address' => $oldOrder->recipient_address ?: $oldOrder->customer?->address,
                         'delivery_time' => $oldOrder->delivery_time ?: $oldOrder->customer?->delivery_time,
+                        'delivery_time_note' => $oldOrder->delivery_time_note ?: $oldOrder->customer?->delivery_time_note,
                     ]);
                 }
 
@@ -5887,7 +5894,8 @@ public function apiTruckRoutes(Request $request)
             'email' => 'nullable|email|max:255',
             'phone' => 'nullable|string|max:50',
             'address' => 'nullable|string|max:1000',
-            'delivery_time' => 'nullable|string|max:255',
+            'delivery_time' => 'required|date_format:H:i',
+            'delivery_time_note' => 'nullable|string|max:1000',
             'size' => 'nullable|string|max:255',
             'production' => 'nullable|string|max:255',
             'company_name' => 'nullable|string|max:255',
@@ -5997,6 +6005,7 @@ public function apiTruckRoutes(Request $request)
         $customer->phone = $validated['phone'] ?? null;
         $customer->address = $validated['address'] ?? null;
         $customer->delivery_time = $validated['delivery_time'] ?? null;
+        $customer->delivery_time_note = $validated['delivery_time_note'] ?? null;
         $customer->size = $validated['size'] ?? null;
         $customer->production = $validated['production'] ?? null;
         $customer->company_name = $validated['company_name'] ?? null;
