@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\OrderItem;
+use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\Role;
 use App\Models\ShipperDispatchHistory;
 use App\Models\User;
@@ -28,7 +31,20 @@ class WarehouseAssignmentReviewTest extends TestCase
             'user_id' => $warehouseUser->id,
             'warehouse_id' => $warehouse->id,
             'code' => 'WAREHOUSE-PRINT-OWN',
+            'recipient_name' => 'Khách hàng nổi bật',
+            'recipient_phone' => '0909123456',
+            'recipient_address' => '123 Đường kiểm thử',
+            'daily_sequence' => 12,
             'status' => Order::STATUS_READY_TO_SHIP,
+        ]);
+        $product = Product::query()->create(['user_id' => $warehouseUser->id, 'name' => 'Vịt nguyên con', 'status' => true]);
+        $variant = ProductVariant::query()->create(['product_id' => $product->id, 'name' => 'Size 2.5', 'size' => 2.5, 'kg' => 2.5]);
+        OrderItem::query()->create([
+            'order_id' => $ownOrder->id,
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 3,
+            'total_weight' => 7.5,
         ]);
         $otherOrder = Order::query()->create([
             'customer_id' => $customer->id,
@@ -60,8 +76,14 @@ class WarehouseAssignmentReviewTest extends TestCase
             ->get(route('warehouse.assignment-review.index'))
             ->assertOk()
             ->assertSee('Review &amp; In ấn của Kho', false)
-            ->assertSee('WAREHOUSE-PRINT-OWN')
-            ->assertSee('WAREHOUSE-PRINT-OTHER')
+            ->assertSee('warehouse-print-own')
+            ->assertSee('warehouse-print-other')
+            ->assertSee('Khách hàng nổi bật')
+            ->assertSee('0909123456')
+            ->assertSee('123 Đường kiểm thử')
+            ->assertSee('Vịt nguyên con')
+            ->assertSee('STT ưu tiên')
+            ->assertDontSee('<th>Lộ trình</th>', false)
             ->assertSee('Kho chưa in');
 
         $this->actingAs($warehouseUser)
@@ -110,7 +132,7 @@ class WarehouseAssignmentReviewTest extends TestCase
         $this->actingAs($warehouseUser)
             ->get(route('warehouse.assignment-review.index', ['date' => now()->toDateString()]))
             ->assertOk()
-            ->assertSee('WAREHOUSE-NOT-IN-DISPATCH');
+            ->assertSee('warehouse-not-in-dispatch');
 
         $this->actingAs($warehouseUser)
             ->post(route('warehouse.assignment-review.print'), [
@@ -145,9 +167,9 @@ class WarehouseAssignmentReviewTest extends TestCase
         $this->actingAs($warehouseUser)
             ->get(route('warehouse.assignment-review.index', ['date' => now()->toDateString()]))
             ->assertOk()
-            ->assertSee('PACKING-DONE')
-            ->assertSee('PACKING-NOT-DONE')
-            ->assertDontSee('PACKING-CANCELLED');
+            ->assertSee('packing-done')
+            ->assertSee('packing-not-done')
+            ->assertDontSee('packing-cancelled');
 
         $orderWithoutWarehouse = Order::query()->where('code', 'PACKING-NOT-DONE')->firstOrFail();
         $this->actingAs($warehouseUser)

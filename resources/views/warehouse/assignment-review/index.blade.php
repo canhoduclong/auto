@@ -9,6 +9,12 @@
     .review-day strong { display:block; font-size:1rem; }
     .review-card { background:#fff; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; }
     .review-printed { background:#f0fdf4; }
+    .review-priority { min-width:44px; height:44px; display:inline-flex; align-items:center; justify-content:center; border-radius:10px; background:#047857; color:#fff; font-size:1.05rem; font-weight:700; }
+    .review-customer-name { font-size:1rem; font-weight:700; color:#0f172a; }
+    .review-order-code { font-size:.75rem; font-weight:400; color:#64748b; text-transform:lowercase; }
+    .review-contact { font-size:.82rem; color:#475569; }
+    .review-item-line { min-height:24px; padding:2px 0; border-bottom:1px dashed #e2e8f0; }
+    .review-item-line:last-child { border-bottom:0; }
 </style>
 @endpush
 
@@ -53,19 +59,50 @@
             <table class="table align-middle mb-0">
                 <thead class="table-light"><tr>
                     <th style="width:42px"><input id="warehouse-select-all" type="checkbox" class="form-check-input"></th>
-                    <th>Phiếu / Khách hàng</th><th>Lộ trình</th><th>Shipper</th><th>Trạng thái in của Kho</th><th class="text-end">Tổng tiền</th><th class="text-center">In</th>
+                    <th class="text-center">STT ưu tiên</th><th>Khách hàng / Đơn hàng</th><th>Sản phẩm</th><th>Size</th><th class="text-center">Số lượng</th><th class="text-end">Khối lượng</th><th>Shipper</th><th>Trạng thái in của Kho</th><th class="text-end">Tổng tiền</th><th class="text-center">In</th>
                 </tr></thead>
                 <tbody>
                 @forelse($orders as $order)
                     @php($printed = $printHistories->get($order->id))
                     <tr class="{{ $printed ? 'review-printed' : '' }}">
                         <td><input type="checkbox" name="order_ids[]" value="{{ $order->id }}" class="form-check-input warehouse-order-check"></td>
+                        <td class="text-center"><span class="review-priority">{{ $order->daily_sequence ?? '—' }}</span></td>
                         <td>
-                            <div class="fw-bold">{{ $order->code ?: '#'.$order->id }}</div>
-                            <div>{{ $order->recipient_name ?: $order->customer?->name ?: '—' }}</div>
-                            <div class="small text-muted">{{ $order->recipient_address ?: $order->customer?->address ?: '—' }}</div>
+                            <div class="review-customer-name">{{ $order->recipient_name ?: $order->customer?->name ?: '—' }}</div>
+                            <div class="review-order-code">{{ \Illuminate\Support\Str::lower($order->code ?: '#'.$order->id) }}</div>
+                            <div class="review-contact"><i class="bi bi-telephone me-1"></i>{{ $order->recipient_phone ?: $order->customer?->phone ?: '—' }}</div>
+                            <div class="review-contact"><i class="bi bi-geo-alt me-1"></i>{{ $order->recipient_address ?: $order->customer?->address ?: '—' }}</div>
                         </td>
-                        <td><span class="badge bg-light text-dark">{{ $routeMeta[$order->id]['route_name'] ?? '—' }}</span><div class="small text-muted">Thứ tự {{ $routeMeta[$order->id]['sequence'] ?? '—' }}</div></td>
+                        <td>
+                            @forelse($order->items as $item)
+                                <div class="review-item-line fw-semibold">{{ $item->display_name }}</div>
+                            @empty
+                                <div class="review-item-line text-muted">—</div>
+                            @endforelse
+                        </td>
+                        <td>
+                            @forelse($order->items as $item)
+                                @php($size = $item->variant?->size)
+                                <div class="review-item-line">{{ $size !== null ? rtrim(rtrim(number_format((float) $size, 2, ',', '.'), '0'), ',') : '—' }}</div>
+                            @empty
+                                <div class="review-item-line text-muted">—</div>
+                            @endforelse
+                        </td>
+                        <td class="text-center">
+                            @forelse($order->items as $item)
+                                <div class="review-item-line">{{ number_format((float) ($item->quantity ?? 0), 0, ',', '.') }}</div>
+                            @empty
+                                <div class="review-item-line text-muted">—</div>
+                            @endforelse
+                        </td>
+                        <td class="text-end">
+                            @forelse($order->items as $item)
+                                @php($weight = $item->actual_weight ?? $item->packed_weight ?? $item->total_weight ?? ((float) $item->effective_unit_weight * (float) ($item->quantity ?? 0)))
+                                <div class="review-item-line text-nowrap">{{ rtrim(rtrim(number_format((float) $weight, 3, ',', '.'), '0'), ',') }} kg</div>
+                            @empty
+                                <div class="review-item-line text-muted">—</div>
+                            @endforelse
+                        </td>
                         <td>{{ $order->shipper?->name ?: ($routeMeta[$order->id]['shipper_name'] ?? '—') }}</td>
                         <td>
                             @if($printed)
@@ -79,7 +116,7 @@
                         <td class="text-center"><button type="button" class="btn btn-outline-success btn-sm warehouse-print-one" data-order-id="{{ $order->id }}"><i class="bi bi-printer"></i></button></td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="text-center text-muted py-5"><i class="bi bi-inbox fs-2 d-block mb-2"></i>Không có đơn trong ngày giao này.</td></tr>
+                    <tr><td colspan="11" class="text-center text-muted py-5"><i class="bi bi-inbox fs-2 d-block mb-2"></i>Không có đơn trong ngày giao này.</td></tr>
                 @endforelse
                 </tbody>
             </table>
