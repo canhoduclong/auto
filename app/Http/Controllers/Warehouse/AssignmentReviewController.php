@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use App\Enums\OrderStatus;
 
 class AssignmentReviewController extends Controller
 {
@@ -130,7 +131,13 @@ class AssignmentReviewController extends Controller
                 }
             })
             ->whereNull('trash_at')
-            ->where('status', 'packed_waiting_pickup')
+            //->where('status', 'packed_waiting_pickup')
+            ->whereIn('status', [
+                OrderStatus::PackedWaitingPickup->value,
+                OrderStatus::PickedUp->value,
+                OrderStatus::Delivering->value,
+                OrderStatus::Delivered->value,
+            ])
             ->whereNotIn('status', [Order::STATUS_CANCELLED, 'canceled'])
             ->get()
             ->sortBy(function (Order $order) use ($orderIds) {
