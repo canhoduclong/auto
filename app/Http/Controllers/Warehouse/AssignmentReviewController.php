@@ -130,7 +130,7 @@ class AssignmentReviewController extends Controller
                 }
             })
             ->whereNull('trash_at')
-            ->where('status', 'packed')
+            ->where('status', 'packed_waiting_pickup')
             ->whereNotIn('status', [Order::STATUS_CANCELLED, 'canceled'])
             ->get()
             ->sortBy(function (Order $order) use ($orderIds) {
