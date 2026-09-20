@@ -134,6 +134,7 @@ class AssignmentReviewController extends Controller
             ->whereNull('trash_at')
             ->where(function ($query): void {
                 $query->whereIn('status', [
+                    Order::STATUS_PACKED,
                     OrderStatus::PackedWaitingPickup->value,
                     OrderStatus::PickedUp->value,
                     OrderStatus::Delivering->value,
