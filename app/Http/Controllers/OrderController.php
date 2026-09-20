@@ -786,9 +786,7 @@ class OrderController extends Controller
                     'collect_customer_shipping_fee' => (bool) ($validated['collect_customer_shipping_fee'] ?? false),
                     'customer_shipping_fee' => (float) ($validated['customer_shipping_fee'] ?? 0),
                     'created_at' => $businessCreatedAt,
-                    'delivery_date' => $isBusinessDateException
-                        ? $businessDate
-                        : now()->addDay()->toDateString(),
+                    'delivery_date' => Carbon::parse($businessDate)->addDay()->toDateString(),
                     'skip_auto_cancel' => $isBusinessDateException,
                     'allow_backorder' => true,
                     'status' => OrderStatus::Pending->value,

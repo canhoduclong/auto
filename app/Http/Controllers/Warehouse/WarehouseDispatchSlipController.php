@@ -762,6 +762,10 @@ class WarehouseDispatchSlipController extends Controller
         $orderRows = collect();
         $itemRows = collect();
         $inventoryTransferRows = collect();
+        $resolveUnit = static fn ($item, $variant): string => trim((string) (
+            $item->unit ?? $variant?->product?->unit ?? '—'
+        )) ?: '—';
+        $isPieceUnit = static fn (string $unit): bool => mb_strtolower(trim($unit), 'UTF-8') === 'cái';
 
         foreach ($slip->entries as $entry) {
             if ($entry->orderTransfer) {
@@ -795,12 +799,15 @@ class WarehouseDispatchSlipController extends Controller
                         }
                         $liveItem = $order->items->firstWhere('id', $item->id ?? null);
                         $variant = $liveItem?->variant ?? $order->items->firstWhere('product_variant_id', $item->product_variant_id)?->variant;
+                        $unit = $resolveUnit($item, $variant);
                         $itemRows->push([
                             'source' => 'Đơn '.($order->code ?: '#'.$order->id),
                             'variant_id' => (int) $item->product_variant_id,
                             'product_name' => $item->product_name ?? $variant?->product?->name ?? $variant?->name ?? 'Sản phẩm',
                             'sku' => $item->sku ?? $variant?->sku,
                             'size' => $item->size ?? $variant?->size,
+                            'unit' => $unit,
+                            'is_piece_unit' => $isPieceUnit($unit),
                             'quantity' => (int) $item->quantity,
                             'weight' => (float) ($item->weight ?? $item->packed_weight ?? $item->total_weight ?? 0),
                             'price' => (float) ($item->price ?? $liveItem?->price ?? 0),
@@ -847,12 +854,15 @@ class WarehouseDispatchSlipController extends Controller
                     }
                     $liveItem = $order->items->firstWhere('id', $item->id ?? null);
                     $variant = $liveItem?->variant ?? $order->items->firstWhere('product_variant_id', $item->product_variant_id)?->variant;
+                    $unit = $resolveUnit($item, $variant);
                     $itemRows->push([
                         'source' => 'Đơn '.($orderSnapshot['code'] ?? ($order->code ?: '#'.$order->id)),
                         'variant_id' => (int) $item->product_variant_id,
                         'product_name' => $item->product_name ?? $variant?->product?->name ?? $variant?->name ?? 'Sản phẩm',
                         'sku' => $item->sku ?? $variant?->sku,
                         'size' => $item->size ?? $variant?->size,
+                        'unit' => $unit,
+                        'is_piece_unit' => $isPieceUnit($unit),
                         'quantity' => (int) $item->quantity,
                         'weight' => (float) ($item->weight ?? $item->packed_weight ?? $item->total_weight ?? 0),
                         'price' => (float) ($item->price ?? $liveItem?->price ?? 0),
@@ -882,14 +892,17 @@ class WarehouseDispatchSlipController extends Controller
                     'received' => $transfer->status === WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED,
                     'receiver_name' => $transfer->receiver?->name,
                     'received_at' => optional($transfer->received_at)->format('d/m/Y H:i'),
-                    'items' => $expectedItems->map(function ($item) use ($transfer): array {
+                    'items' => $expectedItems->map(function ($item) use ($transfer, $resolveUnit, $isPieceUnit): array {
                         $liveItem = $transfer->items->firstWhere('product_variant_id', $item->product_variant_id);
                         $variant = $liveItem?->variant;
+                        $unit = $resolveUnit($item, $variant);
 
                         return [
                             'product_name' => $item->product_name ?? $variant?->product?->name ?? $variant?->name ?? 'Sản phẩm',
                             'sku' => $item->sku ?? $variant?->sku,
                             'size' => $item->size ?? $variant?->size,
+                            'unit' => $unit,
+                            'is_piece_unit' => $isPieceUnit($unit),
                             'quantity' => (int) $item->quantity,
                             'weight' => (float) $item->weight_kg,
                         ];
@@ -899,12 +912,15 @@ class WarehouseDispatchSlipController extends Controller
                     $received = $transfer->status === WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED;
                     $liveItem = $transfer->items->firstWhere('product_variant_id', $item->product_variant_id);
                     $variant = $liveItem?->variant;
+                    $unit = $resolveUnit($item, $variant);
                     $itemRows->push([
                         'source' => 'Hàng '.($inventorySnapshot['code'] ?? ($transfer->transfer_code ?: '#'.$transfer->id)),
                         'variant_id' => (int) $item->product_variant_id,
                         'product_name' => $item->product_name ?? $variant?->product?->name ?? $variant?->name ?? 'Sản phẩm',
                         'sku' => $item->sku ?? $variant?->sku,
                         'size' => $item->size ?? $variant?->size,
+                        'unit' => $unit,
+                        'is_piece_unit' => $isPieceUnit($unit),
                         'quantity' => (int) $item->quantity,
                         'weight' => (float) $item->weight_kg,
                         'price' => (float) ($item->unit_cost ?? $liveItem?->unit_cost ?? 0),
@@ -934,6 +950,8 @@ class WarehouseDispatchSlipController extends Controller
                 'product_name' => $first['product_name'],
                 'sku' => $first['sku'],
                 'size' => $first['size'],
+                'unit' => $first['unit'],
+                'is_piece_unit' => (bool) $first['is_piece_unit'],
                 'quantity' => (int) $rows->sum('quantity'),
                 'weight' => round((float) $rows->sum('weight'), 3),
                 'price' => (float) $first['price'],
@@ -947,7 +965,7 @@ class WarehouseDispatchSlipController extends Controller
         };
         $summaryRows = $itemRows->groupBy('variant_id')->map($summarizeRows)->values();
         $exportSummaryRows = $itemRows->groupBy(fn (array $row) => json_encode([
-            $row['variant_id'], number_format($row['price'], 2, '.', ''), $row['priced_by_kg'],
+            $row['variant_id'], number_format($row['price'], 2, '.', ''), $row['priced_by_kg'], $row['unit'],
         ]))->map($summarizeRows)->values();
 
         return compact('orderRows', 'itemRows', 'summaryRows', 'exportSummaryRows', 'inventoryTransferRows');
@@ -997,6 +1015,7 @@ class WarehouseDispatchSlipController extends Controller
                             'product_name' => $item->variant?->product?->name ?? $item->variant?->name ?? 'Sản phẩm',
                             'sku' => $item->variant?->sku,
                             'size' => $item->variant?->size,
+                            'unit' => $item->variant?->product?->unit,
                             'quantity' => (int) $item->quantity,
                             'weight' => (float) ($item->packed_weight ?? $item->total_weight ?? 0),
                             'price' => (float) ($item->price ?? 0),
@@ -1033,6 +1052,7 @@ class WarehouseDispatchSlipController extends Controller
                         'product_name' => $item->variant?->product?->name ?? $item->variant?->name ?? 'Sản phẩm',
                         'sku' => $item->variant?->sku,
                         'size' => $item->variant?->size,
+                        'unit' => $item->variant?->product?->unit,
                         'quantity' => (int) $item->quantity,
                         'weight' => (float) ($item->packed_weight ?? $item->actual_weight ?? $item->total_weight ?? 0),
                         'price' => (float) ($item->price ?? 0),
@@ -1055,6 +1075,7 @@ class WarehouseDispatchSlipController extends Controller
                     'product_name' => $item->variant?->product?->name ?? $item->variant?->name ?? 'Sản phẩm',
                     'sku' => $item->variant?->sku,
                     'size' => $item->variant?->size,
+                    'unit' => $item->variant?->product?->unit,
                     'quantity' => (int) $item->quantity,
                     'weight_kg' => (float) $item->weight_kg,
                     'unit_cost' => (float) $item->unit_cost,

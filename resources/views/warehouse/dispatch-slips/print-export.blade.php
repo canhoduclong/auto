@@ -5,7 +5,7 @@
 .customer-name{color:#0f172a;font-size:10.5px;line-height:1.15;font-weight:700}
 .order-table{font-size:10px;line-height:1.1}.order-table th,.order-table td{padding:2px 3px;vertical-align:middle}.order-table .muted{margin-top:0;font-size:9px;line-height:1.05}.order-table .order-note{font-size:9px;line-height:1.1;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word}
 .order-table th:nth-child(1){width:4%}.order-table th:nth-child(2){width:21%}.order-table th:nth-child(3){width:9%}.order-table th:nth-child(4){width:7%}.order-table th:nth-child(5){width:10%}.order-table th:nth-child(6){width:12%}.order-table th:nth-child(7){width:15%}.order-table th:nth-child(8){width:22%}
-.transfer-goods-table th:nth-child(1){width:6%}.transfer-goods-table th:nth-child(2){width:34%}.transfer-goods-table th:nth-child(3){width:20%}.transfer-goods-table th:nth-child(4){width:18%}.transfer-goods-table th:nth-child(5){width:22%}
+.transfer-goods-table th:nth-child(1){width:5%}.transfer-goods-table th:nth-child(2){width:31%}.transfer-goods-table th:nth-child(3){width:18%}.transfer-goods-table th:nth-child(4){width:10%}.transfer-goods-table th:nth-child(5){width:15%}.transfer-goods-table th:nth-child(6){width:21%}
 .print-actions{position:fixed;right:24px;top:18px;z-index:10;display:flex;gap:8px}.print-actions button{border:0;border-radius:7px;background:#0f766e;color:#fff;font-size:13px;font-weight:700;padding:9px 16px;cursor:pointer;box-shadow:0 2px 8px rgba(15,23,42,.2)}.print-actions .share-btn{background:#087f5b}@media print{.print-actions{display:none!important}}
 </style></head><body>
 @php($formatKg = static fn (float|int|string $value): string => rtrim(rtrim(number_format((float) $value, 3, ',', '.'), '0'), ',').' kg')
@@ -29,9 +29,9 @@
 <div class="box">
 <strong>CHI TIẾT {{ $transferRow['code'] }}</strong>
 @if(filled($transferRow['note']))<span class="muted">Ghi chú: {{ $transferRow['note'] }}</span>@endif
-<table class="transfer-goods-table"><thead><tr><th class="center">STT</th><th>Hàng hóa điều chuyển</th><th>SKU / Size</th><th class="num">Số lượng</th><th class="num">Khối lượng</th></tr></thead><tbody>
-@foreach($transferRow['items'] as $item)<tr><td class="center">{{ $loop->iteration }}</td><td><strong>{{ $item['product_name'] }}</strong></td><td>{{ $item['sku'] ?: '—' }}<span class="muted">Size: {{ $item['size'] ?: '—' }}</span></td><td class="num"><strong>{{ number_format($item['quantity']) }}</strong></td><td class="num">{{ $formatKg($item['weight']) }}</td></tr>@endforeach
-</tbody><tfoot><tr><th colspan="3">TỔNG HÀNG ĐIỀU CHUYỂN</th><th class="num">{{ number_format($transferRow['quantity']) }}</th><th class="num">{{ $formatKg($transferRow['weight']) }}</th></tr></tfoot></table>
+<table class="transfer-goods-table"><thead><tr><th class="center">STT</th><th>Hàng hóa điều chuyển</th><th>SKU / Size</th><th class="center">ĐVT</th><th class="num">Số lượng</th><th class="num">Khối lượng</th></tr></thead><tbody>
+@foreach($transferRow['items'] as $item)<tr><td class="center">{{ $loop->iteration }}</td><td><strong>{{ $item['product_name'] }}</strong></td><td>{{ $item['sku'] ?: '—' }}<span class="muted">Size: {{ $item['size'] ?: '—' }}</span></td><td class="center">{{ $item['unit'] }}</td><td class="num"><strong>{{ number_format($item['quantity']) }}</strong></td><td class="num">{{ $item['is_piece_unit'] ? '-' : $formatKg($item['weight']) }}</td></tr>@endforeach
+</tbody><tfoot><tr><th colspan="4">TỔNG HÀNG ĐIỀU CHUYỂN</th><th class="num">{{ number_format($transferRow['quantity']) }}</th><th class="num">{{ $transferRow['items']->every('is_piece_unit') ? '-' : $formatKg($transferRow['items']->reject(fn ($item) => $item['is_piece_unit'])->sum('weight')) }}</th></tr></tfoot></table>
 </div>
 @endforeach
 

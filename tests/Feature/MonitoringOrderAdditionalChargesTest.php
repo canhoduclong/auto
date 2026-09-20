@@ -61,7 +61,7 @@ class MonitoringOrderAdditionalChargesTest extends TestCase
         $order = Order::query()->latest('id')->firstOrFail();
         $expectedDate = $role === 'admin' ? '2026-08-23' : '2026-08-25';
         $this->assertSame($expectedDate, $order->created_at->toDateString());
-        $this->assertSame($role === 'admin' ? '2026-08-23' : '2026-08-26', $order->delivery_date->toDateString());
+        $this->assertSame($role === 'admin' ? '2026-08-24' : '2026-08-26', $order->delivery_date->toDateString());
         $this->assertSame($role === 'admin', $order->skip_auto_cancel);
         $this->assertStringContainsString('date='.$expectedDate, $response->json('monitoring_url'));
         $this->assertStringContainsString('date_field=business_date', $response->json('monitoring_url'));

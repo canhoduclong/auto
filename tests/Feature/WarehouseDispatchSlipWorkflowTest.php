@@ -180,7 +180,10 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             'name' => '2.8 kg',
             'sku' => 'MOC-2.8-DISPATCH',
         ]);
-        $inventoryVariant->product()->update(['name' => 'Vịt Nguyên Con Điều Chuyển']);
+        $inventoryVariant->product()->update([
+            'name' => 'Vịt Nguyên Con Điều Chuyển',
+            'unit' => 'cái',
+        ]);
         $inventoryTransfer->items()->create([
             'product_variant_id' => $inventoryVariant->id,
             'quantity' => 12,
@@ -239,6 +242,8 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             ->assertSee('B. PHIẾU ĐIỀU CHUYỂN HÀNG')
             ->assertSee('Ghi chú điều chuyển')
             ->assertSee('Hàng điều chuyển cần bảo quản lạnh')
+            ->assertSee('ĐVT')
+            ->assertSee('>cái</td><td class="num"><strong>12</strong></td><td class="num">-</td>', false)
             ->assertSee('D. GHI CHÚ BÀN GIAO')
             ->assertSee('54.000đ/đv')
             ->assertSee('648.000đ');
