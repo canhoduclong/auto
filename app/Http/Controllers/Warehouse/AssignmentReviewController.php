@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderHistory;
 use App\Models\ShipperDispatchHistory;
+use App\Models\WarehouseTransfer;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -131,13 +132,17 @@ class AssignmentReviewController extends Controller
                 }
             })
             ->whereNull('trash_at')
-            ->where('status', 'packed_waiting_pickup')
-            /*->whereIn('status', [
-                OrderStatus::PackedWaitingPickup->value,
-                OrderStatus::PickedUp->value,
-                OrderStatus::Delivering->value,
-                OrderStatus::Delivered->value,
-            ])*/
+            ->where(function ($query): void {
+                $query->whereIn('status', [
+                    OrderStatus::PackedWaitingPickup->value,
+                    OrderStatus::PickedUp->value,
+                    OrderStatus::Delivering->value,
+                    Order::STATUS_SHIPPING,
+                    Order::STATUS_IN_DELIVERY,
+                ])->orWhereHas('warehouseTransfers', function ($transferQuery): void {
+                    $transferQuery->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED);
+                });
+            })
             ->whereNotIn('status', [Order::STATUS_CANCELLED, 'canceled'])
             ->get()
             ->sortBy(function (Order $order) use ($orderIds) {
