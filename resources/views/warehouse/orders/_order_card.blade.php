@@ -105,16 +105,16 @@
                             $orderIndexClass = $isPacking ? 'is-packing' : ($isPacked ? 'is-packed' : 'is-unpacked');
                         @endphp
                         <div class="wh-order-index {{ $orderIndexClass }} text-center">{{ $order->daily_sequence ?? '—' }}</div>
-                        <div class=" border-0 w-100  d-flex justify-content-between align-items-center">
+                        <div class="border-0 w-100 d-flex justify-content-between align-items-center wh-order-card-header-content">
                             <div>
-                                <div class="fw-semibold fs-5 mb-0 pb-0">{{ $order->customer?->name ?? '—' }} </div>
+                                <div class="fw-semibold fs-5 mb-0 pb-0 wh-order-customer-name">{{ $order->customer?->name ?? '—' }} </div>
                                 <div class="text-muted card-desript">
                                     #{{ $order->daily_sequence ?? '—' }} · Ngày lên đơn {{ $order->created_at->format('d/m/Y H:i') }} ·
                                     Ngày giao {{ optional($order->delivery_date)->format('d/m/Y') ?: 'chưa cập nhật' }} · {{ $order->code }} ·
                                     Sale: {{ $order->user?->name ?? 'Chưa xác định' }}
                                 </div>
                             </div> 
-                            <div class="d-flex align-items-center gap-2">
+                            <div class="d-flex align-items-center gap-2 wh-order-card-header-actions">
                                 @if($warehouseCanAdjust)
                                     <span class="badge bg-primary-subtle text-primary border border-primary-subtle" title="Kho được phép trực tiếp điều chỉnh đơn">
                                         <i class="bi bi-pencil-square me-1"></i>Kho được sửa

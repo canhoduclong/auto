@@ -40,7 +40,7 @@
     @else
         <div class="dropdown">
             <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                <i class="bi bi-person-badge"></i> Chuyển vai trò
+                <i class="bi bi-person-badge"></i><span class="role-switcher-label"> Chuyển vai trò</span>
             </button>
             <ul class="dropdown-menu dropdown-menu-end shadow-sm">
                 <li><h6 class="dropdown-header">Chọn khu vực làm việc</h6></li>

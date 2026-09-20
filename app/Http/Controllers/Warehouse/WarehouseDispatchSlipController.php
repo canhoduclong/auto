@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class WarehouseDispatchSlipController extends Controller
@@ -765,7 +766,7 @@ class WarehouseDispatchSlipController extends Controller
         $resolveUnit = static fn ($item, $variant): string => trim((string) (
             $item->unit ?? $variant?->product?->unit ?? '—'
         )) ?: '—';
-        $isPieceUnit = static fn (string $unit): bool => mb_strtolower(trim($unit), 'UTF-8') === 'cái';
+        $isPieceUnit = static fn (string $unit): bool => Str::lower(Str::ascii(trim($unit))) === 'cai';
 
         foreach ($slip->entries as $entry) {
             if ($entry->orderTransfer) {

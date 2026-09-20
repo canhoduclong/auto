@@ -225,6 +225,7 @@
             min-width: 0;
         }
         @media (max-width: 768px) {
+            html, body { max-width: 100%; overflow-x: hidden; }
             .wh-sidebar {
                 width: min(86vw, 320px);
                 transform: translateX(-100%);
@@ -232,10 +233,33 @@
             }
             .wh-sidebar.mobile-open { transform: translateX(0); }
             .wh-main { margin-left: 0; width: 100%; }
-            .wh-topbar { padding: .65rem .85rem; }
+            .wh-topbar { padding: .55rem .65rem; gap: .5rem; align-items: center; }
+            .wh-topbar-main { flex: 1 1 auto; min-width: 0; }
+            .wh-topbar-heading { min-width: 0; overflow: hidden; }
+            .wh-topbar-title {
+                overflow: hidden;
+                font-size: .95rem !important;
+                line-height: 1.15;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .wh-topbar-subtitle { display: none; }
+            .wh-topbar-actions { flex: 0 0 auto; gap: .55rem !important; }
+            .wh-topbar-actions .dropdown.me-2 { margin-right: 0 !important; }
+            .wh-topbar-actions > .text-muted.small { display: none; }
+            .wh-topbar-actions .role-switcher-label,
+            .wh-topbar-actions .wh-mobile-logout-btn span { display: none; }
+            .wh-topbar-actions .wh-account-dropdown,
+            .wh-topbar-actions > form.d-md-none { display: none; }
+            .wh-topbar-actions .btn.dropdown-toggle {
+                width: 38px; height: 38px; padding: 0; font-size: 0;
+            }
+            .wh-topbar-actions .btn.dropdown-toggle i { font-size: 1rem; }
+            .wh-mobile-logout-btn { width: 38px; height: 38px; min-height: 38px; padding: 0; }
+            .wh-packing-setting-button { width: 38px; height: 38px; }
             .wh-content {
-                padding: .9rem;
-                padding-bottom: calc(.9rem + env(safe-area-inset-bottom, 0px));
+                padding: .65rem;
+                padding-bottom: calc(.75rem + env(safe-area-inset-bottom, 0px));
             }
             .wh-notification-menu {
                 width: calc(100vw - 1rem);
@@ -462,24 +486,24 @@
                     ->unique('href')
                     ->values();
             @endphp
-            <div class="d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2 wh-topbar-main">
                 <button type="button" class="btn btn-light d-md-none js-wh-toggle" aria-label="Open menu">
                     <i class="bi bi-list"></i>
                 </button>
-                <div>
-                <h6 class="mb-0 fw-semibold">@yield('title', 'Dashboard')</h6>
+                <div class="wh-topbar-heading">
+                <h6 class="mb-0 fw-semibold wh-topbar-title">@yield('title', 'Dashboard')</h6>
                 @if(trim($__env->yieldContent('subtitle_clock')) === '1')
-                    <div class="text-muted" style="font-size:.9rem;">
+                    <div class="text-muted wh-topbar-subtitle" style="font-size:.9rem;">
                         <i class="bi bi-clock me-1"></i>
                         <span data-current-time>{{ now()->format('H:i') }}</span>
                         – {{ now()->format('d/m/Y') }}
                     </div>
                 @elseif(View::hasSection('subtitle'))
-                    <div class="text-muted" style="font-size:.9rem;">@yield('subtitle')</div>
+                    <div class="text-muted wh-topbar-subtitle" style="font-size:.9rem;">@yield('subtitle')</div>
                 @endif
                 </div>
             </div>
-            <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center gap-3 wh-topbar-actions">
                 @if($headerWarehouse)
                     <div class="dropdown">
                         <button type="button"
@@ -570,7 +594,7 @@
                     </ul>
                 </div>
                 <!-- Dropdown tài khoản -->
-                <div class="dropdown">
+                <div class="dropdown wh-account-dropdown">
                     <a href="#" class="d-flex align-items-center gap-2 text-decoration-none" id="dropdownAccount" data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="bi bi-person-circle fs-5 text-secondary"></i>
                         <div class="small text-end d-none d-md-block">

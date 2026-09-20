@@ -963,6 +963,150 @@
             display: none;
         }
     }
+    @media (max-width: 575.98px) {
+        .wh-orders-shell { min-width: 0; }
+        .wh-orders-shell > .card { border-radius: 10px; }
+        .wh-orders-shell > .card .card-body { padding: .75rem; }
+        .wh-orders-filter-actions { flex-wrap: wrap; width: 100%; }
+        .wh-orders-filter-actions > .btn,
+        .wh-orders-filter-actions > a.btn {
+            flex: 1 1 calc(50% - .25rem);
+            min-height: 42px;
+        }
+        .wh-orders-quick-dates { width: 100%; margin: .25rem 0 0 !important; }
+        .wh-quick-wrap {
+            flex-wrap: nowrap;
+            width: 100%;
+            padding-bottom: 4px;
+            overflow-x: auto;
+            scrollbar-width: thin;
+        }
+        .wh-quick-pill { flex: 0 0 auto; }
+        .wh-summary-pill { padding: 6px 9px; font-size: .72rem; }
+        .wh-order-nav-area {
+            top: 59px;
+            margin-bottom: .75rem !important;
+            padding: 8px;
+            border-radius: 9px;
+            overflow-x: auto;
+        }
+        .wh-order-nav-area > .d-flex {
+            flex-wrap: nowrap !important;
+            width: max-content;
+            min-width: 100%;
+        }
+        .wh-order-nav-pill { flex: 0 0 auto; min-width: 34px; height: 34px; }
+        [id^="order-card-"] { scroll-margin-top: 108px; }
+        .wh-order-card { border-radius: 10px; }
+        .wh-order-card .card-header { align-items: flex-start !important; padding: .75rem; }
+        .wh-order-card-header-content {
+            align-items: flex-start !important;
+            flex-direction: column;
+            gap: .5rem;
+        }
+        .wh-order-card-header-actions {
+            width: 100%;
+            flex-wrap: wrap;
+            justify-content: flex-start;
+        }
+        .wh-order-index { flex: 0 0 36px; width: 36px; margin-right: 8px; }
+        .wh-order-customer-name {
+            font-size: 1rem !important;
+            line-height: 1.2;
+            overflow-wrap: anywhere;
+        }
+        .card-desript {
+            margin-top: 3px;
+            font-size: .7rem;
+            line-height: 1.4;
+            overflow-wrap: anywhere;
+        }
+        .wh-order-card .card-body { padding: .75rem; }
+        .wh-order-card-grid { gap: 8px; }
+        .wh-item-table-wrap { overflow: visible; }
+        .wh-item-table-head { display: none; }
+        .wh-item-list { gap: 10px; }
+        .wh-item-row {
+            padding: 0;
+            border: 1px solid #dbe4ee;
+            border-radius: 10px;
+            background: #fff;
+            overflow: hidden;
+        }
+        .wh-item-table-row {
+            min-width: 0;
+            padding: 10px;
+            grid-template-columns: 52px minmax(0, 1fr);
+            gap: 7px 10px;
+            align-items: center;
+        }
+        .wh-item-table-row > :nth-child(1) { grid-column: 1; grid-row: 1; }
+        .wh-item-table-row > :nth-child(2) { grid-column: 2; grid-row: 1; }
+        .wh-item-table-row > :nth-child(n+3) {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            min-width: 0;
+            padding-top: 7px;
+            border-top: 1px dashed #e2e8f0;
+            text-align: right;
+        }
+        .wh-item-table-row > :nth-child(3)::before { content: "Size"; }
+        .wh-item-table-row > :nth-child(4)::before { content: "Số lượng"; }
+        .wh-item-table-row > :nth-child(5)::before { content: "SL đóng"; }
+        .wh-item-table-row > :nth-child(6)::before { content: "Tổng"; }
+        .wh-item-table-row > :nth-child(7)::before { content: "Khối lượng"; }
+        .wh-item-table-row > :nth-child(8)::before { content: "Đơn giá"; }
+        .wh-item-table-row > :nth-child(9)::before { content: "Thành tiền"; }
+        .wh-item-table-row > :nth-child(n+3)::before {
+            flex: 0 0 auto;
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 700;
+            text-align: left;
+            text-transform: uppercase;
+        }
+        .wh-item-name {
+            overflow: visible;
+            font-size: .9rem;
+            text-overflow: clip;
+            white-space: normal;
+        }
+        .wh-item-thumb,
+        .wh-item-thumb-placeholder { width: 48px; height: 48px; }
+        .wh-item-action,
+        .wh-item-cell { font-size: .84rem; }
+        .wh-compact-form {
+            flex: 1 1 auto;
+            justify-content: flex-end !important;
+            flex-wrap: wrap;
+        }
+        .wh-compact-form .form-control { max-width: 112px; min-height: 38px; }
+        .wh-compact-form .btn { min-height: 38px; }
+        .actual_weight { width: 112px; }
+        .wh-picked-material-row { align-items: stretch; flex-direction: column; }
+        .wh-picked-material-actions { justify-content: stretch; }
+        .wh-picked-material-actions .btn { width: 100%; }
+        .wh-order-actions { align-items: stretch; }
+        .wh-order-actions > form,
+        .wh-order-actions > button,
+        .wh-order-actions > span,
+        .wh-order-actions > a,
+        .wh-order-actions > details { width: 100%; }
+        .wh-order-actions .btn,
+        .wh-order-actions form .btn,
+        .wh-footer-adjustment > summary {
+            justify-content: center;
+            width: 100%;
+            min-height: 42px;
+        }
+        .wh-order-card .card-footer { padding: .75rem !important; }
+        .wh-customer-feedback-panel { padding: 8px; }
+        .alert { overflow-wrap: anywhere; }
+        .modal-dialog { margin: .35rem; }
+    }
 </style>
 @endpush
 
@@ -1111,14 +1255,14 @@
                         <option value="packed_waiting_pickup" {{ ($status ?? '') === 'packed_waiting_pickup' ? 'selected' : '' }}>Chờ shipper nhận</option>
                     </select>
                 </div>
-                <div class="col-md-8 d-flex gap-2">
+                <div class="col-md-8 d-flex gap-2 wh-orders-filter-actions">
                     <button class="btn btn-primary" type="submit">
                         <i class="bi bi-funnel me-1"></i>Lọc
                     </button>
                     <a href="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders') }}" class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-clockwise me-1"></i>Hôm nay
                     </a>
-                    <div class="mx-3">
+                    <div class="mx-3 wh-orders-quick-dates">
                          
                         <div class="wh-quick-wrap">
                             @foreach($quickDates as $quickDate)

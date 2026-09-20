@@ -182,7 +182,7 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
         ]);
         $inventoryVariant->product()->update([
             'name' => 'Vịt Nguyên Con Điều Chuyển',
-            'unit' => 'cái',
+            'unit' => 'cai',
         ]);
         $inventoryTransfer->items()->create([
             'product_variant_id' => $inventoryVariant->id,
@@ -243,7 +243,7 @@ class WarehouseDispatchSlipWorkflowTest extends TestCase
             ->assertSee('Ghi chú điều chuyển')
             ->assertSee('Hàng điều chuyển cần bảo quản lạnh')
             ->assertSee('ĐVT')
-            ->assertSee('>cái</td><td class="num"><strong>12</strong></td><td class="num">-</td>', false)
+            ->assertSee('>cai</td><td class="num"><strong>12</strong></td><td class="num">-</td>', false)
             ->assertSee('D. GHI CHÚ BÀN GIAO')
             ->assertSee('54.000đ/đv')
             ->assertSee('648.000đ');
