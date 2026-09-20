@@ -420,6 +420,7 @@
     </div> 
 </div>
                     
+                    
 {{-- Recent packed orders --}}
 @if($recentPacked->isNotEmpty())
 <div class="card shadow-sm border-0">

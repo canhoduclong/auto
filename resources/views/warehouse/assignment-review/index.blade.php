@@ -22,7 +22,7 @@
 <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
     <div>
         <h5 class="mb-1 fw-bold">Review &amp; In ấn của Kho</h5>
-        <div class="text-muted small">Hiển thị đơn toàn hệ thống theo ngày giao, kể cả đơn chưa nhập hoặc chưa gán kho.</div>
+        <div class="text-muted small">Hiển thị đơn toàn hệ thống khi ngày lên đơn hoặc ngày giao khớp ngày đã chọn.</div>
     </div>
     <form method="GET" action="{{ route('warehouse.assignment-review.index') }}" class="d-flex gap-2">
         <input type="date" name="date" value="{{ $selectedDate }}" class="form-control form-control-sm">
@@ -116,7 +116,7 @@
                         <td class="text-center"><button type="button" class="btn btn-outline-success btn-sm warehouse-print-one" data-order-id="{{ $order->id }}"><i class="bi bi-printer"></i></button></td>
                     </tr>
                 @empty
-                    <tr><td colspan="11" class="text-center text-muted py-5"><i class="bi bi-inbox fs-2 d-block mb-2"></i>Không có đơn trong ngày giao này.</td></tr>
+                    <tr><td colspan="11" class="text-center text-muted py-5"><i class="bi bi-inbox fs-2 d-block mb-2"></i>Không có đơn có ngày lên đơn hoặc ngày giao khớp ngày đã chọn.</td></tr>
                 @endforelse
                 </tbody>
             </table>

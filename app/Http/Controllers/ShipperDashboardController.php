@@ -2593,6 +2593,8 @@ class ShipperDashboardController extends Controller
             ->orderByDesc('version')
             ->get();
 
+         
+
         $selectedHistory = $request->filled('history_id')
             ? $versions->firstWhere('id', (int) $request->input('history_id'))
             : $versions->first();

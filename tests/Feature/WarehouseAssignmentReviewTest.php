@@ -11,6 +11,7 @@ use App\Models\Role;
 use App\Models\ShipperDispatchHistory;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Models\WarehouseTransfer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -143,7 +144,43 @@ class WarehouseAssignmentReviewTest extends TestCase
             ->assertSee('PHIẾU GIAO HÀNG');
     }
 
-    public function test_review_includes_orders_not_entered_into_warehouse_and_excludes_cancelled_orders(): void
+    public function test_review_matches_either_order_creation_date_or_delivery_date(): void
+    {
+        $warehouseRole = Role::query()->create(['name' => 'warehouse']);
+        $warehouse = Warehouse::query()->create(['name' => 'Kho theo ngày', 'status' => true]);
+        $warehouseUser = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $warehouseUser->roles()->attach($warehouseRole);
+        $customer = Customer::query()->create(['name' => 'Khách theo ngày', 'status' => 'active']);
+
+        $order = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $warehouseUser->id,
+            'warehouse_id' => $warehouse->id,
+            'code' => 'CREATED-TODAY-DELIVER-TOMORROW',
+            'status' => Order::STATUS_READY_TO_SHIP,
+            'delivery_date' => now()->addDay()->toDateString(),
+        ]);
+
+        $this->actingAs($warehouseUser)
+            ->get(route('warehouse.assignment-review.index', ['date' => now()->toDateString()]))
+            ->assertOk()
+            ->assertSee('created-today-deliver-tomorrow');
+
+        $this->actingAs($warehouseUser)
+            ->get(route('warehouse.assignment-review.index', ['date' => now()->addDay()->toDateString()]))
+            ->assertOk()
+            ->assertSee('created-today-deliver-tomorrow');
+
+        $this->actingAs($warehouseUser)
+            ->post(route('warehouse.assignment-review.print'), [
+                'date' => now()->toDateString(),
+                'order_ids' => [$order->id],
+            ])
+            ->assertOk()
+            ->assertSee('PHIẾU GIAO HÀNG');
+    }
+
+    public function test_review_only_includes_orders_ready_for_or_already_in_delivery(): void
     {
         $warehouseRole = Role::query()->create(['name' => 'warehouse']);
         $warehouse = Warehouse::query()->create(['name' => 'Kho lọc đóng hàng', 'status' => true]);
@@ -151,33 +188,53 @@ class WarehouseAssignmentReviewTest extends TestCase
         $warehouseUser->roles()->attach($warehouseRole);
         $customer = Customer::query()->create(['name' => 'Khách lọc', 'status' => 'active']);
 
-        foreach ([
-            ['code' => 'PACKING-NOT-DONE', 'status' => Order::STATUS_PACKING, 'warehouse_id' => null],
+        $orders = collect([
+            ['code' => 'ORDER-NEW-PENDING', 'status' => 'pending'],
+            ['code' => 'ORDER-APPROVED-NOT-PACKED', 'status' => Order::STATUS_APPROVED],
+            ['code' => 'PACKING-NOT-DONE', 'status' => Order::STATUS_PACKING],
+            ['code' => 'PACKING-DONE-LEGACY', 'status' => Order::STATUS_PACKED],
             ['code' => 'PACKING-DONE', 'status' => Order::STATUS_READY_TO_SHIP],
+            ['code' => 'ORDER-PICKED-UP', 'status' => 'picked_up'],
+            ['code' => 'ORDER-DELIVERING', 'status' => Order::STATUS_DELIVERING],
             ['code' => 'PACKING-CANCELLED', 'status' => Order::STATUS_CANCELLED],
-        ] as $data) {
-            Order::query()->create($data + [
+            ['code' => 'TRANSFER-RECEIVED', 'status' => Order::STATUS_COMPLETED],
+        ])->mapWithKeys(function (array $data) use ($customer, $warehouseUser, $warehouse) {
+            $order = Order::query()->create($data + [
                 'customer_id' => $customer->id,
                 'user_id' => $warehouseUser->id,
-                'warehouse_id' => $data['warehouse_id'] ?? $warehouse->id,
+                'warehouse_id' => $warehouse->id,
                 'delivery_date' => now()->toDateString(),
             ]);
-        }
+
+            return [$data['code'] => $order];
+        });
+
+        WarehouseTransfer::query()->create([
+            'order_id' => $orders['TRANSFER-RECEIVED']->id,
+            'source_warehouse_id' => $warehouse->id,
+            'target_warehouse_id' => $warehouse->id,
+            'status' => WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+            'received_at' => now(),
+        ]);
 
         $this->actingAs($warehouseUser)
             ->get(route('warehouse.assignment-review.index', ['date' => now()->toDateString()]))
             ->assertOk()
+            ->assertSee('packing-done-legacy')
             ->assertSee('packing-done')
-            ->assertSee('packing-not-done')
+            ->assertSee('order-picked-up')
+            ->assertSee('order-delivering')
+            ->assertSee('transfer-received')
+            ->assertDontSee('order-new-pending')
+            ->assertDontSee('order-approved-not-packed')
+            ->assertDontSee('packing-not-done')
             ->assertDontSee('packing-cancelled');
 
-        $orderWithoutWarehouse = Order::query()->where('code', 'PACKING-NOT-DONE')->firstOrFail();
         $this->actingAs($warehouseUser)
             ->post(route('warehouse.assignment-review.print'), [
                 'date' => now()->toDateString(),
-                'order_ids' => [$orderWithoutWarehouse->id],
+                'order_ids' => [$orders['PACKING-NOT-DONE']->id],
             ])
-            ->assertOk()
-            ->assertSee('PHIẾU GIAO HÀNG');
+            ->assertForbidden();
     }
 }

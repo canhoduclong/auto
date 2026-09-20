@@ -126,7 +126,10 @@ class AssignmentReviewController extends Controller
         return Order::query()
             ->with(['customer', 'shipper:id,name,phone', 'user:id,name', 'warehouse:id,name', 'items.product', 'items.variant.product'])
             ->where(function ($query) use ($orderIds, $date) {
-                $query->whereDate('delivery_date', $date);
+                $query->where(function ($dateQuery) use ($date): void {
+                    $dateQuery->whereDate('created_at', $date)
+                        ->orWhereDate('delivery_date', $date);
+                });
                 if ($orderIds !== []) {
                     $query->orWhereIn('id', $orderIds);
                 }
