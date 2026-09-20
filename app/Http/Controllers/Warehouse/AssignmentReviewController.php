@@ -131,13 +131,13 @@ class AssignmentReviewController extends Controller
                 }
             })
             ->whereNull('trash_at')
-            //->where('status', 'packed_waiting_pickup')
-            ->whereIn('status', [
+            ->where('status', 'packed_waiting_pickup')
+            /*->whereIn('status', [
                 OrderStatus::PackedWaitingPickup->value,
                 OrderStatus::PickedUp->value,
                 OrderStatus::Delivering->value,
                 OrderStatus::Delivered->value,
-            ])
+            ])*/
             ->whereNotIn('status', [Order::STATUS_CANCELLED, 'canceled'])
             ->get()
             ->sortBy(function (Order $order) use ($orderIds) {
