@@ -1342,8 +1342,6 @@ class ShipperDashboardController extends Controller
 
     public function bulkPickupWarehouseTransfers(Request $request)
     {
-        $this->authorizeManagerShipper();
-
         $validated = $request->validate([
             'transfer_ids' => ['required', 'array', 'min:1'],
             'transfer_ids.*' => ['required', 'integer', 'exists:warehouse_transfers,id'],
@@ -1355,6 +1353,10 @@ class ShipperDashboardController extends Controller
             ->whereIn('id', $validated['transfer_ids'])
             ->where('status', WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP)
             ->get();
+
+        foreach ($transfers as $transfer) {
+            $this->authorizeWarehouseTransferShipper($transfer, $request);
+        }
 
         if ($transfers->isEmpty()) {
             return back()->with('error', 'Không có phiếu điều chuyển nào ở trạng thái chờ nhận hàng.');
@@ -1427,8 +1429,6 @@ class ShipperDashboardController extends Controller
 
     public function bulkDeliverWarehouseTransfers(Request $request)
     {
-        $this->authorizeManagerShipper();
-
         $validated = $request->validate([
             'transfer_ids' => ['required', 'array', 'min:1'],
             'transfer_ids.*' => ['required', 'integer', 'exists:warehouse_transfers,id'],
@@ -1440,6 +1440,10 @@ class ShipperDashboardController extends Controller
             ->whereIn('id', $validated['transfer_ids'])
             ->where('status', WarehouseTransfer::STATUS_IN_TRANSIT)
             ->get();
+
+        foreach ($transfers as $transfer) {
+            $this->authorizeWarehouseTransferShipper($transfer, $request);
+        }
 
         if ($transfers->isEmpty()) {
             return back()->with('error', 'Không có phiếu điều chuyển nào ở trạng thái đang vận chuyển.');

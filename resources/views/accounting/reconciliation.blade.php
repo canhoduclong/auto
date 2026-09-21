@@ -98,6 +98,11 @@
     .recon-detail {
         min-height: 260px;
     }
+    .recon-detail-layout { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(280px,.75fr); gap:16px; align-items:start; }
+    .recon-detail-flow { position:sticky; top:72px; }
+    .recon-detail-toolbar { display:flex; gap:6px; }
+    .recon-icon-button { width:34px; height:34px; display:inline-flex; align-items:center; justify-content:center; }
+    .recon-inline-detail-row.is-pinned > td { background:#eff6ff !important; }
     .recon-inline-detail-row > td {
         padding: 0 0 12px !important;
         border-top: 0;
@@ -182,6 +187,8 @@
     .recon-sort-link .bi { font-size: .72rem; opacity: .7; }
     @media (max-width: 992px) {
         .recon-grid { grid-template-columns: 1fr; }
+        .recon-detail-layout { grid-template-columns:1fr; }
+        .recon-detail-flow { position:static; }
     }
 </style>
 @endpush
@@ -190,14 +197,8 @@
     <div class="recon-panel">
         <div class="panel-head">
             Tổng quan
-            @if($businessDate && $deliveredDate)
-                · Ngày nghiệp vụ {{ \Carbon\Carbon::parse($businessDate)->format('d/m/Y') }}
-                · Ngày giao {{ \Carbon\Carbon::parse($deliveredDate)->format('d/m/Y') }}
-            @elseif($businessDate)
-                ngày nghiệp vụ {{ \Carbon\Carbon::parse($businessDate)->format('d/m/Y') }}
-            @else
-                ngày giao {{ \Carbon\Carbon::parse($deliveredDate)->format('d/m/Y') }}
-            @endif
+            · Lên đơn {{ $businessDateFrom ? \Carbon\Carbon::parse($businessDateFrom)->format('d/m/Y') : '…' }} – {{ $businessDateTo ? \Carbon\Carbon::parse($businessDateTo)->format('d/m/Y') : '…' }}
+            · Giao {{ $deliveredDateFrom ? \Carbon\Carbon::parse($deliveredDateFrom)->format('d/m/Y') : '…' }} – {{ $deliveredDateTo ? \Carbon\Carbon::parse($deliveredDateTo)->format('d/m/Y') : '…' }}
         </div>
         <div class="panel-body">
             <form method="GET" class="row g-2 mb-3">
@@ -205,13 +206,13 @@
                 <input type="hidden" name="direction" value="{{ $sortDirection }}">
                 <div class="col-12">
                     <label class="form-label">Ngày nghiệp vụ / ngày lên đơn</label>
-                    <input class="form-control" type="date" name="business_date" value="{{ $businessDate }}">
-                    <div class="form-text">Để trống nếu không lọc theo ngày này.</div>
+                    <div class="row g-2"><div class="col-6"><input class="form-control" aria-label="Ngày lên đơn từ" type="date" name="business_date_from" value="{{ $businessDateFrom }}"></div><div class="col-6"><input class="form-control" aria-label="Ngày lên đơn đến" type="date" name="business_date_to" value="{{ $businessDateTo }}"></div></div>
+                    <div class="form-text">Từ ngày – đến ngày; có thể để trống một đầu.</div>
                 </div>
                 <div class="col-12">
                     <label class="form-label">Ngày giao thực tế</label>
-                    <input class="form-control" type="date" name="delivered_date" value="{{ $deliveredDate }}">
-                    <div class="form-text">Có thể chọn cùng ngày nghiệp vụ để lọc kết hợp.</div>
+                    <div class="row g-2"><div class="col-6"><input class="form-control" aria-label="Ngày giao từ" type="date" name="delivered_date_from" value="{{ $deliveredDateFrom }}"></div><div class="col-6"><input class="form-control" aria-label="Ngày giao đến" type="date" name="delivered_date_to" value="{{ $deliveredDateTo }}"></div></div>
+                    <div class="form-text">Từ ngày – đến ngày; kết hợp được với ngày lên đơn.</div>
                 </div>
                 <div class="col-12">
                     <label class="form-label">Sale</label>
@@ -635,9 +636,13 @@ document.addEventListener('DOMContentLoaded', function () {
             <div class="recon-panel">
                 <div class="panel-head d-flex justify-content-between align-items-center">
                     <span>Chi tiết ${esc(order.code)}, Ngày ${esc(order.created_date)}</span>
-                    <span class="badge ${recon.status === 'confirmed' ? 'text-bg-success' : 'text-bg-warning'}">${recon.status === 'confirmed' ? 'Đã xác nhận' : 'Chưa xác nhận'}</span>
+                    <div class="recon-detail-toolbar">
+                        <span class="badge align-self-center ${recon.status === 'confirmed' ? 'text-bg-success' : 'text-bg-warning'}">${recon.status === 'confirmed' ? 'Đã xác nhận' : 'Chưa xác nhận'}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary recon-icon-button js-detail-collapse" title="Thu gọn (dê chuột để mở lại)"><i class="bi bi-chevron-up"></i></button>
+                        <button type="button" class="btn btn-sm btn-outline-primary recon-icon-button js-detail-pin" title="Neo chi tiết"><i class="bi bi-pin-angle"></i></button>
+                    </div>
                 </div>
-                <div class="panel-body">
+                <div class="panel-body js-detail-body">
                     ${section('Thông tin đơn hàng', [
                         ['Khách hàng', esc(order.customer?.name)],
                         ['Số điện thoại', esc(order.customer?.phone)],
@@ -665,6 +670,15 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <tbody>${items || '<tr><td colspan="7" class="text-muted text-center">Không có sản phẩm.</td></tr>'}</tbody>
                             </table>
                         </div>
+                        <div class="d-flex justify-content-end"><div style="min-width:280px">
+                            <div class="recon-mini-row"><span>Tiền hàng</span><span>${money(order.subtotal_amount)}</span></div>
+                            <div class="recon-mini-row"><span>Giảm giá</span><span>-${money(order.total_discount)}</span></div>
+                            <div class="recon-mini-row"><span>Phí ship</span><span>${money(order.shipping_fee)}</span></div>
+                            ${Number(order.customer_shipping_fee || 0) > 0 ? `<div class="recon-mini-row"><span>Phí giao hàng thu khách</span><span>${money(order.customer_shipping_fee)}</span></div>` : ''}
+                            ${Number(order.foam_box_fee || 0) > 0 ? `<div class="recon-mini-row"><span>Phí thùng xốp</span><span>${money(order.foam_box_fee)}</span></div>` : ''}
+                            <div class="recon-mini-row"><span>VAT ${Number(order.vat_percent || 0) > 0 ? `(${Number(order.vat_percent).toLocaleString('vi-VN')}%)` : ''}</span><span>${money(order.vat_amount)}</span></div>
+                            <div class="recon-mini-row border-top mt-1 pt-2 fs-6"><strong>Tổng giá trị đơn hàng</strong><strong>${money(order.total)}</strong></div>
+                        </div></div>
                     </div>
                     <div class="recon-detail-section">
                         <div class="recon-detail-title">Luồng xử lý</div>
@@ -712,6 +726,23 @@ document.addEventListener('DOMContentLoaded', function () {
                 </div>
             </div>
         `;
+
+        const detailPanel = detailBox.querySelector('.recon-panel');
+        const detailBody = detailBox.querySelector('.js-detail-body');
+        detailBox.querySelector('.js-detail-collapse')?.addEventListener('click', function () {
+            detailBody.classList.toggle('d-none');
+            this.querySelector('i').className = detailBody.classList.contains('d-none') ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
+        });
+        detailPanel?.addEventListener('mouseenter', function () {
+            if (detailBody.classList.contains('d-none')) detailBody.classList.remove('d-none');
+        });
+        detailBox.querySelector('.js-detail-pin')?.addEventListener('click', function () {
+            const pinned = detailRow.classList.toggle('is-pinned');
+            this.classList.toggle('btn-primary', pinned);
+            this.classList.toggle('btn-outline-primary', !pinned);
+            this.title = pinned ? 'Tắt neo chi tiết' : 'Neo chi tiết';
+            this.querySelector('i').className = pinned ? 'bi bi-pin-angle-fill' : 'bi bi-pin-angle';
+        });
 
         detailBox.querySelector('#reconConfirmForm')?.addEventListener('submit', async function (event) {
             event.preventDefault();
@@ -769,6 +800,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function collapseDetail() {
+        detailRow?.classList.remove('is-pinned');
         document.querySelectorAll('.recon-order-row').forEach(item => item.classList.remove('active'));
         resetToggleButtons();
         activeOrderId = null;
@@ -794,7 +826,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function toggleDetail(row) {
+        if (detailRow?.classList.contains('is-pinned') && activeOrderId !== row.dataset.orderId) return;
         if (activeOrderId === row.dataset.orderId) {
+            if (detailRow?.classList.contains('is-pinned')) return;
             collapseDetail();
             return;
         }

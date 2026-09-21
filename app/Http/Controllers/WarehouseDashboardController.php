@@ -1835,7 +1835,54 @@ class WarehouseDashboardController extends Controller
             ->latest('id')
             ->get();
 
-        return view('warehouse.transfers.incoming', compact('transfers', 'inventoryTransfers', 'managedWarehouseId', 'selectedDate'));
+        $shipperTransfers = WarehouseTransfer::query()
+            ->with(['order.customer', 'order.items.variant.product', 'sourceWarehouse', 'targetWarehouse', 'shipper'])
+            ->when($managedWarehouseId, fn ($query) => $query->where('target_warehouse_id', $managedWarehouseId))
+            ->whereHas('order')
+            ->where('status', WarehouseTransfer::STATUS_IN_TRANSIT)
+            ->orderByDesc('picked_up_at')
+            ->orderByDesc('id')
+            ->get();
+
+        return view('warehouse.transfers.incoming', compact('transfers', 'inventoryTransfers', 'shipperTransfers', 'managedWarehouseId', 'selectedDate'));
+    }
+
+    public function pullTransferToWarehouse(Request $request, WarehouseTransfer $transfer)
+    {
+        $managedWarehouseId = $request->user()?->warehouse_id ? (int) $request->user()->warehouse_id : null;
+        if ($managedWarehouseId && (int) $transfer->target_warehouse_id !== $managedWarehouseId) {
+            abort(403, 'Bạn chỉ có thể kéo đơn về kho mình quản lý.');
+        }
+        if ($transfer->status !== WarehouseTransfer::STATUS_IN_TRANSIT) {
+            return back()->with('error', 'Đơn không còn ở trạng thái shipper đang vận chuyển.');
+        }
+
+        $validated = $request->validate(['note' => ['nullable', 'string', 'max:1000']]);
+        DB::transaction(function () use ($transfer, $validated): void {
+            $locked = WarehouseTransfer::query()->with('order')->lockForUpdate()->findOrFail($transfer->id);
+            if ($locked->status !== WarehouseTransfer::STATUS_IN_TRANSIT) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['transfer' => 'Đơn vừa được cập nhật bởi người khác.']);
+            }
+            $locked->update([
+                'status' => WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                'delivered_by' => Auth::id(),
+                'delivered_at' => now(),
+                'shipper_delivery_note' => trim((string) ($validated['note'] ?? '')) ?: 'Kho chủ động kéo đơn về do shipper chưa bấm giao.',
+            ]);
+            if ($locked->order) {
+                OrderHistory::create([
+                    'order_id' => $locked->order->id,
+                    'action' => 'warehouse_pull_transfer_from_shipper',
+                    'user_id' => Auth::id(),
+                    'role' => 'warehouse',
+                    'status_before' => $locked->order->status,
+                    'status_after' => $locked->order->status,
+                    'note' => 'Kho kéo phiếu điều chuyển #'.$locked->id.' từ Shipper về hàng chờ tiếp nhận.',
+                ]);
+            }
+        });
+
+        return back()->with('success', 'Đã kéo đơn về kho. Vui lòng kiểm cân và xác nhận tại tab Tiếp nhận đơn.');
     }
 
     public function confirmTransferReceipt(Request $request, WarehouseTransfer $transfer)

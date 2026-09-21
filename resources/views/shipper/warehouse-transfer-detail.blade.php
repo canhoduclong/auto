@@ -115,6 +115,12 @@ document.addEventListener('DOMContentLoaded', function () {
         bindAjaxForm('.js-deliver-form', 'Không thể hoàn thành giao hàng.', 'Xác nhận đã giao hàng cho kho nhận?');
         bindAjaxForm('.js-resume-transfer-form', 'Không thể tiếp tục giao hàng.', 'Xác nhận tiếp tục giao phiếu này tới kho nhận?');
 
+        document.querySelectorAll('.js-bulk-transfer-form').forEach(function (form) {
+            form.addEventListener('submit', function (event) {
+                if (!window.confirm(form.dataset.confirm || 'Xác nhận thao tác tất cả?')) event.preventDefault();
+            }, { once: true });
+        });
+
         document.querySelectorAll('.js-rollback-transfer-form').forEach(function (form) {
             form.addEventListener('submit', function (event) {
                 event.preventDefault();

@@ -9,6 +9,30 @@
     })->forget(null)->sortKeys();
 @endphp
 
+@php
+    $pickupTransfers = $transfers->where('status', 'pending_shipper_pickup');
+    $deliverTransfers = $transfers->where('status', 'in_transit');
+@endphp
+@if($pickupTransfers->isNotEmpty() || $deliverTransfers->isNotEmpty())
+<div class="card border-0 shadow-sm mb-3"><div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div><strong>Thao tác toàn bộ phiếu</strong><div class="small text-muted">Áp dụng cho các đơn đang ở đúng trạng thái trong phiếu này.</div></div>
+    <div class="d-flex gap-2">
+        @if($pickupTransfers->isNotEmpty())
+        <form method="POST" action="{{ route('shipper.warehouse-transfers.bulk-pickup') }}" class="js-bulk-transfer-form" data-confirm="Xác nhận nhận tất cả {{ $pickupTransfers->count() }} đơn trong phiếu?">@csrf
+            @foreach($pickupTransfers as $transfer)<input type="hidden" name="transfer_ids[]" value="{{ $transfer->id }}">@endforeach
+            <button class="btn btn-primary"><i class="bi bi-box-arrow-in-down me-1"></i>Nhận tất cả ({{ $pickupTransfers->count() }})</button>
+        </form>
+        @endif
+        @if($deliverTransfers->isNotEmpty())
+        <form method="POST" action="{{ route('shipper.warehouse-transfers.bulk-deliver') }}" class="js-bulk-transfer-form" data-confirm="Xác nhận giao tất cả {{ $deliverTransfers->count() }} đơn cho kho nhận?">@csrf
+            @foreach($deliverTransfers as $transfer)<input type="hidden" name="transfer_ids[]" value="{{ $transfer->id }}">@endforeach
+            <button class="btn btn-success"><i class="bi bi-truck me-1"></i>Giao tất cả ({{ $deliverTransfers->count() }})</button>
+        </form>
+        @endif
+    </div>
+</div></div>
+@endif
+
 <div class="transfer-timeline">
     <div class="fw-bold text-muted mb-2"><i class="bi bi-clock-history me-1"></i>Điều hướng theo giờ giao</div>
     <div class="transfer-timeline-track">

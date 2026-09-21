@@ -205,6 +205,7 @@
 <div class="d-flex gap-2 mb-3">
     <a href="#incoming-orders" class="btn btn-sm btn-primary"><i class="bi bi-receipt me-1"></i>Tiếp nhận đơn</a>
     <a href="#incoming-goods" class="btn btn-sm btn-outline-primary"><i class="bi bi-box-arrow-in-down me-1"></i>Tiếp nhận hàng</a>
+    <a href="#pull-from-shipper" class="btn btn-sm btn-outline-warning"><i class="bi bi-truck-flatbed me-1"></i>Kéo đơn về kho <span class="badge bg-warning text-dark ms-1">{{ $shipperTransfers->count() }}</span></a>
 </div>
 
 @php
@@ -290,6 +291,24 @@
         </div>
     </div>
 </div>
+
+<section id="pull-from-shipper" class="mt-5 pt-3 border-top">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div><h4 class="mb-1 fw-bold"><i class="bi bi-truck-flatbed me-2"></i>Kéo đơn về kho</h4><div class="small text-muted">Dùng khi shipper đã mang hàng tới nhưng quên bấm Giao. Sau khi kéo, đơn chuyển sang danh sách chờ kiểm cân và xác nhận.</div></div>
+        <span class="badge bg-warning text-dark rounded-pill">Đang ở Shipper: {{ $shipperTransfers->count() }}</span>
+    </div>
+    <div class="row g-3">
+        @forelse($shipperTransfers as $transfer)
+            <div class="col-12 col-xl-6"><div class="card border-warning shadow-sm h-100">
+                <div class="card-header bg-white d-flex justify-content-between"><div><strong>{{ $transfer->order?->code ?? '#'.$transfer->order_id }}</strong><div class="small text-muted">{{ $transfer->order?->customer?->name ?? 'Khách hàng' }} · {{ $transfer->sourceWarehouse?->name ?? '—' }} → {{ $transfer->targetWarehouse?->name ?? '—' }}</div></div><span class="badge bg-warning text-dark">Shipper đang giữ</span></div>
+                <div class="card-body small"><div>Shipper: <strong>{{ $transfer->shipper?->name ?? '—' }}</strong></div><div>Nhận lúc: <strong>{{ optional($transfer->picked_up_at)->format('d/m/Y H:i') ?: '—' }}</strong></div><div class="mt-2 text-muted">{{ $transfer->order?->items?->count() ?? 0 }} mặt hàng · {{ format_kg((float) ($transfer->packed_total_weight ?? 0)) }}</div></div>
+                <div class="card-footer bg-white text-end"><form method="POST" action="{{ route('warehouse.transfers.pull-to-warehouse', $transfer) }}" onsubmit="return confirm('Kéo đơn này từ Shipper về danh sách chờ kho xác nhận?')">@csrf<input type="hidden" name="note" value="Kho chủ động kéo đơn về do shipper chưa bấm giao"><button class="btn btn-warning btn-sm"><i class="bi bi-arrow-down-square me-1"></i>Kéo về kho</button></form></div>
+            </div></div>
+        @empty
+            <div class="col-12 text-center text-muted py-4"><i class="bi bi-check2-circle fs-1 d-block"></i>Không có đơn nào đang ở Shipper cần kéo về.</div>
+        @endforelse
+    </div>
+</section>
 
 <section id="incoming-goods" class="mt-5 pt-3 border-top">
     @php($pendingInventoryCount = $inventoryTransfers->where('status', 'pending_receive')->count())
