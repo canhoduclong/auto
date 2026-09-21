@@ -2067,6 +2067,7 @@ class AccountingDashboardController extends Controller
             'users.name as sale_name',
             'order_items.quantity',
             'order_items.price',
+            'order_items.discount_total',
             'order_items.total',
             'order_items.total_weight',
             'order_items.is_priced_by_kg',

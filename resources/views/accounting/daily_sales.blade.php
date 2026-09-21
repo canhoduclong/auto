@@ -461,10 +461,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                     </tr>
                 </thead>
                 <tbody>
-                @php
-                    $rowNo = ($items->currentPage() - 1) * $items->perPage() + 1;
-                    $shownDiscountOrders = [];
-                @endphp
+                @php $rowNo = ($items->currentPage() - 1) * $items->perPage() + 1; @endphp
                 @forelse($items as $row)
                     @php
                         $adjFlag   = (bool) $row->has_adj;
@@ -472,11 +469,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         $effPrice  = (float) $row->eff_price;
                         $effWeight = (float) $row->eff_weight;
                         $effTotal  = (float) $row->eff_total;
-                        $orderDiscount = max(0, (float) ($row->order_total_discount ?? 0));
-                        $showOrderDiscount = $orderDiscount > 0 && !in_array((int) $row->order_id_val, $shownDiscountOrders, true);
-                        if ($showOrderDiscount) {
-                            $shownDiscountOrders[] = (int) $row->order_id_val;
-                        }
+                        $productDiscount = max(0, (float) ($row->discount_total ?? 0));
 
                         $unitLabel = \App\Enums\ProductUnit::tryFrom($row->product_unit ?? '')?->label() ?? 'Cái';
 
@@ -539,8 +532,8 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         <td class="text-end fw-bold text-success">
                             {{ number_format($effTotal, 0, ',', '.') }}
                         </td>
-                        <td class="text-end fw-bold {{ $showOrderDiscount ? 'text-danger' : 'text-muted' }}">
-                            {{ $showOrderDiscount ? '-'.number_format($orderDiscount, 0, ',', '.').'đ' : '—' }}
+                        <td class="text-end fw-bold {{ $productDiscount > 0 ? 'text-danger' : 'text-muted' }}">
+                            {{ $productDiscount > 0 ? '-'.number_format($productDiscount, 0, ',', '.').'đ' : '—' }}
                         </td>
                     </tr>
                 @empty
