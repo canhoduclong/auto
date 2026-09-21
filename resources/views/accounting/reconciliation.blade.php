@@ -75,6 +75,13 @@
         color: #0f172a;
     }
     .recon-panel .panel-body { padding: 16px; }
+    .recon-filter-panel { position:sticky; top:72px; z-index:20; transition:width .2s ease; }
+    .recon-filter-panel.is-collapsed { width:58px; min-width:58px; overflow:visible; }
+    .recon-filter-panel.is-collapsed .js-filter-body, .recon-filter-panel.is-collapsed .js-filter-title { display:none; }
+    .recon-filter-panel.is-collapsed .panel-head { padding:10px; justify-content:center; border-bottom:0; }
+    .recon-filter-panel.is-collapsed #reconFilterPin { display:none; }
+    .recon-grid.filter-collapsed { grid-template-columns:58px minmax(0,1fr); }
+    .recon-filter-actions { display:flex; gap:5px; flex:0 0 auto; }
     .recon-stats {
         display: grid;
         gap: 8px;
@@ -193,14 +200,18 @@
 </style>
 @endpush
 
-<div class="recon-grid">
-    <div class="recon-panel">
-        <div class="panel-head">
-            Tổng quan
+<div class="recon-grid" id="reconGrid">
+    <div class="recon-panel recon-filter-panel" id="reconFilterPanel">
+        <div class="panel-head d-flex justify-content-between align-items-start gap-2">
+            <span class="js-filter-title">Tổng quan
             · Lên đơn {{ $businessDateFrom ? \Carbon\Carbon::parse($businessDateFrom)->format('d/m/Y') : '…' }} – {{ $businessDateTo ? \Carbon\Carbon::parse($businessDateTo)->format('d/m/Y') : '…' }}
-            · Giao {{ $deliveredDateFrom ? \Carbon\Carbon::parse($deliveredDateFrom)->format('d/m/Y') : '…' }} – {{ $deliveredDateTo ? \Carbon\Carbon::parse($deliveredDateTo)->format('d/m/Y') : '…' }}
+            · Giao {{ $deliveredDateFrom ? \Carbon\Carbon::parse($deliveredDateFrom)->format('d/m/Y') : '…' }} – {{ $deliveredDateTo ? \Carbon\Carbon::parse($deliveredDateTo)->format('d/m/Y') : '…' }}</span>
+            <span class="recon-filter-actions">
+                <button type="button" class="btn btn-sm btn-outline-secondary recon-icon-button" id="reconFilterToggle" title="Thu gọn bộ lọc; rê chuột vào để mở"><i class="bi bi-layout-sidebar-inset"></i></button>
+                <button type="button" class="btn btn-sm btn-outline-primary recon-icon-button" id="reconFilterPin" title="Neo bộ lọc"><i class="bi bi-pin-angle"></i></button>
+            </span>
         </div>
-        <div class="panel-body">
+        <div class="panel-body js-filter-body">
             <form method="GET" class="row g-2 mb-3">
                 <input type="hidden" name="sort" value="{{ $sort }}">
                 <input type="hidden" name="direction" value="{{ $sortDirection }}">
@@ -463,6 +474,50 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const filterPanel = document.getElementById('reconFilterPanel');
+    const reconGrid = document.getElementById('reconGrid');
+    const filterToggle = document.getElementById('reconFilterToggle');
+    const filterPin = document.getElementById('reconFilterPin');
+    let filterPinned = localStorage.getItem('accountingReconciliationFilterPinned') !== '0';
+    let filterCollapsed = localStorage.getItem('accountingReconciliationFilterCollapsed') === '1';
+
+    function paintFilterPanel(temporaryOpen = false) {
+        const collapsed = filterCollapsed && !temporaryOpen;
+        filterPanel?.classList.toggle('is-collapsed', collapsed);
+        reconGrid?.classList.toggle('filter-collapsed', collapsed);
+        filterPin?.classList.toggle('btn-primary', filterPinned);
+        filterPin?.classList.toggle('btn-outline-primary', !filterPinned);
+        if (filterPin) {
+            filterPin.title = filterPinned ? 'Tắt neo bộ lọc' : 'Neo bộ lọc';
+            filterPin.querySelector('i').className = filterPinned ? 'bi bi-pin-angle-fill' : 'bi bi-pin-angle';
+        }
+        if (filterToggle) {
+            filterToggle.title = collapsed ? 'Mở bộ lọc' : 'Thu gọn bộ lọc; rê chuột vào biểu tượng để mở';
+            filterToggle.querySelector('i').className = collapsed ? 'bi bi-layout-sidebar' : 'bi bi-layout-sidebar-inset';
+        }
+    }
+    filterToggle?.addEventListener('click', function () {
+        filterCollapsed = !filterCollapsed;
+        if (filterCollapsed) filterPinned = false;
+        localStorage.setItem('accountingReconciliationFilterPinned', filterPinned ? '1' : '0');
+        localStorage.setItem('accountingReconciliationFilterCollapsed', filterCollapsed ? '1' : '0');
+        paintFilterPanel();
+    });
+    filterToggle?.addEventListener('mouseenter', function () {
+        if (filterCollapsed && !filterPinned) paintFilterPanel(true);
+    });
+    filterPanel?.addEventListener('mouseleave', function () {
+        if (filterCollapsed && !filterPinned) paintFilterPanel(false);
+    });
+    filterPin?.addEventListener('click', function () {
+        filterPinned = !filterPinned;
+        if (filterPinned) filterCollapsed = false;
+        localStorage.setItem('accountingReconciliationFilterPinned', filterPinned ? '1' : '0');
+        localStorage.setItem('accountingReconciliationFilterCollapsed', filterCollapsed ? '1' : '0');
+        paintFilterPanel();
+    });
+    paintFilterPanel();
+
     document.querySelectorAll('.js-exclude-invalid-order-form').forEach(function (form) {
         form.addEventListener('submit', function (event) {
             event.preventDefault();
@@ -602,7 +657,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td class="text-end">${Number(item.quantity || 0).toLocaleString('vi-VN')}</td>
                 <td class="text-end">${esc(item.total_label || '-')}</td>
                 <td class="text-end">${Number(item.weight || 0) > 0 ? Number(item.weight || 0).toLocaleString('vi-VN') + ' kg' : '-'}</td>
-                <td class="text-end">${money(item.unit_price)}</td>
+                <td class="text-end">
+                    <div>${money(item.unit_price)}</div>
+                    ${Number(item.unit_discount || 0) > 0 ? `<div class="small text-muted">Giá hiện tại ${money(item.base_price)} → giá bán ${money(item.unit_price)}</div><div class="small ${item.discount_type === 'increase' ? 'text-primary' : 'text-danger'}">${item.discount_type === 'increase' ? 'Điều chỉnh tăng' : 'Giảm giá'}: ${item.discount_type === 'increase' ? '+' : '-'}${money(item.unit_discount)}</div>` : ''}
+                </td>
                 <td class="text-end fw-semibold">${money(item.line_total)}</td>
             </tr>
         `).join('');
@@ -672,7 +730,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         </div>
                         <div class="d-flex justify-content-end"><div style="min-width:280px">
                             <div class="recon-mini-row"><span>Tiền hàng</span><span>${money(order.subtotal_amount)}</span></div>
-                            <div class="recon-mini-row"><span>Giảm giá</span><span>-${money(order.total_discount)}</span></div>
+                            <div class="recon-mini-row"><span>Giảm giá sản phẩm${Number(order.item_discount_total || 0) > 0 ? ' (giá hiện tại thể hiện tại từng dòng)' : ''}</span><span class="text-danger">-${money(order.item_discount_total)}</span></div>
+                            <div class="recon-mini-row"><span>Chiết khấu đơn${order.discount_reason ? ` (${esc(order.discount_reason)})` : ' (chưa có lý do riêng)'}</span><span class="${order.order_discount_type === 'increase' ? 'text-primary' : 'text-danger'}">${order.order_discount_type === 'increase' ? '+' : '-'}${money(Math.abs(Number(order.extra_discount_total || order.order_discount || 0)))}</span></div>
                             <div class="recon-mini-row"><span>Phí ship</span><span>${money(order.shipping_fee)}</span></div>
                             ${Number(order.customer_shipping_fee || 0) > 0 ? `<div class="recon-mini-row"><span>Phí giao hàng thu khách</span><span>${money(order.customer_shipping_fee)}</span></div>` : ''}
                             ${Number(order.foam_box_fee || 0) > 0 ? `<div class="recon-mini-row"><span>Phí thùng xốp</span><span>${money(order.foam_box_fee)}</span></div>` : ''}
@@ -680,6 +739,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             <div class="recon-mini-row border-top mt-1 pt-2 fs-6"><strong>Tổng giá trị đơn hàng</strong><strong>${money(order.total)}</strong></div>
                         </div></div>
                     </div>
+                    ${(data.pricing_changes || []).length ? `<div class="recon-detail-section"><div class="recon-detail-title">Lịch sử thay đổi giá / chiết khấu</div>${data.pricing_changes.map(change => `<div class="border-start border-3 border-warning ps-2 mb-2"><div>${esc(change.note)}</div><div class="small text-muted">${esc(change.user)} · ${esc(change.at)}</div></div>`).join('')}</div>` : ''}
                     <div class="recon-detail-section">
                         <div class="recon-detail-title">Luồng xử lý</div>
                         <div class="recon-info-grid">

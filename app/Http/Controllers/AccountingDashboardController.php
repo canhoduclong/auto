@@ -2679,6 +2679,20 @@ class AccountingDashboardController extends Controller
             ->where('type', 'payment')
             ->sortByDesc('id')
             ->first();
+        $pricingChanges = $order->histories
+            ->filter(fn ($history) => in_array($history->action, [
+                'sale_changed_after_packing', 'warehouse_confirmed_sale_changes',
+                'order_adjustment_applied', 'order_updated',
+            ], true) || preg_match('/giảm|chiết khấu|giá/iu', (string) $history->note))
+            ->sortByDesc('id')
+            ->take(10)
+            ->map(fn ($history) => [
+                'action' => $history->action,
+                'note' => $history->note,
+                'user' => $history->user?->name ?? '-',
+                'at' => optional($history->created_at)->format('d/m/Y H:i'),
+            ])->values();
+        $discountReason = trim((string) ($pricingChanges->first()['note'] ?? ''));
 
         return response()->json([
             'order' => [
@@ -2690,6 +2704,11 @@ class AccountingDashboardController extends Controller
                 'total' => (float) $order->total,
                 'subtotal_amount' => (float) ($order->subtotal_amount ?? $order->total ?? 0),
                 'total_discount' => (float) ($order->total_discount ?? 0),
+                'item_discount_total' => (float) ($order->item_discount_total ?? 0),
+                'extra_discount_total' => (float) ($order->extra_discount_total ?? 0),
+                'order_discount' => (float) ($order->order_discount ?? 0),
+                'order_discount_type' => (string) ($order->order_discount_type ?? 'decrease'),
+                'discount_reason' => $discountReason !== '' ? $discountReason : null,
                 'amount_paid' => $effectivePaid,
                 'amount_due' => $effectiveDue,
                 'accounting_amount_paid' => (float) ($order->amount_paid ?? 0),
@@ -2725,8 +2744,13 @@ class AccountingDashboardController extends Controller
                 'total_label' => $item->display_total_label,
                 'weight' => (float) ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight ?? 0),
                 'unit_price' => (float) ($item->price ?? $item->unit_price ?? 0),
+                'base_price' => (float) ($item->base_price ?? $item->price ?? $item->unit_price ?? 0),
+                'unit_discount' => (float) ($item->unit_discount ?? 0),
+                'discount_type' => (string) ($item->discount_type ?? 'decrease'),
+                'discount_total' => (float) ($item->discount_total ?? 0),
                 'line_total' => (float) ($item->subtotal ?? $item->total ?? ((float) ($item->quantity ?? 0) * (float) ($item->price ?? $item->unit_price ?? 0))),
             ])->values(),
+            'pricing_changes' => $pricingChanges,
             'approval' => [
                 'created_by' => $order->user?->name ?? '-',
                 'approved_by' => $approvedHistory?->user?->name ?? '-',
