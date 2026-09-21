@@ -1042,6 +1042,21 @@ class PageController extends Controller
                 'accountingReconciliation',
                 'additionalFees',
                 'approvals.step',
+                'approvals.approver:id,name,short_name',
+                'histories' => function ($query): void {
+                    $query->whereIn('action', [
+                        'start_packing',
+                        'warehouse_confirm_pack',
+                        'complete_packing',
+                        'warehouse_complete_packing',
+                    ])->oldest('id');
+                },
+                'warehouseTransfers' => function ($query): void {
+                    $query->with([
+                        'sourceWarehouse:id,name',
+                        'targetWarehouse:id,name',
+                    ])->latest('id');
+                },
                 'adjustments' => function ($query): void {
                     $query->with([
                         'requester:id,name,team_id',

@@ -283,10 +283,7 @@
         color: #b91c1c;
     }
     .monitor-order-head {
-        display: grid;
-        grid-template-columns: minmax(180px, 1fr) minmax(250px, 280px);
-        align-items: start;
-        gap: 18px;
+        display: block;
         padding-bottom: 10px;
         border-bottom: 1px solid #edf2f7;
     }
@@ -305,28 +302,35 @@
     }
     .monitor-order-name { color: #075985; font-weight: 800; text-transform: uppercase; }
     .monitor-order-code { color: #64748b; font-size: .72rem; }
-    .monitor-timeline { padding-top: 2px; }
+    .monitor-timeline {
+        width: min(100%, 760px);
+        margin-top: 14px;
+        padding: 2px 14px 0 28px;
+        overflow-x: auto;
+    }
     .monitor-timeline-track {
         position: relative;
-        display: flex;
-        justify-content: space-between;
-        padding: 0 7px;
+        display: grid;
+        grid-template-columns: repeat(var(--timeline-columns, 8), minmax(72px, 1fr));
+        min-width: calc(var(--timeline-columns, 8) * 72px);
     }
     .monitor-timeline-track::before {
         content: "";
         position: absolute;
         top: 8px;
-        left: 14px;
-        right: 14px;
+        left: calc(50% / var(--timeline-columns, 8));
+        right: calc(50% / var(--timeline-columns, 8));
         height: 3px;
         background: #d9e4ef;
     }
     .monitor-timeline-progress {
         position: absolute;
         top: 8px;
-        left: 14px;
+        left: calc(50% / var(--timeline-columns, 8));
         height: 3px;
+        width: var(--timeline-progress-width, 0%);
         background: linear-gradient(90deg, #0e7490, #2563eb);
+        opacity:0.4;
     }
     .monitor-timeline-dot {
         position: relative;
@@ -336,6 +340,7 @@
         border: 2px solid #cbd9e8;
         border-radius: 50%;
         background: #fff;
+        justify-self: center;
     }
     .monitor-timeline-dot.done { border-color: #0e7490; background: #0e7490; }
     .monitor-timeline-dot.current {
@@ -345,12 +350,14 @@
     }
     .monitor-timeline-labels {
         display: grid;
-        grid-template-columns: repeat(5, 1fr);
+        grid-template-columns: repeat(var(--timeline-columns, 8), minmax(72px, 1fr));
+        min-width: calc(var(--timeline-columns, 8) * 72px);
         margin-top: 5px;
         color: #64748b;
         font-size: .62rem;
         text-align: center;
     }
+    .monitor-timeline-labels span { padding: 0 3px; overflow-wrap: anywhere; }
     .monitor-meta {
         display: grid;
         gap: 4px;
@@ -991,28 +998,6 @@
         'pending_warehouse_approval' => 'Chờ Kho duyệt',
         'shipping' => 'Đang vận chuyển',
         'picked_up' => 'Đã lấy hàng',
-    ];
-    $timelineSteps = ['Đặt đơn', 'Duyệt', 'Kho', 'Vận chuyển', 'Hoàn tất'];
-    $timelineMap = [
-        \App\Models\Order::STATUS_ORDER_PLACED => 0,
-        \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL => 1,
-        \App\Models\Order::STATUS_PENDING_MANAGER_APPROVAL => 1,
-        'pending_warehouse_approval' => 1,
-        \App\Models\Order::STATUS_ORDER_CONFIRMED => 1,
-        \App\Models\Order::STATUS_APPROVED => 1,
-        \App\Models\Order::STATUS_READY_TO_PACK => 2,
-        \App\Models\Order::STATUS_PACKING => 2,
-        \App\Models\Order::STATUS_PACKED => 2,
-        \App\Models\Order::STATUS_READY_TO_SHIP => 3,
-        \App\Models\Order::STATUS_DELIVERING => 3,
-        \App\Models\Order::STATUS_IN_DELIVERY => 3,
-        'shipping' => 3,
-        'picked_up' => 3,
-        \App\Models\Order::STATUS_DELIVERED => 4,
-        \App\Models\Order::STATUS_COMPLETED => 4,
-        \App\Models\Order::STATUS_RETURNING => 3,
-        \App\Models\Order::STATUS_RETURNED => 4,
-        \App\Models\Order::STATUS_RETURNED_COMPLETED => 4,
     ];
     $monitorStateLabels = [
         'pending' => 'Đã lên đơn, chờ duyệt',
@@ -1850,8 +1835,69 @@
                             $hasInvalidSizeItems = $order->items->contains(
                                 fn ($item) => (float) ($item->effective_unit_weight ?? 0) <= 0
                             );
-                            $timelineIndex = $timelineMap[$order->status] ?? 0;
-                            $timelinePercent = ($timelineIndex / 4) * 100;
+                            $leaderRoleSlugs = ['leader_sale', 'leader', 'sale_manager'];
+                            $managerRoleSlugs = ['manager_sale', 'manager', 'director'];
+                            $leaderApproval = $order->approvals
+                                ->filter(fn ($approval) => in_array(strtolower((string) $approval->step?->role_slug), $leaderRoleSlugs, true))
+                                ->sortBy(fn ($approval) => (int) ($approval->step?->step_order ?? PHP_INT_MAX))
+                                ->first();
+                            $managerApproval = $order->approvals
+                                ->filter(fn ($approval) => in_array(strtolower((string) $approval->step?->role_slug), $managerRoleSlugs, true))
+                                ->sortBy(fn ($approval) => (int) ($approval->step?->step_order ?? PHP_INT_MAX))
+                                ->first();
+                            $pastApproval = !in_array((string) $order->status, [
+                                'draft', 'pending',
+                                \App\Models\Order::STATUS_ORDER_PLACED,
+                                \App\Models\Order::STATUS_PENDING_LEADER_APPROVAL,
+                                \App\Models\Order::STATUS_PENDING_MANAGER_APPROVAL,
+                            ], true);
+                            $leaderDone = $leaderApproval?->status === 'approved' || (!$leaderApproval && $pastApproval);
+                            $managerDone = $managerApproval?->status === 'approved' || (!$managerApproval && $pastApproval);
+                            $warehouseAccepted = $order->histories->isNotEmpty() || in_array((string) $order->status, [
+                                \App\Models\Order::STATUS_PACKING,
+                                \App\Models\Order::STATUS_PACKED,
+                                \App\Models\Order::STATUS_READY_TO_SHIP,
+                                \App\Models\Order::STATUS_DELIVERING,
+                                \App\Models\Order::STATUS_IN_DELIVERY,
+                                'shipping', 'picked_up',
+                                \App\Models\Order::STATUS_DELIVERED,
+                                \App\Models\Order::STATUS_COMPLETED,
+                            ], true);
+                            $activeTransfer = $order->warehouseTransfers
+                                ->first(fn ($transfer) => $transfer->status !== \App\Models\WarehouseTransfer::STATUS_CANCELLED);
+                            $transferDone = $activeTransfer && in_array($activeTransfer->status, [
+                                    \App\Models\WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                                    \App\Models\WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
+                                ], true);
+                            $targetWarehouseReceived = $activeTransfer
+                                && $activeTransfer->status === \App\Models\WarehouseTransfer::STATUS_RECEIVED_COMPLETED;
+                            $deliveryDone = in_array((string) $order->status, [
+                                \App\Models\Order::STATUS_DELIVERED,
+                                \App\Models\Order::STATUS_COMPLETED,
+                            ], true);
+                            $completed = (string) $order->status === \App\Models\Order::STATUS_COMPLETED;
+                            $packingWarehouseName = $activeTransfer?->sourceWarehouse?->name ?: $order->warehouse?->name;
+                            $warehouseLabel = $warehouseAccepted && $packingWarehouseName
+                                ? $packingWarehouseName
+                                : 'Kho';
+                            $transferTargetName = $activeTransfer?->targetWarehouse?->name ?: 'Kho Chiến Lược';
+                            $timelineSteps = [
+                                ['label' => 'Đặt đơn', 'done' => true, 'title' => 'Đơn đã được tạo'],
+                                ['label' => 'Leader duyệt', 'done' => $leaderDone, 'title' => $leaderDone ? (($leaderApproval?->approver?->short_name ?: $leaderApproval?->approver?->name) ?: 'Leader đã duyệt') : 'Chờ Leader duyệt'],
+                                ['label' => 'Manager duyệt', 'done' => $managerDone, 'title' => $managerDone ? (($managerApproval?->approver?->short_name ?: $managerApproval?->approver?->name) ?: 'Manager đã duyệt') : 'Chờ Manager duyệt'],
+                                ['label' => $warehouseLabel, 'done' => $warehouseAccepted, 'title' => $warehouseAccepted ? $warehouseLabel.' đã nhận đóng hàng' : 'Chưa có kho nhận đóng hàng'],
+                            ];
+                            if ($activeTransfer) {
+                                $timelineSteps[] = ['label' => 'Điều chuyển', 'done' => $transferDone, 'title' => 'Điều chuyển tới '.$transferTargetName];
+                                $timelineSteps[] = ['label' => $transferTargetName, 'done' => $targetWarehouseReceived, 'title' => $targetWarehouseReceived ? $transferTargetName.' đã nhận hàng' : 'Chờ '.$transferTargetName.' nhận hàng'];
+                            }
+                            $timelineSteps[] = ['label' => 'Giao hàng', 'done' => $deliveryDone, 'title' => $deliveryDone ? 'Đã giao hàng' : 'Chờ giao hàng'];
+                            $timelineSteps[] = ['label' => 'Hoàn thành', 'done' => $completed, 'title' => $completed ? 'Đơn đã hoàn thành' : 'Chưa hoàn thành'];
+                            $timelineCurrentIndex = collect($timelineSteps)->search(fn ($step) => !$step['done']);
+                            $timelineCurrentIndex = $timelineCurrentIndex === false ? count($timelineSteps) - 1 : $timelineCurrentIndex;
+                            $timelineLastDoneIndex = collect($timelineSteps)->where('done', true)->keys()->last() ?? 0;
+                            $timelinePercent = ($timelineLastDoneIndex / max(1, count($timelineSteps) - 1)) * 100;
+                            $timelineProgressWidth = ((count($timelineSteps) - 1) / max(1, count($timelineSteps))) * $timelinePercent;
                             $defaultAddress = $order->customer?->addresses?->firstWhere('is_default', 1)
                                 ?? $order->customer?->addresses?->first();
                             $deliveryAddress = $order->recipient_address
@@ -1964,15 +2010,15 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="monitor-timeline">
+                                    <div class="monitor-timeline" style="--timeline-columns: {{ count($timelineSteps) }}; --timeline-progress-width: {{ $timelineProgressWidth }}%">
                                         <div class="monitor-timeline-track">
-                                            <div class="monitor-timeline-progress" style="width: {{ $timelinePercent }}%"></div>
-                                            @foreach($timelineSteps as $stepIndex => $stepName)
-                                                <span class="monitor-timeline-dot {{ $stepIndex < $timelineIndex ? 'done' : ($stepIndex === $timelineIndex ? 'current' : '') }}" title="{{ $stepName }}"></span>
+                                            <div class="monitor-timeline-progress"></div>
+                                            @foreach($timelineSteps as $stepIndex => $step)
+                                                <span class="monitor-timeline-dot {{ $step['done'] ? 'done' : ($stepIndex === $timelineCurrentIndex ? 'current' : '') }}" title="{{ $step['title'] }}"></span>
                                             @endforeach
                                         </div>
                                         <div class="monitor-timeline-labels">
-                                            @foreach($timelineSteps as $stepName)<span>{{ $stepName }}</span>@endforeach
+                                            @foreach($timelineSteps as $step)<span title="{{ $step['title'] }}">{{ $step['label'] }}</span>@endforeach
                                         </div>
                                     </div>
                                 </div>
