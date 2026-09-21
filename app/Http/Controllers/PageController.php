@@ -2160,11 +2160,16 @@ class PageController extends Controller
             ->with([
                 'avatar.media',
                 'variants.latestPriceLog',
+                'variants.latestPriceRule',
             ])
             ->where('status', true)
             ->whereHas('variants', function ($variantQuery) {
-                $variantQuery->whereHas('latestPriceLog', function ($priceLogQuery) {
-                    $priceLogQuery->where('new_price', '>', 0);
+                $variantQuery->where(function ($priceQuery) {
+                    $priceQuery->whereHas('latestPriceRule', function ($priceRuleQuery) {
+                        $priceRuleQuery->where('price', '>', 0);
+                    })->orWhereHas('latestPriceLog', function ($priceLogQuery) {
+                        $priceLogQuery->where('new_price', '>', 0);
+                    });
                 });
             })
             ->when($keyword !== '', function ($query) use ($keyword) {
@@ -2187,7 +2192,9 @@ class PageController extends Controller
             $products->getCollection()->map(function (Product $product) {
                 $variantRows = $product->variants
                     ->map(function (ProductVariant $variant) {
-                        $price = (float) ($variant->latestPriceLog?->new_price ?? 0);
+                        $price = (float) ($variant->latestPriceRule?->price
+                            ?? $variant->latestPriceLog?->new_price
+                            ?? 0);
 
                         $variant->setAttribute('current_price', $price);
                         $variant->setAttribute('price_key', number_format($price, 4, '.', ''));
@@ -2237,8 +2244,12 @@ class PageController extends Controller
             ->whereHas('product', function ($query) {
                 $query->where('status', true);
             })
-            ->whereHas('latestPriceLog', function ($priceLogQuery) {
-                $priceLogQuery->where('new_price', '>', 0);
+            ->where(function ($priceQuery) {
+                $priceQuery->whereHas('latestPriceRule', function ($priceRuleQuery) {
+                    $priceRuleQuery->where('price', '>', 0);
+                })->orWhereHas('latestPriceLog', function ($priceLogQuery) {
+                    $priceLogQuery->where('new_price', '>', 0);
+                });
             })
             ->when($keyword !== '', function ($query) use ($keyword) {
                 $query->where(function ($sub) use ($keyword) {
@@ -2261,8 +2272,12 @@ class PageController extends Controller
             ->select(['id', 'name'])
             ->where('status', true)
             ->whereHas('variants', function ($variantQuery) {
-                $variantQuery->whereHas('latestPriceLog', function ($priceLogQuery) {
-                    $priceLogQuery->where('new_price', '>', 0);
+                $variantQuery->where(function ($priceQuery) {
+                    $priceQuery->whereHas('latestPriceRule', function ($priceRuleQuery) {
+                        $priceRuleQuery->where('price', '>', 0);
+                    })->orWhereHas('latestPriceLog', function ($priceLogQuery) {
+                        $priceLogQuery->where('new_price', '>', 0);
+                    });
                 });
             })
             ->orderBy('name')

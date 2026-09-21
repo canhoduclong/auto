@@ -1032,7 +1032,7 @@
         .monitor-mobile-item { min-width: 0; padding: 10px; border: 1px solid #dfe8f2; border-radius: 8px; background: rgba(255,255,255,.86); }
         .monitor-mobile-item-name { overflow-wrap: anywhere; color: #0f172a; font-size: .78rem; font-weight: 800; }
         .monitor-mobile-item-sku { color: #64748b; font-size: .66rem; font-weight: 500; }
-        .monitor-mobile-item-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 12px; margin-top: 8px; }
+        .monitor-mobile-item-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px 12px; margin-top: 8px; }
         .monitor-mobile-item-field { min-width: 0; }
         .monitor-mobile-item-field span { display: block; color: #64748b; font-size: .61rem; font-weight: 800; text-transform: uppercase; }
         .monitor-mobile-item-field strong { display: block; margin-top: 1px; overflow-wrap: anywhere; color: #0f172a; font-size: .76rem; }
@@ -1998,8 +1998,8 @@
                             $transferTargetName = $activeTransfer?->targetWarehouse?->name ?: 'Kho Chiến Lược';
                             $timelineSteps = [
                                 ['label' => 'Đặt đơn', 'done' => true, 'title' => 'Đơn đã được tạo'],
-                                ['label' => 'Leader duyệt', 'done' => $leaderDone, 'title' => $leaderDone ? (($leaderApproval?->approver?->short_name ?: $leaderApproval?->approver?->name) ?: 'Leader đã duyệt') : 'Chờ Leader duyệt'],
-                                ['label' => 'Manager duyệt', 'done' => $managerDone, 'title' => $managerDone ? (($managerApproval?->approver?->short_name ?: $managerApproval?->approver?->name) ?: 'Manager đã duyệt') : 'Chờ Manager duyệt'],
+                                ['label' => 'Leader', 'done' => $leaderDone, 'title' => $leaderDone ? (($leaderApproval?->approver?->short_name ?: $leaderApproval?->approver?->name) ?: 'Leader đã duyệt') : 'Chờ Leader duyệt'],
+                                ['label' => 'Manager', 'done' => $managerDone, 'title' => $managerDone ? (($managerApproval?->approver?->short_name ?: $managerApproval?->approver?->name) ?: 'Manager đã duyệt') : 'Chờ Manager duyệt'],
                                 ['label' => $warehouseLabel, 'done' => $warehouseAccepted, 'title' => $warehouseAccepted ? $warehouseLabel.' đã nhận đóng hàng' : 'Chưa có kho nhận đóng hàng'],
                             ];
                             if ($activeTransfer) {
