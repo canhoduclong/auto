@@ -8,12 +8,43 @@ use Illuminate\Support\Str;
 
 class PermissionController extends Controller
 {
+    private const GROUP_CATALOG = [
+        'access-control' => ['Phân quyền & vai trò', 'Quản lý vai trò, quyền truy cập và phạm vi sử dụng.', 10],
+        'users' => ['Người dùng', 'Quản lý tài khoản, hồ sơ và thông tin đăng nhập.', 20],
+        'customers' => ['Khách hàng', 'Quản lý hồ sơ, công nợ và dữ liệu khách hàng.', 30],
+        'products' => ['Sản phẩm & giá', 'Quản lý sản phẩm, biến thể, danh mục và giá bán.', 40],
+        'orders' => ['Đơn hàng', 'Tạo, xem và xử lý vòng đời đơn hàng.', 50],
+        'warehouse' => ['Kho & tồn kho', 'Đóng hàng, nhập xuất, điều chuyển và kiểm soát tồn kho.', 60],
+        'shipping' => ['Giao hàng', 'Phân công shipper, giao nhận và chi phí vận chuyển.', 70],
+        'accounting' => ['Kế toán & tài chính', 'Đối soát, thu chi, công nợ và nghiệp vụ kế toán.', 80],
+        'notifications' => ['Thông báo', 'Tạo, sửa, gửi và quản trị thông báo hệ thống.', 90],
+        'reports' => ['Báo cáo & thống kê', 'Xem báo cáo điều hành, doanh thu và thống kê.', 100],
+        'media' => ['Tệp & hình ảnh', 'Quản lý tệp tải lên và thư viện hình ảnh.', 110],
+        'other' => ['Khác', 'Các quyền chưa thuộc phân hệ chuyên biệt.', 999],
+    ];
+
+    private const ACTION_CATALOG = [
+        'index' => ['Xem danh sách', 10], 'show' => ['Xem chi tiết', 20],
+        'create' => ['Mở form thêm', 30], 'store' => ['Thêm mới', 40],
+        'edit' => ['Mở form sửa', 50], 'update' => ['Cập nhật', 60],
+        'confirm' => ['Xác nhận', 70], 'approve' => ['Duyệt', 71],
+        'reject' => ['Từ chối', 72], 'cancel' => ['Hủy', 73],
+        'destroy' => ['Xóa', 90], 'delete' => ['Xóa', 90],
+        'export' => ['Xuất dữ liệu', 100], 'import' => ['Nhập dữ liệu', 101],
+        'print' => ['In', 102], 'sync-routes' => ['Đồng bộ route', 110],
+    ];
+
     public function index()
     {
         $permissions = Permission::query()
-            ->orderBy('group')
-            ->orderBy('name')
-            ->get();
+            ->get()
+            ->sortBy(fn (Permission $permission) => sprintf(
+                '%04d-%04d-%s',
+                $this->groupMeta($permission->group)['order'],
+                $this->actionMeta($permission->name)['order'],
+                $permission->name
+            ))
+            ->values();
 
         $stats = [
             'total' => (int) $permissions->count(),
@@ -22,8 +53,10 @@ class PermissionController extends Controller
         ];
         $groupedPermissions = $permissions->groupBy(fn (Permission $permission) => $permission->group ?: 'other');
         $groupOptions = $groupedPermissions->keys()->sort()->values();
+        $groupCatalog = collect($groupedPermissions->keys())->mapWithKeys(fn ($group) => [$group => $this->groupMeta($group)]);
+        $permissionCatalog = $permissions->mapWithKeys(fn (Permission $permission) => [$permission->id => $this->actionMeta($permission->name)]);
 
-        return view('permissions.index', compact('permissions', 'stats', 'groupedPermissions', 'groupOptions'));
+        return view('permissions.index', compact('permissions', 'stats', 'groupedPermissions', 'groupOptions', 'groupCatalog', 'permissionCatalog'));
     }
 
     public function syncFromRoutes()
@@ -179,5 +212,29 @@ class PermissionController extends Controller
             Str::contains($root, ['media', 'upload', 'file']) => 'media',
             default => Str::slug($root ?: trim(explode('/', trim($uri, '/'))[0] ?? 'other')) ?: 'other',
         };
+    }
+
+    private function groupMeta(?string $group): array
+    {
+        $key = $group ?: 'other';
+        [$label, $description, $order] = self::GROUP_CATALOG[$key]
+            ?? [Str::headline($key), 'Nhóm quyền '.$key.'.', 500];
+
+        return compact('label', 'description', 'order');
+    }
+
+    private function actionMeta(string $permissionName): array
+    {
+        $segments = explode('.', $permissionName);
+        $action = (string) end($segments);
+        [$label, $order] = self::ACTION_CATALOG[$action] ?? [Str::headline($action), 80];
+        $resource = count($segments) > 1 ? $segments[count($segments) - 2] : $segments[0];
+
+        return [
+            'key' => $action,
+            'label' => $label,
+            'order' => $order,
+            'explanation' => $label.' đối với chức năng '.Str::lower(Str::headline($resource)).'.',
+        ];
     }
 }

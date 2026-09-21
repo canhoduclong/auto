@@ -51,6 +51,10 @@
                 <div class="col-lg-8"><label for="permission-search" class="form-label fw-semibold mb-1">Tìm quyền nhanh</label><input type="text" id="permission-search" class="form-control" placeholder="Nhập tên quyền, mô tả hoặc URI..."></div>
                 <div class="col-lg-4"><label for="permission-group-filter" class="form-label fw-semibold mb-1">Nhóm chức năng</label><select id="permission-group-filter" class="form-select"><option value="">Tất cả nhóm</option>@foreach($groupOptions as $group)<option value="{{ strtolower($group) }}">{{ ucfirst(str_replace('-', ' ', $group)) }} ({{ $groupedPermissions[$group]->count() }})</option>@endforeach</select></div>
             </div>
+            <div class="d-flex gap-2 mt-3">
+                <button type="button" class="btn btn-sm btn-outline-primary" id="expand-all-groups"><i class="bi bi-arrows-expand me-1"></i>Mở tất cả nhóm</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="collapse-all-groups"><i class="bi bi-arrows-collapse me-1"></i>Thu gọn tất cả</button>
+            </div>
         </div>
     </div>
 
@@ -60,6 +64,7 @@
                 <tr>
                     <th style="width:70px;">ID</th>
                     <th style="min-width:220px;">Tên quyền</th>
+                    <th style="min-width:145px;">Thao tác</th>
                     <th style="min-width:160px;">Nhóm</th>
                     <th style="min-width:110px;">Method</th>
                     <th style="min-width:220px;">URI</th>
@@ -69,13 +74,16 @@
             </thead>
             <tbody>
                 @forelse($groupedPermissions as $group => $groupPermissions)
-                    <tr class="table-primary permission-group-header" data-group="{{ strtolower($group) }}"><td colspan="7"><div class="d-flex justify-content-between align-items-center"><strong><i class="bi bi-folder2-open me-2"></i>{{ ucfirst(str_replace('-', ' ', $group)) }}</strong><span class="badge bg-primary">{{ $groupPermissions->count() }} quyền</span></div></td></tr>
+                    @php($groupMeta = $groupCatalog[$group])
+                    <tr class="table-primary permission-group-header" data-group="{{ strtolower($group) }}"><td colspan="8"><button type="button" class="btn btn-link text-decoration-none text-start text-dark w-100 p-0 js-toggle-permission-group" data-group="{{ strtolower($group) }}" aria-expanded="true"><div class="d-flex justify-content-between align-items-center gap-3"><span><strong><i class="bi bi-folder2-open me-2 js-group-icon"></i>{{ $groupMeta['label'] }}</strong><small class="d-block text-muted mt-1">{{ $groupMeta['description'] }}</small></span><span class="text-nowrap"><span class="badge bg-primary me-2">{{ $groupPermissions->count() }} quyền</span><i class="bi bi-chevron-up js-group-chevron"></i></span></div></button></td></tr>
                     @foreach($groupPermissions as $p)
                     <tr class="permission-row" data-group="{{ strtolower($group) }}">
                         <td>{{ $p->id }}</td>
                         <td>
                             <div class="fw-semibold">{{ $p->name }}</div>
+                            <small class="text-muted">{{ $permissionCatalog[$p->id]['explanation'] }}</small>
                         </td>
+                        <td><span class="badge bg-light text-dark border">{{ $permissionCatalog[$p->id]['label'] }}</span></td>
                         <td>
                             @if(!empty($p->group))
                                 <span class="badge bg-info text-dark">{{ $p->group }}</span>
@@ -110,7 +118,7 @@
                     @endforeach
                 @empty
                     <tr>
-                        <td colspan="7" class="text-center text-muted py-4">Chưa có quyền nào.</td>
+                        <td colspan="8" class="text-center text-muted py-4">Chưa có quyền nào.</td>
                     </tr>
                 @endforelse
             </tbody>
@@ -129,6 +137,21 @@ document.addEventListener('DOMContentLoaded', function () {
     const rows = Array.from(table.querySelectorAll('tbody .permission-row'));
     const groupHeaders = Array.from(table.querySelectorAll('tbody .permission-group-header'));
     const groupFilter = document.getElementById('permission-group-filter');
+    const manuallyCollapsedGroups = new Set();
+
+    function paintGroup(group) {
+        const header = groupHeaders.find(item => item.dataset.group === group);
+        const collapsed = manuallyCollapsedGroups.has(group);
+        rows.filter(row => row.dataset.group === group).forEach(row => {
+            if (collapsed) row.style.display = 'none';
+        });
+        const button = header?.querySelector('.js-toggle-permission-group');
+        button?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        const icon = header?.querySelector('.js-group-icon');
+        if (icon) icon.className = `bi ${collapsed ? 'bi-folder2' : 'bi-folder2-open'} me-2 js-group-icon`;
+        const chevron = header?.querySelector('.js-group-chevron');
+        if (chevron) chevron.className = `bi ${collapsed ? 'bi-chevron-down' : 'bi-chevron-up'} js-group-chevron`;
+    }
 
     function applyPermissionFilters() {
         const keyword = (searchInput.value || '').trim().toLowerCase();
@@ -138,15 +161,36 @@ document.addEventListener('DOMContentLoaded', function () {
             const text = (row.textContent || '').toLowerCase();
             const matchesKeyword = keyword === '' || text.includes(keyword);
             const matchesGroup = selectedGroup === '' || row.dataset.group === selectedGroup;
-            row.style.display = matchesKeyword && matchesGroup ? '' : 'none';
+            const expanded = !manuallyCollapsedGroups.has(row.dataset.group);
+            row.style.display = matchesKeyword && matchesGroup && expanded ? '' : 'none';
         });
         groupHeaders.forEach(function (header) {
-            const hasVisibleRows = rows.some(row => row.dataset.group === header.dataset.group && row.style.display !== 'none');
-            header.style.display = hasVisibleRows ? '' : 'none';
+            const hasMatchingRows = rows.some(row => {
+                const matchesKeyword = keyword === '' || (row.textContent || '').toLowerCase().includes(keyword);
+                const matchesGroup = selectedGroup === '' || row.dataset.group === selectedGroup;
+                return row.dataset.group === header.dataset.group && matchesKeyword && matchesGroup;
+            });
+            header.style.display = hasMatchingRows ? '' : 'none';
         });
     }
     searchInput.addEventListener('input', applyPermissionFilters);
     groupFilter?.addEventListener('change', applyPermissionFilters);
+    document.querySelectorAll('.js-toggle-permission-group').forEach(button => button.addEventListener('click', function () {
+        const group = button.dataset.group;
+        manuallyCollapsedGroups.has(group) ? manuallyCollapsedGroups.delete(group) : manuallyCollapsedGroups.add(group);
+        applyPermissionFilters();
+        paintGroup(group);
+    }));
+    document.getElementById('expand-all-groups')?.addEventListener('click', function () {
+        manuallyCollapsedGroups.clear();
+        applyPermissionFilters();
+        groupHeaders.forEach(header => paintGroup(header.dataset.group));
+    });
+    document.getElementById('collapse-all-groups')?.addEventListener('click', function () {
+        groupHeaders.forEach(header => manuallyCollapsedGroups.add(header.dataset.group));
+        applyPermissionFilters();
+        groupHeaders.forEach(header => paintGroup(header.dataset.group));
+    });
 });
 </script>
 @endsection
