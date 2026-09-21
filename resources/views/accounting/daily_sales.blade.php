@@ -461,7 +461,10 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                     </tr>
                 </thead>
                 <tbody>
-                @php $rowNo = ($items->currentPage() - 1) * $items->perPage() + 1; @endphp
+                @php
+                    $rowNo = ($items->currentPage() - 1) * $items->perPage() + 1;
+                    $shownDiscountOrders = [];
+                @endphp
                 @forelse($items as $row)
                     @php
                         $adjFlag   = (bool) $row->has_adj;
@@ -469,9 +472,11 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         $effPrice  = (float) $row->eff_price;
                         $effWeight = (float) $row->eff_weight;
                         $effTotal  = (float) $row->eff_total;
-                        $lineDiscount = max(0, (float) ($row->eff_discount ?? $row->discount_total ?? 0));
                         $orderDiscount = max(0, (float) ($row->order_total_discount ?? 0));
-                        $displayDiscount = $lineDiscount > 0 ? $lineDiscount : $orderDiscount;
+                        $showOrderDiscount = $orderDiscount > 0 && !in_array((int) $row->order_id_val, $shownDiscountOrders, true);
+                        if ($showOrderDiscount) {
+                            $shownDiscountOrders[] = (int) $row->order_id_val;
+                        }
 
                         $unitLabel = \App\Enums\ProductUnit::tryFrom($row->product_unit ?? '')?->label() ?? 'Cái';
 
@@ -534,11 +539,8 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         <td class="text-end fw-bold text-success">
                             {{ number_format($effTotal, 0, ',', '.') }}
                         </td>
-                        <td class="text-end fw-bold {{ $displayDiscount > 0 ? 'text-danger' : 'text-muted' }}">
-                            {{ $displayDiscount > 0 ? '-'.number_format($displayDiscount, 0, ',', '.').'đ' : '—' }}
-                            @if($lineDiscount <= 0 && $orderDiscount > 0)
-                                <div class="small fw-normal">Toàn đơn</div>
-                            @endif
+                        <td class="text-end fw-bold {{ $showOrderDiscount ? 'text-danger' : 'text-muted' }}">
+                            {{ $showOrderDiscount ? '-'.number_format($orderDiscount, 0, ',', '.').'đ' : '—' }}
                         </td>
                     </tr>
                 @empty
