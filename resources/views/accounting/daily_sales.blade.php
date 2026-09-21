@@ -329,6 +329,21 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
         <div class="val">{{ number_format((int)($summary->item_count ?? 0)) }}</div>
         <div class="sub">{{ number_format((int)($summary->order_count ?? 0)) }} đơn hàng</div>
     </div>
+    <div class="ds-kpi-item">
+        <div class="lbl">Tổng chi phí giảm giá</div>
+        <div class="val text-danger">{{ number_format((float)($summary->total_discount ?? 0), 0, ',', '.') }}đ</div>
+        <div class="sub">Giảm giá sản phẩm và chiết khấu đơn</div>
+    </div>
+    <div class="ds-kpi-item">
+        <div class="lbl">Hao hụt sản phẩm</div>
+        <div class="val text-warning">{{ $fmtN((float)($summary->loss_weight ?? 0)) }} kg</div>
+        <div class="sub">Giá trị hao hụt: <strong class="text-danger">{{ number_format((float)($summary->loss_value ?? 0), 0, ',', '.') }}đ</strong></div>
+    </div>
+    <div class="ds-kpi-item">
+        <div class="lbl">Tổng chi phí ship</div>
+        <div class="val text-primary">{{ number_format((float)($summary->total_shipping_fee ?? 0), 0, ',', '.') }}đ</div>
+        <div class="sub">Theo đơn trong khoảng ngày đã lọc</div>
+    </div>
 </div>
 
 {{-- ── Product stats ────────────────────────────────────────────────── --}}

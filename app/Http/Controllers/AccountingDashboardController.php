@@ -15,6 +15,7 @@ use App\Models\Transaction;
 use App\Models\TransactionCategory;
 use App\Models\User;
 use App\Models\Warehouse;
+use App\Models\WarehouseTransfer;
 use App\Notifications\AccountingOrderRevenueConfirmed;
 use App\Services\ApprovalService;
 use App\Services\CompletedSalesJournalService;
@@ -2132,6 +2133,37 @@ class AccountingDashboardController extends Controller
             ->when($saleId > 0, fn ($query) => $query->where('orders.user_id', $saleId))
             ->when($customerId > 0, fn ($query) => $query->where('orders.customer_id', $customerId))
             ->sum('orders.total');
+
+        $orderCostSummary = DB::table('orders')
+            ->whereNotIn('orders.status', ['rejected', 'cancelled'])
+            ->whereRaw("{$businessDateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
+            ->when($saleId > 0, fn ($query) => $query->where('orders.user_id', $saleId))
+            ->when($customerId > 0, fn ($query) => $query->where('orders.customer_id', $customerId))
+            ->selectRaw('COALESCE(SUM(orders.total_discount), 0) as total_discount')
+            ->selectRaw('COALESCE(SUM(orders.shipping_fee), 0) as total_shipping_fee')
+            ->first();
+        $summary->total_discount = (float) ($orderCostSummary->total_discount ?? 0);
+        $summary->total_shipping_fee = (float) ($orderCostSummary->total_shipping_fee ?? 0);
+
+        $lossTransfers = WarehouseTransfer::query()
+            ->with(['order.items:id,order_id,price,total,total_weight,packed_weight,actual_weight,is_priced_by_kg'])
+            ->where('weight_loss', '>', 0)
+            ->whereHas('order', function ($orders) use ($businessDateExpression, $fromDate, $toDate, $saleId, $customerId): void {
+                $orders->whereNotIn('status', ['rejected', 'cancelled'])
+                    ->whereRaw("{$businessDateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
+                    ->when($saleId > 0, fn ($query) => $query->where('user_id', $saleId))
+                    ->when($customerId > 0, fn ($query) => $query->where('customer_id', $customerId));
+            })
+            ->get();
+        $summary->loss_weight = (float) $lossTransfers->sum('weight_loss');
+        $summary->loss_value = (float) $lossTransfers->sum(function (WarehouseTransfer $transfer): float {
+            $items = $transfer->order?->items ?? collect();
+            $pricedWeight = (float) $items->sum(fn ($item) => max(0, (float) ($item->packed_weight ?? $item->actual_weight ?? $item->total_weight ?? 0)));
+            $salesValue = (float) $items->sum(fn ($item) => max(0, (float) ($item->total ?? 0)));
+            $averageSalePrice = $pricedWeight > 0 ? $salesValue / $pricedWeight : 0;
+
+            return round(max(0, (float) $transfer->weight_loss) * $averageSalePrice, 2);
+        });
 
         // ── Product stats ──────────────────────────────────────────────
         $productStats = $makeBase()->select([
