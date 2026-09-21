@@ -48,7 +48,7 @@ class MonitoringApprovalScopeTest extends TestCase
         $this->assertFalse($method->invoke($controller, $this->userWithRole('director')));
     }
 
-    public function test_only_manager_roles_can_access_monitoring_sales_journal(): void
+    public function test_only_manager_ceo_and_admin_roles_can_access_monitoring_sales_journal(): void
     {
         $controller = (new ReflectionClass(PageController::class))->newInstanceWithoutConstructor();
         $method = new \ReflectionMethod(PageController::class, 'canAccessMonitoringSalesJournal');
@@ -57,8 +57,10 @@ class MonitoringApprovalScopeTest extends TestCase
         $this->assertTrue($method->invoke($controller, $this->userWithRole('manager_sale')));
         $this->assertFalse($method->invoke($controller, $this->userWithRole('leader')));
         $this->assertFalse($method->invoke($controller, $this->userWithRole('sale_manager')));
-        $this->assertFalse($method->invoke($controller, $this->userWithRole('director')));
-        $this->assertFalse($method->invoke($controller, $this->userWithRole('admin')));
+        $this->assertTrue($method->invoke($controller, $this->userWithRole('director')));
+        $this->assertTrue($method->invoke($controller, $this->userWithRole('ceo')));
+        $this->assertTrue($method->invoke($controller, $this->userWithRole('CEO')));
+        $this->assertTrue($method->invoke($controller, $this->userWithRole('admin')));
         $this->assertFalse($method->invoke($controller, $this->userWithRole('sale')));
     }
 

@@ -2020,7 +2020,8 @@ class PageController extends Controller
         OrderAutoApprovalService $autoApprovalService
     )
     {
-        $this->monitoringUserOrFail();
+        $user = $this->monitoringUserOrFail();
+        abort_unless($user->isAdmin(), 403, 'Chỉ admin mới được làm mới số thứ tự ưu tiên.');
 
         $query = Order::query()->where('status', '!=', Order::STATUS_REJECTED);
         $this->applyMonitoringOrderFilters($query, $request);
@@ -3234,7 +3235,15 @@ class PageController extends Controller
 
     private function canAccessMonitoringSalesJournal(User $user): bool
     {
-        return $user->hasRole(['manager', 'manager_sale']);
+        return $user->hasRole([
+            'manager',
+            'manager_sale',
+            'ceo',
+            'CEO',
+            'director',
+            'Director',
+            'admin',
+        ]);
     }
 
     private function applyManagedSalesScope(Builder $query, User $user): Builder

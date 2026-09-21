@@ -35,6 +35,8 @@
         grid-column: 1 / -1;
     }
     .monitor-date-actions,.monitor-date-form { display: flex; align-items: center; gap: 8px; position: relative; z-index: 31; overflow: visible; }
+    .monitor-date-shortcuts { display: inline-flex; gap: 6px; }
+    .monitor-date-shortcuts .btn { white-space: nowrap; }
     .monitor-date-form .form-select { position: relative; z-index: 32; }
     .monitor-date-form .form-control { width: 160px; height: 36px; border-radius: 4px; }
     .monitor-date-form .form-select { width: 180px; height: 36px; border-radius: 4px; }
@@ -369,6 +371,7 @@
         font-size: .78rem;
     }
     .monitor-items { width: 100%; margin: 0; font-size: .76rem; }
+    .monitor-items-mobile { display: none; }
     .monitor-items th {
         border-bottom: 1px solid #dfe8f2;
         color: #64748b;
@@ -926,8 +929,13 @@
     }
     @media (max-width: 767.98px) {
         .monitor-simple-list { overflow-x: auto !important; overflow-y: visible !important; }
-        .monitor-page { padding-top: 12px; }
+        .monitor-page { max-width: 100vw; padding-top: 12px; overflow-x: clip; }
         .monitor-shell { width: calc(100% - 20px); }
+        .monitor-layout,
+        .monitor-content,
+        .monitor-orders,
+        .monitor-order,
+        .monitor-order-main { min-width: 0; max-width: 100%; }
         .monitor-mobile-menu {
             position: sticky;
             top: 8px;
@@ -995,6 +1003,8 @@
         .monitor-toolbar > * { grid-column: 1; }
         .monitor-date-actions,.monitor-date-form { width: 100%; }
         .monitor-date-actions { flex-wrap: wrap; }
+        .monitor-date-shortcuts { width: 100%; }
+        .monitor-date-shortcuts .btn { flex: 1; }
         .monitor-date-form .form-control,.monitor-date-form .form-select { flex: 1; width: auto; }
         .monitor-order-head { grid-template-columns: 1fr; }
         .monitor-order { display: block; }
@@ -1017,28 +1027,18 @@
         .monitor-order-code { margin-top: 2px; line-height: 1.45; }
         .monitor-meta { font-size: .75rem; line-height: 1.45; }
         .monitor-timeline { margin-top: 10px; padding-inline: 4px; }
-        .monitor-items thead { display: none; }
-        .monitor-items,
-        .monitor-items tbody { display: block; width: 100%; }
-        .monitor-items tr { display: block; margin-bottom: 9px; padding: 7px 9px; border: 1px solid #e2e8f0; border-radius: 7px; background: rgba(255,255,255,.78); }
-        .monitor-items td {
-            display: grid;
-            grid-template-columns: minmax(92px, 38%) minmax(0, 1fr);
-            gap: 8px;
-            padding: 5px 0;
-            border: 0;
-            text-align: right !important;
-            overflow-wrap: anywhere;
-        }
-        .monitor-items td::before { color: #64748b; font-size: .64rem; font-weight: 800; text-align: left; text-transform: uppercase; }
-        .monitor-items td:nth-child(1)::before { content: "Sản phẩm"; }
-        .monitor-items td:nth-child(2)::before { content: "Số lượng"; }
-        .monitor-items td:nth-child(3)::before { content: "Size"; }
-        .monitor-items td:nth-child(4)::before { content: "Thực tế"; }
-        .monitor-items td:nth-child(5)::before { content: "Đơn giá"; }
-        .monitor-items td:nth-child(6)::before { content: "Thành tiền"; }
-        .monitor-items td[colspan] { display: block; text-align: center !important; }
-        .monitor-items td[colspan]::before { content: none; }
+        .monitor-items-table { display: none; }
+        .monitor-items-mobile { display: grid; gap: 8px; width: 100%; }
+        .monitor-mobile-item { min-width: 0; padding: 10px; border: 1px solid #dfe8f2; border-radius: 8px; background: rgba(255,255,255,.86); }
+        .monitor-mobile-item-name { overflow-wrap: anywhere; color: #0f172a; font-size: .78rem; font-weight: 800; }
+        .monitor-mobile-item-sku { color: #64748b; font-size: .66rem; font-weight: 500; }
+        .monitor-mobile-item-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 12px; margin-top: 8px; }
+        .monitor-mobile-item-field { min-width: 0; }
+        .monitor-mobile-item-field span { display: block; color: #64748b; font-size: .61rem; font-weight: 800; text-transform: uppercase; }
+        .monitor-mobile-item-field strong { display: block; margin-top: 1px; overflow-wrap: anywhere; color: #0f172a; font-size: .76rem; }
+        .monitor-mobile-item-field.is-total strong { color: #047857; }
+        .monitor-mobile-item.is-fee { border-color: #fde68a; background: #fffbeb; }
+        .monitor-mobile-item.is-discount { border-color: #fecaca; background: #fef2f2; }
         .monitor-order-total { justify-content: space-between; padding: 8px 2px; }
         .monitor-sent-adjustment { grid-template-columns: 1fr; }
         .monitor-sent-adjustment-link { justify-self: start; }
@@ -1285,6 +1285,12 @@
             <h1 class="monitor-title">{{ $monitorTabLabels[$activeTab] ?? $monitorTabLabels['today'] }}</h1>
             @if($activeTab === 'today')
             <div class="monitor-date-actions">
+                <div class="monitor-date-shortcuts" aria-label="Chọn ngày nhanh">
+                    <a class="btn btn-sm {{ $selectedDate === now()->subDay()->toDateString() ? 'btn-primary' : 'btn-outline-primary' }}"
+                       href="{{ request()->fullUrlWithQuery(['date' => now()->subDay()->toDateString(), 'page' => 1]) }}">Hôm qua</a>
+                    <a class="btn btn-sm {{ $selectedDate === now()->toDateString() ? 'btn-primary' : 'btn-outline-primary' }}"
+                       href="{{ request()->fullUrlWithQuery(['date' => now()->toDateString(), 'page' => 1]) }}">Hôm nay</a>
+                </div>
                 <form class="monitor-date-form" method="GET" action="{{ route('pages.my_orders.monitoring') }}">
                     <input type="hidden" name="tab" value="today">
                     <input type="hidden" name="view" value="{{ $viewMode }}">
@@ -1377,6 +1383,7 @@
                         <i class="bi bi-clock-history"></i>
                     </button>
                 @endif
+                @if(auth()->user()?->isAdmin())
                 <form method="POST" action="{{ route('pages.my_orders.monitoring.refresh_sequence') }}" onsubmit="return confirm('Quét duyệt tự động và đánh lại số thứ tự chung cho tất cả đơn đã đóng/chưa đóng của ngày này?');">
                     @csrf
                     <input type="hidden" name="date" value="{{ $selectedDate }}">
@@ -1389,6 +1396,7 @@
                         <i class="bi bi-arrow-clockwise"></i>
                     </button>
                 </form>
+                @endif
                 @if($canApproveManagedSales)
                     <form method="POST" action="{{ route('pages.my_orders.monitoring.approve_sales') }}" onsubmit="return confirm('Duyệt các đơn của sale thuộc phạm vi bạn quản lý?');">
                         @csrf
@@ -2154,7 +2162,7 @@
                                     </div>
                                 @endif
 
-                                <div class="table-responsive">
+                                <div class="table-responsive monitor-items-table">
                                     <table class="table table-sm monitor-items">
                                         <thead>
                                             <tr>
@@ -2200,6 +2208,39 @@
                                             @endforeach
                                         </tbody>
                                     </table>
+                                </div>
+                                <div class="monitor-items-mobile" aria-label="Sản phẩm trong đơn">
+                                    @forelse($order->items as $item)
+                                        @php
+                                            $itemName = $item->display_name;
+                                            $lineTotal = $item->lineTotalForStage((string) $order->status);
+                                        @endphp
+                                        <div class="monitor-mobile-item">
+                                            <div class="monitor-mobile-item-name">
+                                                {{ $itemName }}
+                                                @if($item->variant?->sku)<span class="monitor-mobile-item-sku">({{ $item->variant->sku }})</span>@endif
+                                            </div>
+                                            <div class="monitor-mobile-item-grid">
+                                                <div class="monitor-mobile-item-field"><span>Số lượng</span><strong>{{ $formatQuantity($item->quantity) }}</strong></div>
+                                                <div class="monitor-mobile-item-field"><span>Size</span><strong>{{ $item->variant?->size ?? '—' }}</strong></div>
+                                                <div class="monitor-mobile-item-field"><span>Số liệu thực tế</span><strong>{{ $item->displayLabelForStage((string) $order->status) }}</strong></div>
+                                                <div class="monitor-mobile-item-field"><span>Đơn giá</span><strong>{{ number_format((float) $item->price, 0, ',', '.') }}đ</strong></div>
+                                                <div class="monitor-mobile-item-field is-total"><span>Thành tiền</span><strong>{{ number_format($lineTotal, 0, ',', '.') }}đ</strong></div>
+                                            </div>
+                                        </div>
+                                    @empty
+                                        <div class="monitor-mobile-item text-center text-muted">Đơn chưa có sản phẩm.</div>
+                                    @endforelse
+                                    @foreach($currentOrderFeeRows as $feeRow)
+                                        <div class="monitor-mobile-item is-fee {{ $feeRow['direction'] === 'discount' ? 'is-discount' : '' }}">
+                                            <div class="monitor-mobile-item-name">{{ $feeRow['name'] }}</div>
+                                            <div class="monitor-mobile-item-grid">
+                                                <div class="monitor-mobile-item-field"><span>Loại</span><strong>{{ $feeRow['direction'] === 'discount' ? 'Giảm trừ' : 'Cộng thêm' }}</strong></div>
+                                                <div class="monitor-mobile-item-field"><span>Đơn vị</span><strong>{{ $feeRow['unit'] }}</strong></div>
+                                                <div class="monitor-mobile-item-field is-total"><span>Thành tiền</span><strong>{{ $feeRow['amount'] < 0 ? '−' : '' }}{{ number_format(abs((float) $feeRow['amount']), 0, ',', '.') }}đ</strong></div>
+                                            </div>
+                                        </div>
+                                    @endforeach
                                 </div>
                                 <div class="monitor-order-total"><span>Tổng đơn sau phí/chiết khấu</span><strong>{{ number_format((float) $order->total, 0, ',', '.') }}đ</strong></div>
 
