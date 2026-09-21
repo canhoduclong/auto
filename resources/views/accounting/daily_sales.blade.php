@@ -457,6 +457,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                                 <i class="bi bi-{{ $sort === 'amount_asc' ? 'sort-up' : ($sort === 'amount_desc' ? 'sort-down' : 'sort') }}"></i>
                             </a>
                         </th>
+                        <th class="text-end">Giảm giá</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -468,6 +469,9 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         $effPrice  = (float) $row->eff_price;
                         $effWeight = (float) $row->eff_weight;
                         $effTotal  = (float) $row->eff_total;
+                        $lineDiscount = max(0, (float) ($row->eff_discount ?? $row->discount_total ?? 0));
+                        $orderDiscount = max(0, (float) ($row->order_total_discount ?? 0));
+                        $displayDiscount = $lineDiscount > 0 ? $lineDiscount : $orderDiscount;
 
                         $unitLabel = \App\Enums\ProductUnit::tryFrom($row->product_unit ?? '')?->label() ?? 'Cái';
 
@@ -530,10 +534,16 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         <td class="text-end fw-bold text-success">
                             {{ number_format($effTotal, 0, ',', '.') }}
                         </td>
+                        <td class="text-end fw-bold {{ $displayDiscount > 0 ? 'text-danger' : 'text-muted' }}">
+                            {{ $displayDiscount > 0 ? '-'.number_format($displayDiscount, 0, ',', '.').'đ' : '—' }}
+                            @if($lineDiscount <= 0 && $orderDiscount > 0)
+                                <div class="small fw-normal">Toàn đơn</div>
+                            @endif
+                        </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="12" class="text-center text-muted py-4">
+                        <td colspan="13" class="text-center text-muted py-4">
                             <i class="bi bi-inbox fs-4 d-block mb-2"></i>
                             Không có dữ liệu cho bộ lọc này.
                         </td>
@@ -555,6 +565,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         <td class="text-end text-success">
                             {{ number_format($items->sum('eff_total'), 0, ',', '.') }}đ
                         </td>
+                        <td></td>
                     </tr>
                 </tfoot>
                 @endif

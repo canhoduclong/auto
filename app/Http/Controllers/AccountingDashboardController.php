@@ -2067,9 +2067,14 @@ class AccountingDashboardController extends Controller
             'users.name as sale_name',
             'order_items.quantity',
             'order_items.price',
+            'order_items.base_price',
+            'order_items.discount_total',
             'order_items.total',
             'order_items.total_weight',
             'order_items.is_priced_by_kg',
+            'orders.total_discount as order_total_discount',
+            'orders.item_discount_total as order_item_discount_total',
+            'orders.extra_discount_total as order_extra_discount_total',
             DB::raw('COALESCE(adj.adjusted_quantity, order_items.quantity) as eff_qty'),
             DB::raw('COALESCE(adj.adjusted_price,    order_items.price)    as eff_price'),
             DB::raw('COALESCE(adj.adjusted_weight,   order_items.total_weight) as eff_weight'),
@@ -2081,6 +2086,15 @@ class AccountingDashboardController extends Controller
                             ELSE COALESCE(adj.adjusted_quantity, order_items.quantity)   * COALESCE(adj.adjusted_price, order_items.price)
                         END
                      ELSE order_items.total END as eff_total'),
+            DB::raw('CASE
+                WHEN COALESCE(order_items.base_price, order_items.price) > COALESCE(adj.adjusted_price, order_items.price)
+                THEN (COALESCE(order_items.base_price, order_items.price) - COALESCE(adj.adjusted_price, order_items.price)) *
+                    CASE WHEN order_items.is_priced_by_kg = 1
+                        THEN COALESCE(adj.adjusted_weight, order_items.total_weight)
+                        ELSE COALESCE(adj.adjusted_quantity, order_items.quantity)
+                    END
+                ELSE 0
+            END as eff_discount'),
         ]);
 
         $orderByDateAndPriority = static function ($query, string $direction) use ($businessDateExpression) {
