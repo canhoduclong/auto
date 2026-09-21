@@ -90,6 +90,8 @@ class AdminNotificationController extends Controller
 
         $viewContext = $this->resolveNotificationViewContext($request);
         $layoutKey = $viewContext['notificationLayoutKey'] ?? null;
+        $notificationSearch = Str::lower(trim((string) $request->query('notification_search', '')));
+        $notificationStatus = (string) $request->query('notification_status', '');
 
         $filteredNotifications = $request->user()
             ->notifications()
@@ -99,6 +101,17 @@ class AdminNotificationController extends Controller
             ->filter(fn ($notification) => $this->notificationMatchesLayout($notification->data ?? [], $layoutKey))
             ->filter(fn ($notification) => !$this->notificationIsExpired($notification->data ?? []))
             ->filter(fn ($notification) => !$this->notificationIsScheduled($notification->data ?? []))
+            ->when($notificationSearch !== '', fn (Collection $items) => $items->filter(function ($notification) use ($notificationSearch): bool {
+                $data = $notification->data ?? [];
+
+                return Str::contains(Str::lower(implode(' ', [
+                    $data['title'] ?? '',
+                    $data['message'] ?? '',
+                    $data['url'] ?? '',
+                ])), $notificationSearch);
+            }))
+            ->when($notificationStatus === 'unread', fn (Collection $items) => $items->whereNull('read_at'))
+            ->when($notificationStatus === 'read', fn (Collection $items) => $items->whereNotNull('read_at'))
             ->values();
         $page = LengthAwarePaginator::resolveCurrentPage();
         $perPage = 20;

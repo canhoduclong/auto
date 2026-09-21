@@ -645,7 +645,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/weekly-report', [CeoDashboardController::class, 'weeklyReport'])->name('weekly-report');
         Route::get('/weekly-customer-report', [CeoDashboardController::class, 'weeklyCustomerReport'])->name('weekly-customer-report');
         Route::get('/financial-reports', [CeoDashboardController::class, 'financialReports'])->name('financial-reports');
-        Route::get('/daily-sales', [CeoDashboardController::class, 'dailySales'])->name('daily-sales');
+        Route::get('/daily-sales', [AccountingDashboardController::class, 'dailySales'])->name('daily-sales');
 
         // Báo cáo doanh thu khách hàng riêng CEO
         Route::get('/customer/{customer}/revenue', [CeoDashboardController::class, 'customerRevenueReport'])->name('customer-revenue-report');

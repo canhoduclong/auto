@@ -117,7 +117,17 @@
         @if($sentBroadcasts->hasPages())<div class="card-footer bg-white">{{ $sentBroadcasts->links('pagination::bootstrap-5') }}</div>@endif
     </div>
 
-    <div class="card shadow-sm"><div class="card-header bg-white"><h5 class="mb-0">Hộp thư của tôi</h5></div><div class="list-group list-group-flush">
+    <div class="card shadow-sm"><div class="card-header bg-white">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2"><div><h5 class="mb-0">Hộp thư của tôi</h5><small class="text-muted">{{ $notifications->total() }} kết quả</small></div>
+        <form method="GET" action="{{ route($notificationIndexRouteName ?? 'admin.notifications.index') }}" class="d-flex flex-wrap gap-2">
+            @if(!empty($notificationLayoutKey))<input type="hidden" name="layout" value="{{ $notificationLayoutKey }}">@endif
+            @foreach(['broadcast_search','broadcast_status','broadcast_priority','broadcast_role'] as $preservedFilter)@if(request()->filled($preservedFilter))<input type="hidden" name="{{ $preservedFilter }}" value="{{ request($preservedFilter) }}">@endif @endforeach
+            <input type="search" name="notification_search" class="form-control form-control-sm" value="{{ request('notification_search') }}" placeholder="Tìm trong hộp thư..." style="min-width:220px">
+            <select name="notification_status" class="form-select form-select-sm" style="width:auto"><option value="">Tất cả</option><option value="unread" @selected(request('notification_status') === 'unread')>Chưa đọc</option><option value="read" @selected(request('notification_status') === 'read')>Đã đọc</option></select>
+            <button class="btn btn-sm btn-outline-primary"><i class="ph-magnifying-glass me-1"></i>Tìm</button>
+            @if(request()->filled('notification_search') || request()->filled('notification_status'))<a class="btn btn-sm btn-outline-secondary" href="{{ route($notificationIndexRouteName ?? 'admin.notifications.index', ['layout'=>$notificationLayoutKey ?? null]) }}">Xóa lọc</a>@endif
+        </form></div>
+    </div><div class="list-group list-group-flush">
         @forelse($notifications as $notification)@php $receivedMeta=$priorityMeta[$notification->data['priority'] ?? 'info'] ?? $priorityMeta['info']; @endphp
             <div class="list-group-item d-flex align-items-center gap-2 p-0 {{ is_null($notification->read_at) ? 'bg-light' : '' }}">
                 <a href="{{ route($notificationShowRouteName ?? 'admin.notifications.show', ['notificationId'=>$notification->id,'layout'=>$notificationLayoutKey ?? null]) }}" class="list-group-item-action d-flex gap-3 py-3 px-3 text-decoration-none text-body flex-grow-1">
