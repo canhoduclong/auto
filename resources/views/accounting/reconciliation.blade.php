@@ -659,7 +659,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td class="text-end">${Number(item.weight || 0) > 0 ? Number(item.weight || 0).toLocaleString('vi-VN') + ' kg' : '-'}</td>
                 <td class="text-end">
                     <div>${money(item.unit_price)}</div>
-                    ${Number(item.unit_discount || 0) > 0 ? `<div class="small text-muted">Giá hiện tại ${money(item.base_price)} → giá bán ${money(item.unit_price)}</div><div class="small ${item.discount_type === 'increase' ? 'text-primary' : 'text-danger'}">${item.discount_type === 'increase' ? 'Điều chỉnh tăng' : 'Giảm giá'}: ${item.discount_type === 'increase' ? '+' : '-'}${money(item.unit_discount)}</div>` : ''}
+                    ${Number(item.unit_discount || 0) > 0 ? `<div class="small ${item.discount_type === 'increase' ? 'text-primary' : 'text-danger'}">${item.discount_type === 'increase' ? 'Điều chỉnh tăng' : 'Giảm giá'}: ${item.discount_type === 'increase' ? '+' : '-'}${money(item.unit_discount)}</div>` : ''}
                 </td>
                 <td class="text-end fw-semibold">${money(item.line_total)}</td>
             </tr>
@@ -728,10 +728,10 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <tbody>${items || '<tr><td colspan="7" class="text-muted text-center">Không có sản phẩm.</td></tr>'}</tbody>
                             </table>
                         </div>
-                        <div class="d-flex justify-content-end"><div style="min-width:280px">
+                        <div class="d-flex justify-content-end"><div style="min-width:360px">
                             <div class="recon-mini-row"><span>Tiền hàng</span><span>${money(order.subtotal_amount)}</span></div>
-                            <div class="recon-mini-row"><span>Giảm giá sản phẩm${Number(order.item_discount_total || 0) > 0 ? ' (giá hiện tại thể hiện tại từng dòng)' : ''}</span><span class="text-danger">-${money(order.item_discount_total)}</span></div>
-                            <div class="recon-mini-row"><span>Chiết khấu đơn${order.discount_reason ? ` (${esc(order.discount_reason)})` : ' (chưa có lý do riêng)'}</span><span class="${order.order_discount_type === 'increase' ? 'text-primary' : 'text-danger'}">${order.order_discount_type === 'increase' ? '+' : '-'}${money(Math.abs(Number(order.extra_discount_total || order.order_discount || 0)))}</span></div>
+                            <div class="recon-mini-row"><span>Giảm giá sản phẩm</span><span class="text-danger">-${money(order.item_discount_total)}</span></div>
+                            <div class="recon-mini-row"><span>Chiết khấu đơn</span><span class="${order.order_discount_type === 'increase' ? 'text-primary' : 'text-danger'}">${order.order_discount_type === 'increase' ? '+' : '-'}${money(Math.abs(Number(order.extra_discount_total || order.order_discount || 0)))}</span></div>
                             <div class="recon-mini-row"><span>Phí ship</span><span>${money(order.shipping_fee)}</span></div>
                             ${Number(order.customer_shipping_fee || 0) > 0 ? `<div class="recon-mini-row"><span>Phí giao hàng thu khách</span><span>${money(order.customer_shipping_fee)}</span></div>` : ''}
                             ${Number(order.foam_box_fee || 0) > 0 ? `<div class="recon-mini-row"><span>Phí thùng xốp</span><span>${money(order.foam_box_fee)}</span></div>` : ''}
@@ -739,7 +739,6 @@ document.addEventListener('DOMContentLoaded', function () {
                             <div class="recon-mini-row border-top mt-1 pt-2 fs-6"><strong>Tổng giá trị đơn hàng</strong><strong>${money(order.total)}</strong></div>
                         </div></div>
                     </div>
-                    ${(data.pricing_changes || []).length ? `<div class="recon-detail-section"><div class="recon-detail-title">Lịch sử thay đổi giá / chiết khấu</div>${data.pricing_changes.map(change => `<div class="border-start border-3 border-warning ps-2 mb-2"><div>${esc(change.note)}</div><div class="small text-muted">${esc(change.user)} · ${esc(change.at)}</div></div>`).join('')}</div>` : ''}
                     <div class="recon-detail-section">
                         <div class="recon-detail-title">Luồng xử lý</div>
                         <div class="recon-info-grid">
