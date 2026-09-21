@@ -28,7 +28,7 @@ class RoleController extends Controller
      */
     public function create()
     {
-        $permissions = Permission::all();
+        $permissions = Permission::query()->orderBy('group')->orderBy('name')->get();
         $layoutCatalog = config('workspaces.catalog', []);
 
         return view('roles.create', compact('permissions', 'layoutCatalog'));
@@ -103,7 +103,7 @@ class RoleController extends Controller
     public function edit($id)
     {
         $role = Role::findOrFail($id); 
-        $permissions = Permission::all();
+        $permissions = Permission::query()->orderBy('group')->orderBy('name')->get();
         $rolePermissions = $role->permissions->pluck('id')->toArray();  
         $layoutCatalog = config('workspaces.catalog', []);
 

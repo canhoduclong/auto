@@ -421,7 +421,7 @@
 
                 @php
                     $groupedPermissions = $permissions->groupBy(function ($perm) {
-                        return explode('.', $perm->name)[0];
+                        return $perm->group ?: explode('.', $perm->name)[0];
                     });
 
                     $featureIcons = [

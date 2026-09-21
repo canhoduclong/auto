@@ -47,8 +47,10 @@
 
     <div class="card border-0 shadow-sm mb-3">
         <div class="card-body">
-            <label for="permission-search" class="form-label fw-semibold mb-1">Tìm quyền nhanh</label>
-            <input type="text" id="permission-search" class="form-control" placeholder="Nhập tên quyền, mô tả, nhóm hoặc URI...">
+            <div class="row g-2 align-items-end">
+                <div class="col-lg-8"><label for="permission-search" class="form-label fw-semibold mb-1">Tìm quyền nhanh</label><input type="text" id="permission-search" class="form-control" placeholder="Nhập tên quyền, mô tả hoặc URI..."></div>
+                <div class="col-lg-4"><label for="permission-group-filter" class="form-label fw-semibold mb-1">Nhóm chức năng</label><select id="permission-group-filter" class="form-select"><option value="">Tất cả nhóm</option>@foreach($groupOptions as $group)<option value="{{ strtolower($group) }}">{{ ucfirst(str_replace('-', ' ', $group)) }} ({{ $groupedPermissions[$group]->count() }})</option>@endforeach</select></div>
+            </div>
         </div>
     </div>
 
@@ -66,8 +68,10 @@
                 </tr>
             </thead>
             <tbody>
-                @forelse($permissions as $p)
-                    <tr>
+                @forelse($groupedPermissions as $group => $groupPermissions)
+                    <tr class="table-primary permission-group-header" data-group="{{ strtolower($group) }}"><td colspan="7"><div class="d-flex justify-content-between align-items-center"><strong><i class="bi bi-folder2-open me-2"></i>{{ ucfirst(str_replace('-', ' ', $group)) }}</strong><span class="badge bg-primary">{{ $groupPermissions->count() }} quyền</span></div></td></tr>
+                    @foreach($groupPermissions as $p)
+                    <tr class="permission-row" data-group="{{ strtolower($group) }}">
                         <td>{{ $p->id }}</td>
                         <td>
                             <div class="fw-semibold">{{ $p->name }}</div>
@@ -103,6 +107,7 @@
                             </form>
                         </td>
                     </tr>
+                    @endforeach
                 @empty
                     <tr>
                         <td colspan="7" class="text-center text-muted py-4">Chưa có quyền nào.</td>
@@ -121,16 +126,27 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
-    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    const rows = Array.from(table.querySelectorAll('tbody .permission-row'));
+    const groupHeaders = Array.from(table.querySelectorAll('tbody .permission-group-header'));
+    const groupFilter = document.getElementById('permission-group-filter');
 
-    searchInput.addEventListener('input', function () {
+    function applyPermissionFilters() {
         const keyword = (searchInput.value || '').trim().toLowerCase();
+        const selectedGroup = groupFilter?.value || '';
 
         rows.forEach(function (row) {
             const text = (row.textContent || '').toLowerCase();
-            row.style.display = keyword === '' || text.includes(keyword) ? '' : 'none';
+            const matchesKeyword = keyword === '' || text.includes(keyword);
+            const matchesGroup = selectedGroup === '' || row.dataset.group === selectedGroup;
+            row.style.display = matchesKeyword && matchesGroup ? '' : 'none';
         });
-    });
+        groupHeaders.forEach(function (header) {
+            const hasVisibleRows = rows.some(row => row.dataset.group === header.dataset.group && row.style.display !== 'none');
+            header.style.display = hasVisibleRows ? '' : 'none';
+        });
+    }
+    searchInput.addEventListener('input', applyPermissionFilters);
+    groupFilter?.addEventListener('change', applyPermissionFilters);
 });
 </script>
 @endsection

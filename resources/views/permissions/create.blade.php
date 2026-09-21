@@ -16,7 +16,11 @@
         </div>
          <div class="mb-3">
             <label for="group" class="form-label">Nhóm</label>
-            <input type="text" name="group" id="group" class="form-control" value="{{ old('group') }}">
+            <input type="text" name="group" id="group" class="form-control" list="permission-groups" value="{{ old('group') }}" required placeholder="Ví dụ: orders, accounting, warehouse">
+            <datalist id="permission-groups">
+                @foreach($groupOptions as $group)<option value="{{ $group }}">@endforeach
+            </datalist>
+            <div class="form-text">Chọn nhóm có sẵn hoặc nhập tên nhóm mới.</div>
         </div>
         <button type="submit" class="btn btn-primary">Lưu</button>
         <a href="{{ route('permissions.index') }}" class="btn btn-secondary">Quay lại</a>

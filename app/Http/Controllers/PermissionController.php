@@ -20,8 +20,10 @@ class PermissionController extends Controller
             'with_route_meta' => (int) $permissions->filter(fn (Permission $p) => !empty($p->uri) || !empty($p->method))->count(),
             'groups' => (int) $permissions->pluck('group')->filter()->unique()->count(),
         ];
+        $groupedPermissions = $permissions->groupBy(fn (Permission $permission) => $permission->group ?: 'other');
+        $groupOptions = $groupedPermissions->keys()->sort()->values();
 
-        return view('permissions.index', compact('permissions', 'stats'));
+        return view('permissions.index', compact('permissions', 'stats', 'groupedPermissions', 'groupOptions'));
     }
 
     public function syncFromRoutes()
@@ -43,7 +45,7 @@ class PermissionController extends Controller
 
                 $methodText = $methods->isNotEmpty() ? $methods->implode('|') : null;
                 $uri = '/' . ltrim($route->uri(), '/');
-                $group = Str::before($name, '.');
+                $group = $this->permissionGroupForRoute($name, $uri);
 
                 return [
                     'name' => $name,
@@ -109,7 +111,9 @@ class PermissionController extends Controller
 
     public function create()
     {
-        return view('permissions.create');
+        $groupOptions = Permission::query()->whereNotNull('group')->distinct()->orderBy('group')->pluck('group');
+
+        return view('permissions.create', compact('groupOptions'));
     }
 
     public function store(Request $request)
@@ -117,6 +121,7 @@ class PermissionController extends Controller
         $request->validate([
             'name' => 'required|unique:permissions',
             'description' => 'nullable',
+            'group' => 'required|string|max:100',
         ]);
 
         Permission::create($request->all());
@@ -126,7 +131,9 @@ class PermissionController extends Controller
 
     public function edit(Permission $permission)
     {
-        return view('permissions.edit', compact('permission'));
+        $groupOptions = Permission::query()->whereNotNull('group')->distinct()->orderBy('group')->pluck('group');
+
+        return view('permissions.edit', compact('permission', 'groupOptions'));
     }
 
     public function update(Request $request, Permission $permission)
@@ -134,7 +141,7 @@ class PermissionController extends Controller
         $request->validate([
             'name' => 'required|unique:permissions,name,' . $permission->id,
             'description' => 'nullable',
-            'group' => 'nullable',
+            'group' => 'required|string|max:100',
         ]);
 
         $permission->update($request->all());
@@ -146,5 +153,31 @@ class PermissionController extends Controller
     {
         $permission->delete();
         return redirect()->route('permissions.index')->with('success', __('permissions.messages.deleted'));
+    }
+
+    private function permissionGroupForRoute(string $name, string $uri): string
+    {
+        $segments = explode('.', $name);
+        $root = $segments[0] ?? 'other';
+        $second = $segments[1] ?? null;
+
+        if (in_array($root, ['admin', 'site', 'pages'], true) && $second) {
+            $root = $second;
+        }
+
+        return match (true) {
+            Str::contains($root, ['notification']) => 'notifications',
+            Str::contains($root, ['permission', 'role']) => 'access-control',
+            Str::contains($root, ['user', 'profile', 'password']) => 'users',
+            Str::contains($root, ['order', 'cart', 'checkout']) => 'orders',
+            Str::contains($root, ['customer']) => 'customers',
+            Str::contains($root, ['product', 'variant', 'categor']) => 'products',
+            Str::contains($root, ['warehouse', 'inventory', 'stock', 'dispatch']) => 'warehouse',
+            Str::contains($root, ['shipper', 'delivery']) => 'shipping',
+            Str::contains($root, ['account', 'cashflow', 'transaction', 'debt', 'commission']) => 'accounting',
+            Str::contains($root, ['report', 'statistic', 'dashboard', 'revenue']) => 'reports',
+            Str::contains($root, ['media', 'upload', 'file']) => 'media',
+            default => Str::slug($root ?: trim(explode('/', trim($uri, '/'))[0] ?? 'other')) ?: 'other',
+        };
     }
 }
