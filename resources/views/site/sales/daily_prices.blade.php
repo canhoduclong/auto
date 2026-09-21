@@ -204,6 +204,11 @@
         color: #334155;
         background: #f8fafc;
     }
+    .sp-select-col { width: 48px; text-align: center; }
+    .sp-product-check,
+    #spSelectAll { width: 18px; height: 18px; cursor: pointer; }
+    .sp-product-row.is-selected td { background: #f0f9ff; }
+    .sp-export-summary { color: #64748b; font-size: .86rem; font-weight: 600; }
     .sp-empty {
         padding: 44px 24px 52px;
         text-align: center;
@@ -329,7 +334,7 @@
                                 </option>
                             @endforeach
                         </select>
-                        <small class="text-muted">Chọn sản phẩm cần hiển thị báo giá (giữ Ctrl/Cmd để chọn nhiều).</small>
+                        <small class="text-muted">Lọc nhanh danh sách. Bạn có thể đánh dấu sản phẩm cần báo giá ngay trong bảng bên dưới.</small>
                     </div>
                     <div class="col-6 col-md-2">
                         <button type="submit" class="btn btn-primary w-100"><i class="fa fa-search me-1"></i>Lọc</button>
@@ -422,12 +427,15 @@
                             <i class="fa fa-calendar"></i>
                             Hiệu lực: <strong>{{ $asOfDate->format('d/m/Y H:i') }}</strong>
                         </span> 
-                        <span class="text-muted small">Trang {{ $products->currentPage() }}/{{ max(1, $products->lastPage()) }}</span>
+                        <span class="text-muted small sp-page-number">Trang {{ $products->currentPage() }}/{{ max(1, $products->lastPage()) }}</span>
                     </div>
                     <div class="table-responsive border-top">
                         <table class="table sp-table mb-0">
                             <thead>
                                 <tr>
+                                    <th class="sp-select-col sp-selection-control">
+                                        <input type="checkbox" id="spSelectAll" aria-label="Chọn tất cả sản phẩm trên trang">
+                                    </th>
                                     <th>#</th>
                                     <th>Sản phẩm</th>
                                     <th>DVT</th>
@@ -443,7 +451,10 @@
                                         $allVariantsSamePrice = ($product->priceDiffVariants->count() ?? 0) === 0;
                                         $size = $allVariantsSamePrice ? 'ALL' : '-';
                                     @endphp
-                                    <tr>
+                                    <tr class="sp-product-row" data-product-id="{{ $product->id }}">
+                                        <td class="sp-select-col sp-selection-control">
+                                            <input type="checkbox" class="form-check-input sp-product-check" value="{{ $product->id }}" aria-label="Chọn {{ $product->name }} để báo giá" @checked(in_array((int) $product->id, $selectedProductIds ?? [], true))>
+                                        </td>
                                         <td>{{ $products->firstItem() + $index }}</td>
                                         <td>
                                             <div class="d-flex align-items-center gap-2">
@@ -471,7 +482,8 @@
                                     </tr>
 
                                     @foreach(($product->priceDiffVariants ?? collect()) as $diffVariant)
-                                        <tr>
+                                        <tr class="sp-variant-row" data-parent-product-id="{{ $product->id }}">
+                                            <td class="sp-selection-control"></td>
                                             <td></td>
                                             <td>
                                                 <div class="ps-4">
@@ -486,7 +498,7 @@
                                     @endforeach
                                 @empty
                                     <tr>
-                                        <td colspan="5"><div class="sp-empty">Không có dữ liệu bảng giá theo bộ lọc hiện tại.</div></td>
+                                        <td colspan="6"><div class="sp-empty">Không có dữ liệu bảng giá theo bộ lọc hiện tại.</div></td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -556,8 +568,9 @@
             <div class="col-md-12">
                 <div style="padding: 12px 24px;">
                     <div class="sp-actions">
+                        <span class="sp-export-summary" id="spExportSummary">Chưa chọn sản phẩm</span>
                         <button type="button" class="btn btn-outline-primary" id="btnExportPdf">
-                            <i class="fa fa-file-pdf-o me-1"></i>Xuất PDF
+                            <i class="fa fa-file-pdf-o me-1"></i>Xuất PDF báo giá đã chọn
                         </button>
                         <a href="#" class="btn btn-outline-success" id="btnShareZalo" target="_blank" rel="noopener">
                             <i class="fa fa-share-alt me-1"></i>Chia sẻ Zalo
@@ -571,6 +584,38 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    var productChecks = Array.from(document.querySelectorAll('.sp-product-check'));
+    var selectAll = document.getElementById('spSelectAll');
+    var exportSummary = document.getElementById('spExportSummary');
+
+    function refreshProductSelection() {
+        var selectedCount = productChecks.filter(function (checkbox) { return checkbox.checked; }).length;
+        productChecks.forEach(function (checkbox) {
+            var row = checkbox.closest('.sp-product-row');
+            if (row) row.classList.toggle('is-selected', checkbox.checked);
+        });
+        if (selectAll) {
+            selectAll.checked = productChecks.length > 0 && selectedCount === productChecks.length;
+            selectAll.indeterminate = selectedCount > 0 && selectedCount < productChecks.length;
+        }
+        if (exportSummary) {
+            exportSummary.textContent = selectedCount > 0
+                ? 'Đã chọn ' + selectedCount + ' sản phẩm'
+                : 'Chưa chọn sản phẩm';
+        }
+    }
+
+    productChecks.forEach(function (checkbox) {
+        checkbox.addEventListener('change', refreshProductSelection);
+    });
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            productChecks.forEach(function (checkbox) { checkbox.checked = selectAll.checked; });
+            refreshProductSelection();
+        });
+    }
+    refreshProductSelection();
+
     var pdfButton = document.getElementById('btnExportPdf');
     if (pdfButton) {
         pdfButton.addEventListener('click', function () {
@@ -580,9 +625,32 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
 
+            var selectedIds = productChecks
+                .filter(function (checkbox) { return checkbox.checked; })
+                .map(function (checkbox) { return checkbox.value; });
+            if (!selectedIds.length) {
+                window.alert('Vui lòng chọn ít nhất một sản phẩm để xuất báo giá.');
+                return;
+            }
+
+            var exportClone = exportNode.cloneNode(true);
+            exportClone.querySelectorAll('.sp-product-row').forEach(function (row) {
+                if (!selectedIds.includes(row.dataset.productId)) row.remove();
+            });
+            exportClone.querySelectorAll('.sp-variant-row').forEach(function (row) {
+                if (!selectedIds.includes(row.dataset.parentProductId)) row.remove();
+            });
+            exportClone.querySelectorAll('.sp-selection-control, .card-footer, .sp-page-number').forEach(function (node) {
+                node.remove();
+            });
+            exportClone.querySelectorAll('.sp-product-row').forEach(function (row, index) {
+                if (row.cells[0]) row.cells[0].textContent = String(index + 1);
+                row.classList.remove('is-selected');
+            });
+
             var printWindow = window.open('', '_blank', 'width=1024,height=768');
             if (!printWindow) {
-                window.print();
+                window.alert('Trình duyệt đang chặn cửa sổ xuất PDF. Vui lòng cho phép pop-up rồi thử lại.');
                 return;
             }
 
@@ -630,7 +698,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     </style>
                 </head>
                 <body>
-                    ${exportNode.outerHTML}
+                    ${exportClone.outerHTML}
                 </body>
                 </html>
             `;

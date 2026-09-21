@@ -159,6 +159,9 @@
     }
     .monitor-content { min-width: 0; }
     .monitor-sidebar { display: grid; gap: 14px; align-content: start; }
+    .monitor-mobile-menu,
+    .monitor-sidebar-backdrop,
+    .monitor-sidebar-mobile-head { display: none; }
     .monitor-tab-nav { display: grid; gap: 8px; }
     .monitor-tab-link {
         display: flex;
@@ -923,13 +926,76 @@
     }
     @media (max-width: 767.98px) {
         .monitor-simple-list { overflow-x: auto !important; overflow-y: visible !important; }
-        .monitor-page { padding-top: 18px; }
+        .monitor-page { padding-top: 12px; }
+        .monitor-shell { width: calc(100% - 20px); }
+        .monitor-mobile-menu {
+            position: sticky;
+            top: 8px;
+            z-index: 38;
+            display: inline-flex;
+            width: 100%;
+            min-height: 44px;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 12px;
+            padding: 9px 12px;
+            border: 1px solid #cbdbe7;
+            border-radius: 8px;
+            background: #fff;
+            color: var(--monitor-blue);
+            font-weight: 800;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, .1);
+        }
+        .monitor-mobile-menu-label { display: inline-flex; align-items: center; gap: 8px; }
+        .monitor-sidebar {
+            position: fixed;
+            z-index: 1052;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            display: block;
+            width: min(86vw, 340px);
+            padding: 0 12px 24px;
+            overflow-x: hidden;
+            overflow-y: auto;
+            background: #f8fafc;
+            box-shadow: 10px 0 30px rgba(15, 23, 42, .2);
+            transform: translateX(-105%);
+            transition: transform .22s ease;
+        }
+        .monitor-sidebar.is-open { transform: translateX(0); }
+        .monitor-sidebar > * + * { margin-top: 12px; }
+        .monitor-sidebar-mobile-head {
+            position: sticky;
+            z-index: 2;
+            top: 0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 56px;
+            margin: 0 -12px 12px;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--monitor-border);
+            background: #fff;
+            color: #0f172a;
+            font-weight: 900;
+        }
+        .monitor-sidebar-close { width: 38px; height: 38px; padding: 0; border: 0; border-radius: 50%; background: #eef2f7; color: #334155; font-size: 1.15rem; }
+        .monitor-sidebar-backdrop {
+            position: fixed;
+            z-index: 1051;
+            inset: 0;
+            background: rgba(15, 23, 42, .5);
+        }
+        .monitor-sidebar-backdrop.is-open { display: block; }
+        body.monitor-menu-open { overflow: hidden; }
+        .monitor-tab-nav { gap: 6px; }
         .monitor-toolbar { grid-template-columns: 1fr; align-items: flex-start; row-gap: 10px; padding-top: 0; }
         .monitor-toolbar > * { grid-column: 1; }
         .monitor-date-actions,.monitor-date-form { width: 100%; }
         .monitor-date-actions { flex-wrap: wrap; }
         .monitor-date-form .form-control,.monitor-date-form .form-select { flex: 1; width: auto; }
-        .monitor-sidebar { grid-template-columns: 1fr; }
         .monitor-order-head { grid-template-columns: 1fr; }
         .monitor-order { display: block; }
         .monitor-order-footer {
@@ -944,7 +1010,36 @@
         .monitor-actions { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .monitor-actions .monitor-cancel-form { margin-top: 0; padding-top: 0; border-top: 0; }
         .monitor-timeline { min-width: 0; }
-        .monitor-order-main { padding: 12px; }
+        .monitor-order-main { padding: 12px 10px; border-left-width: 4px; }
+        .monitor-order-person { align-items: flex-start; gap: 9px; }
+        .monitor-order-person > div:last-child { min-width: 0; }
+        .monitor-order-name { overflow-wrap: anywhere; font-size: .9rem; }
+        .monitor-order-code { margin-top: 2px; line-height: 1.45; }
+        .monitor-meta { font-size: .75rem; line-height: 1.45; }
+        .monitor-timeline { margin-top: 10px; padding-inline: 4px; }
+        .monitor-items thead { display: none; }
+        .monitor-items,
+        .monitor-items tbody { display: block; width: 100%; }
+        .monitor-items tr { display: block; margin-bottom: 9px; padding: 7px 9px; border: 1px solid #e2e8f0; border-radius: 7px; background: rgba(255,255,255,.78); }
+        .monitor-items td {
+            display: grid;
+            grid-template-columns: minmax(92px, 38%) minmax(0, 1fr);
+            gap: 8px;
+            padding: 5px 0;
+            border: 0;
+            text-align: right !important;
+            overflow-wrap: anywhere;
+        }
+        .monitor-items td::before { color: #64748b; font-size: .64rem; font-weight: 800; text-align: left; text-transform: uppercase; }
+        .monitor-items td:nth-child(1)::before { content: "Sản phẩm"; }
+        .monitor-items td:nth-child(2)::before { content: "Số lượng"; }
+        .monitor-items td:nth-child(3)::before { content: "Size"; }
+        .monitor-items td:nth-child(4)::before { content: "Thực tế"; }
+        .monitor-items td:nth-child(5)::before { content: "Đơn giá"; }
+        .monitor-items td:nth-child(6)::before { content: "Thành tiền"; }
+        .monitor-items td[colspan] { display: block; text-align: center !important; }
+        .monitor-items td[colspan]::before { content: none; }
+        .monitor-order-total { justify-content: space-between; padding: 8px 2px; }
         .monitor-sent-adjustment { grid-template-columns: 1fr; }
         .monitor-sent-adjustment-link { justify-self: start; }
         .monitor-sent-adjustment-actions { justify-self: start; }
@@ -978,6 +1073,9 @@
         .monitor-adjustment-picker-head { flex-direction: column; }
         .monitor-adjustment-fee-row { grid-template-columns: 1fr; gap: 10px; }
         .monitor-adjustment-fee-control { padding-left: 28px; }
+        .monitor-date-form { display: grid; grid-template-columns: 1fr auto; }
+        .monitor-date-form .form-select { grid-column: 1 / -1; width: 100%; }
+        .monitor-date-form .form-control { width: 100%; }
     }
 </style>
 @endpush
@@ -1078,7 +1176,16 @@
 <section class="monitor-page">
     <div class="container monitor-shell">
         <div class="monitor-layout">
-            <aside class="monitor-sidebar">
+            <button type="button" class="monitor-mobile-menu" aria-controls="monitorSidebar" aria-expanded="false">
+                <span class="monitor-mobile-menu-label"><i class="bi bi-list"></i>Bảng điều khiển & bộ lọc</span>
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </button>
+            <div class="monitor-sidebar-backdrop" aria-hidden="true"></div>
+            <aside class="monitor-sidebar" id="monitorSidebar" aria-label="Bảng điều khiển và bộ lọc">
+                <div class="monitor-sidebar-mobile-head">
+                    <span><i class="bi bi-sliders me-2"></i>Bảng điều khiển</span>
+                    <button type="button" class="monitor-sidebar-close" aria-label="Đóng menu"><i class="bi bi-x-lg"></i></button>
+                </div>
                 @include('site.orders.partials.monitor_sidebar_nav')
 
                 @if($activeTab === 'drafts')
@@ -2493,6 +2600,49 @@
 
 @push('scripts')
 <script>
+(() => {
+    const sidebar = document.getElementById('monitorSidebar');
+    const openButton = document.querySelector('.monitor-mobile-menu');
+    const closeButton = sidebar?.querySelector('.monitor-sidebar-close');
+    const backdrop = document.querySelector('.monitor-sidebar-backdrop');
+    if (!sidebar || !openButton || !closeButton || !backdrop) return;
+
+    const setMenuOpen = open => {
+        sidebar.classList.toggle('is-open', open);
+        backdrop.classList.toggle('is-open', open);
+        document.body.classList.toggle('monitor-menu-open', open);
+        openButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+        sidebar.setAttribute('aria-hidden', open ? 'false' : 'true');
+        if (open) closeButton.focus();
+    };
+    const syncMenuForViewport = () => {
+        if (window.matchMedia('(max-width: 767.98px)').matches) {
+            setMenuOpen(false);
+            return;
+        }
+        sidebar.classList.remove('is-open');
+        backdrop.classList.remove('is-open');
+        document.body.classList.remove('monitor-menu-open');
+        openButton.setAttribute('aria-expanded', 'false');
+        sidebar.removeAttribute('aria-hidden');
+    };
+
+    openButton.addEventListener('click', () => setMenuOpen(true));
+    closeButton.addEventListener('click', () => setMenuOpen(false));
+    backdrop.addEventListener('click', () => setMenuOpen(false));
+    sidebar.addEventListener('click', event => {
+        if (event.target.closest('a') && window.matchMedia('(max-width: 767.98px)').matches) setMenuOpen(false);
+    });
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && sidebar.classList.contains('is-open')) {
+            setMenuOpen(false);
+            openButton.focus();
+        }
+    });
+    window.addEventListener('resize', syncMenuForViewport);
+    syncMenuForViewport();
+})();
+
 document.addEventListener('click', async event => {
     const button = event.target.closest('.js-copy-zalo-order');
     if (!button) return;
