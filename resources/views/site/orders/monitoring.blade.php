@@ -328,6 +328,8 @@
         height: 3px;
         background: #d9e4ef;
     }
+  
+
     .monitor-timeline-progress {
         position: absolute;
         top: 8px;
@@ -428,6 +430,7 @@
         font-weight: 800;
     }
     .monitor-actions { display: grid; align-content: start; gap: 8px; }
+    .monitor-actions-toggle { display: none; }
     .monitor-actions .btn {
         display: inline-flex;
         width: 100%;
@@ -1017,7 +1020,34 @@
             border-left: 0;
             padding-top: 10px;
         }
-        .monitor-actions { width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .monitor-actions-toggle {
+            display: inline-flex;
+            width: 40px;
+            height: 40px;
+            align-items: center;
+            justify-content: center;
+            margin-left: auto;
+            padding: 0;
+            border: 1px solid #fdba74;
+            border-radius: 6px;
+            background: #fff;
+            color: #334155;
+            font-size: 1.15rem;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, .06);
+        }
+        .monitor-actions-toggle[aria-expanded="true"] { border-color: #f97316; background: #fff7ed; color: #c2410c; }
+        .monitor-actions {
+            display: none;
+            width: 100%;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            padding: 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 9px;
+            background: #f8fafc;
+            box-shadow: 0 5px 16px rgba(15, 23, 42, .08);
+        }
+        .monitor-actions.is-open { display: grid; }
         .monitor-actions .monitor-cancel-form { margin-top: 0; padding-top: 0; border-top: 0; }
         .monitor-timeline { min-width: 0; }
         .monitor-order-main { padding: 12px 10px; border-left-width: 4px; }
@@ -1027,6 +1057,21 @@
         .monitor-order-code { margin-top: 2px; line-height: 1.45; }
         .monitor-meta { font-size: .75rem; line-height: 1.45; }
         .monitor-timeline { margin-top: 10px; padding-inline: 4px; }
+        .monitor-timeline-track {
+            position: relative;
+            display: grid;
+            grid-template-columns: repeat(var(--timeline-columns, 8), minmax(55px, 1fr));
+            min-width: calc(var(--timeline-columns, 8) * 57px);
+        }
+        .monitor-timeline-labels {
+            display: grid;
+            grid-template-columns: repeat(var(--timeline-columns, 8), minmax(55px, 1fr));
+            min-width: calc(var(--timeline-columns, 8) * 57px);
+            margin-top: 5px;
+            color: #64748b;
+            font-size: .62rem;
+            text-align: center;
+        }
         .monitor-items-table { display: none; }
         .monitor-items-mobile { display: grid; gap: 8px; width: 100%; }
         .monitor-mobile-item { min-width: 0; padding: 10px; border: 1px solid #dfe8f2; border-radius: 8px; background: rgba(255,255,255,.86); }
@@ -2455,7 +2500,10 @@
                             </div>
                             <div class="monitor-order-footer">
                                 <span class="monitor-status">{{ $statusLabels[$order->status] ?? str_replace('_', ' ', $order->status) }}</span>
-                                <div class="monitor-actions">
+                                <button type="button" class="monitor-actions-toggle" aria-expanded="false" aria-controls="monitorActions{{ $order->id }}" title="Mở thao tác đơn hàng" aria-label="Mở thao tác đơn hàng {{ $order->code ?: ('#' . $order->id) }}">
+                                    <i class="bi bi-three-dots-vertical"></i>
+                                </button>
+                                <div class="monitor-actions" id="monitorActions{{ $order->id }}">
                                     @if($canApprove)
                                         <form method="POST" action="{{ route('site.orders.approve', $order) }}" class="js-monitor-approval-form">
                                             @csrf
@@ -2683,6 +2731,29 @@
     window.addEventListener('resize', syncMenuForViewport);
     syncMenuForViewport();
 })();
+
+document.addEventListener('click', event => {
+    const toggle = event.target.closest('.monitor-actions-toggle');
+    if (toggle) {
+        const actions = document.getElementById(toggle.getAttribute('aria-controls'));
+        if (!actions) return;
+        const shouldOpen = !actions.classList.contains('is-open');
+        document.querySelectorAll('.monitor-actions.is-open').forEach(openActions => {
+            openActions.classList.remove('is-open');
+            document.querySelector(`[aria-controls="${openActions.id}"]`)?.setAttribute('aria-expanded', 'false');
+        });
+        actions.classList.toggle('is-open', shouldOpen);
+        toggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+        return;
+    }
+
+    if (window.matchMedia('(max-width: 767.98px)').matches && !event.target.closest('.monitor-order-footer')) {
+        document.querySelectorAll('.monitor-actions.is-open').forEach(actions => {
+            actions.classList.remove('is-open');
+            document.querySelector(`[aria-controls="${actions.id}"]`)?.setAttribute('aria-expanded', 'false');
+        });
+    }
+});
 
 document.addEventListener('click', async event => {
     const button = event.target.closest('.js-copy-zalo-order');
