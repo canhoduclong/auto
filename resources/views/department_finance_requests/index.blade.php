@@ -562,6 +562,14 @@
                                         <i class="bi bi-pencil"></i>
                                     </a>
                                 @endif
+                                @if($isManagerPage)
+                                    <form method="POST" action="{{ route('manager.finance-requests.duplicate', $requestItem) }}" class="d-inline" onsubmit="return confirm('Nhân bản phiếu #{{ $requestItem->id }} và gửi vào luồng duyệt mới?');">
+                                        @csrf
+                                        <button type="submit" class="btn btn-outline-primary btn-sm fr-action-icon" title="Nhân bản phiếu">
+                                            <i class="bi bi-copy"></i>
+                                        </button>
+                                    </form>
+                                @endif
                                 <a href="{{ route($config['route_prefix'] . '.print', $requestItem) }}" target="_blank" class="btn btn-outline-secondary btn-sm fr-action-icon" title="In phiếu">
                                     <i class="bi bi-printer"></i>
                                 </a>

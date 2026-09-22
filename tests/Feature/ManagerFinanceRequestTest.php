@@ -72,6 +72,44 @@ class ManagerFinanceRequestTest extends TestCase
         }
     }
 
+    public function test_manager_can_duplicate_request_into_a_fresh_approval_flow(): void
+    {
+        $manager = $this->manager();
+        $original = Transaction::query()->create([
+            'amount' => 500000,
+            'type' => 'extra_expense',
+            'method' => 'cash',
+            'note' => 'Chi phí cần lặp lại',
+            'status' => Transaction::STATUS_APPROVED,
+            'submitted_by' => $manager->id,
+            'approved_by' => $manager->id,
+            'approved_at' => now(),
+            'request_source' => 'manager',
+            'request_department' => 'Bộ phận cũ',
+            'request_form_type' => Transaction::REQUEST_FORM_CASH,
+            'request_title' => 'Phiếu định kỳ',
+            'request_items' => [['stt' => 1, 'content' => 'Chi phí', 'quantity' => 1, 'unit_price' => 500000, 'line_total' => 500000]],
+            'request_subtotal' => 500000,
+            'request_vat' => 0,
+            'request_total' => 500000,
+        ]);
+
+        $this->actingAs($manager)
+            ->withSession(['active_role' => 'manager'])
+            ->post(route('manager.finance-requests.duplicate', $original))
+            ->assertRedirect(route('manager.finance-requests.index'))
+            ->assertSessionHas('success');
+
+        $copy = Transaction::query()->whereKeyNot($original->id)->firstOrFail();
+        $this->assertSame(Transaction::STATUS_PENDING_APPROVAL, $copy->status);
+        $this->assertSame($manager->id, $copy->submitted_by);
+        $this->assertSame('manager', $copy->request_source);
+        $this->assertSame('Manager', $copy->request_department);
+        $this->assertSame('Phiếu định kỳ', $copy->request_title);
+        $this->assertNull($copy->approved_by);
+        $this->assertNull($copy->approved_at);
+    }
+
     private function manager(): User
     {
         $user = User::factory()->create();

@@ -243,6 +243,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'managerIndex'])->name('finance-requests.index');
         Route::get('/requests/create', [DepartmentFinanceRequestController::class, 'managerCreate'])->name('finance-requests.create');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'managerStore'])->name('finance-requests.store');
+        Route::post('/requests/{transaction}/duplicate', [DepartmentFinanceRequestController::class, 'managerDuplicate'])->name('finance-requests.duplicate');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'managerPrint'])->name('finance-requests.print');
     });
 

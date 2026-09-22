@@ -209,6 +209,48 @@ class DepartmentFinanceRequestController extends Controller
         return $this->index($request, 'manager', null, true);
     }
 
+    public function managerDuplicate(Request $request, Transaction $transaction)
+    {
+        $config = $this->config('manager');
+        $this->authorizeSource($config);
+        abort_unless($transaction->request_source === 'manager', 404);
+
+        $duplicate = DB::transaction(function () use ($transaction, $request, $config): Transaction {
+            $copy = Transaction::query()->create([
+                'amount' => $transaction->amount,
+                'type' => $transaction->type,
+                'destination_type' => $transaction->destination_type,
+                'destination_account_id' => $transaction->destination_account_id,
+                'external_recipient' => $transaction->external_recipient,
+                'external_account_number' => $transaction->external_account_number,
+                'external_bank_name' => $transaction->external_bank_name,
+                'external_bank_branch' => $transaction->external_bank_branch,
+                'method' => $transaction->method,
+                'note' => $transaction->note,
+                'receipt_image_path' => $transaction->receipt_image_path,
+                'request_attachments' => $transaction->request_attachments,
+                'status' => Transaction::STATUS_PENDING_APPROVAL,
+                'submitted_by' => $request->user()->id,
+                'request_source' => 'manager',
+                'request_department' => $config['label'],
+                'request_form_type' => $transaction->request_form_type,
+                'request_title' => $transaction->request_title,
+                'request_items' => $transaction->request_items,
+                'request_subtotal' => $transaction->request_subtotal,
+                'request_vat' => $transaction->request_vat,
+                'request_total' => $transaction->request_total,
+            ]);
+
+            app(\App\Services\ApprovalService::class)->initTransactionApproval($copy);
+
+            return $copy;
+        });
+
+        return redirect()
+            ->route('manager.finance-requests.index')
+            ->with('success', 'Đã nhân bản phiếu #'.$transaction->id.' thành phiếu #'.$duplicate->id.' và gửi vào luồng duyệt mới.');
+    }
+
     public function managerPrint(Transaction $transaction)
     {
         return $this->printRequest($transaction, 'manager');
