@@ -56,11 +56,11 @@ class CopyOrderApprovalTest extends TestCase
 
         $response->assertRedirect(route('pages.my_orders.monitoring', [
             'tab' => 'today',
-            'date' => '2026-09-23',
+            'date' => '2026-09-22',
             'date_field' => 'business_date',
             'highlight' => $copy->id,
         ]));
-        $this->assertSame('2026-09-23', $copy->created_at->toDateString());
+        $this->assertSame('2026-09-22', $copy->created_at->toDateString());
         $this->assertSame('2026-09-23', $copy->delivery_date->toDateString());
         $this->assertSame('06:45', $copy->delivery_time);
         $this->assertSame(Order::STATUS_PENDING_MANAGER_APPROVAL, $copy->status);
@@ -75,12 +75,12 @@ class CopyOrderApprovalTest extends TestCase
             ->withSession(['active_role' => 'manager'])
             ->get(route('pages.my_orders.monitoring', [
                 'tab' => 'today',
-                'date' => '2026-09-23',
+                'date' => '2026-09-22',
                 'date_field' => 'business_date',
             ]))
             ->assertOk()
             ->assertSee($copy->code)
-            ->assertSee('Ngày tạo: 23/09/2026')
+            ->assertSee('Ngày tạo: 22/09/2026')
             ->assertSee('Ngày giao: 23/09/2026')
             ->assertSee('action="'.route('site.orders.approve', $copy).'"', false);
 

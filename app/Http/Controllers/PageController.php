@@ -5734,7 +5734,7 @@ public function apiTruckRoutes(Request $request)
             return back()->with('error', 'Chỉ có thể gửi lại đơn đang ở trạng thái đã hủy.');
         }
 
-        $copiedOrderDate = now()->addDay();
+        $copiedOrderDate = now();
         $newOrder = null;
 
         DB::transaction(function () use ($oldOrder, $user, $isResend, &$copiedOrderDate, &$newOrder) {
@@ -5797,17 +5797,17 @@ public function apiTruckRoutes(Request $request)
             } while (Order::where('code', $newCode)->exists());
             $newOrder->code = $newCode;
             $newOrder->resetForCopiedOrder($oldOrder->id);
-            // Đơn sao chép là đơn giao cho ngày kế tiếp. Hệ thống hiện dùng
-            // created_at làm ngày nghiệp vụ của đơn thường, nên cả ngày nghiệp
-            // vụ và delivery_date phải cùng chuyển sang ngày mai.
-            $nextDeliveryAt = now()->addDay();
+            // Ngày tạo phản ánh đúng thời điểm Sale bấm sao chép; ngày giao
+            // mặc định là ngày kế tiếp so với ngày tạo.
+            $createdAt = now();
+            $nextDeliveryAt = $createdAt->copy()->addDay();
             $newOrder->delivery_date = $nextDeliveryAt->toDateString();
             $newOrder->delivery_time = $oldOrder->delivery_time
                 ?: $oldOrder->customer?->delivery_time;
             $newOrder->delivery_time_note = $oldOrder->delivery_time_note
                 ?: $oldOrder->customer?->delivery_time_note;
-            $newOrder->created_at = $nextDeliveryAt;
-            $newOrder->updated_at = now();
+            $newOrder->created_at = $createdAt;
+            $newOrder->updated_at = $createdAt;
             $newOrder->save();
 
             $copiedOrderDate = $newOrder->created_at ?: now();
@@ -5885,7 +5885,7 @@ public function apiTruckRoutes(Request $request)
 
         return redirect()->route('pages.my_orders.monitoring', [
             'tab' => 'today',
-            'date' => $newOrder->delivery_date?->toDateString() ?: now()->addDay()->toDateString(),
+            'date' => $newOrder->created_at?->toDateString() ?: now()->toDateString(),
             'date_field' => 'business_date',
             'highlight' => $newOrder->id,
         ])->with('success', 'Đã sao chép đơn #'.$oldOrder->code.' thành #'.$newOrder->code
