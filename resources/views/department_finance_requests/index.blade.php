@@ -19,8 +19,10 @@
     $selectedMethod = old('method', $editingRequest?->method ?? 'cash');
     $selectedFlow = old('flow_direction', $editingRequest?->type === 'extra_income' ? 'in' : 'out');
     $currentUser = auth()->user();
-    $currentDepartmentName = $currentUser?->department?->name;
-    $currentBlockName = $currentUser?->department?->block?->name ?: $currentUser?->block?->name;
+    $formSubmitter = $editingRequest?->submitter ?: $currentUser;
+    $currentDepartmentName = $formSubmitter?->department?->name;
+    $currentBlockName = $formSubmitter?->department?->block?->name ?: $formSubmitter?->block?->name;
+    $requestJobTitle = old('request_job_title', $editingRequest?->request_job_title ?: $formSubmitter?->job_title ?: $config['label']);
 @endphp
 <style>
     .finance-request-page {
@@ -244,7 +246,7 @@
                 <h2 class="fr-title">{{ $editingRequest ? ($editingRequest->status === \App\Models\Transaction::STATUS_REJECTED ? 'Sửa và gửi lại phiếu #' : 'Sửa phiếu #') . $editingRequest->id : 'Tạo phiếu tài chính' }}</h2>
                 <div class="fr-subtitle">{{ $config['label'] }} gửi duyệt theo luồng Kế toán xác nhận → Director duyệt → Kế toán hoàn thành</div>
             </div>
-            <span class="badge text-bg-light border px-3 py-2">{{ $config['label'] }}</span>
+            <span class="badge text-bg-light border px-3 py-2" id="requestJobTitleBadge">{{ $requestJobTitle }}</span>
         </div>
         <div class="fr-panel-body">
             <form method="POST" action="{{ $editingRequest ? route(($isManagerPage ? 'manager' : 'leader') . '.finance-requests.update', $editingRequest) : route($config['route_prefix'] . '.store') }}" enctype="multipart/form-data">
@@ -256,13 +258,18 @@
                 <div class="fr-section-label"><i class="bi bi-card-checklist"></i> Thông tin phiếu</div>
                 <div class="fr-user-card mb-3">
                     <div class="small text-muted">Người tạo phiếu</div>
-                    <div><strong>{{ $currentUser?->name ?: '-' }}</strong></div>
+                    <div><strong>{{ $formSubmitter?->name ?: '-' }}</strong></div>
                     <div class="fr-creator-line">
                         <span><i class="bi bi-diagram-3"></i>{{ $currentBlockName ?: 'Chưa gán khối' }}</span>
                         <span><i class="bi bi-building"></i>{{ $currentDepartmentName ?: 'Chưa gán phòng ban' }}</span>
                     </div>
                 </div>
                 <div class="fr-meta-grid mb-4">
+                    <div>
+                        <label class="form-label fw-semibold">Chức danh trên phiếu <span class="text-danger">*</span></label>
+                        <input type="text" name="request_job_title" id="requestJobTitle" class="form-control" maxlength="150" value="{{ $requestJobTitle }}" placeholder="VD: Trưởng phòng Kinh doanh" required>
+                        <div class="form-text">Chức danh được lưu riêng theo phiếu để đối chiếu về sau.</div>
+                    </div>
                     <div>
                         <label class="form-label fw-semibold">Loại chứng từ <span class="text-danger">*</span></label>
                         <select name="request_form_type" id="requestFormType" class="form-select" required>
@@ -614,6 +621,11 @@
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const requestJobTitleInput = document.getElementById('requestJobTitle');
+    const requestJobTitleBadge = document.getElementById('requestJobTitleBadge');
+    requestJobTitleInput?.addEventListener('input', function () {
+        requestJobTitleBadge.textContent = this.value.trim() || '{{ $config['label'] }}';
+    });
     const flowInputs = Array.from(document.querySelectorAll('input[name="flow_direction"]'));
     const formTypeInput = document.getElementById('requestFormType');
     const flowDirectionGroup = document.getElementById('flowDirectionGroup');

@@ -233,6 +233,7 @@ class DepartmentFinanceRequestController extends Controller
                 'submitted_by' => $request->user()->id,
                 'request_source' => 'manager',
                 'request_department' => $config['label'],
+                'request_job_title' => trim((string) ($request->user()->job_title ?: $config['label'])),
                 'request_form_type' => $transaction->request_form_type,
                 'request_title' => $transaction->request_title,
                 'request_items' => $transaction->request_items,
@@ -356,6 +357,7 @@ class DepartmentFinanceRequestController extends Controller
         $validated = $request->validate([
             'request_source' => ['required', 'in:'.implode(',', array_keys(self::SOURCES))],
             'request_department' => ['required', 'string', 'max:150'],
+            'request_job_title' => ['nullable', 'string', 'max:150'],
             'request_form_type' => ['required', 'in:'.Transaction::REQUEST_FORM_CASH.','.Transaction::REQUEST_FORM_PAYMENT],
             'flow_direction' => ['required', 'in:in,out'],
             'request_title' => ['required', 'string', 'max:255'],
@@ -387,6 +389,10 @@ class DepartmentFinanceRequestController extends Controller
         $transaction->update([
             'request_source' => $validated['request_source'],
             'request_department' => trim($validated['request_department']),
+            'request_job_title' => trim((string) (($validated['request_job_title'] ?? null)
+                ?: $transaction->request_job_title
+                ?: $transaction->submitter?->job_title
+                ?: $validated['request_department'])),
             'request_form_type' => $validated['request_form_type'],
             'request_title' => trim($validated['request_title']),
             'request_items' => $items->all(),
@@ -461,7 +467,7 @@ class DepartmentFinanceRequestController extends Controller
 
         $requests = Transaction::query()
             ->with([
-                'submitter:id,name,email,department_id,block_id',
+                'submitter:id,name,email,job_title,department_id,block_id',
                 'submitter.department:id,name,block_id',
                 'submitter.department.block:id,name',
                 'submitter.block:id,name',
@@ -543,6 +549,7 @@ class DepartmentFinanceRequestController extends Controller
             'request_form_type' => ['required', 'in:' . Transaction::REQUEST_FORM_CASH . ',' . Transaction::REQUEST_FORM_PAYMENT],
             'flow_direction' => ['required', 'in:in,out'],
             'request_title' => ['required', 'string', 'max:255'],
+            'request_job_title' => ['nullable', 'string', 'max:150'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.content' => ['required', 'string', 'max:255'],
             'items.*.unit' => ['nullable', 'string', 'max:50'],
@@ -644,6 +651,7 @@ class DepartmentFinanceRequestController extends Controller
             'submitted_by' => auth()->id(),
             'request_source' => $source,
             'request_department' => $config['label'],
+            'request_job_title' => trim((string) (($validated['request_job_title'] ?? null) ?: auth()->user()?->job_title ?: $config['label'])),
             'request_form_type' => $validated['request_form_type'],
             'request_title' => $validated['request_title'],
             'request_items' => $items->all(),
@@ -728,7 +736,7 @@ class DepartmentFinanceRequestController extends Controller
         }
 
         $transaction->load([
-            'submitter:id,name,email,department_id,block_id',
+            'submitter:id,name,email,job_title,department_id,block_id',
             'submitter.department:id,name,block_id',
             'submitter.block:id,name',
             'approver:id,name',

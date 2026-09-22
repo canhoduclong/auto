@@ -23,6 +23,7 @@
     $departmentName = $transaction->submitter?->department?->name
         ?: $transaction->submitter?->block?->name
         ?: ($transaction->request_department ?: ($config['label'] ?? '-'));
+    $jobTitle = $transaction->request_job_title ?: $transaction->submitter?->job_title ?: ($config['label'] ?? '-');
 
     $companyName = Setting::get('company_legal_name', Setting::get('brand_name', 'CÔNG TY CỔ PHẦN THỰC PHẨM HOÀNG LONG TNT'));
     $companyDisplayName = str_replace(
@@ -308,6 +309,10 @@
             <div class="info-row">
                 <span class="info-label">{{ $isPaymentProposal ? 'Họ và tên người đề nghị thanh toán:' : 'Họ và tên người yêu cầu:' }}</span>
                 <span>{{ $transaction->submitter?->name ?: '-' }}</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">Chức danh:</span>
+                <span>{{ $jobTitle }}</span>
             </div>
             <div class="info-row">
                 <span class="info-label">Bộ phận:</span>

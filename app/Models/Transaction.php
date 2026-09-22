@@ -47,6 +47,7 @@ class Transaction extends Model
         'reject_reason',
         'request_source',
         'request_department',
+        'request_job_title',
         'request_form_type',
         'request_title',
         'request_items',
