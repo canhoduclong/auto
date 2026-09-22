@@ -475,7 +475,7 @@ class DepartmentFinanceRequestController extends Controller
                 'rejecter:id,name',
                 'transactionCategory:id,code,name,flow_direction',
                 'account:id,name,type',
-                'destinationAccount:id,name,type,account_number,bank_name',
+                'destinationAccount:id,name,type,owner_name,account_number,bank_name',
                 'approvalSteps:id,transaction_id,status,approved_by',
             ])
             ->where('request_source', $source)
@@ -743,7 +743,7 @@ class DepartmentFinanceRequestController extends Controller
             'rejecter:id,name',
             'transactionCategory:id,code,name,flow_direction',
             'account:id,name,type',
-            'destinationAccount:id,name,type,account_number,bank_name',
+            'destinationAccount:id,name,type,owner_name,account_number,bank_name',
         ]);
 
         return view('department_finance_requests.print', [

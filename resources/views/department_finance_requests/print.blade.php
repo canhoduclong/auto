@@ -24,6 +24,18 @@
         ?: $transaction->submitter?->block?->name
         ?: ($transaction->request_department ?: ($config['label'] ?? '-'));
     $jobTitle = $transaction->request_job_title ?: $transaction->submitter?->job_title ?: ($config['label'] ?? '-');
+    $isTransfer = in_array($transaction->method, ['managed_transfer', 'bank_transfer'], true);
+    $transferAccountNumber = $transaction->method === 'managed_transfer'
+        ? $transaction->destinationAccount?->account_number
+        : $transaction->external_account_number;
+    $transferAccountName = $transaction->method === 'managed_transfer'
+        ? ($transaction->destinationAccount?->owner_name ?: $transaction->destinationAccount?->name)
+        : $transaction->external_recipient;
+    $transferBankName = $transaction->method === 'managed_transfer'
+        ? $transaction->destinationAccount?->bank_name
+        : $transaction->external_bank_name;
+    $transferBankBranch = $transaction->method === 'bank_transfer' ? $transaction->external_bank_branch : null;
+    $hasTransferInfo = $isTransfer && ($transferAccountNumber || $transferAccountName || $transferBankName);
 
     $companyName = Setting::get('company_legal_name', Setting::get('brand_name', 'CÔNG TY CỔ PHẦN THỰC PHẨM HOÀNG LONG TNT'));
     $companyDisplayName = str_replace(
@@ -213,6 +225,10 @@
             font-style: italic;
             white-space: nowrap;
         }
+        .transfer-label {
+            margin-left: 10px;
+            font-style: italic;
+        }
         .money {
             font-weight: 800;
         }
@@ -318,6 +334,16 @@
                 <span class="info-label">Bộ phận:</span>
                 <span>{{ $departmentName }}</span>
             </div>
+            @if($hasTransferInfo)
+                <div class="info-row">
+                    <span class="info-label">Tài khoản:</span>
+                    <span>
+                        {{ $transferAccountNumber ?: '-' }}
+                        <strong class="transfer-label">Tên TK:</strong> {{ $transferAccountName ?: '-' }}
+                        <strong class="transfer-label">Ngân hàng:</strong> {{ $transferBankName ?: '-' }}{{ $transferBankBranch ? ' - ' . $transferBankBranch : '' }}
+                    </span>
+                </div>
+            @endif
             <div class="info-row">
                 <span class="info-label">{{ $isPaymentProposal ? 'Nội dung thanh toán:' : 'Nội dung yêu cầu:' }}</span>
                 <span>{{ $transaction->request_title ?: ($transaction->note ?: '-') }}</span>

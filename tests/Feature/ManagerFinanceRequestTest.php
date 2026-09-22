@@ -160,6 +160,42 @@ class ManagerFinanceRequestTest extends TestCase
         $this->assertDatabaseMissing('transactions', ['id' => $request->id]);
     }
 
+    public function test_manager_print_shows_bank_transfer_recipient_details(): void
+    {
+        $manager = $this->manager();
+        $request = Transaction::query()->create([
+            'amount' => 500000,
+            'type' => 'extra_expense',
+            'method' => 'bank_transfer',
+            'destination_type' => 'external',
+            'external_recipient' => 'Nguyễn Đình Huy',
+            'external_account_number' => '0071003906252',
+            'external_bank_name' => 'Vietcombank',
+            'external_bank_branch' => 'Tân Định',
+            'note' => 'Thanh toán dịch vụ',
+            'status' => Transaction::STATUS_PENDING_APPROVAL,
+            'submitted_by' => $manager->id,
+            'request_source' => 'manager',
+            'request_department' => 'IT',
+            'request_form_type' => Transaction::REQUEST_FORM_CASH,
+            'request_title' => 'Thanh toán dịch vụ',
+            'request_items' => [['content' => 'Dịch vụ', 'quantity' => 1, 'unit_price' => 500000, 'line_total' => 500000]],
+            'request_subtotal' => 500000,
+            'request_vat' => 0,
+            'request_total' => 500000,
+        ]);
+
+        $this->actingAs($manager)->withSession(['active_role' => 'manager'])
+            ->get(route('manager.finance-requests.print', $request))
+            ->assertOk()
+            ->assertSee('Tài khoản:')
+            ->assertSee('0071003906252')
+            ->assertSee('Tên TK:')
+            ->assertSee('Nguyễn Đình Huy')
+            ->assertSee('Ngân hàng:')
+            ->assertSee('Vietcombank - Tân Định');
+    }
+
     private function manager(): User
     {
         $user = User::factory()->create();
