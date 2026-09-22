@@ -16,7 +16,7 @@ class AccountingReconciliationCurrentPriceDetailTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_detail_uses_current_company_price_and_lists_product_discount_separately(): void
+    public function test_detail_uses_company_price_effective_when_order_was_created_and_lists_discount_separately(): void
     {
         $accountant = User::factory()->create();
         $accountant->roles()->attach(Role::query()->create(['name' => 'accounting']));
@@ -38,6 +38,8 @@ class AccountingReconciliationCurrentPriceDetailTest extends TestCase
             'product_variant_id' => $variant->id,
             'price' => 69000,
             'min_price' => 60000,
+            'start_date' => '2026-09-01',
+            'end_date' => '2026-09-19',
             'created_by' => $sale->id,
         ]);
         $order = Order::query()->create([
@@ -48,6 +50,14 @@ class AccountingReconciliationCurrentPriceDetailTest extends TestCase
             'shipping_fee' => 0,
             'vat_amount' => 0,
             'total' => 8160000,
+        ]);
+        $order->forceFill(['created_at' => '2026-09-19 10:00:00'])->saveQuietly();
+        ProductPriceRule::query()->create([
+            'product_variant_id' => $variant->id,
+            'price' => 72000,
+            'min_price' => 62000,
+            'start_date' => '2026-09-20',
+            'created_by' => $sale->id,
         ]);
         $order->items()->create([
             'product_id' => $product->id,
@@ -69,6 +79,7 @@ class AccountingReconciliationCurrentPriceDetailTest extends TestCase
             ->getJson(route('accounting.reconciliation.detail', $order))
             ->assertOk()
             ->assertJsonPath('items.0.unit_price', 69000)
+            ->assertJsonPath('items.0.price_effective_date', '2026-09-19')
             ->assertJsonPath('items.0.pricing_quantity', 120)
             ->assertJsonPath('items.0.line_total', 8280000)
             ->assertJsonPath('items.0.discount_total', 120000)

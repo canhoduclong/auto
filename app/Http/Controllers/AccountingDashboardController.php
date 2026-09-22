@@ -2684,6 +2684,11 @@ class AccountingDashboardController extends Controller
             'warehouse:id,name',
             'items.product:id,name',
             'items.variant:id,name,sku,size',
+            'items.variant.priceRules' => fn ($query) => $query
+                ->select('id', 'product_variant_id', 'price', 'start_date', 'end_date')
+                ->orderByRaw('CASE WHEN price > 0 THEN 0 ELSE 1 END')
+                ->orderByDesc('start_date')
+                ->orderByDesc('id'),
             'histories.user:id,name',
             'transactions.submitter:id,name',
             'transactions.approver:id,name',
@@ -2730,9 +2735,13 @@ class AccountingDashboardController extends Controller
                 'at' => optional($history->created_at)->format('d/m/Y H:i'),
             ])->values();
         $discountReason = trim((string) ($pricingChanges->first()['note'] ?? ''));
-        $reconciliationItems = $order->items->map(function ($item) use ($order): array {
+        $orderPriceDate = ($order->created_at ?: now())->toDateString();
+        $reconciliationItems = $order->items->map(function ($item) use ($order, $orderPriceDate): array {
             $pricingQuantity = max(0, (float) $item->displayValueForStage((string) $order->status));
-            $currentUnitPrice = (float) ($item->variant?->latestPriceRule?->price
+            $applicablePriceRule = $item->variant?->priceRules
+                ?->first(fn ($rule) => ($rule->start_date === null || $rule->start_date <= $orderPriceDate)
+                    && ($rule->end_date === null || $rule->end_date >= $orderPriceDate));
+            $currentUnitPrice = (float) ($applicablePriceRule?->price
                 ?? $item->base_price
                 ?? $item->price
                 ?? 0);
@@ -2752,6 +2761,7 @@ class AccountingDashboardController extends Controller
                 'weight' => (float) ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight ?? 0),
                 'pricing_quantity' => $pricingQuantity,
                 'unit_price' => $currentUnitPrice,
+                'price_effective_date' => $orderPriceDate,
                 'base_price' => $currentUnitPrice,
                 'unit_discount' => $unitDiscount,
                 'discount_type' => $discountType,
@@ -2790,6 +2800,7 @@ class AccountingDashboardController extends Controller
                 'payment_status' => $order->payment_status,
                 'total' => (float) $order->total,
                 'current_goods_total' => $currentGoodsTotal,
+                'price_effective_date' => $orderPriceDate,
                 'current_item_discount_total' => $currentItemDiscountTotal,
                 'current_item_increase_total' => $currentItemIncreaseTotal,
                 'current_calculated_total' => $currentOrderTotal,

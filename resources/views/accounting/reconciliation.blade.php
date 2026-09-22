@@ -746,7 +746,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             </table>
                         </div>
                         <div class="d-flex justify-content-end"><div style="min-width:360px">
-                            <div class="recon-mini-row"><span>Tổng&nbsp;&nbsp; Tiền hàng theo giá hiện tại</span><span>${money(order.current_goods_total)}</span></div>
+                            <div class="recon-mini-row"><span>Tổng&nbsp;&nbsp; Tiền hàng theo giá áp dụng ngày lên đơn</span><span>${money(order.current_goods_total)}</span></div>
                             <div class="recon-mini-row text-danger"><span>Tổng&nbsp;&nbsp; Giảm giá sản phẩm</span><span>-${money(order.current_item_discount_total)}</span></div>
                             ${Number(order.current_item_increase_total || 0) > 0 ? `<div class="recon-mini-row text-primary"><span>Điều chỉnh tăng sản phẩm</span><span>+${money(order.current_item_increase_total)}</span></div>` : ''}
                             <div class="recon-mini-row"><span>Chiết khấu đơn</span><span class="${order.order_discount_type === 'increase' ? 'text-primary' : 'text-danger'}">${order.order_discount_type === 'increase' ? '+' : '-'}${money(Math.abs(Number(order.extra_discount_total || order.order_discount || 0)))}</span></div>
