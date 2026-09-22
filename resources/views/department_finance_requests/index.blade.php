@@ -1,7 +1,7 @@
 @extends($config['layout'])
 
 @section('title', 'Phiếu tài chính')
-@section('subtitle', 'Tạo phiếu yêu cầu thu/chi hoặc phiếu đề nghị thanh toán')
+@section('subtitle', $source === 'manager' && !($showCreateForm ?? false) ? 'Danh sách phiếu yêu cầu đã gửi' : 'Tạo phiếu yêu cầu thu/chi hoặc phiếu đề nghị thanh toán')
 
 @section('content')
 @php
@@ -12,6 +12,8 @@
         \App\Models\Transaction::STATUS_REJECTED => ['label' => 'Từ chối', 'class' => 'danger'],
     ];
     $editingRequest = $editingRequest ?? null;
+    $showCreateForm = $showCreateForm ?? false;
+    $isManagerPage = $source === 'manager';
     $selectedFormType = old('request_form_type', $editingRequest?->request_form_type ?? \App\Models\Transaction::REQUEST_FORM_CASH);
     $oldItems = old('items', $editingRequest?->request_items ?? [['content' => '', 'unit' => '', 'quantity' => 1, 'unit_price' => 0]]);
     $selectedMethod = old('method', $editingRequest?->method ?? 'cash');
@@ -204,7 +206,8 @@
     @endif
 
     <div class="row g-3 align-items-start">
-        <div class="col-lg-5">
+        @if(!$isManagerPage || $showCreateForm)
+        <div class="{{ $isManagerPage ? 'col-12' : 'col-lg-5' }}">
     <div class="fr-panel">
         <div class="fr-panel-head">
             <div>
@@ -300,10 +303,28 @@
                         <label class="form-label fw-semibold">Nội dung/Lý do <span class="text-danger">*</span></label>
                         <textarea name="note" class="form-control" rows="5" maxlength="1000" placeholder="Mô tả rõ lý do thu/chi, nhà cung cấp, vật tư, ghi chú kế toán...">{{ old('note', $editingRequest?->note) }}</textarea>
                     </div>
-                    <div>
-                        <label class="form-label fw-semibold">Chứng từ đính kèm</label>
-                        <input type="file" name="receipt_image" class="form-control" accept="image/*">
-                    </div>
+                    @if($isManagerPage)
+                        <div>
+                            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                                <label class="form-label fw-semibold mb-0">Chứng từ đính kèm</label>
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="addRequestAttachment" title="Thêm chứng từ">
+                                    <i class="bi bi-plus-lg me-1"></i>Thêm chứng từ
+                                </button>
+                            </div>
+                            <div id="requestAttachments" class="d-grid gap-2">
+                                <div class="input-group request-attachment-row">
+                                    <input type="file" name="attachments[]" class="form-control" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">
+                                    <button type="button" class="btn btn-outline-danger remove-request-attachment" title="Bỏ chứng từ"><i class="bi bi-x-lg"></i></button>
+                                </div>
+                            </div>
+                            <div class="form-text">Tối đa 10 tệp; mỗi tệp không quá 20MB.</div>
+                        </div>
+                    @else
+                        <div>
+                            <label class="form-label fw-semibold">Chứng từ đính kèm</label>
+                            <input type="file" name="receipt_image" class="form-control" accept="image/*">
+                        </div>
+                    @endif
                 </div>
 
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
@@ -339,7 +360,7 @@
                                         <input type="number" name="items[{{ $itemIndex }}][quantity]" class="form-control form-control-sm line-quantity" min="0.01" step="0.01" value="{{ $item['quantity'] ?? 1 }}" required>
                                     </td>
                                     <td>
-                                        <input type="number" name="items[{{ $itemIndex }}][unit_price]" class="form-control form-control-sm line-price" min="0" step="1000" value="{{ $item['unit_price'] ?? 0 }}" required>
+                                        <input type="number" name="items[{{ $itemIndex }}][unit_price]" class="form-control form-control-sm line-price" min="0" step="any" value="{{ $item['unit_price'] ?? 0 }}" required>
                                     </td>
                                     <td class="line-total text-end fw-semibold">0đ</td>
                                     <td class="text-center">
@@ -363,7 +384,7 @@
                         <div class="fr-summary-row align-items-center">
                             <label class="form-label mb-0" for="requestVat">VAT</label>
                             <div class="input-group input-group-sm" style="max-width: 190px;">
-                                <input type="number" name="request_vat" id="requestVat" class="form-control text-end" min="0" step="1000" value="{{ old('request_vat', $editingRequest?->request_vat ?? 0) }}">
+                                <input type="number" name="request_vat" id="requestVat" class="form-control text-end" min="0" step="any" value="{{ old('request_vat', $editingRequest?->request_vat ?? 0) }}">
                                 <span class="input-group-text">đ</span>
                             </div>
                         </div>
@@ -375,6 +396,9 @@
                 </div>
 
                 <div class="fr-actions">
+                    @if($isManagerPage)
+                        <a href="{{ route('manager.finance-requests.index') }}" class="btn btn-outline-secondary px-4">Hủy</a>
+                    @endif
                     @if($editingRequest)
                         <a href="{{ route('leader.finance-requests.index') }}" class="btn btn-outline-secondary px-4">Hủy sửa</a>
                     @endif
@@ -386,14 +410,22 @@
         </div>
     </div>
         </div>
+        @endif
 
-        <div class="col-lg-7">
+        @if(!$isManagerPage || !$showCreateForm)
+        <div class="{{ $isManagerPage ? 'col-12' : 'col-lg-7' }}">
     <div class="fr-panel">
         <div class="fr-panel-head">
             <div>
                 <h2 class="fr-title">Phiếu đã gửi</h2>
                 <div class="fr-subtitle">Theo dõi trạng thái duyệt và xác nhận chuyển tiền</div>
             </div>
+            <div class="d-flex gap-2 align-items-end flex-wrap justify-content-end">
+            @if($isManagerPage)
+                <a href="{{ route('manager.finance-requests.create') }}" class="btn btn-primary btn-sm align-self-end">
+                    <i class="bi bi-plus-lg me-1"></i>Tạo mới
+                </a>
+            @endif
             <form method="GET" class="d-flex gap-2 align-items-end flex-wrap">
                 <div>
                     <label class="form-label small mb-1">Loại chứng từ</label>
@@ -415,6 +447,7 @@
                 </div>
                 <button class="btn btn-outline-primary btn-sm"><i class="bi bi-funnel me-1"></i>Lọc</button>
             </form>
+            </div>
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -453,6 +486,15 @@
                                 </div>
                                 @if($requestItem->note)
                                     <div class="small text-muted">{{ \Illuminate\Support\Str::limit($requestItem->note, 90) }}</div>
+                                @endif
+                                @if(!empty($requestItem->request_attachments))
+                                    <div class="d-flex flex-wrap gap-1 mt-1">
+                                        @foreach($requestItem->request_attachments as $attachment)
+                                            <a href="{{ asset('storage/' . $attachment['path']) }}" target="_blank" class="badge text-bg-light border text-decoration-none" title="{{ $attachment['name'] ?? 'Chứng từ' }}">
+                                                <i class="bi bi-paperclip"></i>{{ \Illuminate\Support\Str::limit($attachment['name'] ?? 'Chứng từ', 24) }}
+                                            </a>
+                                        @endforeach
+                                    </div>
                                 @endif
                             </td>
                             <td>
@@ -508,6 +550,7 @@
         </div>
     </div>
         </div>
+        @endif
     </div>
 
 </div>
@@ -528,6 +571,33 @@ document.addEventListener('DOMContentLoaded', function () {
     const externalRecipient = document.getElementById('externalRecipient');
     const externalAccountNumber = document.getElementById('externalAccountNumber');
     const externalBankName = document.getElementById('externalBankName');
+    const attachmentsContainer = document.getElementById('requestAttachments');
+    const addAttachmentButton = document.getElementById('addRequestAttachment');
+
+    function bindAttachmentRow(row) {
+        row.querySelector('.remove-request-attachment')?.addEventListener('click', function () {
+            const rows = attachmentsContainer.querySelectorAll('.request-attachment-row');
+            if (rows.length === 1) {
+                row.querySelector('input[type="file"]').value = '';
+                return;
+            }
+            row.remove();
+        });
+    }
+
+    if (attachmentsContainer) {
+        attachmentsContainer.querySelectorAll('.request-attachment-row').forEach(bindAttachmentRow);
+        addAttachmentButton?.addEventListener('click', function () {
+            if (attachmentsContainer.querySelectorAll('.request-attachment-row').length >= 10) return;
+            const row = attachmentsContainer.querySelector('.request-attachment-row').cloneNode(true);
+            row.querySelector('input[type="file"]').value = '';
+            attachmentsContainer.appendChild(row);
+            bindAttachmentRow(row);
+            row.querySelector('input[type="file"]').click();
+        });
+    }
+
+    if (!requestItemsTable) return;
 
     function syncPaymentMethod() {
         const method = paymentMethod?.value || 'cash';

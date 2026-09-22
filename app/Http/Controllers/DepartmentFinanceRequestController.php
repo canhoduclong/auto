@@ -10,6 +10,7 @@ use Illuminate\Validation\ValidationException;
 use App\Models\Setting;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class DepartmentFinanceRequestController extends Controller
 {
@@ -203,6 +204,11 @@ class DepartmentFinanceRequestController extends Controller
         return $this->store($request, 'manager');
     }
 
+    public function managerCreate(Request $request)
+    {
+        return $this->index($request, 'manager', null, true);
+    }
+
     public function managerPrint(Transaction $transaction)
     {
         return $this->printRequest($transaction, 'manager');
@@ -234,7 +240,7 @@ class DepartmentFinanceRequestController extends Controller
         return self::SOURCES[$source];
     }
 
-    private function index(Request $request, string $source, ?Transaction $editingRequest = null)
+    private function index(Request $request, string $source, ?Transaction $editingRequest = null, bool $showCreateForm = false)
     {
         $settings = $this->settings;
         
@@ -297,6 +303,7 @@ class DepartmentFinanceRequestController extends Controller
             'managedAccounts' => $managedAccounts,
             'defaultManagedAccountId' => $defaultManagedAccountId,
             'editingRequest' => $editingRequest,
+            'showCreateForm' => $showCreateForm,
         ]);
     }
 
@@ -337,6 +344,8 @@ class DepartmentFinanceRequestController extends Controller
             'external_bank_branch' => ['nullable', 'string', 'max:150'],
             'note' => ['required', 'string', 'max:1000'],
             'receipt_image' => ['nullable', 'image', 'max:5120'],
+            'attachments' => ['nullable', 'array', 'max:10'],
+            'attachments.*' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx', 'max:20480'],
         ]);
 
         if ($validated['request_form_type'] === Transaction::REQUEST_FORM_PAYMENT) {
@@ -432,6 +441,34 @@ class DepartmentFinanceRequestController extends Controller
 
         if ($request->hasFile('receipt_image')) {
             $data['receipt_image_path'] = $request->file('receipt_image')->store('transactions/requests', 'public');
+        }
+
+        if ($request->hasFile('attachments')) {
+            $storedAttachments = [];
+
+            try {
+                foreach ($request->file('attachments') as $file) {
+                    if (! $file || ! $file->isValid()) {
+                        continue;
+                    }
+
+                    $path = $file->store('transactions/request-documents', 'public');
+                    $storedAttachments[] = [
+                        'name' => $file->getClientOriginalName(),
+                        'path' => $path,
+                        'mime_type' => $file->getClientMimeType(),
+                        'size' => $file->getSize(),
+                    ];
+                }
+            } catch (\Throwable $exception) {
+                foreach ($storedAttachments as $attachment) {
+                    Storage::disk('public')->delete($attachment['path']);
+                }
+
+                throw $exception;
+            }
+
+            $data['request_attachments'] = $storedAttachments;
         }
 
         return $data;

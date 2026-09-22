@@ -53,6 +53,7 @@ class Transaction extends Model
         'request_subtotal',
         'request_vat',
         'request_total',
+        'request_attachments',
     ];
 
     protected $casts = [
@@ -63,6 +64,7 @@ class Transaction extends Model
         'request_subtotal' => 'decimal:2',
         'request_vat' => 'decimal:2',
         'request_total' => 'decimal:2',
+        'request_attachments' => 'array',
     ];
 
     public function order() { return $this->belongsTo(Order::class); }

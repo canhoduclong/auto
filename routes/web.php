@@ -241,6 +241,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     Route::prefix('manager')->name('manager.')->middleware('role:manager,manager_sale,admin')->group(function () {
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'managerIndex'])->name('finance-requests.index');
+        Route::get('/requests/create', [DepartmentFinanceRequestController::class, 'managerCreate'])->name('finance-requests.create');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'managerStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'managerPrint'])->name('finance-requests.print');
     });

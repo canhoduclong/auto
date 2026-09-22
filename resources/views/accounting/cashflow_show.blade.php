@@ -158,6 +158,18 @@
                         <div class="text-muted small">Nội dung</div>
                         <div>{{ $transaction->note ?: '-' }}</div>
                     </div>
+                    @if(!empty($transaction->request_attachments))
+                        <div class="col-12">
+                            <div class="text-muted small">Chứng từ yêu cầu đính kèm</div>
+                            <div class="d-flex flex-wrap gap-2 mt-1">
+                                @foreach($transaction->request_attachments as $attachment)
+                                    <a class="btn btn-sm btn-outline-secondary" href="{{ Storage::disk('public')->url($attachment['path']) }}" target="_blank" rel="noopener">
+                                        <i class="bi bi-paperclip me-1"></i>{{ $attachment['name'] ?? 'Xem chứng từ' }}
+                                    </a>
+                                @endforeach
+                            </div>
+                        </div>
+                    @endif
                     @if($transaction->transfer_proof_path)
                         <div class="col-12">
                             <div class="text-muted small">Chứng từ chuyển khoản</div>
