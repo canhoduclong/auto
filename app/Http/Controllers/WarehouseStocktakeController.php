@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Inventory;
 use App\Models\InventoryAdjustment;
 use App\Models\InventoryMovement;
+use App\Models\InventoryReservation;
 use App\Models\InventoryStocktake;
+use App\Models\Order;
 use App\Models\ProductVariant;
 use App\Models\Warehouse;
 use App\Services\GoogleSheetsInventoryService;
@@ -95,7 +97,17 @@ class WarehouseStocktakeController extends Controller
             ->withQueryString();
 
         $this->attachBalancesAt($inventories->getCollection(), $countedAt);
+        $packedReservations = $this->packedReservationsByInventory(
+            $inventories->getCollection()->pluck('id')
+        );
         foreach ($inventories as $inventory) {
+            $packedQuantity = (float) $packedReservations->get((int) $inventory->id, 0);
+            $inventory->setAttribute('packed_reserved_quantity', $packedQuantity);
+            $inventory->setAttribute(
+                'stocktake_unpacked_quantity',
+                max(0, round((float) $inventory->stocktake_quantity - $packedQuantity, 3))
+            );
+
             if ($sheetClosingByVariant->has((int) $inventory->product_variant_id)) {
                 $inventory->setAttribute(
                     'sheet_closing_quantity',
@@ -164,7 +176,8 @@ class WarehouseStocktakeController extends Controller
             ->filter(fn ($row) => $this->hasCountedValue($row, 'counted_quantity')
                 || $this->hasCountedValue($row, 'counted_weight_kg'))
             ->mapWithKeys(function ($row, $inventoryId) {
-                $row['counted_quantity'] = $this->hasCountedValue($row, 'counted_quantity')
+                $row['_has_counted_quantity'] = $this->hasCountedValue($row, 'counted_quantity');
+                $row['counted_quantity'] = $row['_has_counted_quantity']
                     ? $row['counted_quantity']
                     : $row['expected_quantity'];
                 $row['counted_weight_kg'] = $this->hasCountedValue($row, 'counted_weight_kg')
@@ -199,6 +212,7 @@ class WarehouseStocktakeController extends Controller
 
             $balancesAtCount = $this->balancesAt($inventories, $countedAt);
             $this->guardUnchangedInventory($countedRows, $balancesAtCount);
+            $packedReservations = $this->packedReservationsByInventory($inventories->pluck('id'));
 
             $stocktake = InventoryStocktake::create([
                 'warehouse_id' => $warehouse->id,
@@ -217,7 +231,16 @@ class WarehouseStocktakeController extends Controller
                 $inventory = $inventories->get($inventoryId);
                 $balanceAtCount = $balancesAtCount->get($inventoryId);
                 $systemQuantity = round((float) $balanceAtCount['quantity'], 3);
-                $countedQuantity = round((float) $row['counted_quantity'], 3);
+                // Hàng đã hoàn tất đóng gói không còn nằm trên kệ để kiểm đếm,
+                // nhưng vẫn thuộc tồn sổ cho tới khi shipper nhận và phiếu xuất
+                // kho được lập. Vì vậy số thực đếm chỉ thay thế phần chưa đóng.
+                $packedReservedQuantity = round(
+                    (float) $packedReservations->get((int) $inventory->id, 0),
+                    3
+                );
+                $countedQuantity = $row['_has_counted_quantity']
+                    ? round((float) $row['counted_quantity'] + $packedReservedQuantity, 3)
+                    : $systemQuantity;
                 $difference = round($countedQuantity - $systemQuantity, 3);
                 $systemWeight = round((float) $balanceAtCount['weight_kg'], 3);
                 $countedWeight = round((float) $row['counted_weight_kg'], 3);
@@ -228,6 +251,10 @@ class WarehouseStocktakeController extends Controller
                     'product_variant_id' => $inventory->product_variant_id,
                     'system_quantity' => $systemQuantity,
                     'counted_quantity' => $countedQuantity,
+                    'physical_counted_quantity' => $row['_has_counted_quantity']
+                        ? round((float) $row['counted_quantity'], 3)
+                        : null,
+                    'packed_reserved_quantity' => $packedReservedQuantity,
                     'difference' => $difference,
                     'system_weight_kg' => $systemWeight,
                     'counted_weight_kg' => $countedWeight,
@@ -401,5 +428,26 @@ class WarehouseStocktakeController extends Controller
 
             ProductVariant::query()->whereKey($variantId)->update(['stock' => $total]);
         }
+    }
+
+    /**
+     * Quantity already removed from the picking shelf for completed packages,
+     * but not exported yet because a shipper has not accepted the order.
+     */
+    private function packedReservationsByInventory(Collection $inventoryIds): Collection
+    {
+        if ($inventoryIds->isEmpty()) {
+            return collect();
+        }
+
+        return InventoryReservation::query()
+            ->join('order_items', 'order_items.id', '=', 'inventory_reservations.order_item_id')
+            ->join('orders', 'orders.id', '=', 'order_items.order_id')
+            ->whereIn('inventory_reservations.inventory_id', $inventoryIds->all())
+            ->whereIn('orders.status', [Order::STATUS_PACKED, Order::STATUS_READY_TO_SHIP])
+            ->whereNull('orders.trash_at')
+            ->selectRaw('inventory_reservations.inventory_id, SUM(inventory_reservations.quantity) AS packed_quantity')
+            ->groupBy('inventory_reservations.inventory_id')
+            ->pluck('packed_quantity', 'inventory_reservations.inventory_id');
     }
 }

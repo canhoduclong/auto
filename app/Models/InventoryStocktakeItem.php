@@ -15,6 +15,8 @@ class InventoryStocktakeItem extends Model
         'product_variant_id',
         'system_quantity',
         'counted_quantity',
+        'physical_counted_quantity',
+        'packed_reserved_quantity',
         'difference',
         'system_weight_kg',
         'counted_weight_kg',
@@ -24,6 +26,8 @@ class InventoryStocktakeItem extends Model
     protected $casts = [
         'system_quantity' => 'float',
         'counted_quantity' => 'float',
+        'physical_counted_quantity' => 'float',
+        'packed_reserved_quantity' => 'float',
         'difference' => 'float',
         'system_weight_kg' => 'float',
         'counted_weight_kg' => 'float',

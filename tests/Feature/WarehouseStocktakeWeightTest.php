@@ -2,8 +2,12 @@
 
 namespace Tests\Feature;
 
+use App\Models\Customer;
 use App\Models\Inventory;
+use App\Models\InventoryReservation;
+use App\Models\Order;
 use App\Models\InventoryMovement;
+use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Role;
 use App\Models\User;
@@ -174,6 +178,72 @@ class WarehouseStocktakeWeightTest extends TestCase
             'id' => $inventory->id,
             'quantity' => 10,
             'weight_kg' => 24.4,
+        ]);
+    }
+
+    public function test_stocktake_preserves_packed_goods_waiting_for_shipper(): void
+    {
+        $warehouse = Warehouse::factory()->create();
+        $user = User::factory()->create(['warehouse_id' => $warehouse->id]);
+        $user->roles()->attach(Role::create(['name' => 'warehouse']));
+        $product = Product::factory()->create();
+        $variant = $product->variants()->create(['name' => 'Đã đóng', 'sku' => 'PACKED-STOCKTAKE']);
+        $inventory = Inventory::factory()->create([
+            'warehouse_id' => $warehouse->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 10,
+            'weight_kg' => 0,
+            'reserved_quantity' => 4,
+        ]);
+        $customer = Customer::query()->create([
+            'user_id' => $user->id,
+            'name' => 'Khách chờ shipper',
+            'status' => 'active',
+        ]);
+        $order = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $user->id,
+            'warehouse_id' => $warehouse->id,
+            'code' => 'PACKED-STOCKTAKE-1',
+            'status' => Order::STATUS_READY_TO_SHIP,
+            'total' => 0,
+        ]);
+        $item = $order->items()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 4,
+            'price' => 0,
+            'total' => 0,
+            'is_priced_by_kg' => false,
+        ]);
+        $reservation = InventoryReservation::query()->create([
+            'order_item_id' => $item->id,
+            'inventory_id' => $inventory->id,
+            'quantity' => 4,
+            'reserved_at' => now(),
+        ]);
+
+        $this->actingAs($user)->post(route('warehouse.stocktakes.store'), [
+            'warehouse_id' => $warehouse->id,
+            'counted_at' => now()->subMinute()->format('Y-m-d H:i:s'),
+            'items' => [$inventory->id => [
+                'expected_quantity' => 10,
+                'expected_weight_kg' => 0,
+                // Only six unpacked units are physically left on the shelf.
+                'counted_quantity' => 6,
+            ]],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame(10.0, (float) $inventory->fresh()->quantity);
+        $this->assertSame(4.0, (float) $inventory->fresh()->reserved_quantity);
+        $this->assertDatabaseHas('inventory_reservations', ['id' => $reservation->id, 'quantity' => 4]);
+        $this->assertDatabaseHas('inventory_stocktake_items', [
+            'inventory_id' => $inventory->id,
+            'system_quantity' => 10,
+            'counted_quantity' => 10,
+            'physical_counted_quantity' => 6,
+            'packed_reserved_quantity' => 4,
+            'difference' => 0,
         ]);
     }
 

@@ -38,7 +38,7 @@
 
 <div class="stocktake-help rounded p-3 mb-3 small">
     <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Hướng dẫn kiểm kê</div>
-    Chọn ngày và loại tồn cần kiểm kê. Tồn đầu lấy tại đầu ngày; tồn cuối lấy tại cuối ngày đã chọn (riêng hôm nay lấy đến thời điểm hiện tại). Có thể nhập số lượng, số kg hoặc cả hai; đại lượng để trống sẽ được giữ nguyên.
+    Chọn ngày và loại tồn cần kiểm kê. Tồn đầu lấy tại đầu ngày; tồn cuối lấy tại cuối ngày đã chọn (riêng hôm nay lấy đến thời điểm hiện tại). Cột số lượng hệ thống chỉ hiển thị phần <strong>chưa đóng hàng</strong>; hàng đã đóng chờ shipper được hệ thống giữ riêng và tự cộng lại khi chốt kiểm kê. Có thể nhập số lượng, số kg hoặc cả hai; đại lượng để trống sẽ được giữ nguyên.
 </div>
 
 @if($sheetLoadError)
@@ -129,6 +129,7 @@
                     <col style="width:62px;">
                     <col style="width:70px;">
                     <col style="width:82px;">
+                    <col style="width:82px;">
                     <col style="width:125px;">
                     <col style="width:125px;">
                     <col style="width:82px;">
@@ -142,7 +143,8 @@
                         <th>Sản phẩm / Biến thể</th>
                         <th>SKU</th>
                         <th>ĐVT</th>
-                        <th class="text-end" title="Tồn hệ thống tại {{ $countedAt->format('d/m/Y H:i:s') }}">SL {{ $stocktakeType === 'closing' ? 'tồn cuối' : 'tồn đầu' }}</th>
+                        <th class="text-end" title="Không gồm hàng đã đóng đang chờ shipper">SL chưa đóng</th>
+                        <th class="text-end" title="Hàng đã đóng được giữ lại đến khi shipper nhận">SL đã đóng</th>
                         <th class="text-end" title="Khối lượng hệ thống tại {{ $countedAt->format('d/m/Y H:i:s') }}">Kg {{ $stocktakeType === 'closing' ? 'tồn cuối' : 'tồn đầu' }}</th>
                         <th class="text-end">SL thực tế</th>
                         <th class="text-end">Kg thực tế</th>
@@ -173,7 +175,8 @@
                             </td>
                             <td class="stocktake-sku">{{ $variant?->sku ?: '—' }}</td>
                             <td>{{ $variant?->product?->unit_label ?? '—' }}</td>
-                            <td class="text-end stocktake-number">{{ number_format((float) $inventory->stocktake_quantity, 0, ',', '.') }}</td>
+                            <td class="text-end stocktake-number">{{ number_format((float) $inventory->stocktake_unpacked_quantity, 0, ',', '.') }}</td>
+                            <td class="text-end stocktake-number text-primary">{{ number_format((float) $inventory->packed_reserved_quantity, 0, ',', '.') }}</td>
                             <td class="text-end stocktake-number">{{ format_kg((float) $inventory->stocktake_weight_kg) }}</td>
                             <td class="text-end">
                                 <input type="hidden" name="items[{{ $inventory->id }}][expected_quantity]" value="{{ number_format((float) $inventory->stocktake_quantity, 3, '.', '') }}">
@@ -183,7 +186,7 @@
                                        class="form-control form-control-sm stocktake-input ms-auto js-counted-value"
                                        value="{{ $oldQuantity !== null ? $oldQuantity : (!$sheetIsWeight && $sheetQuantity !== null ? rtrim(rtrim(number_format((float) $sheetQuantity, 3, '.', ''), '0'), '.') : '') }}"
                                        min="0" step="1"
-                                       data-system="{{ number_format((float) $inventory->stocktake_quantity, 3, '.', '') }}"
+                                       data-system="{{ number_format((float) $inventory->stocktake_unpacked_quantity, 3, '.', '') }}"
                                        data-diff-target="quantity-diff-{{ $inventory->id }}"
                                        data-suffix=""
                                        aria-label="Số lượng thực tế {{ $productName }} {{ $variantName }}">
@@ -259,13 +262,15 @@
                 <div class="table-responsive">
                     <table class="table table-sm align-middle mb-0">
                         <thead>
-                            <tr><th>Sản phẩm</th><th class="text-end">SL hệ thống</th><th class="text-end">SL thực tế</th><th class="text-end">Lệch SL</th><th class="text-end">Kg hệ thống</th><th class="text-end">Kg thực tế</th><th class="text-end">Lệch kg</th></tr>
+                            <tr><th>Sản phẩm</th><th class="text-end">SL hệ thống</th><th class="text-end">Thực đếm chưa đóng</th><th class="text-end">Đã đóng giữ lại</th><th class="text-end">SL sau kiểm kê</th><th class="text-end">Lệch SL</th><th class="text-end">Kg hệ thống</th><th class="text-end">Kg thực tế</th><th class="text-end">Lệch kg</th></tr>
                         </thead>
                         <tbody>
                             @foreach($stocktake->items as $item)
                                 <tr>
                                     <td>{{ trim(($item->productVariant?->product?->name ?? 'Sản phẩm') . ' ' . ($item->productVariant?->name ?: '')) }}</td>
                                     <td class="text-end">{{ number_format((float) $item->system_quantity, 0, ',', '.') }}</td>
+                                    <td class="text-end">{{ $item->physical_counted_quantity === null ? '—' : number_format((float) $item->physical_counted_quantity, 0, ',', '.') }}</td>
+                                    <td class="text-end text-primary">{{ number_format((float) $item->packed_reserved_quantity, 0, ',', '.') }}</td>
                                     <td class="text-end">{{ number_format((float) $item->counted_quantity, 0, ',', '.') }}</td>
                                     <td class="text-end fw-semibold {{ (float) $item->difference < 0 ? 'text-danger' : ((float) $item->difference > 0 ? 'text-success' : 'text-muted') }}">
                                         {{ (float) $item->difference > 0 ? '+' : '' }}{{ number_format((float) $item->difference, 0, ',', '.') }}
