@@ -287,7 +287,7 @@
                 <div class="recon-stat"><span>Tổng doanh thu</span><strong>{{ $money($stats['total_revenue']) }}</strong></div>
                 <div class="recon-stat"><span>Tổng đã thanh toán</span><strong class="text-success">{{ $money($stats['total_paid']) }}</strong></div>
                 <div class="recon-stat"><span>Tổng còn thiếu</span><strong class="text-danger">{{ $money($stats['total_due']) }}</strong></div>
-                <div class="recon-stat"><span>Tổng phí ship</span><strong>{{ $money($stats['total_shipping_fee']) }}</strong></div>
+                <div class="recon-stat"><span>Tổng phí giao hàng thu khách</span><strong>{{ $money($stats['total_shipping_fee']) }}</strong></div>
                 <div class="recon-stat"><span>Tổng đơn hoàn/trả</span><strong>{{ number_format($stats['return_orders']) }}</strong></div>
                 <div class="recon-stat"><span>Đã kế toán xác nhận</span><strong class="text-success">{{ number_format($stats['confirmed']) }}</strong></div>
                 <div class="recon-stat"><span>Chưa kế toán xác nhận</span><strong class="text-warning">{{ number_format($stats['pending']) }}</strong></div>
@@ -330,7 +330,7 @@
                             <th><a class="recon-sort-link" href="{{ $sortLink('due') }}">Còn thiếu <i class="bi {{ $sortIcon('due') }}"></i></a></th>
                             <th><a class="recon-sort-link" href="{{ $sortLink('sale') }}">Sale <i class="bi {{ $sortIcon('sale') }}"></i></a></th>
                             <th><a class="recon-sort-link" href="{{ $sortLink('shipper') }}">Shipper <i class="bi {{ $sortIcon('shipper') }}"></i></a></th>
-                            <th><a class="recon-sort-link" href="{{ $sortLink('shipping_fee') }}">Phí ship <i class="bi {{ $sortIcon('shipping_fee') }}"></i></a></th>
+                            <th><a class="recon-sort-link" href="{{ $sortLink('shipping_fee') }}">Phí giao hàng thu khách <i class="bi {{ $sortIcon('shipping_fee') }}"></i></a></th>
                             <th><a class="recon-sort-link" href="{{ $sortLink('accounting_status') }}">Kế toán <i class="bi {{ $sortIcon('accounting_status') }}"></i></a></th>
                             <th><a class="recon-sort-link" href="{{ $sortLink('date') }}">Giao <i class="bi {{ $sortIcon('date') }}"></i></a></th>
                             <th></th>
@@ -424,7 +424,7 @@
                             <td class="{{ $dueAmount > 0 ? 'text-danger' : 'text-success' }} fw-semibold">{{ $money($dueAmount) }}</td>
                             <td>{{ $order->user?->short_name ?: ($order->user?->name ?? '-') }}</td>
                             <td>{{ $order->shipper?->name ?? '-' }}</td>
-                            <td>{{ $money($order->shipping_fee) }}</td>
+                            <td>{{ $money(($order->collect_customer_shipping_fee ?? false) ? $order->customer_shipping_fee : 0) }}</td>
                             <td class="js-accounting-status">
                                 <span class="badge {{ $isConfirmed ? 'text-bg-success' : 'text-bg-warning' }}">
                                     {{ $isConfirmed ? 'Đã xác nhận' : 'Chưa xác nhận' }}
@@ -750,8 +750,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             <div class="recon-mini-row text-danger"><span>Tổng&nbsp;&nbsp; Giảm giá sản phẩm</span><span>-${money(order.current_item_discount_total)}</span></div>
                             ${Number(order.current_item_increase_total || 0) > 0 ? `<div class="recon-mini-row text-primary"><span>Điều chỉnh tăng sản phẩm</span><span>+${money(order.current_item_increase_total)}</span></div>` : ''}
                             <div class="recon-mini-row"><span>Chiết khấu đơn</span><span class="${order.order_discount_type === 'increase' ? 'text-primary' : 'text-danger'}">${order.order_discount_type === 'increase' ? '+' : '-'}${money(Math.abs(Number(order.extra_discount_total || order.order_discount || 0)))}</span></div>
-                            <div class="recon-mini-row"><span>Phí ship</span><span>${money(order.shipping_fee)}</span></div>
-                            ${Number(order.customer_shipping_fee || 0) > 0 ? `<div class="recon-mini-row"><span>Phí giao hàng thu khách</span><span>${money(order.customer_shipping_fee)}</span></div>` : ''}
+                            <div class="recon-mini-row"><span>Phí giao hàng thu khách</span><span>${money(order.customer_shipping_fee)}</span></div>
                             ${Number(order.foam_box_fee || 0) > 0 ? `<div class="recon-mini-row"><span>Phí thùng xốp</span><span>${money(order.foam_box_fee)}</span></div>` : ''}
                             <div class="recon-mini-row"><span>VAT ${Number(order.vat_percent || 0) > 0 ? `(${Number(order.vat_percent).toLocaleString('vi-VN')}%)` : ''}</span><span>${money(order.vat_amount)}</span></div>
                             <div class="recon-mini-row border-top mt-1 pt-2 fs-6"><strong>Tổng giá trị đơn hàng</strong><strong>${money(order.current_calculated_total)}</strong></div>
@@ -776,7 +775,6 @@ document.addEventListener('DOMContentLoaded', function () {
                                 ['Shipper', esc(data.delivery?.shipper)],
                                 ['Trạng thái', esc(data.delivery?.status)],
                                 ['Thời gian giao', esc(data.delivery?.delivered_at)],
-                                ['Phí ship', money(data.delivery?.shipping_fee)],
                                 ['Ghi chú', esc(data.delivery?.note)],
                             ])}
                         </div>

@@ -47,7 +47,10 @@ class AccountingReconciliationCurrentPriceDetailTest extends TestCase
             'user_id' => $sale->id,
             'code' => 'RECON-CURRENT-PRICE',
             'status' => Order::STATUS_DELIVERED,
-            'shipping_fee' => 0,
+            'charge_shipping_fee' => true,
+            'shipping_fee' => 80000,
+            'collect_customer_shipping_fee' => true,
+            'customer_shipping_fee' => 80000,
             'vat_amount' => 0,
             'total' => 8160000,
         ]);
@@ -87,12 +90,17 @@ class AccountingReconciliationCurrentPriceDetailTest extends TestCase
             ->assertJsonPath('items.0.discount_total', 120000)
             ->assertJsonPath('order.current_goods_total', 8280000)
             ->assertJsonPath('order.current_item_discount_total', 120000)
-            ->assertJsonPath('order.current_calculated_total', 8160000);
+            ->assertJsonPath('order.customer_shipping_fee', 80000)
+            ->assertJsonMissingPath('order.shipping_fee')
+            ->assertJsonMissingPath('delivery.shipping_fee')
+            ->assertJsonPath('order.current_calculated_total', 8240000);
 
         $this->actingAs($accountant)
             ->get(route('accounting.reconciliation'))
             ->assertOk()
             ->assertSee('Tổng Giảm giá sản phẩm')
+            ->assertSee('Phí giao hàng thu khách')
+            ->assertDontSee('Phí ship')
             ->assertSee('recon-product-discount-row');
     }
 }

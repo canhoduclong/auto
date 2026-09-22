@@ -1027,7 +1027,7 @@ class AccountingDashboardController extends Controller
                 User::query()->select('name')->whereColumn('users.id', 'orders.shipper_id'),
                 $sortDirection
             ),
-            'shipping_fee' => $ordersQuery->orderBy('orders.shipping_fee', $sortDirection),
+            'shipping_fee' => $ordersQuery->orderBy('orders.customer_shipping_fee', $sortDirection),
             'accounting_status' => $ordersQuery->orderBy(
                 AccountingReconciliation::query()->select('status')->whereColumn('accounting_reconciliations.order_id', 'orders.id'),
                 $sortDirection
@@ -1065,7 +1065,7 @@ class AccountingDashboardController extends Controller
             'total_revenue' => (float) $allForStats->sum(fn (Order $order) => $this->recognizedRevenueForOrder($order)),
             'total_paid' => (float) $allForStats->sum(fn (Order $order) => $this->effectivePaidForOrder($order)),
             'total_due' => (float) $allForStats->sum(fn (Order $order) => $this->effectiveDueForOrder($order)),
-            'total_shipping_fee' => (float) $allForStats->sum('shipping_fee'),
+            'total_shipping_fee' => (float) $allForStats->sum(fn (Order $order) => $this->customerDeliveryFeeForOrder($order)),
             'return_orders' => $returnOrdersCount,
             'confirmed' => $confirmedCount,
             'pending' => max(0, $allForStats->count() - $confirmedCount),
@@ -1099,7 +1099,9 @@ class AccountingDashboardController extends Controller
                         'payment_status' => (string) ($attributes['payment_status'] ?? ''),
                         'total' => (float) ($deleted->order_total ?? 0),
                         'paid_amount' => (float) ($attributes['amount_paid'] ?? 0),
-                        'shipping_fee' => (float) ($attributes['shipping_fee'] ?? 0),
+                        'shipping_fee' => (bool) ($attributes['collect_customer_shipping_fee'] ?? false)
+                            ? (float) ($attributes['customer_shipping_fee'] ?? 0)
+                            : 0,
                         'created_at' => $attributes['created_at'] ?? null,
                         'delivery_date' => $attributes['delivery_date'] ?? null,
                         'delivered_at' => $attributes['delivered_at'] ?? null,
@@ -2787,8 +2789,7 @@ class AccountingDashboardController extends Controller
             - $currentItemDiscountTotal
             + $currentItemIncreaseTotal
             + $signedOrderDiscount
-            + (float) ($order->shipping_fee ?? 0)
-            + (float) ($order->customer_shipping_fee ?? 0)
+            + $this->customerDeliveryFeeForOrder($order)
             + (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0)
             + (float) ($order->vat_amount ?? 0)
         ), 2);
@@ -2817,9 +2818,7 @@ class AccountingDashboardController extends Controller
                 'amount_due' => $effectiveDue,
                 'accounting_amount_paid' => (float) ($order->amount_paid ?? 0),
                 'shipper_collected_amount' => (float) ($order->collected_amount ?? 0),
-                'shipping_fee' => (float) ($order->shipping_fee ?? 0),
-                'charge_shipping_fee' => (bool) ($order->charge_shipping_fee ?? true),
-                'customer_shipping_fee' => (float) ($order->customer_shipping_fee ?? 0),
+                'customer_shipping_fee' => $this->customerDeliveryFeeForOrder($order),
                 'collect_customer_shipping_fee' => (bool) ($order->collect_customer_shipping_fee ?? false),
                 'vat_percent' => (float) ($order->vat_percent ?? 0),
                 'vat_amount' => (float) ($order->vat_amount ?? 0),
@@ -2856,7 +2855,6 @@ class AccountingDashboardController extends Controller
                 'shipper' => $order->shipper?->name ?? '-',
                 'status' => $order->status,
                 'delivered_at' => optional($order->delivered_at)->format('d/m/Y H:i'),
-                'shipping_fee' => (float) ($order->shipping_fee ?? 0),
                 'note' => $deliveryHistory?->note ?? $order->shipper_note,
             ],
             'payment' => [
@@ -3171,9 +3169,9 @@ class AccountingDashboardController extends Controller
                 [
                     'sale_id' => $order->user_id,
                     'shipper_id' => $order->shipper_id,
-                    'total_amount' => (float) ($order->total ?? 0),
+                    'total_amount' => $recognizedRevenue,
                     'paid_amount' => $effectivePaid,
-                    'shipping_fee' => (float) ($order->shipping_fee ?? 0),
+                    'shipping_fee' => $this->customerDeliveryFeeForOrder($order),
                     'return_amount' => $returnAmount,
                     'recognized_revenue' => $recognizedRevenue,
                     'status' => AccountingReconciliation::STATUS_CONFIRMED,
@@ -3554,8 +3552,18 @@ class AccountingDashboardController extends Controller
     private function recognizedRevenueForOrder(Order $order): float
     {
         $orderTotal = (float) ($order->total ?? 0);
+        $internalShippingCost = (bool) ($order->charge_shipping_fee ?? false)
+            ? max(0, (float) ($order->shipping_fee ?? 0))
+            : 0;
 
-        return max(0, $orderTotal - $this->returnAmountForOrder($order));
+        return max(0, $orderTotal - $internalShippingCost - $this->returnAmountForOrder($order));
+    }
+
+    private function customerDeliveryFeeForOrder(Order $order): float
+    {
+        return (bool) ($order->collect_customer_shipping_fee ?? false)
+            ? max(0, (float) ($order->customer_shipping_fee ?? 0))
+            : 0;
     }
 
     private function createCommissionForCompletedOrder(Order $order, ?float $recognizedRevenue = null, ?int $confirmedBy = null): void
