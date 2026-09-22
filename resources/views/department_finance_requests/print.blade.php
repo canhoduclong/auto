@@ -229,6 +229,9 @@
             margin-left: 10px;
             font-style: italic;
         }
+        .info-inline-label {
+            margin-left: 28px;
+        }
         .money {
             font-weight: 800;
         }
@@ -329,9 +332,7 @@
             <div class="info-row">
                 <span class="info-label">Chức danh:</span>
                 <span>{{ $jobTitle }}</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Bộ phận:</span>
+                <span class="info-label info-inline-label">Bộ phận:</span>
                 <span>{{ $departmentName }}</span>
             </div>
             @if($hasTransferInfo)
