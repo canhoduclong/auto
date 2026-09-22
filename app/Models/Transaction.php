@@ -49,6 +49,7 @@ class Transaction extends Model
         'request_department',
         'request_job_title',
         'request_form_type',
+        'request_document_title',
         'request_title',
         'request_items',
         'request_subtotal',

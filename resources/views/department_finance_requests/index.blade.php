@@ -22,7 +22,12 @@
     $formSubmitter = $editingRequest?->submitter ?: $currentUser;
     $currentDepartmentName = $formSubmitter?->department?->name;
     $currentBlockName = $formSubmitter?->department?->block?->name ?: $formSubmitter?->block?->name;
-    $requestJobTitle = old('request_job_title', $editingRequest?->request_job_title ?: $formSubmitter?->job_title ?: $config['label']);
+    $requestJobTitle = $formSubmitter?->job_title ?: $config['label'];
+    $storedDocumentTitle = $editingRequest?->request_document_title
+        ?: ($selectedFormType === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu');
+    $standardDocumentTitles = ['Phiếu yêu cầu', 'Phiếu đề nghị thanh toán'];
+    $selectedDocumentTitle = old('request_document_title', in_array($storedDocumentTitle, $standardDocumentTitles, true) ? $storedDocumentTitle : '__custom__');
+    $customDocumentTitle = old('request_document_title_custom', in_array($storedDocumentTitle, $standardDocumentTitles, true) ? '' : $storedDocumentTitle);
 @endphp
 <style>
     .finance-request-page {
@@ -266,14 +271,18 @@
                 </div>
                 <div class="fr-meta-grid mb-4">
                     <div>
-                        <label class="form-label fw-semibold">Chức danh trên phiếu <span class="text-danger">*</span></label>
-                        <input type="text" name="request_job_title" id="requestJobTitle" class="form-control" maxlength="150" value="{{ $requestJobTitle }}" placeholder="VD: Trưởng phòng Kinh doanh" required>
-                        <div class="form-text">Chức danh được lưu riêng theo phiếu để đối chiếu về sau.</div>
+                        <label class="form-label fw-semibold">Tiêu đề chứng từ <span class="text-danger">*</span></label>
+                        <select name="request_document_title" id="requestDocumentTitle" class="form-select" required>
+                            <option value="Phiếu yêu cầu" @selected($selectedDocumentTitle === 'Phiếu yêu cầu')>Phiếu yêu cầu</option>
+                            <option value="Phiếu đề nghị thanh toán" @selected($selectedDocumentTitle === 'Phiếu đề nghị thanh toán')>Phiếu đề nghị thanh toán</option>
+                            <option value="__custom__" @selected($selectedDocumentTitle === '__custom__')>Nhập tiêu đề khác...</option>
+                        </select>
+                        <input type="text" name="request_document_title_custom" id="requestDocumentTitleCustom" class="form-control mt-2" maxlength="255" value="{{ $customDocumentTitle }}" placeholder="Nhập tiêu đề chứng từ khác">
                     </div>
                     <div>
                         <label class="form-label fw-semibold">Loại chứng từ <span class="text-danger">*</span></label>
                         <select name="request_form_type" id="requestFormType" class="form-select" required>
-                            <option value="{{ \App\Models\Transaction::REQUEST_FORM_CASH }}" @selected($selectedFormType === \App\Models\Transaction::REQUEST_FORM_CASH)>Phiếu yêu cầu thu/chi</option>
+                            <option value="{{ \App\Models\Transaction::REQUEST_FORM_CASH }}" @selected($selectedFormType === \App\Models\Transaction::REQUEST_FORM_CASH)>Phiếu yêu cầu</option>
                             <option value="{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}" @selected($selectedFormType === \App\Models\Transaction::REQUEST_FORM_PAYMENT)>Phiếu đề nghị thanh toán</option>
                         </select>
                     </div>
@@ -517,7 +526,7 @@
                             <td>
                                 <div class="mb-1">
                                     <span class="badge text-bg-light border">
-                                        {{ $requestItem->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Đề nghị thanh toán' : 'Yêu cầu thu/chi' }}
+                                        {{ $requestItem->request_document_title ?: ($requestItem->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu') }}
                                     </span>
                                 </div>
                                 <div class="fw-semibold">{{ $requestItem->request_title ?: 'Phiếu yêu cầu' }}</div>
@@ -621,11 +630,8 @@
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-    const requestJobTitleInput = document.getElementById('requestJobTitle');
-    const requestJobTitleBadge = document.getElementById('requestJobTitleBadge');
-    requestJobTitleInput?.addEventListener('input', function () {
-        requestJobTitleBadge.textContent = this.value.trim() || '{{ $config['label'] }}';
-    });
+    const requestDocumentTitle = document.getElementById('requestDocumentTitle');
+    const requestDocumentTitleCustom = document.getElementById('requestDocumentTitleCustom');
     const flowInputs = Array.from(document.querySelectorAll('input[name="flow_direction"]'));
     const formTypeInput = document.getElementById('requestFormType');
     const flowDirectionGroup = document.getElementById('flowDirectionGroup');
@@ -703,10 +709,21 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function syncDocumentTitle() {
+        const isCustom = requestDocumentTitle?.value === '__custom__';
+        requestDocumentTitleCustom?.classList.toggle('d-none', !isCustom);
+        requestDocumentTitleCustom?.toggleAttribute('required', isCustom);
+        if (requestDocumentTitle?.value === 'Phiếu yêu cầu') formTypeInput.value = '{{ \App\Models\Transaction::REQUEST_FORM_CASH }}';
+        if (requestDocumentTitle?.value === 'Phiếu đề nghị thanh toán') formTypeInput.value = '{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}';
+        syncFormType();
+    }
+
     flowInputs.forEach((input) => input.addEventListener('change', function () {
         syncPaymentMethod();
     }));
     formTypeInput?.addEventListener('change', syncFormType);
+    requestDocumentTitle?.addEventListener('change', syncDocumentTitle);
+    syncDocumentTitle();
     syncFormType();
 
     function requestRows() {

@@ -55,7 +55,7 @@
                             <td class="text-muted">#{{ $requestTx->id }}</td>
                             <td><span class="badge text-bg-light border">{{ $requestTx->request_department ?: $requestTx->request_source }}</span></td>
                             <td>
-                                <div class="mb-1"><span class="badge text-bg-light border">{{ $requestTx->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Đề nghị thanh toán' : 'Yêu cầu thu/chi' }}</span></div>
+                                <div class="mb-1"><span class="badge text-bg-light border">{{ $requestTx->request_document_title ?: ($requestTx->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu') }}</span></div>
                                 <div class="fw-semibold">{{ $requestTx->request_title ?: 'Phiếu yêu cầu' }}</div>
                                 <div class="small text-muted">{{ $requestTx->transactionCategory?->name ?: '-' }}</div>
                             </td>

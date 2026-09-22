@@ -19,11 +19,11 @@
     $createdAt = ($transaction->created_at ?: now())->copy()->timezone(config('app.display_timezone'));
     $flow = $transaction->transactionCategory?->flow_direction === 'in' || $transaction->type === 'extra_income' ? 'Thu' : 'Chi';
     $isPaymentProposal = $transaction->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT;
-    $documentTitle = $isPaymentProposal ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu ' . mb_strtolower($flow);
+    $documentTitle = $transaction->request_document_title ?: ($isPaymentProposal ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu');
     $departmentName = $transaction->submitter?->department?->name
         ?: $transaction->submitter?->block?->name
         ?: ($transaction->request_department ?: ($config['label'] ?? '-'));
-    $jobTitle = $transaction->request_job_title ?: $transaction->submitter?->job_title ?: ($config['label'] ?? '-');
+    $jobTitle = $transaction->submitter?->job_title ?: 'Chưa cập nhật chức danh';
     $isTransfer = in_array($transaction->method, ['managed_transfer', 'bank_transfer'], true);
     $transferAccountNumber = $transaction->method === 'managed_transfer'
         ? $transaction->destinationAccount?->account_number

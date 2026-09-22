@@ -31,7 +31,7 @@
             @php([$statusText, $statusClass] = $statusLabels[$item->status] ?? [$item->status, 'secondary'])
             <tr>
                 <td class="fw-bold">#{{ $item->id }}</td>
-                <td><div class="fw-semibold">{{ $item->request_title ?: 'Phiếu yêu cầu' }}</div><div class="small text-muted">{{ $item->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Đề nghị thanh toán' : 'Yêu cầu thu/chi' }}</div></td>
+                <td><div class="fw-semibold">{{ $item->request_title ?: 'Phiếu yêu cầu' }}</div><div class="small text-muted">{{ $item->request_document_title ?: ($item->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu') }}</div></td>
                 <td>{{ $item->submitter?->name ?: '—' }}</td>
                 <td><span class="badge bg-light text-dark border">{{ $sources[$item->request_source] ?? $item->request_source }}</span><div class="small mt-1">{{ $item->request_department ?: '—' }}</div></td>
                 <td class="text-end fw-bold">{{ number_format((float) $item->amount, 0, ',', '.') }}đ</td>

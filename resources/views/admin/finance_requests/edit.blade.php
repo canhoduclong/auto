@@ -7,6 +7,8 @@
     $items = old('items', $transaction->request_items ?: [['content' => '', 'unit' => '', 'quantity' => 1, 'unit_price' => 0]]);
     $assignedRoles = $transaction->submitter?->roles?->pluck('name')->map(fn ($name) => strtolower($name))->all() ?? [];
     $flow = old('flow_direction', $transaction->type === 'extra_income' ? 'in' : 'out');
+    $storedDocumentTitle = $transaction->request_document_title ?: ($transaction->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu');
+    $documentTitleChoice = old('request_document_title', in_array($storedDocumentTitle, ['Phiếu yêu cầu', 'Phiếu đề nghị thanh toán'], true) ? $storedDocumentTitle : '__custom__');
 @endphp
 <div class="container-fluid py-3" style="max-width:1200px">
     <div class="d-flex justify-content-between align-items-start mb-3"><div><h1 class="h3 mb-1">Sửa phiếu yêu cầu #{{ $transaction->id }}</h1><div class="text-muted">Trạng thái và lịch sử duyệt sẽ được giữ nguyên.</div></div><a class="btn btn-outline-secondary" href="{{ route('admin.accounting.finance-requests.index') }}">Quay lại</a></div>
@@ -16,10 +18,10 @@
             <div class="col-md-4"><label class="form-label">Người lập phiếu</label><input class="form-control" value="{{ $transaction->submitter?->name ?: 'Không xác định' }}" disabled><div class="form-text">Vai trò được gán: {{ $transaction->submitter?->roles?->pluck('name')->implode(', ') ?: 'Không có' }}</div></div>
             <div class="col-md-4"><label class="form-label">Vai trò / nguồn tạo phiếu <span class="text-danger">*</span></label><select class="form-select" name="request_source" id="adminRequestSource" required>@foreach($sourceConfigs as $key => $config)@php($matchesRole = collect(explode(',', $config['role']))->map(fn($role) => strtolower(trim($role)))->reject(fn($role) => $role === 'admin')->intersect($assignedRoles)->isNotEmpty())<option value="{{ $key }}" data-label="{{ $config['label'] }}" @selected(old('request_source', $transaction->request_source) === $key)>{{ $config['label'] }}{{ $matchesRole ? ' ✓ vai trò của người dùng' : '' }}</option>@endforeach</select></div>
             <div class="col-md-4"><label class="form-label">Tên bộ phận hiển thị <span class="text-danger">*</span></label><div class="input-group"><input class="form-control" name="request_department" id="adminRequestDepartment" maxlength="150" value="{{ old('request_department', $transaction->request_department) }}" required><button class="btn btn-outline-secondary" type="button" id="useRoleLabel">Dùng tên vai trò</button></div><div class="form-text">Có thể nhập tự do nếu tên bộ phận thực tế khác tên vai trò.</div></div>
-            <div class="col-md-4"><label class="form-label">Chức danh trên phiếu <span class="text-danger">*</span></label><input class="form-control" name="request_job_title" maxlength="150" value="{{ old('request_job_title', $transaction->request_job_title ?: $transaction->submitter?->job_title ?: $transaction->request_department) }}" required><div class="form-text">Lưu riêng theo từng phiếu, không đổi theo hồ sơ sau này.</div></div>
         </div></div>
         <div class="card mb-3"><div class="card-header fw-bold">Thông tin phiếu</div><div class="card-body row g-3">
             <div class="col-md-4"><label class="form-label">Loại phiếu</label><select class="form-select" name="request_form_type" required><option value="{{ \App\Models\Transaction::REQUEST_FORM_CASH }}" @selected(old('request_form_type', $transaction->request_form_type) === \App\Models\Transaction::REQUEST_FORM_CASH)>Phiếu yêu cầu thu/chi</option><option value="{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}" @selected(old('request_form_type', $transaction->request_form_type) === \App\Models\Transaction::REQUEST_FORM_PAYMENT)>Phiếu đề nghị thanh toán</option></select></div>
+            <div class="col-md-4"><label class="form-label">Tiêu đề chứng từ</label><select class="form-select" name="request_document_title" id="adminDocumentTitle"><option value="Phiếu yêu cầu" @selected($documentTitleChoice === 'Phiếu yêu cầu')>Phiếu yêu cầu</option><option value="Phiếu đề nghị thanh toán" @selected($documentTitleChoice === 'Phiếu đề nghị thanh toán')>Phiếu đề nghị thanh toán</option><option value="__custom__" @selected($documentTitleChoice === '__custom__')>Nhập tiêu đề khác...</option></select><input class="form-control mt-2" name="request_document_title_custom" id="adminDocumentTitleCustom" maxlength="255" value="{{ old('request_document_title_custom', $documentTitleChoice === '__custom__' ? $storedDocumentTitle : '') }}" placeholder="Nhập tiêu đề khác"></div>
             <div class="col-md-4"><label class="form-label">Dòng tiền</label><select class="form-select" name="flow_direction"><option value="out" @selected($flow === 'out')>Chi</option><option value="in" @selected($flow === 'in')>Thu</option></select></div>
             <div class="col-md-4"><label class="form-label">Hình thức</label><select class="form-select" name="method" id="adminRequestMethod"><option value="cash" @selected(old('method', $transaction->method) === 'cash')>Tiền mặt</option><option value="managed_transfer" @selected(old('method', $transaction->method) === 'managed_transfer')>Chuyển khoản nội bộ</option><option value="bank_transfer" @selected(old('method', $transaction->method) === 'bank_transfer')>Chuyển khoản bên ngoài</option></select></div>
             <div class="col-12"><label class="form-label">Tiêu đề</label><input class="form-control" name="request_title" value="{{ old('request_title', $transaction->request_title) }}" required></div>
@@ -36,6 +38,10 @@
 </div>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const documentTitle = document.getElementById('adminDocumentTitle');
+    const documentTitleCustom = document.getElementById('adminDocumentTitleCustom');
+    function syncDocumentTitle() { const custom = documentTitle.value === '__custom__'; documentTitleCustom.classList.toggle('d-none', !custom); documentTitleCustom.required = custom; }
+    documentTitle.addEventListener('change', syncDocumentTitle); syncDocumentTitle();
     const table = document.getElementById('adminRequestItems');
     const body = table.querySelector('tbody');
     const money = value => Math.round(Number(value) || 0).toLocaleString('vi-VN') + 'đ';

@@ -825,7 +825,7 @@ class AccountingDashboardController extends Controller
         $transaction->load([
             'customer:id,name',
             'order:id,code,total',
-            'submitter:id,name',
+            'submitter:id,name,job_title',
             'approver:id,name',
             'rejecter:id,name',
             'transferProofUploader:id,name',

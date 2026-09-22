@@ -235,6 +235,7 @@ class DepartmentFinanceRequestController extends Controller
                 'request_department' => $config['label'],
                 'request_job_title' => trim((string) ($request->user()->job_title ?: $config['label'])),
                 'request_form_type' => $transaction->request_form_type,
+                'request_document_title' => $transaction->request_document_title,
                 'request_title' => $transaction->request_title,
                 'request_items' => $transaction->request_items,
                 'request_subtotal' => $transaction->request_subtotal,
@@ -359,6 +360,8 @@ class DepartmentFinanceRequestController extends Controller
             'request_department' => ['required', 'string', 'max:150'],
             'request_job_title' => ['nullable', 'string', 'max:150'],
             'request_form_type' => ['required', 'in:'.Transaction::REQUEST_FORM_CASH.','.Transaction::REQUEST_FORM_PAYMENT],
+            'request_document_title' => ['nullable', 'string', 'max:255'],
+            'request_document_title_custom' => ['nullable', 'required_if:request_document_title,__custom__', 'string', 'max:255'],
             'flow_direction' => ['required', 'in:in,out'],
             'request_title' => ['required', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
@@ -394,6 +397,10 @@ class DepartmentFinanceRequestController extends Controller
                 ?: $transaction->submitter?->job_title
                 ?: $validated['request_department'])),
             'request_form_type' => $validated['request_form_type'],
+            'request_document_title' => trim((string) (($validated['request_document_title'] ?? null) === '__custom__'
+                ? $validated['request_document_title_custom']
+                : (($validated['request_document_title'] ?? null)
+                    ?: ($validated['request_form_type'] === Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu')))),
             'request_title' => trim($validated['request_title']),
             'request_items' => $items->all(),
             'request_subtotal' => $subtotal,
@@ -547,6 +554,8 @@ class DepartmentFinanceRequestController extends Controller
 
         $validated = $request->validate([
             'request_form_type' => ['required', 'in:' . Transaction::REQUEST_FORM_CASH . ',' . Transaction::REQUEST_FORM_PAYMENT],
+            'request_document_title' => ['nullable', 'string', 'max:255'],
+            'request_document_title_custom' => ['nullable', 'required_if:request_document_title,__custom__', 'string', 'max:255'],
             'flow_direction' => ['required', 'in:in,out'],
             'request_title' => ['required', 'string', 'max:255'],
             'request_job_title' => ['nullable', 'string', 'max:150'],
@@ -653,6 +662,10 @@ class DepartmentFinanceRequestController extends Controller
             'request_department' => $config['label'],
             'request_job_title' => trim((string) (($validated['request_job_title'] ?? null) ?: auth()->user()?->job_title ?: $config['label'])),
             'request_form_type' => $validated['request_form_type'],
+            'request_document_title' => trim((string) (($validated['request_document_title'] ?? null) === '__custom__'
+                ? $validated['request_document_title_custom']
+                : (($validated['request_document_title'] ?? null)
+                    ?: ($validated['request_form_type'] === Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu')))),
             'request_title' => $validated['request_title'],
             'request_items' => $items->all(),
             'request_subtotal' => $subtotal,

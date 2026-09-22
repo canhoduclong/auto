@@ -31,6 +31,9 @@ class ManagerFinanceRequestTest extends TestCase
             ->assertOk()
             ->assertSee('Tạo phiếu tài chính')
             ->assertSee('name="request_title"', false)
+            ->assertSee('name="request_document_title"', false)
+            ->assertSee('Nhập tiêu đề khác...')
+            ->assertSee('Trưởng phòng Vận hành')
             ->assertSee('name="attachments[]"', false)
             ->assertDontSee('Phiếu đã gửi');
     }
@@ -142,6 +145,8 @@ class ManagerFinanceRequestTest extends TestCase
 
         $this->put(route('manager.finance-requests.update', $request), [
             'request_form_type' => Transaction::REQUEST_FORM_CASH,
+            'request_document_title' => '__custom__',
+            'request_document_title_custom' => 'Phiếu xin cấp ngân sách',
             'flow_direction' => 'out',
             'request_title' => 'Phiếu đã sửa đúng',
             'items' => [['content' => 'Vật tư đúng', 'unit' => 'lần', 'quantity' => 2, 'unit_price' => 75000]],
@@ -152,6 +157,7 @@ class ManagerFinanceRequestTest extends TestCase
 
         $request->refresh();
         $this->assertSame('Phiếu đã sửa đúng', $request->request_title);
+        $this->assertSame('Phiếu xin cấp ngân sách', $request->request_document_title);
         $this->assertSame('160000.00', $request->amount);
         $this->assertSame(Transaction::STATUS_PENDING_APPROVAL, $request->status);
 
@@ -198,7 +204,7 @@ class ManagerFinanceRequestTest extends TestCase
 
     private function manager(): User
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['job_title' => 'Trưởng phòng Vận hành']);
         $user->roles()->attach(Role::query()->firstOrCreate(['name' => 'manager']));
 
         return $user;

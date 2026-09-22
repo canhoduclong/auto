@@ -55,12 +55,12 @@
                 <div class="row g-3">
                     @if($transaction->request_source)
                         <div class="col-md-4">
-                            <div class="text-muted small">Bộ phận yêu cầu</div>
-                            <div><span class="badge text-bg-light border">{{ $transaction->request_department ?: $transaction->request_source }}</span></div>
+                            <div class="text-muted small">Chức danh người yêu cầu</div>
+                            <div><span class="badge text-bg-light border">{{ $transaction->submitter?->job_title ?: 'Chưa cập nhật chức danh' }}</span></div>
                         </div>
                         <div class="col-md-8">
                             <div class="text-muted small">Loại chứng từ</div>
-                            <div class="mb-1"><span class="badge text-bg-light border">{{ $transaction->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu thu/chi' }}</span></div>
+                            <div class="mb-1"><span class="badge text-bg-light border">{{ $transaction->request_document_title ?: ($transaction->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu') }}</span></div>
                             <div class="text-muted small">Tiêu đề phiếu</div>
                             <div class="fw-semibold">{{ $transaction->request_title ?: 'Phiếu yêu cầu' }}</div>
                         </div>
@@ -219,10 +219,10 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
-                            <h5 class="mb-1">Chi tiết nội dung phiếu yêu cầu</h5>
+                            <h5 class="mb-1">Chi tiết nội dung {{ mb_strtolower($transaction->request_document_title ?: ($transaction->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu')) }}</h5>
                             <div class="small text-muted">Kế toán xác nhận lần 1 để gửi Director duyệt, sau đó hoàn thành khi đã chuyển tiền thực tế.</div>
                         </div>
-                        <span class="badge text-bg-light border">{{ $transaction->request_department ?: $transaction->request_source }}</span>
+                        <span class="badge text-bg-light border">{{ $transaction->submitter?->job_title ?: 'Chưa cập nhật chức danh' }}</span>
                     </div>
 
                     <div class="table-responsive">
