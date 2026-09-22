@@ -6,6 +6,7 @@ use App\Models\Inventory;
 use App\Models\InventoryDocument;
 use App\Models\InventoryMovement;
 use App\Models\InventoryReservation;
+use App\Models\Order;
 use App\Models\ProductVariant;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -19,12 +20,17 @@ class InventoryReservationController extends Controller
     public function index()
     {
         $reservations = InventoryReservation::with([
-            'orderItem.order:id,code,status',
+            'orderItem.order:id,customer_id,user_id,shipper_id,code,status',
+            'orderItem.order.customer:id,name,phone',
+            'orderItem.order.user:id,name,short_name',
+            'orderItem.order.shipper:id,name,short_name,phone',
             'orderItem.variant.product',
             'inventory.warehouse',
         ])->withSum('recoveryDocuments as recovered_quantity', 'reservation_recovery_quantity')
             ->paginate(10);
-        return view('inventory-reservations.index', compact('reservations'));
+        $statusOptions = Order::statusOptions();
+
+        return view('inventory-reservations.index', compact('reservations', 'statusOptions'));
     }
 
     public function storeRecoveryReceipt(Request $request, InventoryReservation $inventoryReservation)

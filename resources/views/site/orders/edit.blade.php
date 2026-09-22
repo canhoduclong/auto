@@ -461,6 +461,9 @@
                                 </div>
 
                                 <div class="col-md-6 mb-3">
+                                    <label for="delivery_date" class="form-label fw-bold">Ngày giao hàng</label>
+                                    <input type="date" name="delivery_date" id="delivery_date" class="form-control mb-3"
+                                           value="{{ old('delivery_date', $order->delivery_date?->toDateString() ?: $order->created_at?->copy()->addDay()->toDateString() ?: now()->addDay()->toDateString()) }}" required>
                                     <label for="delivery_time" class="form-label fw-bold">Giờ giao hàng</label>
                                     <input type="text" name="delivery_time" id="delivery_time" class="form-control"
                                            value="{{ old('delivery_time', $order->delivery_time) }}" placeholder="Ví dụ: 9h-11h hoặc sau 17h">

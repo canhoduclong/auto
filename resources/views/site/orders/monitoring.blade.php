@@ -2064,6 +2064,9 @@
                                 ?: ($defaultAddress?->note ?: ($order->customer?->address ?: 'Chưa cập nhật địa chỉ'));
                             $deliveryArea = collect([$defaultAddress?->ward, $defaultAddress?->city])->filter()->implode(', ');
                             $deliveryTime = $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật');
+                            $displayCreatedAt = $order->created_at;
+                            $displayDeliveryDate = $order->delivery_date
+                                ?: $order->created_at?->copy()->addDay();
                             $canManageOrder = (int) $order->user_id === (int) auth()->id();
                             $canViewOrderDetail = !$isSaleViewingRole || $canManageOrder;
                             $isAdminUser = auth()->user()?->isAdmin() ?? false;
@@ -2166,7 +2169,8 @@
                                             <div class="monitor-order-code">
                                                 {{ $order->code ?: ('#' . $order->id) }}
                                                 · Sale: {{ $order->user?->short_name ?: ($order->user?->name ?? '—') }}
-                                                · {{ $order->created_at?->format('H:i d/m/Y') }}
+                                                · Ngày tạo: {{ $displayCreatedAt?->format('d/m/Y') ?? '—' }}
+                                                · Ngày giao: {{ $displayDeliveryDate?->format('d/m/Y') ?? '—' }}
                                             </div>
                                         </div>
                                     </div>
@@ -2375,6 +2379,12 @@
                                                 <div>
                                                     <label for="monitorEditPhone{{ $order->id }}">Số điện thoại</label>
                                                     <input class="form-control form-control-sm" id="monitorEditPhone{{ $order->id }}" name="recipient_phone" value="{{ $order->recipient_phone ?: ($order->customer?->phone ?? '') }}" required>
+                                                </div>
+                                                <div>
+                                                    <label for="monitorEditDeliveryDate{{ $order->id }}">Ngày giao hàng <span class="text-danger">*</span></label>
+                                                    <input type="date" class="form-control form-control-sm @error('delivery_date') is-invalid @enderror" id="monitorEditDeliveryDate{{ $order->id }}" name="delivery_date" value="{{ old('delivery_date', $order->delivery_date?->toDateString() ?: $order->created_at?->copy()->addDay()->toDateString() ?: now()->addDay()->toDateString()) }}" required>
+                                                    @error('delivery_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                                                    @if(!$order->delivery_date)<div class="form-text">Mặc định ngày tạo đơn + 1 ngày.</div>@endif
                                                 </div>
                                                 <div>
                                                     <label for="monitorEditDelivery{{ $order->id }}">Giờ giao hàng <span class="text-danger">*</span></label>

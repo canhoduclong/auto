@@ -5273,6 +5273,11 @@ public function apiTruckRoutes(Request $request)
 
         $request->merge([
             'items' => $sanitizedItems,
+            'delivery_date' => $request->filled('delivery_date')
+                ? $request->input('delivery_date')
+                : ($order->delivery_date?->toDateString()
+                    ?: $order->created_at?->copy()->addDay()->toDateString()
+                    ?: now()->addDay()->toDateString()),
         ]);
 
         $validated = $request->validate([
@@ -5281,6 +5286,7 @@ public function apiTruckRoutes(Request $request)
             'recipient_phone' => ['required', 'string', 'max:50'],
             'recipient_email' => ['nullable', 'email', 'max:255'],
             'recipient_address' => ['required', 'string', 'max:1000'],
+            'delivery_date' => ['required', 'date'],
             'delivery_time' => ['required', 'date_format:H:i'],
             'delivery_time_note' => ['nullable', 'string', 'max:1000'],
             'note' => ['nullable', 'string', 'max:1000'],
@@ -5308,6 +5314,8 @@ public function apiTruckRoutes(Request $request)
             'items.*.variant_id' => ['required', 'integer', 'exists:product_variants,id'],
             'items.*.quantity' => ['required', 'integer', 'min:1'],
         ], [
+            'delivery_date.required' => 'Vui lòng chọn ngày giao hàng.',
+            'delivery_date.date' => 'Ngày giao hàng không hợp lệ.',
             'delivery_time.required' => 'Vui lòng chọn giờ giao hàng trước khi lưu đơn.',
             'delivery_time.date_format' => 'Giờ giao hàng phải đúng định dạng HH:mm.',
         ]);
@@ -5354,6 +5362,7 @@ public function apiTruckRoutes(Request $request)
             $saleChangeService = app(\App\Services\WarehouseSaleChangeService::class);
             $trackSaleItems = $saleChangeService->shouldTrack($order);
             $beforeSaleItems = $trackSaleItems ? $saleChangeService->itemSummary($order) : null;
+            $previousDeliveryDate = $order->delivery_date?->toDateString();
             $order->items()->delete();
 
             $parseWeightToKg = static function ($size): float {
@@ -5501,6 +5510,7 @@ public function apiTruckRoutes(Request $request)
                 'recipient_phone' => $validated['recipient_phone'],
                 'recipient_email' => $validated['recipient_email'] ?? null,
                 'recipient_address' => $validated['recipient_address'],
+                'delivery_date' => $validated['delivery_date'],
                 'delivery_time' => $validated['delivery_time'] ?? null,
                 'delivery_time_note' => $validated['delivery_time_note'] ?? null,
                 'note' => $validated['note'] ?? null,
@@ -5554,6 +5564,19 @@ public function apiTruckRoutes(Request $request)
 
             if ($trackSaleItems && $beforeSaleItems !== $saleChangeService->itemSummary($order)) {
                 $saleChangeService->record($order, 'Hàng hóa: '.$beforeSaleItems.' → '.$saleChangeService->itemSummary($order));
+            }
+
+            $newDeliveryDate = $order->fresh()->delivery_date?->toDateString();
+            if ($previousDeliveryDate !== $newDeliveryDate) {
+                \App\Models\OrderHistory::query()->create([
+                    'order_id' => $order->id,
+                    'action' => 'sale_update_delivery_date',
+                    'user_id' => Auth::id(),
+                    'role' => Auth::user()?->roles()->pluck('name')->first(),
+                    'status_before' => (string) $order->getRawOriginal('status'),
+                    'status_after' => (string) $order->status,
+                    'note' => 'Sale đổi ngày giao từ '.($previousDeliveryDate ?: 'chưa có').' sang '.$newDeliveryDate.'.',
+                ]);
             }
 
             // Sau khi sửa đơn, reset lại luồng duyệt tương tự tạo mới.
@@ -5711,7 +5734,7 @@ public function apiTruckRoutes(Request $request)
             return back()->with('error', 'Chỉ có thể gửi lại đơn đang ở trạng thái đã hủy.');
         }
 
-        $copiedOrderDate = now();
+        $copiedOrderDate = now()->addDay();
         $newOrder = null;
 
         DB::transaction(function () use ($oldOrder, $user, $isResend, &$copiedOrderDate, &$newOrder) {
@@ -5774,7 +5797,16 @@ public function apiTruckRoutes(Request $request)
             } while (Order::where('code', $newCode)->exists());
             $newOrder->code = $newCode;
             $newOrder->resetForCopiedOrder($oldOrder->id);
-            $newOrder->created_at = now();
+            // Đơn sao chép là đơn giao cho ngày kế tiếp. Hệ thống hiện dùng
+            // created_at làm ngày nghiệp vụ của đơn thường, nên cả ngày nghiệp
+            // vụ và delivery_date phải cùng chuyển sang ngày mai.
+            $nextDeliveryAt = now()->addDay();
+            $newOrder->delivery_date = $nextDeliveryAt->toDateString();
+            $newOrder->delivery_time = $oldOrder->delivery_time
+                ?: $oldOrder->customer?->delivery_time;
+            $newOrder->delivery_time_note = $oldOrder->delivery_time_note
+                ?: $oldOrder->customer?->delivery_time_note;
+            $newOrder->created_at = $nextDeliveryAt;
             $newOrder->updated_at = now();
             $newOrder->save();
 
@@ -5789,17 +5821,21 @@ public function apiTruckRoutes(Request $request)
 
             $this->refreshCopiedOrderPrices($newOrder);
 
+            // Copy từ màn hình monitoring phải là một đơn đã gửi duyệt hoàn
+            // chỉnh, không phải bản pending rỗng thiếu approval_orders.
+            if ($this->hasOrderColumn('copied_from_order_id')) {
+                DB::table('orders')->where('id', $newOrder->id)->update([
+                    'copied_from_order_id' => null,
+                ]);
+            }
+            $newOrder->approvals()->delete();
+            app(ApprovalService::class)->initOrderApproval(
+                $newOrder->fresh(),
+                \App\Models\ApprovalWorkflow::ACTIVITY_ORDER_CREATE
+            );
+            $newOrder->refresh();
+
             if ($isResend) {
-                if ($this->hasOrderColumn('copied_from_order_id')) {
-                    DB::table('orders')->where('id', $newOrder->id)->update([
-                        'copied_from_order_id' => null,
-                    ]);
-                }
-
-                $newOrder->approvals()->delete();
-                app(ApprovalService::class)->initOrderApproval($newOrder->fresh());
-                $newOrder->refresh();
-
                 \App\Models\OrderHistory::create([
                     'order_id' => $newOrder->id,
                     'action' => 'resend_cancelled_order',
@@ -5820,6 +5856,20 @@ public function apiTruckRoutes(Request $request)
                     'note' => 'Đã tạo đơn gửi lại #'.($newOrder->code ?: $newOrder->id),
                 ]);
             }
+
+            if (!$isResend) {
+                \App\Models\OrderHistory::create([
+                    'order_id' => $newOrder->id,
+                    'action' => 'copy_order_created',
+                    'user_id' => $user->id,
+                    'role' => $user->roles()->pluck('name')->first(),
+                    'status_before' => (string) $oldOrder->status,
+                    'status_after' => (string) $newOrder->status,
+                    'note' => 'Sao chép từ đơn #'.($oldOrder->code ?: $oldOrder->id)
+                        .' để giao ngày '.$nextDeliveryAt->format('d/m/Y')
+                        .($newOrder->delivery_time ? ' lúc '.$newOrder->delivery_time : ''),
+                ]);
+            }
         });
 
         app(OrderController::class)->syncDailySequenceAndStockSufficiency($copiedOrderDate);
@@ -5833,10 +5883,14 @@ public function apiTruckRoutes(Request $request)
             ])->with('success', 'Đã gửi lại đơn #'.$oldOrder->code.' thành đơn mới #'.$newOrder->code.' và chuyển vào quy trình duyệt.');
         }
 
-        $successMsg = 'Đã copy đơn #' . $oldOrder->code . '. Vui lòng xem lại và bấm "Xác Nhận" để gửi duyệt.';
-
-        return redirect()->route('pages.my_orders')
-            ->with('success', $successMsg);
+        return redirect()->route('pages.my_orders.monitoring', [
+            'tab' => 'today',
+            'date' => $newOrder->delivery_date?->toDateString() ?: now()->addDay()->toDateString(),
+            'date_field' => 'business_date',
+            'highlight' => $newOrder->id,
+        ])->with('success', 'Đã sao chép đơn #'.$oldOrder->code.' thành #'.$newOrder->code
+            .', giữ giờ giao '.($newOrder->delivery_time ?: 'theo thỏa thuận')
+            .' cho ngày mai và chuyển vào quy trình duyệt.');
     }
 
     private function refreshCopiedOrderPrices(Order $order): void

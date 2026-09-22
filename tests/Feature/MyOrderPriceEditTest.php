@@ -17,6 +17,38 @@ class MyOrderPriceEditTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_sale_can_edit_delivery_date_and_form_defaults_to_day_after_creation(): void
+    {
+        [$sale, $customer, $order, $variant] = $this->makeEditableOrder();
+        $order->forceFill([
+            'created_at' => '2026-09-22 10:00:00',
+            'delivery_date' => null,
+        ])->saveQuietly();
+
+        $this->actingAs($sale)
+            ->withSession(['active_role' => 'sale'])
+            ->get(route('site.orders.edit', $order))
+            ->assertOk()
+            ->assertSee('name="delivery_date"', false)
+            ->assertSee('value="2026-09-23"', false);
+
+        $this->put(route('site.orders.update', $order), [
+            'customer_id' => $customer->id,
+            'recipient_name' => 'Khach hang',
+            'recipient_phone' => '0900000000',
+            'recipient_address' => 'Dia chi giao hang',
+            'delivery_date' => '2026-09-25',
+            'delivery_time' => '07:30',
+            'items' => [['variant_id' => $variant->id, 'quantity' => 1]],
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame('2026-09-25', $order->fresh()->delivery_date->toDateString());
+        $this->assertDatabaseHas('order_histories', [
+            'order_id' => $order->id,
+            'action' => 'sale_update_delivery_date',
+        ]);
+    }
+
     public function test_edit_uses_current_list_price_as_the_base_for_the_saved_selling_price(): void
     {
         [$sale, $customer, $order, $variant] = $this->makeEditableOrder();

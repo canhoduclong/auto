@@ -17,6 +17,21 @@ class AdminReservationRecoveryReceiptTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_reservation_page_presents_customer_sale_shipper_and_order_status(): void
+    {
+        [$admin] = $this->fixture();
+
+        $this->actingAs($admin)->get(route('inventory-reservations.index'))
+            ->assertOk()
+            ->assertSee('Đơn hàng của khách hàng')
+            ->assertSee('Khách reservation')
+            ->assertSee('RECOVERY-ORDER')
+            ->assertSee('Sale Nguyễn')
+            ->assertSee('Ship Minh')
+            ->assertSee('Chờ lấy hàng')
+            ->assertSee('Sản phẩm giữ chỗ');
+    }
+
     public function test_admin_can_create_import_receipt_without_releasing_reservation(): void
     {
         [$admin, $inventory, $reservation] = $this->fixture();
@@ -63,8 +78,10 @@ class AdminReservationRecoveryReceiptTest extends TestCase
     private function fixture(): array
     {
         $warehouse = Warehouse::factory()->create();
-        $admin = User::factory()->create();
+        $admin = User::factory()->create(['name' => 'Sale Nguyễn']);
         $admin->roles()->attach(Role::create(['name' => 'admin']));
+        $shipper = User::factory()->create(['name' => 'Ship Minh']);
+        $shipper->roles()->attach(Role::create(['name' => 'shipper']));
         $warehouseUser = User::factory()->create(['warehouse_id' => $warehouse->id]);
         $warehouseUser->roles()->attach(Role::create(['name' => 'warehouse']));
         $product = Product::factory()->create();
@@ -75,9 +92,9 @@ class AdminReservationRecoveryReceiptTest extends TestCase
             'quantity' => 5,
             'reserved_quantity' => 4,
         ]);
-        $customer = Customer::query()->create(['user_id' => $admin->id, 'name' => 'Khách', 'status' => 'active']);
+        $customer = Customer::query()->create(['user_id' => $admin->id, 'name' => 'Khách reservation', 'status' => 'active']);
         $order = Order::query()->create([
-            'customer_id' => $customer->id, 'user_id' => $admin->id, 'warehouse_id' => $warehouse->id,
+            'customer_id' => $customer->id, 'user_id' => $admin->id, 'shipper_id' => $shipper->id, 'warehouse_id' => $warehouse->id,
             'code' => 'RECOVERY-ORDER', 'status' => Order::STATUS_READY_TO_SHIP, 'total' => 0,
         ]);
         $item = $order->items()->create([

@@ -327,6 +327,13 @@
 							</a>
 						</li>
 						<li class="nav-item">
+							<a href="{{ route('inventory-reservations.index') }}" class="nav-link{{ request()->routeIs('inventory-reservations.*') ? ' active' : '' }}">
+								<i class="ph-calendar-check"></i>
+								<span>Đặt chỗ tồn kho</span>
+							</a>
+						</li>
+						
+						<li class="nav-item">
 							<a href="{{ route('inventory-documents.index') }}" class="nav-link{{ request()->routeIs('inventory-documents.*') ? ' active' : '' }}">
 								<i class="ph-files"></i>
 								<span>Nhập xuất kho</span>
