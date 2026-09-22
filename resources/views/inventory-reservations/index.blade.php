@@ -27,6 +27,12 @@
 @endpush
 
 @section('content')
+@php
+    $formatReservationQuantity = static fn ($value): string => rtrim(
+        rtrim(number_format((float) $value, 3, ',', '.'), '0'),
+        ','
+    );
+@endphp
 <div class="container-fluid reservation-page py-3">
     <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
         <div>
@@ -71,7 +77,8 @@
                     <tr>
                         <td>
                             <div class="reservation-customer">{{ $customer?->name ?? 'Khách hàng không xác định' }}</div>
-                            <div class="reservation-order-code">mã đơn: {{ $order?->code ?? '—' }}</div>
+                            <div class="reservation-order-code">{{ $order?->code ?? '—' }}</div>
+                            <div class="reservation-subtext"><i class="bi bi-calendar3 me-1"></i>Ngày đơn: {{ $order?->created_at?->copy()->timezone(config('app.display_timezone'))->format('d/m/Y') ?? '—' }}</div>
                             @if($customer?->phone)<div class="reservation-subtext">{{ $customer->phone }}</div>@endif
                         </td>
                         <td><div class="reservation-meta-label">Sale</div><div class="reservation-person">{{ $sale?->short_name ?: ($sale?->name ?? 'Chưa xác định') }}</div></td>
@@ -86,7 +93,7 @@
                             <div class="reservation-subtext">{{ $variant?->name ?? '—' }} @if($variant?->sku) · SKU {{ $variant->sku }} @endif</div>
                             <div class="reservation-subtext">Reservation #{{ $reservation->id }} · Item #{{ $reservation->order_item_id }}</div>
                         </td>
-                        <td class="text-end"><span class="reservation-quantity">{{ number_format((float) $reservation->quantity, 3, ',', '.') }}</span></td>
+                        <td class="text-end"><span class="reservation-quantity">{{ $formatReservationQuantity($reservation->quantity) }}</span></td>
                         <td>
                             <div class="reservation-person">{{ $reservation->inventory?->warehouse?->name ?? 'Chưa xác định' }}</div>
                             <div class="reservation-subtext">{{ optional($reservation->reserved_at)->format('d/m/Y H:i') ?: '—' }}</div>
@@ -99,9 +106,9 @@
                                     <input type="text" name="reason" class="form-control form-control-sm" maxlength="500" placeholder="Lý do phát sinh" required>
                                     <button class="btn btn-sm btn-warning text-nowrap" onclick="return confirm('Lập phiếu nhập cứu hộ và tăng tồn kho? Reservation vẫn được giữ nguyên.');">Tạo phiếu nhập</button>
                                 </form>
-                                @if((float) ($reservation->recovered_quantity ?? 0) > 0)<div class="reservation-subtext">Đã nhập cứu hộ: {{ number_format((float) $reservation->recovered_quantity, 3, ',', '.') }}</div>@endif
+                                @if((float) ($reservation->recovered_quantity ?? 0) > 0)<div class="reservation-subtext">Đã nhập cứu hộ: {{ $formatReservationQuantity($reservation->recovered_quantity) }}</div>@endif
                             @else
-                                <span class="text-muted small">Đã nhập {{ number_format((float) ($reservation->recovered_quantity ?? 0), 3, ',', '.') }}</span>
+                                <span class="text-muted small">Đã nhập {{ $formatReservationQuantity($reservation->recovered_quantity ?? 0) }}</span>
                             @endif
                         </td>
                     </tr>

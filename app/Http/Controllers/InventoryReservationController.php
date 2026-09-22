@@ -20,7 +20,7 @@ class InventoryReservationController extends Controller
     public function index()
     {
         $reservations = InventoryReservation::with([
-            'orderItem.order:id,customer_id,user_id,shipper_id,code,status',
+            'orderItem.order:id,customer_id,user_id,shipper_id,code,status,created_at',
             'orderItem.order.customer:id,name,phone',
             'orderItem.order.user:id,name,short_name',
             'orderItem.order.shipper:id,name,short_name,phone',
