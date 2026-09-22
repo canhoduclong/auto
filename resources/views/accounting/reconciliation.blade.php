@@ -659,6 +659,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <td class="text-end">${Number(item.weight || 0) > 0 ? Number(item.weight || 0).toLocaleString('vi-VN') + ' kg' : '-'}</td>
                 <td class="text-end">
                     <div>${money(item.unit_price)}</div>
+                    <div class="small text-muted">Giá công ty hiện tại</div>
                     ${Number(item.unit_discount || 0) > 0 ? `<div class="small ${item.discount_type === 'increase' ? 'text-primary' : 'text-danger'}">${item.discount_type === 'increase' ? 'Điều chỉnh tăng' : 'Giảm giá'}: ${item.discount_type === 'increase' ? '+' : '-'}${money(item.unit_discount)}</div>` : ''}
                 </td>
                 <td class="text-end fw-semibold">${money(item.line_total)}</td>
@@ -705,9 +706,9 @@ document.addEventListener('DOMContentLoaded', function () {
                         ['Khách hàng', esc(order.customer?.name)],
                         ['Số điện thoại', esc(order.customer?.phone)],
                         ['Địa chỉ', esc(order.customer?.address)],
-                        ['Tổng tiền hàng', money(order.subtotal_amount)],
-                        ['Giảm giá', money(order.total_discount)],
-                        ['Tổng phải thu', money(order.total)],
+                        ['Tổng tiền hàng (giá hiện tại)', money(order.current_goods_total)],
+                        ['Giảm giá sản phẩm', `<span class="text-danger">-${money(order.current_item_discount_total)}</span>`],
+                        ['Tổng giá trị tính lại', money(order.current_calculated_total)],
                         ['Doanh thu ghi nhận', `<span class="text-success">${money(order.recognized_revenue)}</span>`],
                     ])}
                     <div class="recon-detail-section">
@@ -729,14 +730,15 @@ document.addEventListener('DOMContentLoaded', function () {
                             </table>
                         </div>
                         <div class="d-flex justify-content-end"><div style="min-width:360px">
-                            <div class="recon-mini-row"><span>Tiền hàng</span><span>${money(order.subtotal_amount)}</span></div>
-                            <div class="recon-mini-row"><span>Giảm giá sản phẩm</span><span class="text-danger">-${money(order.item_discount_total)}</span></div>
+                            <div class="recon-mini-row"><span>Tiền hàng theo giá hiện tại</span><span>${money(order.current_goods_total)}</span></div>
+                            <div class="recon-mini-row text-danger"><span>Giảm giá sản phẩm</span><span>-${money(order.current_item_discount_total)}</span></div>
+                            ${Number(order.current_item_increase_total || 0) > 0 ? `<div class="recon-mini-row text-primary"><span>Điều chỉnh tăng sản phẩm</span><span>+${money(order.current_item_increase_total)}</span></div>` : ''}
                             <div class="recon-mini-row"><span>Chiết khấu đơn</span><span class="${order.order_discount_type === 'increase' ? 'text-primary' : 'text-danger'}">${order.order_discount_type === 'increase' ? '+' : '-'}${money(Math.abs(Number(order.extra_discount_total || order.order_discount || 0)))}</span></div>
                             <div class="recon-mini-row"><span>Phí ship</span><span>${money(order.shipping_fee)}</span></div>
                             ${Number(order.customer_shipping_fee || 0) > 0 ? `<div class="recon-mini-row"><span>Phí giao hàng thu khách</span><span>${money(order.customer_shipping_fee)}</span></div>` : ''}
                             ${Number(order.foam_box_fee || 0) > 0 ? `<div class="recon-mini-row"><span>Phí thùng xốp</span><span>${money(order.foam_box_fee)}</span></div>` : ''}
                             <div class="recon-mini-row"><span>VAT ${Number(order.vat_percent || 0) > 0 ? `(${Number(order.vat_percent).toLocaleString('vi-VN')}%)` : ''}</span><span>${money(order.vat_amount)}</span></div>
-                            <div class="recon-mini-row border-top mt-1 pt-2 fs-6"><strong>Tổng giá trị đơn hàng</strong><strong>${money(order.total)}</strong></div>
+                            <div class="recon-mini-row border-top mt-1 pt-2 fs-6"><strong>Tổng giá trị đơn hàng</strong><strong>${money(order.current_calculated_total)}</strong></div>
                         </div></div>
                     </div>
                     <div class="recon-detail-section">

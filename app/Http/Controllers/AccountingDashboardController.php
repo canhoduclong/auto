@@ -404,7 +404,8 @@ class AccountingDashboardController extends Controller
             'shipper:id,name',
             'warehouse:id,name',
             'items.product:id,name',
-            'items.variant:id,name,sku,size',
+            'items.variant:id,product_id,name,sku,size,kg,is_priced_by_kg',
+            'items.variant.latestPriceRule',
             'transactions' => fn ($query) => $query->latest(),
             'histories.user:id,name',
             'returnRecords.returnItems.productVariant.product:id,name',
@@ -2729,6 +2730,56 @@ class AccountingDashboardController extends Controller
                 'at' => optional($history->created_at)->format('d/m/Y H:i'),
             ])->values();
         $discountReason = trim((string) ($pricingChanges->first()['note'] ?? ''));
+        $reconciliationItems = $order->items->map(function ($item) use ($order): array {
+            $pricingQuantity = max(0, (float) $item->displayValueForStage((string) $order->status));
+            $currentUnitPrice = (float) ($item->variant?->latestPriceRule?->price
+                ?? $item->base_price
+                ?? $item->price
+                ?? 0);
+            $unitDiscount = max(0, (float) ($item->unit_discount ?? 0));
+            $discountType = (string) ($item->discount_type ?? 'decrease');
+            $currentLineTotal = round($pricingQuantity * $currentUnitPrice, 2);
+            $currentDiscountTotal = round($pricingQuantity * $unitDiscount, 2);
+
+            return [
+                'product_name' => $item->product?->name ?? 'San pham',
+                'variant_name' => $item->variant?->name ?? '-',
+                'name' => $item->variant?->name ?? $item->product?->name ?? 'San pham',
+                'sku' => $item->variant?->sku,
+                'size' => $item->variant?->size,
+                'quantity' => (float) ($item->quantity ?? 0),
+                'total_label' => $item->display_total_label,
+                'weight' => (float) ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight ?? 0),
+                'pricing_quantity' => $pricingQuantity,
+                'unit_price' => $currentUnitPrice,
+                'base_price' => $currentUnitPrice,
+                'unit_discount' => $unitDiscount,
+                'discount_type' => $discountType,
+                'discount_total' => $currentDiscountTotal,
+                'line_total' => $currentLineTotal,
+            ];
+        })->values();
+        $currentGoodsTotal = round((float) $reconciliationItems->sum('line_total'), 2);
+        $currentItemDiscountTotal = round((float) $reconciliationItems
+            ->filter(fn (array $item): bool => $item['discount_type'] !== 'increase')
+            ->sum('discount_total'), 2);
+        $currentItemIncreaseTotal = round((float) $reconciliationItems
+            ->filter(fn (array $item): bool => $item['discount_type'] === 'increase')
+            ->sum('discount_total'), 2);
+        $orderDiscountAmount = abs((float) ($order->extra_discount_total ?: $order->order_discount ?: 0));
+        $signedOrderDiscount = (string) ($order->order_discount_type ?? 'decrease') === 'increase'
+            ? $orderDiscountAmount
+            : -$orderDiscountAmount;
+        $currentOrderTotal = round(max(0,
+            $currentGoodsTotal
+            - $currentItemDiscountTotal
+            + $currentItemIncreaseTotal
+            + $signedOrderDiscount
+            + (float) ($order->shipping_fee ?? 0)
+            + (float) ($order->customer_shipping_fee ?? 0)
+            + (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0)
+            + (float) ($order->vat_amount ?? 0)
+        ), 2);
 
         return response()->json([
             'order' => [
@@ -2738,6 +2789,10 @@ class AccountingDashboardController extends Controller
                 'status' => $order->status,
                 'payment_status' => $order->payment_status,
                 'total' => (float) $order->total,
+                'current_goods_total' => $currentGoodsTotal,
+                'current_item_discount_total' => $currentItemDiscountTotal,
+                'current_item_increase_total' => $currentItemIncreaseTotal,
+                'current_calculated_total' => $currentOrderTotal,
                 'subtotal_amount' => (float) ($order->subtotal_amount ?? $order->total ?? 0),
                 'total_discount' => (float) ($order->total_discount ?? 0),
                 'item_discount_total' => (float) ($order->item_discount_total ?? 0),
@@ -2770,22 +2825,7 @@ class AccountingDashboardController extends Controller
                 'note' => $order->note,
                 'shipper_note' => $order->shipper_note,
             ],
-            'items' => $order->items->map(fn ($item) => [
-                'product_name' => $item->product?->name ?? 'San pham',
-                'variant_name' => $item->variant?->name ?? '-',
-                'name' => $item->variant?->name ?? $item->product?->name ?? 'San pham',
-                'sku' => $item->variant?->sku,
-                'size' => $item->variant?->size,
-                'quantity' => (float) ($item->quantity ?? 0),
-                'total_label' => $item->display_total_label,
-                'weight' => (float) ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight ?? 0),
-                'unit_price' => (float) ($item->price ?? $item->unit_price ?? 0),
-                'base_price' => (float) ($item->base_price ?? $item->price ?? $item->unit_price ?? 0),
-                'unit_discount' => (float) ($item->unit_discount ?? 0),
-                'discount_type' => (string) ($item->discount_type ?? 'decrease'),
-                'discount_total' => (float) ($item->discount_total ?? 0),
-                'line_total' => (float) ($item->subtotal ?? $item->total ?? ((float) ($item->quantity ?? 0) * (float) ($item->price ?? $item->unit_price ?? 0))),
-            ])->values(),
+            'items' => $reconciliationItems,
             'pricing_changes' => $pricingChanges,
             'approval' => [
                 'created_by' => $order->user?->name ?? '-',
