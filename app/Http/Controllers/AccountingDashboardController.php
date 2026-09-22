@@ -2741,7 +2741,8 @@ class AccountingDashboardController extends Controller
             $applicablePriceRule = $item->variant?->priceRules
                 ?->first(fn ($rule) => ($rule->start_date === null || $rule->start_date <= $orderPriceDate)
                     && ($rule->end_date === null || $rule->end_date >= $orderPriceDate));
-            $currentUnitPrice = (float) ($applicablePriceRule?->price
+            $currentUnitPrice = (float) ($item->company_price_at_order
+                ?? $applicablePriceRule?->price
                 ?? $item->base_price
                 ?? $item->price
                 ?? 0);
@@ -2762,6 +2763,7 @@ class AccountingDashboardController extends Controller
                 'pricing_quantity' => $pricingQuantity,
                 'unit_price' => $currentUnitPrice,
                 'price_effective_date' => $orderPriceDate,
+                'company_price_at_order' => $item->company_price_at_order !== null ? (float) $item->company_price_at_order : null,
                 'base_price' => $currentUnitPrice,
                 'unit_discount' => $unitDiscount,
                 'discount_type' => $discountType,

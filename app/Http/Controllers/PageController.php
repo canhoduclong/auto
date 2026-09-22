@@ -5709,6 +5709,7 @@ public function apiTruckRoutes(Request $request)
             foreach ($oldOrder->items as $item) {
                 $newItem = $item->replicate();
                 $newItem->order_id = $newOrder->id;
+                $newItem->company_price_at_order = null;
                 $newItem->save();
             }
 
@@ -5816,6 +5817,7 @@ public function apiTruckRoutes(Request $request)
             foreach ($oldOrder->items as $item) {
                 $newItem = $item->replicate();
                 $newItem->order_id = $newOrder->id;
+                $newItem->company_price_at_order = null;
                 $newItem->save();
             }
 
@@ -5925,6 +5927,7 @@ public function apiTruckRoutes(Request $request)
             $item->update([
                 'price' => $finalUnitPrice,
                 'base_price' => $currentBasePrice,
+                'company_price_at_order' => $currentBasePrice,
                 'unit_discount' => $unitDiscount,
                 'discount_type' => $discountType,
                 'discount_total' => $lineAdjustment,

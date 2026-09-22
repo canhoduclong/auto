@@ -16,6 +16,7 @@ class OrderItem extends Model
         'quantity',
         'price',
         'base_price',
+        'company_price_at_order',
         'unit_discount',
         'discount_type',
         'discount_total',
@@ -29,10 +30,36 @@ class OrderItem extends Model
     ];
 
     protected $casts = [
+        'company_price_at_order' => 'decimal:2',
         'actual_weight'  => 'decimal:3',
         'packed_weight'  => 'decimal:3',
         'is_priced_by_kg' => 'boolean',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (OrderItem $item): void {
+            if ($item->company_price_at_order !== null) {
+                return;
+            }
+
+            $orderDate = $item->order?->created_at?->toDateString() ?? now()->toDateString();
+            $rulePrice = $item->product_variant_id
+                ? ProductPriceRule::query()
+                    ->where('product_variant_id', $item->product_variant_id)
+                    ->where(fn ($query) => $query->whereNull('start_date')->orWhereDate('start_date', '<=', $orderDate))
+                    ->where(fn ($query) => $query->whereNull('end_date')->orWhereDate('end_date', '>=', $orderDate))
+                    ->orderByRaw('CASE WHEN price > 0 THEN 0 ELSE 1 END')
+                    ->orderByDesc('start_date')
+                    ->orderByDesc('id')
+                    ->value('price')
+                : null;
+
+            $item->company_price_at_order = $rulePrice !== null
+                ? (float) $rulePrice
+                : (float) ($item->base_price ?? $item->price ?? 0);
+        });
+    }
 
     public function getEffectivePricedByKgAttribute(): bool
     {

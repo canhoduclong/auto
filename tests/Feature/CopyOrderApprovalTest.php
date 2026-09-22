@@ -6,6 +6,9 @@ use App\Models\ApprovalStep;
 use App\Models\ApprovalWorkflow;
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\Product;
+use App\Models\ProductPriceRule;
+use App\Models\ProductVariant;
 use App\Models\Role;
 use App\Models\User;
 use Carbon\Carbon;
@@ -50,6 +53,23 @@ class CopyOrderApprovalTest extends TestCase
             'delivery_time' => '06:45',
             'total' => 0,
         ]);
+        $product = Product::factory()->create();
+        $variant = ProductVariant::factory()->create(['product_id' => $product->id]);
+        ProductPriceRule::query()->create([
+            'product_variant_id' => $variant->id,
+            'price' => 68000,
+            'start_date' => '2026-09-22',
+            'created_by' => $sale->id,
+        ]);
+        $source->items()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 1,
+            'price' => 63000,
+            'base_price' => 63000,
+            'company_price_at_order' => 63000,
+            'total' => 63000,
+        ]);
 
         $response = $this->actingAs($sale)->get(route('site.orders.copy', $source));
         $copy = Order::query()->whereKeyNot($source->id)->firstOrFail();
@@ -65,6 +85,7 @@ class CopyOrderApprovalTest extends TestCase
         $this->assertSame('06:45', $copy->delivery_time);
         $this->assertSame(Order::STATUS_PENDING_MANAGER_APPROVAL, $copy->status);
         $this->assertNull($copy->copied_from_order_id);
+        $this->assertSame('68000.00', $copy->items()->firstOrFail()->company_price_at_order);
         $this->assertDatabaseHas('approval_orders', [
             'order_id' => $copy->id,
             'approval_step_id' => ApprovalStep::query()->value('id'),

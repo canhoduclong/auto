@@ -74,12 +74,14 @@ class AccountingReconciliationCurrentPriceDetailTest extends TestCase
             'discount_total' => 125000,
             'total' => 8500000,
         ]);
+        $this->assertSame('69000.00', $order->items()->firstOrFail()->company_price_at_order);
 
         $this->actingAs($accountant)
             ->getJson(route('accounting.reconciliation.detail', $order))
             ->assertOk()
             ->assertJsonPath('items.0.unit_price', 69000)
             ->assertJsonPath('items.0.price_effective_date', '2026-09-19')
+            ->assertJsonPath('items.0.company_price_at_order', 69000)
             ->assertJsonPath('items.0.pricing_quantity', 120)
             ->assertJsonPath('items.0.line_total', 8280000)
             ->assertJsonPath('items.0.discount_total', 120000)
