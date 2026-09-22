@@ -25,4 +25,9 @@ class InventoryReservation extends Model
     {
         return $this->belongsTo(Inventory::class);
     }
+
+    public function recoveryDocuments()
+    {
+        return $this->hasMany(InventoryDocument::class);
+    }
 }

@@ -13,6 +13,8 @@ class InventoryDocument extends Model
         'type',
         'document_number',
         'warehouse_id',
+        'inventory_reservation_id',
+        'reservation_recovery_quantity',
         'supplier_id',
         'document_date',
         'notes',
@@ -25,6 +27,7 @@ class InventoryDocument extends Model
         'document_date' => 'date',
         'shipping_fee' => 'decimal:2',
         'edit_count' => 'integer',
+        'reservation_recovery_quantity' => 'float',
     ];
 
     protected static function booted(): void
@@ -67,5 +70,10 @@ class InventoryDocument extends Model
     public function supplier()
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    public function inventoryReservation()
+    {
+        return $this->belongsTo(InventoryReservation::class);
     }
 }

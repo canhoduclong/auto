@@ -18,6 +18,9 @@
                     <p><strong>{{ __('inventory.labels.date') }}:</strong> {{ $inventoryDocument->document_date }}</p>
                     <p><strong>{{ __('inventory.labels.type') }}:</strong> {{ __('inventory.types.' . $inventoryDocument->type) }}</p>
                     <p><strong>{{ __('inventory.labels.warehouse') }}:</strong> {{ $inventoryDocument->warehouse->name }}</p>
+                    @if($inventoryDocument->inventoryReservation)
+                        <p><strong>Reservation cứu hộ:</strong> #{{ $inventoryDocument->inventoryReservation->id }} — Đơn #{{ $inventoryDocument->inventoryReservation->orderItem?->order?->code ?? 'N/A' }}</p>
+                    @endif
                 </div>
                 <div class="col-md-6">
                     <p><strong>{{ __('inventory.labels.user') }}:</strong> {{ $inventoryDocument->user->name ?? __('inventory.default.na') }}</p>

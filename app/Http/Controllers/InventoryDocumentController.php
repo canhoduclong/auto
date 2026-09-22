@@ -107,12 +107,13 @@ class InventoryDocumentController extends Controller
 
     public function show(InventoryDocument $inventoryDocument)
     {
-        $inventoryDocument->load('items.productVariant.product', 'warehouse', 'user');
+        $inventoryDocument->load('items.productVariant.product', 'warehouse', 'user', 'inventoryReservation.orderItem.order');
         return view('inventory-documents.show', compact('inventoryDocument'));
     }
 
     public function edit(InventoryDocument $inventoryDocument)
     {
+        abort_if($inventoryDocument->inventory_reservation_id, 403, 'Phiếu nhập cứu hộ reservation không được sửa trực tiếp.');
         $this->assertWarehouseAssignment();
 
         $managedWarehouseId = $this->getManagedWarehouseId();
@@ -128,6 +129,7 @@ class InventoryDocumentController extends Controller
 
     public function update(Request $request, InventoryDocument $inventoryDocument)
     {
+        abort_if($inventoryDocument->inventory_reservation_id, 403, 'Phiếu nhập cứu hộ reservation không được sửa trực tiếp.');
         $this->assertWarehouseAssignment();
 
         // For simplicity, we will delete and recreate the items and movements.
@@ -218,6 +220,7 @@ class InventoryDocumentController extends Controller
 
     public function destroy(InventoryDocument $inventoryDocument)
     {
+        abort_if($inventoryDocument->inventory_reservation_id, 403, 'Phiếu nhập cứu hộ reservation không được xóa trực tiếp.');
         $this->assertWarehouseAssignment();
 
         $managedWarehouseId = $this->getManagedWarehouseId();

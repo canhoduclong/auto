@@ -951,6 +951,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::resource('inventory-movements', InventoryMovementController::class)->middleware('permission');
     Route::resource('inventory-documents', InventoryDocumentController::class)->middleware('permission');
     Route::resource('inventory-adjustments', InventoryAdjustmentController::class)->middleware('permission');
+    Route::post('inventory-reservations/{inventoryReservation}/recovery-receipt', [InventoryReservationController::class, 'storeRecoveryReceipt'])
+        ->name('inventory-reservations.recovery-receipt.store')
+        ->middleware('role:admin');
     Route::resource('inventory-reservations', InventoryReservationController::class)->middleware('permission');
     Route::get('/my-orders/{order}/returns/create', [OrderReturnController::class, 'createForMyOrder'])->name('site.order-returns.create');
     Route::post('/my-orders/{order}/returns', [OrderReturnController::class, 'storeForMyOrder'])->name('site.order-returns.store');
