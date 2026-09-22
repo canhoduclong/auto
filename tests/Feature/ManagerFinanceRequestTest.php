@@ -110,6 +110,56 @@ class ManagerFinanceRequestTest extends TestCase
         $this->assertNull($copy->approved_at);
     }
 
+    public function test_manager_can_search_edit_and_delete_manageable_requests(): void
+    {
+        $manager = $this->manager();
+        $request = Transaction::query()->create([
+            'amount' => 100000,
+            'type' => 'extra_expense',
+            'method' => 'cash',
+            'note' => 'Mua vật tư cũ',
+            'status' => Transaction::STATUS_PENDING_APPROVAL,
+            'submitted_by' => $manager->id,
+            'request_source' => 'manager',
+            'request_department' => 'Manager',
+            'request_form_type' => Transaction::REQUEST_FORM_CASH,
+            'request_title' => 'Phiếu cần quản trị',
+            'request_items' => [['content' => 'Vật tư', 'quantity' => 1, 'unit_price' => 100000, 'line_total' => 100000]],
+            'request_subtotal' => 100000,
+            'request_vat' => 0,
+            'request_total' => 100000,
+        ]);
+
+        $this->actingAs($manager)
+            ->withSession(['active_role' => 'manager'])
+            ->get(route('manager.finance-requests.index', ['search' => 'cần quản trị']))
+            ->assertOk()
+            ->assertSee('Phiếu cần quản trị')
+            ->assertSee(route('manager.finance-requests.edit', $request), false);
+
+        $this->get(route('manager.finance-requests.edit', $request))
+            ->assertOk()->assertSee('Sửa phiếu #'.$request->id);
+
+        $this->put(route('manager.finance-requests.update', $request), [
+            'request_form_type' => Transaction::REQUEST_FORM_CASH,
+            'flow_direction' => 'out',
+            'request_title' => 'Phiếu đã sửa đúng',
+            'items' => [['content' => 'Vật tư đúng', 'unit' => 'lần', 'quantity' => 2, 'unit_price' => 75000]],
+            'request_vat' => 10000,
+            'method' => 'cash',
+            'note' => 'Nội dung đã sửa',
+        ])->assertRedirect(route('manager.finance-requests.index'))->assertSessionHasNoErrors();
+
+        $request->refresh();
+        $this->assertSame('Phiếu đã sửa đúng', $request->request_title);
+        $this->assertSame('160000.00', $request->amount);
+        $this->assertSame(Transaction::STATUS_PENDING_APPROVAL, $request->status);
+
+        $this->delete(route('manager.finance-requests.destroy', $request))
+            ->assertRedirect(route('manager.finance-requests.index'));
+        $this->assertDatabaseMissing('transactions', ['id' => $request->id]);
+    }
+
     private function manager(): User
     {
         $user = User::factory()->create();

@@ -251,6 +251,50 @@ class DepartmentFinanceRequestController extends Controller
             ->with('success', 'Đã nhân bản phiếu #'.$transaction->id.' thành phiếu #'.$duplicate->id.' và gửi vào luồng duyệt mới.');
     }
 
+    public function managerEdit(Request $request, Transaction $transaction)
+    {
+        $this->authorizeManagerMutation($transaction);
+
+        return $this->index($request, 'manager', $transaction, true);
+    }
+
+    public function managerUpdate(Request $request, Transaction $transaction)
+    {
+        $this->authorizeManagerMutation($transaction);
+        $data = $this->validatedRequestData($request, 'manager');
+        unset($data['status'], $data['submitted_by'], $data['request_source'], $data['request_department']);
+
+        DB::transaction(function () use ($transaction, $data): void {
+            $transaction->approvalSteps()->delete();
+            $transaction->update(array_merge($data, [
+                'status' => Transaction::STATUS_PENDING_APPROVAL,
+                'approved_by' => null,
+                'approved_at' => null,
+                'rejected_by' => null,
+                'rejected_at' => null,
+                'reject_reason' => null,
+            ]));
+            app(\App\Services\ApprovalService::class)->initTransactionApproval($transaction);
+        });
+
+        return redirect()->route('manager.finance-requests.index')
+            ->with('success', 'Đã cập nhật phiếu #'.$transaction->id.' và khởi tạo lại luồng duyệt.');
+    }
+
+    public function managerDestroy(Transaction $transaction)
+    {
+        $this->authorizeManagerMutation($transaction);
+        $id = $transaction->id;
+
+        DB::transaction(function () use ($transaction): void {
+            $transaction->approvalSteps()->delete();
+            $transaction->delete();
+        });
+
+        return redirect()->route('manager.finance-requests.index')
+            ->with('success', 'Đã xóa phiếu yêu cầu #'.$id.'.');
+    }
+
     public function managerPrint(Transaction $transaction)
     {
         return $this->printRequest($transaction, 'manager');
@@ -413,6 +457,7 @@ class DepartmentFinanceRequestController extends Controller
         $formType = in_array($request->input('form_type'), ['all', Transaction::REQUEST_FORM_CASH, Transaction::REQUEST_FORM_PAYMENT], true)
             ? $request->input('form_type')
             : 'all';
+        $search = trim((string) $request->input('search'));
 
         $requests = Transaction::query()
             ->with([
@@ -431,6 +476,14 @@ class DepartmentFinanceRequestController extends Controller
             ->when($config['own_only'] ?? false, fn ($query) => $query->where('submitted_by', auth()->id()))
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->when($formType !== 'all', fn ($query) => $query->where('request_form_type', $formType))
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where(function ($nested) use ($search): void {
+                    $nested->where('id', ctype_digit($search) ? (int) $search : 0)
+                        ->orWhere('request_title', 'like', "%{$search}%")
+                        ->orWhere('note', 'like', "%{$search}%")
+                        ->orWhereHas('submitter', fn ($user) => $user->where('name', 'like', "%{$search}%"));
+                });
+            })
             ->latest()
             ->paginate(20)
             ->appends($request->query());
@@ -457,6 +510,7 @@ class DepartmentFinanceRequestController extends Controller
             'categories' => $categories,
             'status' => $status,
             'formType' => $formType,
+            'search' => $search,
             'settings' => $settings,
             'accounts' => Account::active()->orderBy('name')->get(['id', 'name', 'type', 'account_number', 'bank_name']),
             'managedAccounts' => $managedAccounts,
@@ -654,6 +708,13 @@ class DepartmentFinanceRequestController extends Controller
             $user->hasRole('admin') || (int) $transaction->submitted_by === (int) $user->id,
             403
         );
+    }
+
+    private function authorizeManagerMutation(Transaction $transaction): void
+    {
+        $this->authorizeSource($this->config('manager'));
+        abort_unless($transaction->request_source === 'manager', 404);
+        abort_unless(in_array($transaction->status, [Transaction::STATUS_PENDING_APPROVAL, Transaction::STATUS_REJECTED], true), 403, 'Chỉ được sửa hoặc xóa phiếu chờ duyệt hay bị từ chối.');
     }
 
     private function printRequest(Transaction $transaction, string $source)

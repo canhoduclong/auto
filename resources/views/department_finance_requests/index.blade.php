@@ -247,7 +247,7 @@
             <span class="badge text-bg-light border px-3 py-2">{{ $config['label'] }}</span>
         </div>
         <div class="fr-panel-body">
-            <form method="POST" action="{{ $editingRequest ? route('leader.finance-requests.update', $editingRequest) : route($config['route_prefix'] . '.store') }}" enctype="multipart/form-data">
+            <form method="POST" action="{{ $editingRequest ? route(($isManagerPage ? 'manager' : 'leader') . '.finance-requests.update', $editingRequest) : route($config['route_prefix'] . '.store') }}" enctype="multipart/form-data">
                 @csrf
                 @if($editingRequest)
                     @method('PUT')
@@ -429,7 +429,7 @@
                     @if($isManagerPage)
                         <a href="{{ route('manager.finance-requests.index') }}" class="btn btn-outline-secondary px-4">Hủy</a>
                     @endif
-                    @if($editingRequest)
+                    @if($editingRequest && !$isManagerPage)
                         <a href="{{ route('leader.finance-requests.index') }}" class="btn btn-outline-secondary px-4">Hủy sửa</a>
                     @endif
                     <button type="submit" class="btn btn-primary px-4">
@@ -457,6 +457,12 @@
                 </a>
             @endif
             <form method="GET" class="d-flex gap-2 align-items-end flex-wrap">
+                @if($isManagerPage)
+                <div>
+                    <label class="form-label small mb-1">Tìm kiếm</label>
+                    <input type="search" name="search" class="form-control form-control-sm" value="{{ $search }}" placeholder="Mã, tiêu đề, nội dung, người lập">
+                </div>
+                @endif
                 <div>
                     <label class="form-label small mb-1">Loại chứng từ</label>
                     <select name="form_type" class="form-select form-select-sm">
@@ -563,12 +569,26 @@
                                     </a>
                                 @endif
                                 @if($isManagerPage)
+                                    @php($canManageManagerRequest = in_array($requestItem->status, [\App\Models\Transaction::STATUS_PENDING_APPROVAL, \App\Models\Transaction::STATUS_REJECTED], true))
+                                    @if($canManageManagerRequest)
+                                        <a href="{{ route('manager.finance-requests.edit', $requestItem) }}" class="btn btn-outline-success btn-sm fr-action-icon" title="Sửa phiếu">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                    @endif
                                     <form method="POST" action="{{ route('manager.finance-requests.duplicate', $requestItem) }}" class="d-inline" onsubmit="return confirm('Nhân bản phiếu #{{ $requestItem->id }} và gửi vào luồng duyệt mới?');">
                                         @csrf
                                         <button type="submit" class="btn btn-outline-primary btn-sm fr-action-icon" title="Nhân bản phiếu">
                                             <i class="bi bi-copy"></i>
                                         </button>
                                     </form>
+                                    @if($canManageManagerRequest)
+                                        <form method="POST" action="{{ route('manager.finance-requests.destroy', $requestItem) }}" class="d-inline" onsubmit="return confirm('Xóa phiếu #{{ $requestItem->id }}? Thao tác này không thể hoàn tác.');">
+                                            @csrf @method('DELETE')
+                                            <button type="submit" class="btn btn-outline-danger btn-sm fr-action-icon" title="Xóa phiếu">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    @endif
                                 @endif
                                 <a href="{{ route($config['route_prefix'] . '.print', $requestItem) }}" target="_blank" class="btn btn-outline-secondary btn-sm fr-action-icon" title="In phiếu">
                                     <i class="bi bi-printer"></i>
