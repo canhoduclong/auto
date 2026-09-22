@@ -182,6 +182,14 @@
         font-weight: 700;
         text-align: right;
     }
+    .recon-product-discount-row td {
+        color: #dc2626;
+        border-top: 0;
+        padding-top: 2px;
+        padding-bottom: 8px;
+    }
+    .recon-product-discount-row.text-primary td { color: #2563eb; }
+    .recon-product-main-row:has(+ .recon-product-discount-row) td { border-bottom: 0; }
     .recon-sort-link {
         display: inline-flex;
         align-items: center;
@@ -647,24 +655,32 @@ document.addEventListener('DOMContentLoaded', function () {
     function renderDetail(data, row) {
         const order = data.order || {};
         const recon = data.reconciliation || {};
-        const items = (data.items || []).map(item => `
-            <tr>
+        const items = (data.items || []).map(item => {
+            const adjustmentType = item.discount_type === 'increase' ? 'increase' : 'decrease';
+            const adjustmentAmount = Number(item.discount_total || 0);
+            const adjustmentRow = adjustmentAmount > 0 ? `
+            <tr class="recon-product-discount-row ${adjustmentType === 'increase' ? 'text-primary' : 'text-danger'}">
+                <td><span class="fw-semibold">${adjustmentType === 'increase' ? 'Điều chỉnh tăng:' : 'Giảm giá:'}</span></td>
+                <td>${esc(item.size || '-')}</td>
+                <td class="text-end">${Number(item.quantity || 0).toLocaleString('vi-VN')}</td>
+                <td class="text-end">${esc(item.total_label || '-')}</td>
+                <td class="text-end">${Number(item.weight || 0) > 0 ? Number(item.weight || 0).toLocaleString('vi-VN') + ' kg' : '-'}</td>
+                <td class="text-end">${adjustmentType === 'increase' ? '+' : '-'}${money(item.unit_discount)}</td>
+                <td class="text-end fw-semibold">${adjustmentType === 'increase' ? '+' : '-'}${money(adjustmentAmount)}</td>
+            </tr>` : '';
+
+            return `<tr class="recon-product-main-row">
                 <td>
-                    <div class="fw-semibold">${esc(item.product_name || item.name)}</div>
-                    ${item.variant_name ? `<div class="small text-muted">${esc(item.variant_name)} ${item.sku ? `(${esc(item.sku)})` : ''}</div>` : ''}
+                    <div class="fw-semibold">${esc(item.product_name || item.name)} <span class="small text-muted fw-normal">${item.variant_name ? esc(item.variant_name) : ''} ${item.sku ? `(${esc(item.sku)})` : ''}</span></div>
                 </td>
                 <td>${esc(item.size || '-')}</td>
                 <td class="text-end">${Number(item.quantity || 0).toLocaleString('vi-VN')}</td>
                 <td class="text-end">${esc(item.total_label || '-')}</td>
                 <td class="text-end">${Number(item.weight || 0) > 0 ? Number(item.weight || 0).toLocaleString('vi-VN') + ' kg' : '-'}</td>
-                <td class="text-end">
-                    <div>${money(item.unit_price)}</div>
-                    <div class="small text-muted">Giá công ty hiện tại</div>
-                    ${Number(item.unit_discount || 0) > 0 ? `<div class="small ${item.discount_type === 'increase' ? 'text-primary' : 'text-danger'}">${item.discount_type === 'increase' ? 'Điều chỉnh tăng' : 'Giảm giá'}: ${item.discount_type === 'increase' ? '+' : '-'}${money(item.unit_discount)}</div>` : ''}
-                </td>
+                <td class="text-end">${money(item.unit_price)}</td>
                 <td class="text-end fw-semibold">${money(item.line_total)}</td>
-            </tr>
-        `).join('');
+            </tr>${adjustmentRow}`;
+        }).join('');
         const returns = (data.returns || []).length
             ? (data.returns || []).map(ret => `<div class="border rounded p-2 mb-2">
                 <div class="fw-semibold">Trạng thái: ${esc(ret.status)} | Hoàn: ${money(ret.refund_amount)}</div>
@@ -706,8 +722,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         ['Khách hàng', esc(order.customer?.name)],
                         ['Số điện thoại', esc(order.customer?.phone)],
                         ['Địa chỉ', esc(order.customer?.address)],
-                        ['Tổng tiền hàng (giá hiện tại)', money(order.current_goods_total)],
-                        ['Giảm giá sản phẩm', `<span class="text-danger">-${money(order.current_item_discount_total)}</span>`],
+                        ['Tổng tiền hàng', money(order.current_goods_total)],
+                        ['Tổng Giảm giá sản phẩm', `<span class="text-danger">-${money(order.current_item_discount_total)}</span>`],
                         ['Tổng giá trị tính lại', money(order.current_calculated_total)],
                         ['Doanh thu ghi nhận', `<span class="text-success">${money(order.recognized_revenue)}</span>`],
                     ])}
@@ -730,8 +746,8 @@ document.addEventListener('DOMContentLoaded', function () {
                             </table>
                         </div>
                         <div class="d-flex justify-content-end"><div style="min-width:360px">
-                            <div class="recon-mini-row"><span>Tiền hàng theo giá hiện tại</span><span>${money(order.current_goods_total)}</span></div>
-                            <div class="recon-mini-row text-danger"><span>Giảm giá sản phẩm</span><span>-${money(order.current_item_discount_total)}</span></div>
+                            <div class="recon-mini-row"><span>Tổng&nbsp;&nbsp; Tiền hàng theo giá hiện tại</span><span>${money(order.current_goods_total)}</span></div>
+                            <div class="recon-mini-row text-danger"><span>Tổng&nbsp;&nbsp; Giảm giá sản phẩm</span><span>-${money(order.current_item_discount_total)}</span></div>
                             ${Number(order.current_item_increase_total || 0) > 0 ? `<div class="recon-mini-row text-primary"><span>Điều chỉnh tăng sản phẩm</span><span>+${money(order.current_item_increase_total)}</span></div>` : ''}
                             <div class="recon-mini-row"><span>Chiết khấu đơn</span><span class="${order.order_discount_type === 'increase' ? 'text-primary' : 'text-danger'}">${order.order_discount_type === 'increase' ? '+' : '-'}${money(Math.abs(Number(order.extra_discount_total || order.order_discount || 0)))}</span></div>
                             <div class="recon-mini-row"><span>Phí ship</span><span>${money(order.shipping_fee)}</span></div>

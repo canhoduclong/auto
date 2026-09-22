@@ -75,5 +75,11 @@ class AccountingReconciliationCurrentPriceDetailTest extends TestCase
             ->assertJsonPath('order.current_goods_total', 8280000)
             ->assertJsonPath('order.current_item_discount_total', 120000)
             ->assertJsonPath('order.current_calculated_total', 8160000);
+
+        $this->actingAs($accountant)
+            ->get(route('accounting.reconciliation'))
+            ->assertOk()
+            ->assertSee('Tổng Giảm giá sản phẩm')
+            ->assertSee('recon-product-discount-row');
     }
 }
