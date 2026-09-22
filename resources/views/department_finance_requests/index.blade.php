@@ -29,6 +29,7 @@
         padding: 0 12px 24px;
     }
     .fr-panel {
+        min-width: 0;
         border: 1px solid rgba(148, 163, 184, .24);
         border-radius: 8px;
         background: #fff;
@@ -56,7 +57,9 @@
         font-size: 13px;
     }
     .fr-panel-body {
+        min-width: 0;
         padding: 18px;
+        overflow: hidden;
     }
     .fr-section-label {
         display: flex;
@@ -166,6 +169,26 @@
         align-items: center;
         gap: 4px;
     }
+    .finance-request-page .row > [class*="col-"] {
+        min-width: 0;
+    }
+    .manager-create-page .fr-meta-grid,
+    .manager-create-page .fr-note-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .manager-create-page #externalBankGroup {
+        grid-column: 1 / -1;
+    }
+    .manager-create-page .form-control,
+    .manager-create-page .form-select,
+    .manager-create-page .input-group,
+    .manager-create-page .input-group > .form-control {
+        min-width: 0;
+        max-width: 100%;
+    }
+    .manager-create-page .fr-items-table {
+        min-width: 860px;
+    }
     @media (max-width: 1199.98px) {
         .fr-meta-grid,
         .fr-note-grid {
@@ -193,10 +216,17 @@
         .fr-actions .btn {
             width: 100%;
         }
+        .manager-create-page .fr-meta-grid,
+        .manager-create-page .fr-note-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .manager-create-page #externalBankGroup {
+            grid-column: auto;
+        }
     }
 </style>
 
-<div class="finance-request-page">
+<div class="finance-request-page {{ $isManagerPage && $showCreateForm ? 'manager-create-page' : '' }}">
     @if($errors->any())
         <div class="alert alert-danger border-0 shadow-sm">
             @foreach($errors->all() as $error)
