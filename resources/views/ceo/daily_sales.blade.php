@@ -11,12 +11,13 @@
 @media (max-width:768px) { .ds-filter { grid-template-columns: repeat(2, minmax(0,1fr)); } }
 
 /* ── KPI strip ── */
-.ds-kpi { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+.ds-kpi { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
 @media (max-width:992px){ .ds-kpi { grid-template-columns:repeat(2,minmax(0,1fr)); } }
-.ds-kpi-item { border:1px solid var(--acc-line,#e2e8f0); border-radius:12px; background:#fff; padding:12px 14px; }
-.ds-kpi-item .lbl { color:#64748b; font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
-.ds-kpi-item .val { font-size:20px; font-weight:800; color:#1e293b; margin-top:3px; }
-.ds-kpi-item .sub { font-size:11px; color:#94a3b8; margin-top:1px; }
+.ds-kpi-item { min-width:0; border:1px solid var(--acc-line,#e2e8f0); border-radius:10px; background:#fff; padding:9px 12px; }
+.ds-kpi-item .lbl { overflow:hidden; color:#64748b; font-size:10px; line-height:1.2; text-transform:uppercase; letter-spacing:.035em; white-space:nowrap; text-overflow:ellipsis; }
+.ds-kpi-item .val { overflow:hidden; font-size:18px; line-height:1.2; font-weight:800; color:#1e293b; margin-top:2px; white-space:nowrap; text-overflow:ellipsis; }
+.ds-kpi-item .sub { overflow:hidden; font-size:10px; line-height:1.25; color:#94a3b8; margin-top:2px; white-space:nowrap; text-overflow:ellipsis; }
+@media (max-width:575.98px){ .ds-kpi { grid-template-columns:minmax(0,1fr); } }
 
 /* ── product stats ── */
 .ds-prod-grid { display:grid; gap:6px; margin-top:8px; }
@@ -185,11 +186,6 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
         <div class="sub">Đã áp dụng điều chỉnh được duyệt</div>
     </div>
     <div class="ds-kpi-item">
-        <div class="lbl">Thực tế</div>
-        <div class="val text-primary">{{ number_format((float)($summary->actual_total ?? 0), 0, ',', '.') }}đ</div>
-        <div class="sub">Doanh thu kế toán đã xác nhận</div>
-    </div>
-    <div class="ds-kpi-item">
         <div class="lbl">Tổng khối lượng</div>
         <div class="val text-info">{{ $fmtN((float)($summary->grand_weight ?? 0)) }} kg</div>
         <div class="sub">&nbsp;</div>
@@ -198,6 +194,16 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
         <div class="lbl">Số dòng / đơn</div>
         <div class="val">{{ number_format((int)($summary->item_count ?? 0)) }}</div>
         <div class="sub">{{ number_format((int)($summary->order_count ?? 0)) }} đơn hàng</div>
+    </div>
+    <div class="ds-kpi-item">
+        <div class="lbl">Tổng chi phí ship</div>
+        <div class="val text-primary">{{ number_format((float)($summary->total_shipping_fee ?? 0), 0, ',', '.') }}đ</div>
+        <div class="sub">Theo đơn trong khoảng ngày đã lọc</div>
+    </div>
+    <div class="ds-kpi-item">
+        <div class="lbl">Tổng chi phí giảm giá</div>
+        <div class="val text-danger">{{ number_format((float)($summary->total_discount ?? 0), 0, ',', '.') }}đ</div>
+        <div class="sub">Giảm giá sản phẩm và chiết khấu đơn</div>
     </div>
 </div>
 

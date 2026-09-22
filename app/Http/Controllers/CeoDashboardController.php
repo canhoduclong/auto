@@ -1774,6 +1774,16 @@ class CeoDashboardController extends Controller
             ->when($customerId > 0, fn ($query) => $query->where('orders.customer_id', $customerId))
             ->sum('ar.recognized_revenue');
 
+        $orderCostSummary = DB::table('orders')
+            ->whereBetween('orders.created_at', [$from, $to])
+            ->when($saleId > 0, fn ($query) => $query->where('orders.user_id', $saleId))
+            ->when($customerId > 0, fn ($query) => $query->where('orders.customer_id', $customerId))
+            ->selectRaw('COALESCE(SUM(orders.total_discount), 0) as total_discount')
+            ->selectRaw('COALESCE(SUM(orders.shipping_fee), 0) as total_shipping_fee')
+            ->first();
+        $summary->total_discount = (float) ($orderCostSummary->total_discount ?? 0);
+        $summary->total_shipping_fee = (float) ($orderCostSummary->total_shipping_fee ?? 0);
+
         // ── Product stats ──────────────────────────────────────────────
         $productStats = $makeBase()->select([
             'products.id as product_id',
