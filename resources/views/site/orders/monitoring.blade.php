@@ -2132,7 +2132,6 @@
 
                                     return collect([
                                         ($index + 1).'. '.$productName,
-                                        '',
                                         $sizes->isNotEmpty() ? '- Size '.$sizes->implode(' - ') : null,
                                         '- Số Lượng: '.$formatQuantity($items->sum(fn ($item) => $item->packed_quantity ?? $item->quantity)),
                                         $index < $groups->count() - 1 ? '' : null,
@@ -2141,12 +2140,10 @@
                                 })->values();
                             $truckStationName = trim((string) ($order->truck_station_name ?: $order->truckStation?->name));
                             $truckStationAddress = trim((string) ($order->truck_station_address ?: $order->truckStation?->address));
-                            $truckStationPhone = trim((string) ($order->truck_station_phone ?: $order->truckStation?->phone));
                             $zaloText = collect([
                                 '---- ĐƠN HÀNG '.($order->code ?: '#'.$order->id).' -----',
                                 'Khách hàng: '.($order->recipient_name ?: $order->customer?->name ?: 'Khách hàng'),
                                 $deliveryAddress !== '' ? 'Địa chỉ: '.$deliveryAddress : null,
-                                ($order->recipient_phone ?: $order->customer?->phone) ? 'SĐT: '.($order->recipient_phone ?: $order->customer?->phone) : null,
                                 '',
                                 'Sản phẩm:',
                                 '',
@@ -2156,7 +2153,6 @@
                                 trim((string) $order->delivery_time) !== '' ? "\nGiờ giao: ".trim((string) $order->delivery_time) : null,
                                 $order->use_truck_station && $truckStationName !== '' ? "\nGửi hàng nhà xe: ".$truckStationName.'.' : null,
                                 $order->use_truck_station && $truckStationAddress !== '' ? 'Đ/C: '.$truckStationAddress : null,
-                                $order->use_truck_station && $truckStationPhone !== '' ? 'Điện thoại: '.$truckStationPhone : null,
                             ])->filter(fn ($line) => $line !== null)->implode("\n");
                         @endphp
                         <article class="monitor-panel monitor-order status-{{ $monitorState }} {{ $canManageOrder ? 'is-mine' : '' }} {{ $isCancelled ? 'is-cancelled' : '' }}" id="monitor-order-{{ $order->id }}" title="{{ $monitorStateLabels[$monitorState] }}">
