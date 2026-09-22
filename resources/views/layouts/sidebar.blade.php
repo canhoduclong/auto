@@ -212,6 +212,12 @@
 							</a>
 						</li>
 						<li class="nav-item">
+							<a href="{{ route('admin.accounting.finance-requests.index') }}" class="nav-link{{ request()->routeIs('admin.accounting.finance-requests.*') ? ' active' : '' }}">
+								<i class="ph-file-text"></i>
+								<span>Quản trị phiếu yêu cầu</span>
+							</a>
+						</li>
+						<li class="nav-item">
 							<a href="{{ route('admin.accounting.financial-reports') }}" class="nav-link{{ request()->routeIs('admin.accounting.financial-reports') ? ' active' : '' }}">
 								<i class="ph-chart-line-up"></i>
 								<span>Báo cáo tài chính</span>

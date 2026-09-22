@@ -355,6 +355,10 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     });
 
     Route::prefix('admin/accounting')->name('admin.accounting.')->middleware('role:admin')->group(function () {
+        Route::get('/finance-requests', [DepartmentFinanceRequestController::class, 'adminIndex'])->name('finance-requests.index');
+        Route::get('/finance-requests/{transaction}/edit', [DepartmentFinanceRequestController::class, 'adminEdit'])->name('finance-requests.edit');
+        Route::put('/finance-requests/{transaction}', [DepartmentFinanceRequestController::class, 'adminUpdate'])->name('finance-requests.update');
+        Route::get('/finance-requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'adminPrint'])->name('finance-requests.print');
         Route::get('/cashflow', [AccountingDashboardController::class, 'cashflow'])->name('cashflow');
         Route::get('/cashflow/refresh-history', [AccountingDashboardController::class, 'refreshHistory'])->name('refresh-history');
         Route::get('/cashflow/{transaction}/edit', [AccountingDashboardController::class, 'transactionEdit'])->name('transactions.edit');

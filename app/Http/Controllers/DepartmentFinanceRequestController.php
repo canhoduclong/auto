@@ -214,6 +214,123 @@ class DepartmentFinanceRequestController extends Controller
         return $this->printRequest($transaction, 'manager');
     }
 
+    public function adminIndex(Request $request)
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+        $source = array_key_exists((string) $request->input('source'), self::SOURCES) ? (string) $request->input('source') : 'all';
+        $status = in_array($request->input('status'), ['all', Transaction::STATUS_PENDING_APPROVAL, Transaction::STATUS_APPROVED_PENDING_COMPLETION, Transaction::STATUS_APPROVED, Transaction::STATUS_REJECTED], true)
+            ? $request->input('status') : 'all';
+        $search = trim((string) $request->input('search'));
+
+        $requests = Transaction::query()
+            ->with(['submitter:id,name,email', 'submitter.roles:id,name', 'approver:id,name', 'rejecter:id,name'])
+            ->whereNotNull('request_source')
+            ->when($source !== 'all', fn ($query) => $query->where('request_source', $source))
+            ->when($status !== 'all', fn ($query) => $query->where('status', $status))
+            ->when($search !== '', function ($query) use ($search): void {
+                $query->where(function ($nested) use ($search): void {
+                    $nested->where('id', ctype_digit($search) ? (int) $search : 0)
+                        ->orWhere('request_title', 'like', "%{$search}%")
+                        ->orWhere('request_department', 'like', "%{$search}%")
+                        ->orWhereHas('submitter', fn ($user) => $user->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->latest()
+            ->paginate(25)
+            ->appends($request->query());
+
+        return view('admin.finance_requests.index', [
+            'requests' => $requests,
+            'sources' => collect(self::SOURCES)->map(fn ($config) => $config['label'])->all(),
+            'source' => $source,
+            'status' => $status,
+            'search' => $search,
+        ]);
+    }
+
+    public function adminEdit(Request $request, Transaction $transaction)
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+        abort_unless($transaction->request_source, 404);
+        $transaction->load(['submitter.roles:id,name']);
+
+        return view('admin.finance_requests.edit', [
+            'transaction' => $transaction,
+            'sources' => collect(self::SOURCES)->map(fn ($config) => $config['label'])->all(),
+            'sourceConfigs' => self::SOURCES,
+            'accounts' => Account::active()->orderBy('name')->get(),
+        ]);
+    }
+
+    public function adminUpdate(Request $request, Transaction $transaction)
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+        abort_unless($transaction->request_source, 404);
+
+        $validated = $request->validate([
+            'request_source' => ['required', 'in:'.implode(',', array_keys(self::SOURCES))],
+            'request_department' => ['required', 'string', 'max:150'],
+            'request_form_type' => ['required', 'in:'.Transaction::REQUEST_FORM_CASH.','.Transaction::REQUEST_FORM_PAYMENT],
+            'flow_direction' => ['required', 'in:in,out'],
+            'request_title' => ['required', 'string', 'max:255'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.content' => ['required', 'string', 'max:255'],
+            'items.*.unit' => ['nullable', 'string', 'max:50'],
+            'items.*.quantity' => ['required', 'numeric', 'min:0.01'],
+            'items.*.unit_price' => ['required', 'numeric', 'min:0'],
+            'request_vat' => ['nullable', 'numeric', 'min:0'],
+            'method' => ['required', 'in:cash,managed_transfer,bank_transfer'],
+            'destination_account_id' => ['nullable', 'integer', 'exists:accounts,id'],
+            'external_recipient' => ['nullable', 'string', 'max:255'],
+            'external_account_number' => ['nullable', 'string', 'max:100'],
+            'external_bank_name' => ['nullable', 'string', 'max:150'],
+            'external_bank_branch' => ['nullable', 'string', 'max:150'],
+            'note' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $flow = $validated['request_form_type'] === Transaction::REQUEST_FORM_PAYMENT ? 'out' : $validated['flow_direction'];
+        $items = collect($validated['items'])->values()->map(function (array $item, int $index): array {
+            $quantity = (float) $item['quantity'];
+            $unitPrice = (float) $item['unit_price'];
+            return ['stt' => $index + 1, 'content' => trim($item['content']), 'unit' => trim((string) ($item['unit'] ?? '')), 'quantity' => $quantity, 'unit_price' => $unitPrice, 'line_total' => round($quantity * $unitPrice, 2)];
+        });
+        $subtotal = round((float) $items->sum('line_total'), 2);
+        $vat = round((float) ($validated['request_vat'] ?? 0), 2);
+        $total = round($subtotal + $vat, 2);
+
+        $transaction->update([
+            'request_source' => $validated['request_source'],
+            'request_department' => trim($validated['request_department']),
+            'request_form_type' => $validated['request_form_type'],
+            'request_title' => trim($validated['request_title']),
+            'request_items' => $items->all(),
+            'request_subtotal' => $subtotal,
+            'request_vat' => $vat,
+            'request_total' => $total,
+            'amount' => $total,
+            'type' => $flow === 'in' ? 'extra_income' : 'extra_expense',
+            'method' => $validated['method'],
+            'destination_type' => match ($validated['method']) { 'cash' => 'cash', 'managed_transfer' => 'internal', default => 'external' },
+            'destination_account_id' => $validated['method'] === 'managed_transfer' ? ($validated['destination_account_id'] ?? null) : null,
+            'external_recipient' => $validated['method'] === 'bank_transfer' ? trim((string) ($validated['external_recipient'] ?? '')) : null,
+            'external_account_number' => $validated['method'] === 'bank_transfer' ? trim((string) ($validated['external_account_number'] ?? '')) : null,
+            'external_bank_name' => $validated['method'] === 'bank_transfer' ? trim((string) ($validated['external_bank_name'] ?? '')) : null,
+            'external_bank_branch' => $validated['method'] === 'bank_transfer' ? trim((string) ($validated['external_bank_branch'] ?? '')) : null,
+            'note' => trim($validated['note']),
+        ]);
+
+        return redirect()->route('admin.accounting.finance-requests.index')->with('success', 'Đã cập nhật phiếu yêu cầu #'.$transaction->id.'. Trạng thái và lịch sử duyệt được giữ nguyên.');
+    }
+
+    public function adminPrint(Request $request, Transaction $transaction)
+    {
+        abort_unless($request->user()?->isAdmin(), 403);
+        abort_unless($transaction->request_source, 404);
+        $source = array_key_exists($transaction->request_source, self::SOURCES) ? $transaction->request_source : 'accounting';
+
+        return $this->printRequest($transaction, $source);
+    }
+
     public function shipperIndex(Request $request)
     {
         return $this->index($request, 'shipper');
