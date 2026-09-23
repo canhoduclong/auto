@@ -208,6 +208,20 @@
     .sp-product-check,
     #spSelectAll { width: 18px; height: 18px; cursor: pointer; }
     .sp-product-row.is-selected td { background: #f0f9ff; }
+    .sp-product-row { cursor: pointer; }
+    .sp-selection-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 12px 14px;
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        margin: 0 0 12px;
+    }
+    .sp-selection-toolbar .btn { border-radius: 10px; font-weight: 700; }
     .sp-export-summary { color: #64748b; font-size: .86rem; font-weight: 600; }
     .sp-empty {
         padding: 44px 24px 52px;
@@ -327,14 +341,15 @@
                         <input type="text" name="keyword" value="{{ $keyword }}" class="form-control" placeholder="Tìm theo tên sản phẩm, tên biến thể, SKU">
                     </div>
                     <div class="col-12 col-md-4">
-                        <select name="product_ids[]" class="form-select" multiple>
+                        <label class="form-label small fw-semibold mb-1">Lọc theo sản phẩm</label>
+                        <select name="product_ids[]" class="form-select sp-native-multiselect" multiple size="5">
                             @foreach(($selectableProducts ?? collect()) as $selectableProduct)
                                 <option value="{{ $selectableProduct->id }}" {{ in_array((int) $selectableProduct->id, $selectedProductIds ?? [], true) ? 'selected' : '' }}>
                                     {{ $selectableProduct->name }}
                                 </option>
                             @endforeach
                         </select>
-                        <small class="text-muted">Lọc nhanh danh sách. Bạn có thể đánh dấu sản phẩm cần báo giá ngay trong bảng bên dưới.</small>
+                        <small class="text-muted">Giữ Ctrl để chọn nhiều sản phẩm. Việc chọn sản phẩm xuất báo giá được thực hiện ở bảng bên dưới.</small>
                     </div>
                     <div class="col-6 col-md-2">
                         <button type="submit" class="btn btn-primary w-100"><i class="fa fa-search me-1"></i>Lọc</button>
@@ -428,6 +443,17 @@
                             Hiệu lực: <strong>{{ $asOfDate->format('d/m/Y H:i') }}</strong>
                         </span> 
                         <span class="text-muted small sp-page-number">Trang {{ $products->currentPage() }}/{{ max(1, $products->lastPage()) }}</span>
+                    </div>
+                    <div class="sp-selection-toolbar sp-selection-control">
+                        <div>
+                            <div class="fw-bold">Chọn sản phẩm đưa vào báo giá</div>
+                            <div class="small text-muted">Tích ô hoặc bấm trực tiếp vào dòng sản phẩm.</div>
+                        </div>
+                        <div class="d-flex gap-2 align-items-center flex-wrap">
+                            <span class="sp-export-summary" id="spTableSelectionSummary">Chưa chọn sản phẩm</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="spSelectVisible">Chọn tất cả trang này</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="spClearSelection">Bỏ chọn</button>
+                        </div>
                     </div>
                     <div class="table-responsive border-top">
                         <table class="table sp-table mb-0">
@@ -582,11 +608,20 @@
     </div>
 </div>
 
+<script src="{{ asset('js/html2canvas.min.js') }}"></script>
+<script src="{{ asset('js/jspdf.umd.min.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    // Global site JS applies Nice Select to every select, which does not
+    // support this native multiple selector correctly.
+    if (window.jQuery && window.jQuery.fn && window.jQuery.fn.niceSelect) {
+        window.jQuery('.sp-native-multiselect').niceSelect('destroy');
+    }
+
     var productChecks = Array.from(document.querySelectorAll('.sp-product-check'));
     var selectAll = document.getElementById('spSelectAll');
     var exportSummary = document.getElementById('spExportSummary');
+    var tableSelectionSummary = document.getElementById('spTableSelectionSummary');
 
     function refreshProductSelection() {
         var selectedCount = productChecks.filter(function (checkbox) { return checkbox.checked; }).length;
@@ -603,10 +638,23 @@ document.addEventListener('DOMContentLoaded', function () {
                 ? 'Đã chọn ' + selectedCount + ' sản phẩm'
                 : 'Chưa chọn sản phẩm';
         }
+        if (tableSelectionSummary) {
+            tableSelectionSummary.textContent = selectedCount > 0
+                ? 'Đã chọn ' + selectedCount + '/' + productChecks.length + ' sản phẩm'
+                : 'Chưa chọn sản phẩm';
+        }
     }
 
     productChecks.forEach(function (checkbox) {
         checkbox.addEventListener('change', refreshProductSelection);
+        var row = checkbox.closest('.sp-product-row');
+        if (row) {
+            row.addEventListener('click', function (event) {
+                if (event.target.closest('input, a, button')) return;
+                checkbox.checked = !checkbox.checked;
+                refreshProductSelection();
+            });
+        }
     });
     if (selectAll) {
         selectAll.addEventListener('change', function () {
@@ -614,14 +662,22 @@ document.addEventListener('DOMContentLoaded', function () {
             refreshProductSelection();
         });
     }
+    document.getElementById('spSelectVisible')?.addEventListener('click', function () {
+        productChecks.forEach(function (checkbox) { checkbox.checked = true; });
+        refreshProductSelection();
+    });
+    document.getElementById('spClearSelection')?.addEventListener('click', function () {
+        productChecks.forEach(function (checkbox) { checkbox.checked = false; });
+        refreshProductSelection();
+    });
     refreshProductSelection();
 
     var pdfButton = document.getElementById('btnExportPdf');
     if (pdfButton) {
-        pdfButton.addEventListener('click', function () {
+        pdfButton.addEventListener('click', async function () {
             var exportNode = document.getElementById('pdfExportContent');
-            if (!exportNode) {
-                window.print();
+            if (!exportNode || typeof window.html2canvas !== 'function' || !window.jspdf?.jsPDF) {
+                window.alert('Không thể khởi tạo trình xuất PDF. Vui lòng tải lại trang và thử lại.');
                 return;
             }
 
@@ -648,70 +704,50 @@ document.addEventListener('DOMContentLoaded', function () {
                 row.classList.remove('is-selected');
             });
 
-            var printWindow = window.open('', '_blank', 'width=1024,height=768');
-            if (!printWindow) {
-                window.alert('Trình duyệt đang chặn cửa sổ xuất PDF. Vui lòng cho phép pop-up rồi thử lại.');
-                return;
+            var renderHost = document.createElement('div');
+            renderHost.style.cssText = 'position:fixed;left:-12000px;top:0;width:1120px;background:#fff;padding:20px;z-index:-1';
+            exportClone.style.cssText = 'width:1080px;background:#fff;box-shadow:none;border:0';
+            exportClone.querySelectorAll('.table-responsive').forEach(function (node) { node.style.overflow = 'visible'; });
+            exportClone.querySelectorAll('.sp-table').forEach(function (node) { node.style.minWidth = '0'; });
+            renderHost.appendChild(exportClone);
+            document.body.appendChild(renderHost);
+
+            var originalHtml = pdfButton.innerHTML;
+            pdfButton.disabled = true;
+            pdfButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang tạo PDF...';
+
+            try {
+                var canvas = await window.html2canvas(exportClone, {
+                    scale: 1.5,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    logging: false
+                });
+                var pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
+                var pageWidth = pdf.internal.pageSize.getWidth();
+                var pageHeight = pdf.internal.pageSize.getHeight();
+                var margin = 8;
+                var imageWidth = pageWidth - margin * 2;
+                var imageHeight = canvas.height * imageWidth / canvas.width;
+                var imageData = canvas.toDataURL('image/jpeg', 0.92);
+                var printableHeight = pageHeight - margin * 2;
+                var offset = 0;
+
+                do {
+                    if (offset > 0) pdf.addPage('a4', 'landscape');
+                    pdf.addImage(imageData, 'JPEG', margin, margin - offset, imageWidth, imageHeight, undefined, 'FAST');
+                    offset += printableHeight;
+                } while (offset < imageHeight);
+
+                pdf.save('bao-gia-{{ $asOfDate->format('Y-m-d') }}.pdf');
+            } catch (error) {
+                console.error(error);
+                window.alert('Xuất PDF không thành công. Vui lòng thử lại.');
+            } finally {
+                renderHost.remove();
+                pdfButton.disabled = false;
+                pdfButton.innerHTML = originalHtml;
             }
-
-            var styleTags = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
-                .map(function (node) { return node.outerHTML; })
-                .join('');
-
-            var printHtml = `
-                <!doctype html>
-                <html>
-                <head>
-                    <meta charset="utf-8">
-                    <title>Bang bao gia</title>
-                    ${styleTags}
-                    <style>
-                        body { background: #fff !important; margin: 0; padding: 16px; }
-                        .card { border: none !important; box-shadow: none !important; }
-                        .sp-actions { display: none !important; }
-                        .card-footer { display: block !important; }
-                        .sp-non-export { display: flex !important; }
-                        .sp-company-header {
-                            display: grid !important;
-                            grid-template-columns: 160px minmax(0, 1fr) !important;
-                            gap: 20px !important;
-                            align-items: start !important;
-                        }
-                        .sp-company-logo-wrap {
-                            justify-content: flex-start !important;
-                            align-items: flex-start !important;
-                            padding-right: 0 !important;
-                            min-height: auto !important;
-                        }
-                        .sp-company-logo {
-                            display: block !important;
-                            margin: 0 !important;
-                        }
-                        .sp-signature,
-                        .sp-signature-title,
-                        .sp-signature-name { 
-                            text-align: center !important;
-                        }
-                        .sp-company-grid {
-                            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-                        }
-                    </style>
-                </head>
-                <body>
-                    ${exportClone.outerHTML}
-                </body>
-                </html>
-            `;
-
-            printWindow.document.open();
-            printWindow.document.write(printHtml);
-            printWindow.document.close();
-
-            printWindow.onload = function () {
-                printWindow.focus();
-                printWindow.print();
-                printWindow.close();
-            };
         });
     }
 
