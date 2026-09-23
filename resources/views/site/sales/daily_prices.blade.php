@@ -129,9 +129,7 @@
     .sp-quotation-footer { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 20px; padding-top: 14px; font-size: .88rem; }
     .sp-notes { margin-top: 8px; }
     .sp-notes ul { margin: 2px 0 0; padding-left: 20px; }
-    .sp-bank { margin-top: auto; padding-top: 24px; overflow-wrap: anywhere; line-height: 1.45; font-size: .85rem; text-align: left; }
     .sp-effective-date { margin-bottom: 6px; font-size: .82rem; }
-    .sp-bank-title { font-weight: 700; text-transform: uppercase; }
     .sp-actions {
         display: flex;
         gap: 10px;
@@ -257,7 +255,6 @@
         .sp-signature { justify-self: end; max-width: 190px; }
     }
     #pdfExportContent.sp-pdf-page { box-sizing: border-box; padding: 28px; min-height: 0; display: block; position: relative; }
-    .sp-pdf-page > .sp-bank { position: absolute; bottom: 24px; left: 28px; right: 28px; padding-top: 0; margin: 0; }
     .sp-pdf-page .sp-company-header > :first-child { width: 90px; padding-right: 16px; }
     .sp-pdf-page .sp-company-logo { width: 90px; height: 90px; }
     .sp-pdf-page .sp-company-title { font-size: 1.2rem; }
@@ -389,9 +386,6 @@
             $brandPhone      = $settings['hotline']->value ?? null;
             $brandTax        = $settings['tax_number']->value ?? null;
             $brandEmail      = $settings['email']->value ?? null;
-            $bankAccount     = $settings['bank_account']->value ?? null;
-            $bankName        = $settings['bank_name']->value ?? null;
-            $bankBranch      = $settings['bank_branch']->value ?? null;
             $priceLogoId     = $settings['price_logo']->value ?? null;
             $logoMediaId     = $priceLogoId ?: ($settings['logo']->value ?? null);
             $logoMedia       = $logoMediaId ? App\Models\Media::find($logoMediaId) : null;
@@ -581,20 +575,7 @@
 
 
                 </div>
-                @if($bankAccount || $bankName || $bankBranch)
-                    <div class="sp-bank">
-                        <div class="sp-bank-title">Thông tin thanh toán / Banking information:</div>
-                        @if($bankAccount)
-                            <div><strong>STK:</strong> {{ $bankAccount }}</div>
-                        @endif
-                        @if($bankName)
-                            <div><strong>Ngân hàng:</strong> {{ $bankName }}</div>
-                        @endif
-                        @if($bankBranch)
-                            <div><strong>Chi nhánh:</strong> {{ $bankBranch }}</div>
-                        @endif
-                    </div>
-                @endif
+
             </div>
 
         </div>
@@ -793,8 +774,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     var style = window.getComputedStyle(page);
                     var bottom = page.getBoundingClientRect().bottom
                         - parseFloat(style.paddingBottom) - parseFloat(style.borderBottomWidth);
-                    var bank = page.querySelector('.sp-bank');
-                    if (bank) bottom = Math.min(bottom, bank.getBoundingClientRect().top - 20);
                     return node.getBoundingClientRect().bottom > bottom + 0.5;
                 }
                 var page = createPage();
@@ -807,11 +786,11 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                 });
                 if (footer) {
-                    page.insertBefore(footer, page.querySelector('.sp-bank'));
+                    page.appendChild(footer);
                     if (overflows(page, footer)) {
                         page = createPage();
                         page.querySelector('.sp-table-wrap').remove();
-                        page.insertBefore(footer, page.querySelector('.sp-bank'));
+                        page.appendChild(footer);
                     }
                 }
                 exportClone.remove();
