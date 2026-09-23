@@ -2748,8 +2748,21 @@ class AccountingDashboardController extends Controller
                 ?? $item->base_price
                 ?? $item->price
                 ?? 0);
-            $unitDiscount = max(0, (float) ($item->unit_discount ?? 0));
-            $discountType = (string) ($item->discount_type ?? 'decrease');
+            $actualUnitPrice = (float) ($item->price ?? $currentUnitPrice);
+            $priceDifference = round($currentUnitPrice - $actualUnitPrice, 2);
+
+            // Legacy/manual orders may contain the actual sale price without
+            // having unit_discount populated. The accounting reconciliation
+            // must derive the adjustment from the company price snapshot and
+            // the actual sale price, otherwise its calculated total is higher
+            // than the order total.
+            if (abs($priceDifference) > 0.0001) {
+                $unitDiscount = abs($priceDifference);
+                $discountType = $priceDifference > 0 ? 'decrease' : 'increase';
+            } else {
+                $unitDiscount = max(0, (float) ($item->unit_discount ?? 0));
+                $discountType = (string) ($item->discount_type ?? 'decrease');
+            }
             $currentLineTotal = round($pricingQuantity * $currentUnitPrice, 2);
             $currentDiscountTotal = round($pricingQuantity * $unitDiscount, 2);
 

@@ -103,4 +103,58 @@ class AccountingReconciliationCurrentPriceDetailTest extends TestCase
             ->assertDontSee('Phí ship')
             ->assertSee('recon-product-discount-row');
     }
+
+    public function test_detail_derives_legacy_discount_from_actual_sale_price(): void
+    {
+        $accountant = User::factory()->create();
+        $accountant->roles()->attach(Role::query()->create(['name' => 'accounting']));
+        $sale = User::factory()->create();
+        $customer = Customer::query()->create(['name' => 'BÁNH MỲ THIÊN KÝ', 'status' => 'active']);
+        $product = Product::factory()->create(['name' => 'Vịt Nguyên Con', 'is_priced_by_kg' => true]);
+        $variant = ProductVariant::factory()->create([
+            'product_id' => $product->id,
+            'is_priced_by_kg' => true,
+            'kg' => 2.6,
+        ]);
+        ProductPriceRule::query()->create([
+            'product_variant_id' => $variant->id,
+            'price' => 68000,
+            'min_price' => 60000,
+            'start_date' => now()->subDay()->toDateString(),
+            'created_by' => $sale->id,
+        ]);
+        $order = Order::query()->create([
+            'customer_id' => $customer->id,
+            'user_id' => $sale->id,
+            'code' => 'ORD-LEGACY-SALE-PRICE',
+            'status' => Order::STATUS_DELIVERED,
+            'total' => 3432000,
+        ]);
+        $order->items()->create([
+            'product_id' => $product->id,
+            'product_variant_id' => $variant->id,
+            'quantity' => 20,
+            'unit_weight' => 2.6,
+            'total_weight' => 52,
+            'actual_weight' => 52,
+            'is_priced_by_kg' => true,
+            'base_price' => 66000,
+            'price' => 66000,
+            'unit_discount' => 0,
+            'discount_type' => 'decrease',
+            'discount_total' => 0,
+            'total' => 3432000,
+        ]);
+
+        $this->actingAs($accountant)
+            ->getJson(route('accounting.reconciliation.detail', $order))
+            ->assertOk()
+            ->assertJsonPath('items.0.unit_price', 68000)
+            ->assertJsonPath('items.0.unit_discount', 2000)
+            ->assertJsonPath('items.0.discount_total', 104000)
+            ->assertJsonPath('order.current_goods_total', 3536000)
+            ->assertJsonPath('order.current_item_discount_total', 104000)
+            ->assertJsonPath('order.current_calculated_total', 3432000)
+            ->assertJsonPath('order.recognized_revenue', 3432000);
+    }
 }
