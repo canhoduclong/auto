@@ -27,3 +27,4 @@ my_app/
 lib/
 android/
 readme.txt
+/tests/
