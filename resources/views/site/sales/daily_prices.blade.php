@@ -740,6 +740,41 @@ document.addEventListener('DOMContentLoaded', function () {
                 var footer = exportClone.querySelector('.sp-quotation-footer');
                 var pages = [];
 
+                // Freeze the header's actual content width and horizontal offset in pixels.
+                // html2canvas clones the document; intrinsic table widths/auto margins can
+                // otherwise expand the header to the page width and leave its contents left-aligned.
+                function centerPdfHeader(page) {
+                    var card = page.querySelector('.sp-company-card');
+                    var header = card.querySelector('.sp-company-header');
+                    var logo = header.firstElementChild;
+                    var info = header.lastElementChild;
+                    var availableWidth = card.getBoundingClientRect().width;
+                    var gap = 16;
+                    var logoWidth = 90;
+                    function textWidth(node) {
+                        var range = node.ownerDocument.createRange();
+                        range.selectNodeContents(node);
+                        return range.getBoundingClientRect().width;
+                    }
+                    var titleWidth = textWidth(info.querySelector('.sp-company-title'));
+                    var lines = Array.from(info.querySelectorAll('.sp-company-line'));
+                    var addressWidth = Math.max(0, ...lines.filter(function (line) {
+                        return line.classList.contains('full');
+                    }).map(textWidth));
+                    var contacts = lines.filter(function (line) { return !line.classList.contains('full'); });
+                    var contactsWidth = contacts.reduce(function (width, line) { return width + textWidth(line); }, 0)
+                        + Math.max(0, contacts.length - 1) * 12;
+                    var infoWidth = Math.min(availableWidth - logoWidth - gap,
+                        Math.ceil(Math.max(titleWidth, addressWidth, contactsWidth)) + 2);
+                    var headerWidth = logoWidth + gap + infoWidth;
+                    header.style.cssText = 'display:flex;align-items:center;gap:0;max-width:none;text-align:left;'
+                        + 'position:relative;margin:0;box-sizing:border-box;width:' + headerWidth + 'px;'
+                        + 'left:' + Math.max(0, (availableWidth - headerWidth) / 2) + 'px';
+                    logo.style.cssText = 'display:block;flex:0 0 ' + logoWidth + 'px;width:' + logoWidth
+                        + 'px;padding:0;margin-right:' + gap + 'px;box-sizing:border-box';
+                    info.style.cssText = 'display:block;flex:0 0 ' + infoWidth + 'px;width:' + infoWidth + 'px;min-width:0';
+                }
+
                 // Lay out real pages before capture, so rows and the signature are never
                 // sliced between pages or duplicated by shifting a full-height image.
                 function createPage() {
@@ -749,6 +784,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     page.querySelector('tbody').replaceChildren();
                     page.querySelector('.sp-quotation-footer')?.remove();
                     renderHost.appendChild(page);
+                    centerPdfHeader(page);
+                    page.dataset.spPdfPage = String(pages.length);
                     pages.push(page);
                     return page;
                 }
@@ -785,6 +822,9 @@ document.addEventListener('DOMContentLoaded', function () {
                         windowWidth: 1024,
                         useCORS: true,
                         backgroundColor: '#f7f4e9',
+                        onclone: function (clonedDocument) {
+                            centerPdfHeader(clonedDocument.querySelector('[data-sp-pdf-page="' + pageIndex + '"]'));
+                        },
                         logging: false
                     });
                     if (pageIndex > 0) pdf.addPage('a4', 'portrait');
