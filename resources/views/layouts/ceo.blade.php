@@ -361,7 +361,7 @@
             <a href="{{ route('ceo.price-management.index') }}" class="ceo-nav-link {{ request()->routeIs('ceo.price-management.*') ? 'active' : '' }}">
                 <i class="bi bi-tags"></i> Quản lý giá
             </a>
-            <a href="{{ route('ceo.task-management.index') }}" class="ceo-nav-link {{ request()->routeIs('ceo.task-management.*') ? 'active' : '' }}">
+            <a href="{{ route('task-assignments.index') }}" class="ceo-nav-link {{ request()->routeIs('task-assignments.*') ? 'active' : '' }}">
                 <i class="bi bi-checklist-rtl"></i> Giao việc
             </a>
             <a href="{{ route('department-notifications.index', ['layout' => 'ceo']) }}" class="ceo-nav-link {{ request()->routeIs('department-notifications.*') && request('layout') === 'ceo' ? 'active' : '' }}">

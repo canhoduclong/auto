@@ -10,6 +10,7 @@ use App\Models\TaskStatusLog;
 use App\Models\TaskDelegateConfig;
 use App\Models\User;
 use App\Services\ApprovalService;
+use App\Services\TaskMenuService;
 use Carbon\Carbon;
 use App\Models\Setting;
 use Illuminate\Http\Request;
@@ -94,6 +95,7 @@ class TaskAssignmentController extends Controller
     public function create(Request $request)
     {
         $user = auth()->user();
+        abort_unless(TaskMenuService::canAssignTasks($user) || TaskDelegateConfig::canAssignTasks($user), 403);
         $isFrontRoles = $user && $user->isSalesFlowRole();
         $isFrontendRoute = $request->routeIs('tasks.create');
 
@@ -105,8 +107,7 @@ class TaskAssignmentController extends Controller
             ->with('steps')
             ->get();
 
-        // Allowed assignees (from delegation config)
-        $allowedAssignees = TaskDelegateConfig::allowedAssignees($user);
+        $allowedAssignees = $this->allowedAssigneesFor($user);
 
         // Pre-select parent from query string
         $parentId = $request->query('parent_id');
@@ -126,6 +127,7 @@ class TaskAssignmentController extends Controller
     public function store(Request $request)
     {
         $user = auth()->user();
+        abort_unless(TaskMenuService::canAssignTasks($user) || TaskDelegateConfig::canAssignTasks($user), 403);
 
         $data = $request->validate([
             'title'            => 'required|string|max:255',
@@ -135,8 +137,8 @@ class TaskAssignmentController extends Controller
             'parent_id'        => 'nullable|exists:task_assignments,id',
             'due_date'         => 'nullable|date_format:Y-m-d\TH:i|after_or_equal:now',
             'attachments.*'    => 'nullable|file|max:10240|mimes:jpg,jpeg,png,pdf,doc,docx,xlsx,zip',
-            'assignee_ids'     => 'nullable|array',
-            'assignee_ids.*'   => 'exists:users,id',
+            'assignee_ids'     => 'required|array|min:1',
+            'assignee_ids.*'   => 'required|integer|distinct|exists:users,id',
         ]);
 
         if (!empty($data['due_date'])) {
@@ -145,10 +147,10 @@ class TaskAssignmentController extends Controller
 
         // Validate that chosen assignees are actually allowed for this user
         if (!empty($data['assignee_ids'])) {
-            $allowed = TaskDelegateConfig::allowedAssignees($user)->pluck('id')->toArray();
+            $allowed = $this->allowedAssigneesFor($user)->pluck('id')->map(fn ($id) => (int) $id)->all();
             foreach ($data['assignee_ids'] as $aid) {
-                if (!in_array($aid, $allowed) && !$user->hasRole('admin')) {
-                    return back()->withErrors(['assignee_ids' => 'Ban khong co quyen giao viec cho nguoi dung ID ' . $aid]);
+                if (!in_array((int) $aid, $allowed, true)) {
+                    return back()->withInput()->withErrors(['assignee_ids' => 'Bạn không có quyền giao việc cho người dùng đã chọn.']);
                 }
             }
         }
@@ -195,6 +197,8 @@ class TaskAssignmentController extends Controller
 
     public function show(TaskAssignment $taskAssignment)
     {
+        abort_unless($this->canViewTask($taskAssignment, auth()->user()), 403);
+
         $task = $taskAssignment->load([
             'creator:id,name',
             'workflow.steps',
@@ -245,7 +249,12 @@ class TaskAssignmentController extends Controller
             ->with('steps')
             ->get();
 
-        $allowedAssignees = TaskDelegateConfig::allowedAssignees($user);
+        $allowedAssignees = $this->allowedAssigneesFor($user);
+        $currentAssigneeIds = $task->assignees->pluck('user_id')->map(fn ($id) => (int) $id);
+        $allowedAssignees = User::query()
+            ->whereIn('id', $allowedAssignees->pluck('id')->merge($currentAssigneeIds)->unique()->all())
+            ->orderBy('name')
+            ->get(['id', 'name']);
         $parentId = $task->parent_id;
         $parentTasks = TaskAssignment::query()
             ->where('status', '!=', TaskAssignment::STATUS_COMPLETED)
@@ -262,7 +271,7 @@ class TaskAssignmentController extends Controller
         $formMethod = 'PUT';
 
         // Load current assignees for edit form
-        $currentAssigneeIds = $task->assignees->pluck('user_id')->toArray();
+        $currentAssigneeIds = $currentAssigneeIds->all();
 
         return view('task_assignments.edit', compact(
             'task',
@@ -298,8 +307,8 @@ class TaskAssignmentController extends Controller
             'parent_id'        => 'nullable|exists:task_assignments,id',
             'due_date'         => 'nullable|date_format:Y-m-d\TH:i',
             'attachments.*'    => 'nullable|file|max:10240|mimes:jpg,jpeg,png,pdf,doc,docx,xlsx,zip',
-            'assignee_ids'     => 'nullable|array',
-            'assignee_ids.*'   => 'exists:users,id',
+            'assignee_ids'     => 'required|array|min:1',
+            'assignee_ids.*'   => 'required|integer|distinct|exists:users,id',
         ]);
 
         if (!empty($data['due_date'])) {
@@ -308,10 +317,10 @@ class TaskAssignmentController extends Controller
 
         // Validate that chosen assignees are actually allowed for this user
         if (!empty($data['assignee_ids'])) {
-            $allowed = TaskDelegateConfig::allowedAssignees($user)->pluck('id')->toArray();
+            $allowed = $this->allowedAssigneesFor($user)->pluck('id')->map(fn ($id) => (int) $id)->all();
             foreach ($data['assignee_ids'] as $aid) {
-                if (!in_array($aid, $allowed) && !$user->hasRole('admin')) {
-                    return back()->withErrors(['assignee_ids' => 'Ban khong co quyen giao viec cho nguoi dung ID ' . $aid]);
+                if (!in_array((int) $aid, $allowed, true)) {
+                    return back()->withInput()->withErrors(['assignee_ids' => 'Bạn không có quyền giao việc cho người dùng đã chọn.']);
                 }
             }
         }
@@ -387,9 +396,12 @@ class TaskAssignmentController extends Controller
                 auth()->user(),
                 $request->note
             );
+            $taskAssignment->refresh();
             $msg = $done
-                ? 'Cong viec ' . $taskAssignment->code . ' da hoan thanh toan bo quy trinh!'
-                : 'Buoc phe duyet da duoc chap nhan. Qua buoc tiep theo.';
+                ? ($taskAssignment->status === TaskAssignment::STATUS_COMPLETED
+                    ? 'Đã duyệt đủ các bước và công việc đang chờ xác nhận hoàn thành.'
+                    : 'Đã duyệt đủ các bước. Công việc tiếp tục chờ các thành viên hoàn thành.')
+                : 'Bước phê duyệt đã được chấp nhận và chuyển sang bước tiếp theo.';
         } catch (\Exception $e) {
             return back()->with('error', $e->getMessage());
         }
@@ -438,7 +450,7 @@ class TaskAssignmentController extends Controller
     public function assigneeUpdate(Request $request, TaskAssignment $taskAssignment)
     {
         $request->validate([
-            'status' => 'required|in:in_progress,processing,completed,rejected',
+            'status' => 'required|in:in_progress,processing,rejected',
             'note'   => 'nullable|string|max:1000',
         ]);
 
@@ -455,6 +467,21 @@ class TaskAssignmentController extends Controller
             'note'         => $request->note,
             'completed_at' => $assigneeStatus === 'completed' ? now() : null,
         ]);
+
+        if ($assigneeStatus === TaskAssignment::STATUS_PROCESSING
+            && in_array($taskAssignment->status, [TaskAssignment::STATUS_PENDING, TaskAssignment::STATUS_REJECTED], true)) {
+            $taskAssignment->update([
+                'status' => TaskAssignment::STATUS_PROCESSING,
+                'rejected_reason' => null,
+            ]);
+        }
+
+        TaskStatusLog::log(
+            $taskAssignment,
+            $taskAssignment->status,
+            auth()->user(),
+            $assigneeStatus === TaskAssignment::STATUS_PROCESSING ? 'Đã nhận việc' : 'Không thể thực hiện: '.($request->note ?: 'Không có ghi chú')
+        );
 
         // If ALL assignees are done, mark overall task completed
         if ($assigneeStatus === 'completed') {
@@ -479,6 +506,7 @@ class TaskAssignmentController extends Controller
     public function completeForm(TaskAssignment $taskAssignment)
     {
         $user = auth()->user();
+        abort_unless($this->canViewTask($taskAssignment, $user), 403);
         $isFrontRoles = $user && $user->isSalesFlowRole();
         $isWarehouse = $user && $user->hasRole('warehouse');
 
@@ -488,6 +516,13 @@ class TaskAssignmentController extends Controller
 
         if (!$canComplete && !$user->hasRole('admin')) {
             return back()->with('error', 'Ban khong co quyen hoan thanh cong viec nay.');
+        }
+
+        if (!$user->hasRole('admin') && $taskAssignment->assignees()
+            ->where('user_id', $user->id)
+            ->where('status', 'completed')
+            ->exists()) {
+            return back()->with('success', 'Phần việc của bạn đã hoàn thành và đang chờ các thành viên còn lại.');
         }
 
         $layout = $isWarehouse ? 'layouts.warehouse' : ($isFrontRoles ? 'layouts.site' : 'layouts.app');
@@ -515,6 +550,17 @@ class TaskAssignmentController extends Controller
             return back()->with('error', 'Ban khong co quyen hoan thanh cong viec nay.');
         }
 
+        if (!$user->hasRole('admin') && $taskAssignment->assignees()
+            ->where('user_id', $user->id)
+            ->where('status', 'completed')
+            ->exists()) {
+            return back()->with('error', 'Phần việc của bạn đã được ghi nhận hoàn thành.');
+        }
+
+        if ($taskAssignment->status === TaskAssignment::STATUS_DONE || $taskAssignment->status === TaskAssignment::STATUS_CANCELLED) {
+            return back()->with('error', 'Công việc đã kết thúc, không thể gửi hoàn thành lại.');
+        }
+
         $request->validate([
             'completion_content' => 'required|string|min:10|max:5000',
             'completion_notes'   => 'required|string|min:5|max:2000',
@@ -524,18 +570,38 @@ class TaskAssignmentController extends Controller
 
         try {
             DB::transaction(function () use ($request, $taskAssignment, $user) {
-                // Update task with completion content
+                $assignee = TaskAssignee::where('task_id', $taskAssignment->id)
+                    ->where('user_id', $user->id)
+                    ->first();
+
+                if ($assignee) {
+                    $assignee->update([
+                        'status' => 'completed',
+                        'note' => $request->completion_content."\n\n".$request->completion_notes,
+                        'completed_at' => now(),
+                    ]);
+                }
+
+                $allDone = $taskAssignment->assignees()
+                    ->where('status', '!=', 'completed')
+                    ->doesntExist();
+                $allApproved = $taskAssignment->approvalSteps()
+                    ->where('status', 'pending')
+                    ->doesntExist();
+                $readyForVerification = $allDone && $allApproved;
+
                 $taskAssignment->update([
-                    'status'               => TaskAssignment::STATUS_COMPLETED,
-                    'completion_content'   => $request->completion_content,
-                    'completion_notes'     => $request->completion_notes,
-                    'completed_at'         => now(),
+                    'status' => $readyForVerification ? TaskAssignment::STATUS_COMPLETED : TaskAssignment::STATUS_PROCESSING,
+                    'completion_content' => $request->completion_content,
+                    'completion_notes' => $request->completion_notes,
+                    'completed_at' => $readyForVerification ? now() : null,
+                    'rejected_reason' => null,
                 ]);
 
                 // Log status change
                 TaskStatusLog::log(
                     $taskAssignment,
-                    TaskAssignment::STATUS_COMPLETED,
+                    $taskAssignment->status,
                     $user,
                     'Gửi hoàn thành công việc'
                 );
@@ -557,13 +623,6 @@ class TaskAssignmentController extends Controller
                     }
                 }
 
-                // Update assignee record if exists
-                TaskAssignee::where('task_id', $taskAssignment->id)
-                    ->where('user_id', $user->id)
-                    ->update([
-                        'status'       => 'completed',
-                        'completed_at' => now(),
-                    ]);
             });
 
             // Send notification to task creator
@@ -572,8 +631,12 @@ class TaskAssignmentController extends Controller
 
             $showRoute = $user->isSalesFlowRole() ? 'tasks.show' : 'task-assignments.show';
 
-            return redirect()->route($showRoute, $taskAssignment)
-                ->with('success', 'Cong viec da duoc gui hoan thanh. Dang cho xac nhan.');
+            $taskAssignment->refresh();
+            $message = $taskAssignment->status === TaskAssignment::STATUS_COMPLETED
+                ? 'Đã gửi hoàn thành. Công việc đang chờ người giao xác nhận.'
+                : 'Đã ghi nhận phần việc của bạn. Công việc tiếp tục chờ các thành viên còn lại.';
+
+            return redirect()->route($showRoute, $taskAssignment)->with('success', $message);
         } catch (\Exception $e) {
             return back()->with('error', 'Loi: ' . $e->getMessage());
         }
@@ -589,7 +652,7 @@ class TaskAssignmentController extends Controller
             return back()->with('error', 'Cong viec khong o trang thai cho xac nhan.');
         }
 
-        if (!($user->hasRole('admin') || $user->hasRole('CEO') || $user->hasRole('manager') || $taskAssignment->created_by === $user->id)) {
+        if (!$this->canVerifyTask($taskAssignment, $user)) {
             return back()->with('error', 'Ban khong co quyen xac nhan cong viec nay.');
         }
 
@@ -620,6 +683,30 @@ class TaskAssignmentController extends Controller
         }
     }
 
+    public function verifyForm(TaskAssignment $taskAssignment)
+    {
+        $user = auth()->user();
+        abort_unless($this->canVerifyTask($taskAssignment, $user), 403);
+
+        if (!$taskAssignment->canBeVerified()) {
+            return redirect()->route('task-assignments.show', $taskAssignment)
+                ->with('error', 'Công việc không ở trạng thái chờ xác nhận hoàn thành.');
+        }
+
+        $task = $taskAssignment->load([
+            'creator:id,name',
+            'assignees.user:id,name',
+            'completionImages',
+            'statusLogs.changedBy:id,name',
+        ]);
+
+        $layout = $user->hasRole('warehouse')
+            ? 'layouts.warehouse'
+            : ($user->isSalesFlowRole() ? 'layouts.site' : 'layouts.admin');
+
+        return view('task_assignments.verify', compact('task', 'layout'));
+    }
+
     // ── Reject Task Completion ────────────────────────────────────────
 
     public function rejectCompletion(Request $request, TaskAssignment $taskAssignment)
@@ -630,7 +717,7 @@ class TaskAssignmentController extends Controller
             return back()->with('error', 'Cong viec khong o trang thai cho tu choi.');
         }
 
-        if (!($user->hasRole('admin') || $user->hasRole('CEO') || $user->hasRole('manager') || $taskAssignment->created_by === $user->id)) {
+        if (!$this->canVerifyTask($taskAssignment, $user)) {
             return back()->with('error', 'Ban khong co quyen tu choi cong viec nay.');
         }
 
@@ -643,6 +730,9 @@ class TaskAssignmentController extends Controller
                 $taskAssignment->update([
                     'status'           => TaskAssignment::STATUS_REJECTED,
                     'rejected_reason'  => $request->rejected_reason,
+                    'completed_at' => null,
+                    'completion_verified_at' => null,
+                    'completion_verified_by' => null,
                 ]);
 
                 TaskStatusLog::log(
@@ -654,7 +744,7 @@ class TaskAssignmentController extends Controller
 
                 // Reset assignee status to allow retry
                 TaskAssignee::where('task_id', $taskAssignment->id)
-                    ->update(['status' => 'pending']);
+                    ->update(['status' => 'pending', 'completed_at' => null]);
             });
 
             return redirect()->route('task-assignments.show', $taskAssignment)
@@ -674,9 +764,16 @@ class TaskAssignmentController extends Controller
         $isFrontendRoute = $request->routeIs('my-tasks');
 
         $tasks = TaskAssignment::whereHas('assignees', fn($q) => $q->where('user_id', $user->id))
-            ->with(['creator:id,name', 'completionImages', 'statusLogs'])
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $keyword = trim((string) $request->search);
+                $query->where(fn ($item) => $item->where('title', 'like', "%{$keyword}%")->orWhere('code', 'like', "%{$keyword}%"));
+            })
+            ->when($request->filled('status'), fn ($query) => $query->where('status', $request->status))
+            ->when($request->filled('priority'), fn ($query) => $query->where('priority', $request->priority))
+            ->with(['creator:id,name', 'assignees.user:id,name', 'completionImages', 'statusLogs'])
             ->latest()
-            ->paginate(20);
+            ->paginate(20)
+            ->withQueryString();
 
         $layout = $isWarehouse
             ? 'layouts.warehouse'
@@ -753,7 +850,8 @@ class TaskAssignmentController extends Controller
         $user = auth()->user();
 
         $tasks = TaskAssignment::where('status', TaskAssignment::STATUS_COMPLETED)
-            ->with(['creator:id,name', 'completionImages', 'statusLogs'])
+            ->when(!($user->hasRole('admin') || $user->hasRole('CEO') || $user->hasRole('manager')), fn ($query) => $query->where('created_by', $user->id))
+            ->with(['creator:id,name', 'assignees.user:id,name', 'completionImages', 'statusLogs'])
             ->latest()
             ->paginate(20);
 
@@ -777,5 +875,42 @@ class TaskAssignmentController extends Controller
         $detailRoute = $isFrontRoles ? 'tasks.show' : 'task-assignments.show';
 
         return view('task_assignments.history', compact('tasks', 'layout', 'detailRoute'));
+    }
+
+    private function allowedAssigneesFor(User $user)
+    {
+        $delegated = TaskDelegateConfig::allowedAssignees($user);
+        $isPrivileged = $user->hasRole('admin')
+            || $user->hasRole('CEO')
+            || $user->hasRole('manager');
+
+        if ($isPrivileged || (TaskMenuService::canAssignTasks($user) && $delegated->isEmpty())) {
+            return User::query()
+                ->whereKeyNot($user->id)
+                ->orderBy('name')
+                ->get(['id', 'name']);
+        }
+
+        return $delegated;
+    }
+
+    private function canViewTask(TaskAssignment $task, User $user): bool
+    {
+        if ($user->hasRole('admin') || $user->hasRole('CEO') || $user->hasRole('manager')) {
+            return true;
+        }
+
+        return (int) $task->created_by === (int) $user->id
+            || $task->assignees()->where('user_id', $user->id)->exists()
+            || $task->approvalSteps()->where('approved_by', $user->id)->exists()
+            || $task->approvalSteps()->whereHas('step', fn ($query) => $query->whereIn('role_slug', $user->roles->pluck('name')))->exists();
+    }
+
+    private function canVerifyTask(TaskAssignment $task, User $user): bool
+    {
+        return (int) $task->created_by === (int) $user->id
+            || $user->hasRole('admin')
+            || $user->hasRole('CEO')
+            || $user->hasRole('manager');
     }
 }

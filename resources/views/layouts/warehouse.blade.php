@@ -418,13 +418,13 @@
                 <i class="bi bi-file-earmark-text"></i><span class="wh-nav-label">Phiếu yêu cầu</span>
             </a>
 
-            <!--div class="wh-nav-section">Nhiệm vụ & Trả hàng</div>
+            <div class="wh-nav-section">Nhiệm vụ</div>
             <a href="{{ route('tasks.my-tasks') }}" class="wh-nav-link {{ request()->routeIs('tasks.my-tasks') || request()->routeIs('task-assignments.assigned-to-me') ? 'active' : '' }}">
                 <i class="bi bi-list-task"></i><span class="wh-nav-label">Nhiệm vụ</span>
             </a>
             <a href="{{ route('task-assignments.in-progress') }}" class="wh-nav-link {{ request()->routeIs('task-assignments.in-progress') || request()->routeIs('task-assignments.complete-form') ? 'active' : '' }}">
                 <i class="bi bi-check2-circle"></i><span class="wh-nav-label">Thực hiện</span>
-            </a-->
+            </a>
             <div class="wh-nav-section">Báo cáo</div>
             <a href="{{ route('warehouse.reports') }}" class="wh-nav-link {{ request()->routeIs('warehouse.reports') ? 'active' : '' }}">
                 <i class="bi bi-graph-up"></i><span class="wh-nav-label">Thống Kê</span>

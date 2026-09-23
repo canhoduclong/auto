@@ -865,6 +865,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('task-assignments/{taskAssignment}/assignee-update', [\App\Http\Controllers\TaskAssignmentController::class, 'assigneeUpdate'])->name('task-assignments.assignee-update');
     Route::post('task-assignments/{taskAssignment}/complete-content', [\App\Http\Controllers\TaskAssignmentController::class, 'completeWithContent'])->name('task-assignments.complete-with-content');
     Route::get('task-assignments/{taskAssignment}/complete', [\App\Http\Controllers\TaskAssignmentController::class, 'completeForm'])->name('task-assignments.complete-form');
+    Route::get('task-assignments/{taskAssignment}/verify', [\App\Http\Controllers\TaskAssignmentController::class, 'verifyForm'])->name('task-assignments.verify-form');
     Route::post('task-assignments/{taskAssignment}/verify-completion', [\App\Http\Controllers\TaskAssignmentController::class, 'verifyCompletion'])->name('task-assignments.verify-completion');
     Route::post('task-assignments/{taskAssignment}/reject-completion', [\App\Http\Controllers\TaskAssignmentController::class, 'rejectCompletion'])->name('task-assignments.reject-completion');
     Route::get('task-assignments/assigned/to-me', [\App\Http\Controllers\TaskAssignmentController::class, 'assignedToMe'])->name('task-assignments.assigned-to-me');

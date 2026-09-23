@@ -891,9 +891,15 @@ class ApprovalService
         $remaining = ApprovalOrder::where('task_id', $task->id)->where('status', 'pending')->count();
 
         if ($remaining === 0) {
+            $allAssigneesCompleted = $task->assignees()
+                ->where('status', '!=', 'completed')
+                ->doesntExist();
+
             $task->update([
-                'status' => \App\Models\TaskAssignment::STATUS_COMPLETED,
-                'completed_at' => now(),
+                'status' => $allAssigneesCompleted
+                    ? \App\Models\TaskAssignment::STATUS_COMPLETED
+                    : \App\Models\TaskAssignment::STATUS_PROCESSING,
+                'completed_at' => $allAssigneesCompleted ? now() : null,
             ]);
 
             return true;

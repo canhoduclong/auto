@@ -105,16 +105,16 @@
                         </div>
                         @endif
 
-                        {{-- Custom assignees (only shown if user has delegation rights) --}}
+                        {{-- Multiple assignees allowed according to the current user's permissions. --}}
                         @if($allowedAssignees->isNotEmpty())
                         <div class="mb-3">
                             <label class="form-label fw-semibold">
                                 <i class="ph-users me-1 text-primary"></i>Giao việc cho thành viên
-                                <span class="badge bg-primary ms-1">Custom</span>
+                                <span class="badge bg-primary ms-1">Có thể chọn nhiều người</span>
                             </label>
                             <div class="border rounded p-3" style="background:#f8fafc">
                                 <p class="small text-muted mb-3">
-                                    Bạn được phép giao trực tiếp cho các thành viên sau. Có thể chọn nhiều người.
+                                    Chọn một hoặc nhiều thành viên cùng thực hiện công việc.
                                     Công việc hoàn thành khi <strong>tất cả</strong> người nhận báo cáo xong.
                                 </p>
                                 <div class="row g-2">

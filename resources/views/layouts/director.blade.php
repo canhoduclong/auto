@@ -353,7 +353,7 @@
             <a href="{{ route('director.price-management.index') }}" class="director-nav-link {{ request()->routeIs('director.price-management.*') ? 'active' : '' }}">
                 <i class="bi bi-tags"></i> Quản lý giá
             </a>
-            <a href="{{ route('director.task-management.index') }}" class="director-nav-link {{ request()->routeIs('director.task-management.*') ? 'active' : '' }}">
+            <a href="{{ route('task-assignments.index') }}" class="director-nav-link {{ request()->routeIs('task-assignments.*') ? 'active' : '' }}">
                 <i class="bi bi-checklist-rtl"></i> Giao việc
             </a>
             <a href="{{ route('department-notifications.index', ['layout' => 'director']) }}" class="director-nav-link {{ request()->routeIs('department-notifications.*') && request('layout') === 'director' ? 'active' : '' }}">

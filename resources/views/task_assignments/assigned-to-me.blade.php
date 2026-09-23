@@ -133,6 +133,7 @@
 
         {{-- Task List --}}
         @forelse ($tasks as $task)
+            @php $myTaskAssignment = $task->assignees->firstWhere('user_id', auth()->id()); @endphp
             <div class="task-item">
                 <div class="task-item-header">
                     <div>
@@ -179,10 +180,12 @@
                         </a>
                     @endif
 
-                    @if ($task->canBeCompleted())
+                    @if ($task->canBeCompleted() && $myTaskAssignment?->status !== 'completed')
                         <a href="{{ route('task-assignments.complete-form', $task) }}" class="btn btn-success btn-sm">
                             <i class="fas fa-check"></i> Hoàn thành
                         </a>
+                    @elseif($myTaskAssignment?->status === 'completed' && !in_array($task->status, ['done', 'cancelled'], true))
+                        <span class="badge bg-info align-self-center">Bạn đã hoàn thành · chờ thành viên khác</span>
                     @endif
                 </div>
             </div>

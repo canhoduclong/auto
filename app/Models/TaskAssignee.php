@@ -33,7 +33,7 @@ class TaskAssignee extends Model
     {
         return match ($this->status) {
             'completed'  => 'success',
-            'in_progress'=> 'primary',
+            'in_progress', 'processing' => 'primary',
             'rejected'   => 'danger',
             default      => 'warning',
         };

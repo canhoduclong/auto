@@ -97,7 +97,7 @@
                         <div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">
                             <p class="mb-2">
                                 <strong>Thực hiện bởi:</strong><br>
-                                {{ $task->assignees->first()?->user->name ?? 'N/A' }}
+                                {{ $task->assignees->pluck('user.name')->filter()->join(', ') ?: 'N/A' }}
                             </p>
                             <p class="mb-0">
                                 <strong>Giao bởi:</strong><br>
@@ -118,13 +118,13 @@
                 @endif
 
                 <div style="margin-top: 15px;">
-                    <a href="{{ route('task-assignments.show', $task) }}" class="btn btn-info btn-sm">
+                    <a href="{{ route('task-assignments.verify-form', $task) }}" class="btn btn-info btn-sm">
                         <i class="fas fa-eye"></i> Xem chi tiết & Xác nhận
                     </a>
-                    <a href="{{ route('task-assignments.show', $task) }}" class="btn btn-success btn-sm">
+                    <a href="{{ route('task-assignments.verify-form', $task) }}" class="btn btn-success btn-sm">
                         <i class="fas fa-check"></i> Phê duyệt
                     </a>
-                    <a href="{{ route('task-assignments.show', $task) }}" class="btn btn-danger btn-sm">
+                    <a href="{{ route('task-assignments.verify-form', $task) }}#rejectModal" class="btn btn-danger btn-sm">
                         <i class="fas fa-times"></i> Từ chối
                     </a>
                 </div>

@@ -147,6 +147,7 @@ class TaskAssignment extends Model
         }
         $q->where(function ($inner) use ($user) {
             $inner->where('created_by', $user->id)
+                  ->orWhereHas('assignees', fn($s) => $s->where('user_id', $user->id))
                   ->orWhereHas('approvalSteps', fn($s) => $s->where('approved_by', $user->id))
                   ->orWhereHas('approvalSteps.step', fn($s) => $s->where('role_slug', $user->roles->pluck('name')->first()));
         });
@@ -192,7 +193,13 @@ class TaskAssignment extends Model
             return false;
         }
 
-        return TaskDelegateConfig::canAssignTasks($user)
+        $canManage = (int) $this->created_by === (int) $user->id
+            || $user->hasRole('admin')
+            || $user->hasRole('CEO')
+            || $user->hasRole('manager');
+
+        return $canManage
+            && (TaskDelegateConfig::canAssignTasks($user) || \App\Services\TaskMenuService::canAssignTasks($user))
             && in_array($this->status, [self::STATUS_PENDING, self::STATUS_IN_PROGRESS, 'in_progress'], true)
             && $this->allAssigneePending();
     }
