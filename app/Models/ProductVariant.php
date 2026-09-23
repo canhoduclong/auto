@@ -162,6 +162,23 @@ class ProductVariant extends Model
         return strtolower($this->product?->unit_label ?? 'cai');
     }
 
+    /** Unit weight for order entry; a numeric size is kg per item, never a line total. */
+    public function getOrderUnitWeightAttribute(): float
+    {
+        $size = trim((string) $this->size);
+        if (preg_match('/^(\d+(?:[.,]\d+)?)\s*(kg|g)?$/iu', $size, $matches)) {
+            $weight = (float) str_replace(',', '.', $matches[1]);
+            if (strtolower($matches[2] ?? '') === 'g') {
+                $weight /= 1000;
+            }
+            if ($weight > 0) {
+                return round($weight, 3);
+            }
+        }
+
+        return (float) $this->effective_kg;
+    }
+
     public function getEffectiveKgAttribute(): float
     {
         $variantKg = (float) ($this->kg ?? 0);

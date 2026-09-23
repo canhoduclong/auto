@@ -20,20 +20,7 @@
             @php
                 $unitValue = (string) ($variant->product->unit ?? 'cai');
                 $weightUnitLabel = $variant->product->unit_label ?? 'Cái';
-                $sizeRaw = strtolower(str_replace(',', '.', trim((string) ($variant->size ?? ''))));
-                preg_match('/([0-9]*\.?[0-9]+)/', $sizeRaw, $sizeMatches);
-                $sizeKg = (float) ($sizeMatches[1] ?? 0);
-                if (str_contains($sizeRaw, 'g') && !str_contains($sizeRaw, 'kg')) {
-                    $sizeKg = $sizeKg / 1000;
-                }
-                $defaultWeight = (float) ($variant->kg ?? 0);
-                if ($defaultWeight <= 0) {
-                    $defaultWeight = (float) ($variant->product->kg ?? 0);
-                }
-                if ($defaultWeight <= 0) {
-                    $defaultWeight = $sizeKg;
-                }
-                $defaultWeight = round(max(0.01, $defaultWeight), 3);
+                $defaultWeight = $variant->order_unit_weight;
                 $isPricedByKg = $variant->is_priced_by_kg !== null
                     ? (bool) $variant->is_priced_by_kg
                     : (bool) ($variant->product->is_priced_by_kg ?? true);

@@ -39,14 +39,7 @@
                     <div class="monitor-variant-grid">
                         @foreach($product->variants as $variant)
                             @php
-                                $sizeRaw = strtolower(str_replace(',', '.', trim((string) ($variant->size ?? ''))));
-                                preg_match('/([0-9]*\.?[0-9]+)/', $sizeRaw, $sizeMatches);
-                                $sizeKg = (float) ($sizeMatches[1] ?? 0);
-                                if (str_contains($sizeRaw, 'g') && !str_contains($sizeRaw, 'kg')) {
-                                    $sizeKg /= 1000;
-                                }
-                                $weight = (float) ($variant->kg ?: $product->kg ?: $sizeKg);
-                                $weight = round(max(0.01, $weight), 3);
+                                $weight = $variant->order_unit_weight;
                                 $isPricedByKg = $variant->is_priced_by_kg !== null
                                     ? (bool) $variant->is_priced_by_kg
                                     : (bool) $product->is_priced_by_kg;

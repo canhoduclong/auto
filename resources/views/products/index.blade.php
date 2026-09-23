@@ -10,6 +10,41 @@
             {{ session('success') }}
         </div>
     @endif
+    @if($errors->any())
+        <div class="alert alert-danger" role="alert">
+            <strong>Chưa nhập dữ liệu:</strong>
+            <ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+        </div>
+    @endif
+    @if(auth()->user()?->isAdmin())
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                    <h5 class="mb-0">Nhập / xuất sản phẩm</h5>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a class="btn btn-outline-secondary" href="{{ route('products.import-template') }}">Tải file mẫu Excel</a>
+                        <a class="btn btn-outline-success" href="{{ route('products.export', request()->only('name', 'category_id', 'status_filter')) }}">Xuất Excel theo bộ lọc</a>
+                    </div>
+                </div>
+                <form method="POST" action="{{ route('products.import') }}" enctype="multipart/form-data" class="row g-2 align-items-end">
+                    @csrf
+                    <div class="col-md-5">
+                        <label for="productImportFile" class="form-label">File sản phẩm (.xlsx, .csv)</label>
+                        <input id="productImportFile" type="file" name="file" class="form-control" accept=".xlsx,.csv" required>
+                    </div>
+                    <div class="col-md-5">
+                        <label for="productImportMode" class="form-label">Cách nhập</label>
+                        <select id="productImportMode" name="mode" class="form-select">
+                            <option value="create" @selected(old('mode', 'create') === 'create')>Chỉ thêm mới</option>
+                            <option value="upsert" @selected(old('mode') === 'upsert')>Thêm mới hoặc cập nhật theo SKU</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Nhập sản phẩm</button></div>
+                </form>
+                <p class="small text-muted mb-0 mt-2">Mỗi dòng là một SKU; tối đa 2.000 dòng, 5 MB. File mẫu có hướng dẫn và danh mục. Xuất toàn bộ kết quả lọc, không giới hạn ở trang hiện tại. Nếu file có lỗi, toàn bộ lần nhập sẽ được hủy.</p>
+            </div>
+        </div>
+    @endif
  <form action="{{ route('products.index') }}" method="GET" class="mb-4">
         <div class="input-group">
             <input type="text" name="name" class="form-control" placeholder="{{ __('admin.product.search_placeholder') }}" value="{{ request('name') }}">

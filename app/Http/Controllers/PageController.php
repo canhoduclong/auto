@@ -5386,46 +5386,7 @@ public function apiTruckRoutes(Request $request)
             $previousDeliveryDate = $order->delivery_date?->toDateString();
             $order->items()->delete();
 
-            $parseWeightToKg = static function ($size): float {
-                $normalized = strtolower(str_replace(',', '.', trim((string) $size)));
-                if ($normalized === '') {
-                    return 0.0;
-                }
-
-                if (!preg_match('/([0-9]*\.?[0-9]+)/', $normalized, $matches)) {
-                    return 0.0;
-                }
-
-                $weight = (float) ($matches[1] ?? 0);
-                if ($weight <= 0) {
-                    return 0.0;
-                }
-
-                if (str_contains($normalized, 'g') && !str_contains($normalized, 'kg')) {
-                    $weight = $weight / 1000;
-                }
-
-                return round(max(0, $weight), 3);
-            };
-
-            $resolveKg = static function ($variant) use ($parseWeightToKg): float {
-                $variantKg = (float) ($variant->kg ?? 0);
-                if ($variantKg > 0) {
-                    return $variantKg;
-                }
-
-                $productKg = (float) ($variant->product?->kg ?? 0);
-                if ($productKg > 0) {
-                    return $productKg;
-                }
-
-                $sizeKg = $parseWeightToKg($variant->size ?? null);
-                if ($sizeKg > 0) {
-                    return $sizeKg;
-                }
-
-                return 1.0;
-            };
+            $resolveKg = static fn ($variant): float => $variant->order_unit_weight;
 
             $resolvePricedByKg = static function ($variant): bool {
                 if ($variant->is_priced_by_kg !== null) {

@@ -80,49 +80,56 @@
     .sp-filter .btn {
         height: 48px;
         border-radius: 14px;
-        font-weight: 700;
+        font-weight: 700; 
     }
-    .sp-company-card {
-        padding: 24px;
+    .sp-quotation-card { background: transparent; border: 0; box-shadow: none; }
+    #pdfExportContent {
+        max-width: 900px;
+        width: 100%;
+        min-height: 1187px;
+        display: flex;
+        flex-direction: column;
+        margin: 0 auto;
+        padding: 32px;
+        color: #29271f;
+        background: #f7f4e9;
+        border: 6px double #c8c0a8;
+        border-radius: 4px;
+        box-shadow: 0 12px 36px rgba(63, 53, 27, .12);
     }
+    #pdfExportContent > * { flex-shrink: 0; }
+    .sp-company-card { padding: 0; width: 100%; text-align: center; }
     .sp-company-header {
-        display: grid;
-        grid-template-columns: 160px minmax(0, 1fr);
-        gap: 20px;
-        align-items: start;
-    }
-    .sp-company-logo-wrap {
-        min-height: 120px;
-         text-align: center 
-         
-    }
-    .sp-company-logo {
-        max-height: 88px;
+        display: inline-table;
+        border-collapse: collapse;
+        width: auto;
         max-width: 100%;
-        object-fit: contain;
+        vertical-align: top;
+        text-align: left;
     }
-    .sp-company-title {
-        font-weight: 900;
-        font-size: 1.15rem;
-        color: #0f172a;
-        margin-bottom: 10px;
+    .sp-company-header > div { display: table-cell; vertical-align: middle; }
+    .sp-company-header > :first-child { width: 90px; padding-right: 18px; box-sizing: content-box; }
+    .sp-company-header > :last-child { min-width: 0; }
+    .sp-company-logo-wrap { display: flex; justify-content: center; }
+    .sp-company-logo { width: 90px; height: 90px; object-fit: contain; }
+    .sp-company-monogram {
+        display: flex; align-items: center; justify-content: center;
+        width: 82px; height: 82px; border-radius: 50%; border: 4px double #a68a43;
+        background: linear-gradient(135deg, #f5e8b8, #a68a43); color: #655021;
+        font: bold 32px Georgia, serif;
     }
-    .sp-company-grid {
-         
-        color: #475569;
-    }
-    .sp-company-line {
-         
-        padding: 2px 10px;
-    }
-    .sp-company-line.full {
-        grid-column: 1 / -1;
-    }
-    .sp-company-label {
-        color: #0f172a;
-        font-weight: 700;
-        margin-right: 6px;
-    }
+    .sp-company-title { font-size: 1.2rem; font-weight: 800; text-transform: uppercase; line-height: 1.4; margin-bottom: 6px; }
+    .sp-company-grid { display: flex; justify-content: flex-start; flex-wrap: wrap; gap: 4px 12px; font-size: .75rem; }
+    .sp-company-line { overflow-wrap: anywhere; }
+    .sp-company-line.full { flex-basis: 100%; }
+    .sp-company-label { font-weight: 600; margin-right: 4px; }
+    .sp-quotation-heading { text-align: center; padding: 22px 0; }
+    .sp-quotation-heading h2 { font-family: Georgia, 'Times New Roman', serif; font-size: 2.5rem; color: #29271f; margin: 0; }
+    .sp-quotation-heading::after { content: ''; display: block; width: 150px; height: 3px; margin: 12px auto 0; background: #a59d87; }
+    .sp-quotation-footer { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 20px; padding-top: 14px; font-size: .88rem; }
+    .sp-notes { margin-top: 8px; }
+    .sp-notes ul { margin: 2px 0 0; padding-left: 20px; }
+    .sp-effective-date { margin-bottom: 6px; font-size: .82rem; }
     .sp-actions {
         display: flex;
         gap: 10px;
@@ -151,47 +158,29 @@
         color: #0f172a;
         font-weight: 600;
     }
-    .sp-table-wrap {
-        padding: 0 18px 18px;
-    }
-    .sp-table {
-        margin-bottom: 0;
-        min-width: 900px;
-    }
-    .sp-table thead th {
-        font-size: .78rem;
-        text-transform: uppercase;
-        letter-spacing: .05em;
-        color: #64748b;
-        border-bottom: 1px solid #e8edf5;
-        padding: 16px 14px;
-        white-space: nowrap;
-    }
-    .sp-table tbody td {
-        padding: 18px 14px;
-        border-color: #edf2f7;
-        vertical-align: middle;
-    }
-    .sp-avatar {
-        width: 52px;
-        height: 52px;
-        border-radius: 10px;
-        object-fit: cover;
-        border: 1px solid #e8edf5;
-    }
-    .sp-product-name {
-        font-weight: 800;
-        color: #0f172a;
-    }
-    .sp-product-sub {
-        font-size: .82rem;
-        color: #64748b;
-    }
-    .sp-price {
-        font-size: 1rem;
-        font-weight: 800;
-        color: #0f172a;
-    }
+    .sp-table-wrap { padding: 0; }
+    .sp-table { width: 100%; margin-bottom: 0; color: #29271f; border-collapse: collapse; }
+    .sp-table > :not(caption) > * > * { background: transparent; box-shadow: none; border: 0.5px solid #bdb7a4; }
+    .sp-table thead th { padding: 13px 10px; text-align: center; vertical-align: middle; font-size: .9rem; font-weight: 800; text-transform: uppercase; color: #29271f; }
+    .sp-table tbody td { padding: 12px 10px; vertical-align: middle; }
+    .sp-number-col { width: 46px; text-align: center; }
+    .sp-unit-col { width: 75px; text-align: center; }
+    .sp-price-col { width: 170px; min-width: 170px; text-align: center; white-space: nowrap; }
+    .sp-table thead th.sp-product-col, .sp-table td.sp-product-col { text-align: left; }
+    .sp-packing-col { width: 110px; text-align: center; font-size: .85rem; }
+    .sp-avatar { flex-shrink: 0; width: 62px; height: 62px; border-radius: 9px; object-fit: cover; border: 1px solid #d6ceba; }
+    .sp-product-name { font-weight: 800; font-size: 1.08rem; color: #29271f; overflow-wrap: anywhere; }
+    .sp-product-sub { font-size: .82rem; color: #6b6658; }
+    .sp-price { font-size: 1.15rem; font-weight: 800; color: #29271f; white-space: nowrap; }
+    .sp-variant-row { font-size: .88rem; }
+    .sp-table thead th { background: #e6e0bb; }
+    .sp-compact .sp-table tbody td { padding: 6px 8px; line-height: 1.3; }
+    .sp-compact .sp-avatar { width: 40px; height: 40px; border-radius: 6px; }
+    .sp-compact .sp-product-name { font-size: .95rem; }
+    .sp-compact .sp-product-sub { font-size: .74rem; line-height: 1.3; }
+    .sp-compact .sp-price { font-size: 1rem; }
+    .sp-compact .sp-variant-row td { padding-top: 5px; padding-bottom: 5px; }
+
     .sp-page-badge {
         display: inline-flex;
         align-items: center;
@@ -207,7 +196,7 @@
     .sp-select-col { width: 48px; text-align: center; }
     .sp-product-check,
     #spSelectAll { width: 18px; height: 18px; cursor: pointer; }
-    .sp-product-row.is-selected td { background: #f0f9ff; }
+    .sp-product-row.is-selected td { background: #ede6cf; }
     .sp-product-row { cursor: pointer; }
     .sp-selection-toolbar {
         display: flex;
@@ -247,23 +236,42 @@
         .sp-kpi-value {
             font-size: 1.35rem;
         }
-        .sp-company-grid {
-            grid-template-columns: 1fr;
-        }
-        .sp-company-header {
-            grid-template-columns: 1fr;
-        }
+        #pdfExportContent { padding: 18px 12px; min-height: 950px; }
+        .sp-company-title { font-size: 1.05rem; }
+        .sp-company-header > :first-child { width: 65px; padding-right: 10px; }
+        .sp-company-logo { width: 65px; height: 65px; }
+        .sp-quotation-heading h2 { font-size: 1.9rem; }
+        .sp-table { min-width: 560px; }
+        .sp-quotation-footer { grid-template-columns: minmax(0, 1fr) 150px; gap: 14px; }
+        .sp-signature-title { margin-bottom: 40px; }
+
         .sp-actions {
             justify-content: flex-start;
         }
     }
 
+    @media (max-width: 479.98px) {
+        .sp-quotation-footer { grid-template-columns: 1fr; }
+        .sp-signature { justify-self: end; max-width: 190px; }
+    }
+    #pdfExportContent.sp-pdf-page { box-sizing: border-box; padding: 28px; min-height: 0; display: block; position: relative; }
+    .sp-pdf-page .sp-company-header > :first-child { width: 90px; padding-right: 16px; }
+    .sp-pdf-page .sp-company-logo { width: 90px; height: 90px; }
+    .sp-pdf-page .sp-company-title { font-size: 1.2rem; }
+    .sp-pdf-page .sp-quotation-heading h2 { font-size: 2.5rem; }
+    .sp-pdf-page .sp-quotation-footer { grid-template-columns: minmax(0, 1fr) 200px; gap: 20px; }
+    .sp-pdf-page .sp-signature-title { margin-bottom: 60px; }
     @media print {
+        @page { size: A4 portrait; margin: 10mm; }
+        #pdfExportContent { max-width: none; box-shadow: none; padding: 18px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        .sp-table { min-width: 0; }
+        .sp-table tr, .sp-quotation-footer { break-inside: avoid; }
+
         .breadcrumb,
         .sp-hero,
         .sp-filter,
         .sp-actions,
-        .sp-non-export,
+        .sp-selection-control,
         .btn,
         .pagination,
         .card-footer {
@@ -378,17 +386,13 @@
             $brandPhone      = $settings['hotline']->value ?? null;
             $brandTax        = $settings['tax_number']->value ?? null;
             $brandEmail      = $settings['email']->value ?? null;
-            $bankAccount     = $settings['bank_account']->value ?? null;
-            $bankName        = $settings['bank_name']->value ?? null;
-            $bankBranch      = $settings['bank_branch']->value ?? null;
             $priceLogoId     = $settings['price_logo']->value ?? null;
             $logoMediaId     = $priceLogoId ?: ($settings['logo']->value ?? null);
             $logoMedia       = $logoMediaId ? App\Models\Media::find($logoMediaId) : null;
             $displayPhone    = $user->phone ?: ($user->customer?->phone ?: $brandPhone);
         @endphp
-        <div class="card sp-card mb-4">
-            
-            <div id="pdfExportContent">
+        <div class="card sp-card sp-quotation-card mb-4">
+            <div id="pdfExportContent" @class(['sp-compact' => $products->count() + $products->sum(fn ($product) => $product->priceDiffVariants->count()) > 8])>
                 <div class="sp-company-card">
                     <div class="sp-company-header">
                         <div>
@@ -396,7 +400,7 @@
                                 @if($logoMedia)
                                     <img src="{{ asset('storage/' . $logoMedia->file_path) }}" alt="{{ $brandName }}" class="sp-company-logo">
                                 @else
-                                    <div style="height: 64px; width: 64px; display: flex; align-items: center; justify-content: center;    font-weight: 900; font-size: 1.4rem; color: #334155;">
+                                    <div class="sp-company-monogram">
                                         {{ mb_substr($companyLegal ?? $brandName ?? 'C', 0, 1) }}
                                     </div>
                                 @endif
@@ -407,43 +411,28 @@
                             <div class="sp-company-title">{{ $companyLegal ?? $brandName ?? '-' }}</div>
 
                             <div class="sp-company-grid">
-                                @if($brandTax)
-                                    <div class="sp-company-line"><span class="sp-company-label">Mã số thuế:</span>{{ $brandTax }}</div>
+                                @if($brandAddr)
+                                    <div class="sp-company-line full"><span class="sp-company-label">Địa chỉ:</span>{{ $brandAddr }}</div>
                                 @endif
-                                @if($displayPhone)
-                                    <div class="sp-company-line"><span class="sp-company-label">Điện thoại:</span>{{ $displayPhone }}</div>
+                                @if($brandTax)
+                                    <div class="sp-company-line"><span class="sp-company-label">MST:</span>{{ $brandTax }}</div>
                                 @endif
                                 @if($user->email)
                                     <div class="sp-company-line"><span class="sp-company-label">Email:</span>{{ $user->email }}</div>
                                 @endif
-                                @if($brandAddr)
-                                    <div class="sp-company-line full"><span class="sp-company-label">Địa chỉ:</span>{{ $brandAddr }}</div>
-                                @endif
-                                @if($bankAccount)
-                                    <div class="sp-company-line"><span class="sp-company-label">Số tài khoản:</span>{{ $bankAccount }}</div>
-                                @endif                                
-                                @if($bankBranch)
-                                    <div class="sp-company-line full"><span class="sp-company-label">Chi nhánh:</span>{{ $bankBranch }}</div>
-                                @endif
-                                @if($bankName)
-                                    <div class="sp-company-line"><span class="sp-company-label">Ngân hàng:</span>{{ $bankName }}</div>
+                                @if($displayPhone)
+                                    <div class="sp-company-line"><span class="sp-company-label">ĐT:</span>{{ $displayPhone }}</div>
                                 @endif
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="p4 Text-center border-top" style="background: #f8f9fa;">
-                    <h2 class="text-center p-4">BẢNG BÁO GIÁ</h2>
+                <div class="sp-quotation-heading">
+                    <h2>BẢNG BÁO GIÁ</h2>
                 </div>
 
                 <div class="sp-table-wrap">
-                    <div class="d-flex justify-content-between align-items-center px-1 py-3">
-                        <span class="date-approved">
-                            <i class="fa fa-calendar"></i>
-                            Hiệu lực: <strong>{{ $asOfDate->format('d/m/Y H:i') }}</strong>
-                        </span> 
-                        <span class="text-muted small sp-page-number">Trang {{ $products->currentPage() }}/{{ max(1, $products->lastPage()) }}</span>
-                    </div>
+                    <div class="text-end small text-muted mb-2 sp-page-number">Trang {{ $products->currentPage() }}/{{ max(1, $products->lastPage()) }}</div>
                     <div class="sp-selection-toolbar sp-selection-control">
                         <div>
                             <div class="fw-bold">Chọn sản phẩm đưa vào báo giá</div>
@@ -455,18 +444,18 @@
                             <button type="button" class="btn btn-sm btn-outline-secondary" id="spClearSelection">Bỏ chọn</button>
                         </div>
                     </div>
-                    <div class="table-responsive border-top">
+                    <div class="table-responsive">
                         <table class="table sp-table mb-0">
                             <thead>
                                 <tr>
                                     <th class="sp-select-col sp-selection-control">
                                         <input type="checkbox" id="spSelectAll" aria-label="Chọn tất cả sản phẩm trên trang">
                                     </th>
-                                    <th>#</th>
-                                    <th>Sản phẩm</th>
-                                    <th>DVT</th>
-                                    <th>Size</th>
-                                    <th class="text-end">Bảng giá (VNĐ)</th>
+                                    <th class="sp-number-col">STT</th>
+                                    <th class="sp-product-col">Sản phẩm</th>
+                                    <th class="sp-unit-col">ĐVT</th>
+                                    <th class="sp-packing-col">Quy cách</th>
+                                    <th class="sp-price-col">Đơn giá (VNĐ)</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -474,15 +463,18 @@
                                     @php
                                         $price = (float) ($product->current_price ?? 0);
                                         $imagePath = $product->avatar?->media?->file_path;
-                                        $allVariantsSamePrice = ($product->priceDiffVariants->count() ?? 0) === 0;
-                                        $size = $allVariantsSamePrice ? 'ALL' : '-';
+                                        $sizes = ($product->allVariantsByPrice ?? collect())
+                                            ->filter(fn ($variant) => (float) $variant->current_price === $price)
+                                            ->pluck('size')->filter(fn ($value) => filled($value))
+                                            ->unique()->values();
+                                        $size = $sizes->count() > 1 ? 'All' : ($sizes->first() ?? '-');
                                     @endphp
                                     <tr class="sp-product-row" data-product-id="{{ $product->id }}">
                                         <td class="sp-select-col sp-selection-control">
                                             <input type="checkbox" class="form-check-input sp-product-check" value="{{ $product->id }}" aria-label="Chọn {{ $product->name }} để báo giá" @checked(in_array((int) $product->id, $selectedProductIds ?? [], true))>
                                         </td>
-                                        <td>{{ $products->firstItem() + $index }}</td>
-                                        <td>
+                                        <td class="sp-number-col">{{ $products->firstItem() + $index }}</td>
+                                        <td class="sp-product-col">
                                             <div class="d-flex align-items-center gap-2">
                                                 @if($imagePath)
                                                     <img src="{{ asset('storage/' . $imagePath) }}" alt="{{ $product->name }}" class="sp-avatar">
@@ -502,24 +494,24 @@
                                                 </div>
                                             </div>
                                         </td>
-                                        <td>{{ $product->is_priced_by_kg ? 'kg' : ($product->unit_label ?? '-') }}</td>
-                                        <td>{{ $size }}</td>
-                                        <td class="text-end"><span class="sp-price">{{ number_format($price, 0, ',', '.') }} đ</span></td>
+                                        <td class="sp-unit-col">{{ $product->is_priced_by_kg ? 'kg' : ($product->unit_label ?? '-') }}</td>
+                                        <td class="sp-packing-col">{{ $size }}</td>
+                                        <td class="sp-price-col"><span class="sp-price">{{ number_format($price, 0, ',', '.') }} đ</span></td>
                                     </tr>
 
                                     @foreach(($product->priceDiffVariants ?? collect()) as $diffVariant)
                                         <tr class="sp-variant-row" data-parent-product-id="{{ $product->id }}">
                                             <td class="sp-selection-control"></td>
                                             <td></td>
-                                            <td>
+                                            <td class="sp-product-col">
                                                 <div class="ps-4">
                                                     <div class="fw-semibold">• {{ $diffVariant->name ?: ('Biến thể #' . $diffVariant->id) }}</div>
                                                     <div class="sp-product-sub">SKU: {{ $diffVariant->sku ?: '-' }}</div>
                                                 </div>
                                             </td>
-                                            <td>{{ $product->is_priced_by_kg ? 'kg' : ($product->unit_label ?? '-') }}</td>
-                                            <td>{{ $diffVariant->size ?: '-' }}</td>
-                                            <td class="text-end"><span class="sp-price">{{ number_format((float) ($diffVariant->current_price ?? 0), 0, ',', '.') }} đ</span></td>
+                                            <td class="sp-unit-col">{{ $product->is_priced_by_kg ? 'kg' : ($product->unit_label ?? '-') }}</td>
+                                            <td class="sp-packing-col">{{ $diffVariant->size ?: '-' }}</td>
+                                            <td class="sp-price-col"><span class="sp-price">{{ number_format((float) ($diffVariant->current_price ?? 0), 0, ',', '.') }} đ</span></td>
                                         </tr>
                                     @endforeach
                                 @empty
@@ -537,19 +529,19 @@
                         {{ $products->links() }}
                     </div>
                 @endif
-                <div class="row mt-4 sp-non-export">
-                    <!-- Notes -->
-                    <div class="col-md-8" >
-                        <div class="pl-4">
-                            <h5 style="font-weight: 700; color: #0f172a; margin-bottom: 12px;">Ghi chú:</h5>
-                            <ul style="margin: 0; padding-left: 24px; color: #64748b; line-height: 1.8; margin-left: 15px;">
+                <div class="sp-quotation-footer">
+                    <div>
+                        <div class="sp-effective-date">Hiệu lực từ: <strong>{{ $asOfDate->format('d/m/Y H:i') }}</strong></div>
+                        <div class="sp-notes">
+                            <strong>Ghi chú:</strong>
+                            <ul>
                                 <li>Giá trên chưa bao gồm VAT</li>
                                 <li>Các giấy tờ theo yêu cầu</li>
                             </ul>
                         </div>
+
                     </div>
-                    <div class="col-md-4" >
-                        <!-- Signature Section -->
+                    <div>
                         @php
                             $userRole = $user->roles->first();
                             $roleTitleMap = [
@@ -581,12 +573,9 @@
 
                     </div>
 
-                    <div style="text-align: center; margin-top: 32px; padding-top: 24px; border-top: 1px solid #e8edf5;">
-                        <div style="font-size: 0.8rem; color: #94a3b8;" class="pb-3">
-                            Bảng giá có hiệu lực từ lúc {{ $asOfDate->format('H:i:s') }} ngày {{ $asOfDate->format('d/m/Y') }}
-                        </div>
-                    </div>
+
                 </div>
+
             </div>
 
         </div>
@@ -704,9 +693,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 row.classList.remove('is-selected');
             });
 
+            exportClone.classList.toggle('sp-compact', exportClone.querySelectorAll('tbody tr').length > 8);
+
             var renderHost = document.createElement('div');
-            renderHost.style.cssText = 'position:fixed;left:-12000px;top:0;width:1120px;background:#fff;padding:20px;z-index:-1';
-            exportClone.style.cssText = 'width:1080px;background:#fff;box-shadow:none;border:0';
+            renderHost.style.cssText = 'position:fixed;left:-12000px;top:0;width:820px;background:#f7f4e9;padding:0;z-index:-1';
+            exportClone.style.cssText = 'width:820px;max-width:none;box-shadow:none';
             exportClone.querySelectorAll('.table-responsive').forEach(function (node) { node.style.overflow = 'visible'; });
             exportClone.querySelectorAll('.sp-table').forEach(function (node) { node.style.minWidth = '0'; });
             renderHost.appendChild(exportClone);
@@ -717,27 +708,108 @@ document.addEventListener('DOMContentLoaded', function () {
             pdfButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Đang tạo PDF...';
 
             try {
-                var canvas = await window.html2canvas(exportClone, {
-                    scale: 1.5,
-                    useCORS: true,
-                    backgroundColor: '#ffffff',
-                    logging: false
-                });
-                var pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
-                var pageWidth = pdf.internal.pageSize.getWidth();
-                var pageHeight = pdf.internal.pageSize.getHeight();
+                if (document.fonts?.ready) await document.fonts.ready;
+                await Promise.all(Array.from(exportClone.querySelectorAll('img')).map(function (img) {
+                    return img.decode ? img.decode().catch(function () {}) : Promise.resolve();
+                }));
+                var pdf = new window.jspdf.jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
                 var margin = 8;
-                var imageWidth = pageWidth - margin * 2;
-                var imageHeight = canvas.height * imageWidth / canvas.width;
-                var imageData = canvas.toDataURL('image/jpeg', 0.92);
-                var printableHeight = pageHeight - margin * 2;
-                var offset = 0;
+                var imageWidth = pdf.internal.pageSize.getWidth() - margin * 2;
+                var printableHeight = pdf.internal.pageSize.getHeight() - margin * 2;
+                var pagePixelHeight = Math.floor(820 * printableHeight / imageWidth);
+                var rows = Array.from(exportClone.querySelectorAll('tbody tr'));
+                var footer = exportClone.querySelector('.sp-quotation-footer');
+                var pages = [];
 
-                do {
-                    if (offset > 0) pdf.addPage('a4', 'landscape');
-                    pdf.addImage(imageData, 'JPEG', margin, margin - offset, imageWidth, imageHeight, undefined, 'FAST');
-                    offset += printableHeight;
-                } while (offset < imageHeight);
+                // Freeze the header's actual content width and horizontal offset in pixels.
+                // html2canvas clones the document; intrinsic table widths/auto margins can
+                // otherwise expand the header to the page width and leave its contents left-aligned.
+                function centerPdfHeader(page) {
+                    var card = page.querySelector('.sp-company-card');
+                    var header = card.querySelector('.sp-company-header');
+                    var logo = header.firstElementChild;
+                    var info = header.lastElementChild;
+                    var availableWidth = card.getBoundingClientRect().width;
+                    var gap = 16;
+                    var logoWidth = 90;
+                    function textWidth(node) {
+                        var range = node.ownerDocument.createRange();
+                        range.selectNodeContents(node);
+                        return range.getBoundingClientRect().width;
+                    }
+                    var titleWidth = textWidth(info.querySelector('.sp-company-title'));
+                    var lines = Array.from(info.querySelectorAll('.sp-company-line'));
+                    var addressWidth = Math.max(0, ...lines.filter(function (line) {
+                        return line.classList.contains('full');
+                    }).map(textWidth));
+                    var contacts = lines.filter(function (line) { return !line.classList.contains('full'); });
+                    var contactsWidth = contacts.reduce(function (width, line) { return width + textWidth(line); }, 0)
+                        + Math.max(0, contacts.length - 1) * 12;
+                    var infoWidth = Math.min(availableWidth - logoWidth - gap,
+                        Math.ceil(Math.max(titleWidth, addressWidth, contactsWidth)) + 2);
+                    var headerWidth = logoWidth + gap + infoWidth;
+                    header.style.cssText = 'display:flex;align-items:center;gap:0;max-width:none;text-align:left;'
+                        + 'position:relative;margin:0;box-sizing:border-box;width:' + headerWidth + 'px;'
+                        + 'left:' + Math.max(0, (availableWidth - headerWidth) / 2) + 'px';
+                    logo.style.cssText = 'display:block;flex:0 0 ' + logoWidth + 'px;width:' + logoWidth
+                        + 'px;padding:0;margin-right:' + gap + 'px;box-sizing:border-box';
+                    info.style.cssText = 'display:block;flex:0 0 ' + infoWidth + 'px;width:' + infoWidth + 'px;min-width:0';
+                }
+
+                // Lay out real pages before capture, so rows and the signature are never
+                // sliced between pages or duplicated by shifting a full-height image.
+                function createPage() {
+                    var page = exportClone.cloneNode(true);
+                    page.classList.add('sp-pdf-page');
+                    page.style.height = pagePixelHeight + 'px';
+                    page.querySelector('tbody').replaceChildren();
+                    page.querySelector('.sp-quotation-footer')?.remove();
+                    renderHost.appendChild(page);
+                    centerPdfHeader(page);
+                    page.dataset.spPdfPage = String(pages.length);
+                    pages.push(page);
+                    return page;
+                }
+                function overflows(page, node) {
+                    var style = window.getComputedStyle(page);
+                    var bottom = page.getBoundingClientRect().bottom
+                        - parseFloat(style.paddingBottom) - parseFloat(style.borderBottomWidth);
+                    return node.getBoundingClientRect().bottom > bottom + 0.5;
+                }
+                var page = createPage();
+                rows.forEach(function (row) {
+                    var body = page.querySelector('tbody');
+                    body.appendChild(row);
+                    if (overflows(page, row) && body.rows.length > 1) {
+                        page = createPage();
+                        page.querySelector('tbody').appendChild(row);
+                    }
+                });
+                if (footer) {
+                    page.appendChild(footer);
+                    if (overflows(page, footer)) {
+                        page = createPage();
+                        page.querySelector('.sp-table-wrap').remove();
+                        page.appendChild(footer);
+                    }
+                }
+                exportClone.remove();
+
+                for (var pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+                    var canvas = await window.html2canvas(pages[pageIndex], {
+                        scale: 1.5,
+                        windowWidth: 1024,
+                        useCORS: true,
+                        backgroundColor: '#f7f4e9',
+                        onclone: function (clonedDocument) {
+                            centerPdfHeader(clonedDocument.querySelector('[data-sp-pdf-page="' + pageIndex + '"]'));
+                        },
+                        logging: false
+                    });
+                    if (pageIndex > 0) pdf.addPage('a4', 'portrait');
+                    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', margin, margin,
+                        imageWidth, canvas.height * imageWidth / canvas.width, undefined, 'FAST');
+                }
 
                 pdf.save('bao-gia-{{ $asOfDate->format('Y-m-d') }}.pdf');
             } catch (error) {

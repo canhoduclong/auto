@@ -47,6 +47,7 @@
     background:#64748b; color:#fff; font-weight:800; font-size:.8rem;
 }
 .ds-adjustments-card { border-color:#86efac; background:#f0fdf4; }
+.ds-price-increase { color:#166534 !important; font-weight:800; }
 .ds-adjustment-list { display:grid; gap:8px; }
 .ds-adjustment-item { border:1px solid #bbf7d0; border-left:4px solid #22c55e; border-radius:9px; background:#fff; padding:9px 11px; }
 .ds-adjustment-changes { display:flex; flex-wrap:wrap; gap:6px; }
@@ -332,9 +333,11 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
         <div class="sub">Theo đơn trong khoảng ngày đã lọc</div>
     </div>
     <div class="ds-kpi-item">
-        <div class="lbl">Tổng chi phí giảm giá</div>
-        <div class="val text-danger">{{ number_format((float)($summary->total_discount ?? 0), 0, ',', '.') }}đ</div>
-        <div class="sub">Giảm giá sản phẩm và chiết khấu đơn</div>
+        @php $totalAdjustment = (float) ($summary->total_adjustment ?? 0); @endphp
+        <div class="lbl">Tổng điều chỉnh</div>
+        <div class="val {{ $totalAdjustment > 0 ? 'ds-price-increase' : ($totalAdjustment < 0 ? 'text-danger' : 'text-muted') }}">{{ $totalAdjustment > 0 ? '+' : '' }}{{ number_format($totalAdjustment, 0, ',', '.') }}đ</div>
+        <div class="sub">Giảm: {{ number_format((float) ($summary->total_discount ?? 0), 0, ',', '.') }}đ · Tăng: {{ number_format((float) ($summary->total_increase ?? 0), 0, ',', '.') }}đ</div>
+        <div class="sub">Gồm chênh lệch giá sản phẩm và điều chỉnh thêm của đơn</div>
     </div>
 </div>
 
@@ -441,6 +444,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                                 <i class="bi bi-{{ $sort === 'weight_asc' ? 'sort-up' : ($sort === 'weight_desc' ? 'sort-down' : 'sort') }}"></i>
                             </a>
                         </th>
+                        <th class="text-center" title="Giá công ty áp dụng cho đơn trước điều chỉnh">Giá HL</th>
                         <th class="text-center">Đơn giá </th>
                         <th class="text-end">
                             <a href="{{ request()->fullUrlWithQuery(['sort' => $sort === 'amount_asc' ? 'amount_desc' : 'amount_asc', 'page' => 1]) }}"
@@ -449,7 +453,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                                 <i class="bi bi-{{ $sort === 'amount_asc' ? 'sort-up' : ($sort === 'amount_desc' ? 'sort-down' : 'sort') }}"></i>
                             </a>
                         </th>
-                        <th class="text-end">Giảm giá</th>
+                        <th class="text-end">Điều chỉnh</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -461,7 +465,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         $effPrice  = (float) $row->eff_price;
                         $effWeight = (float) $row->eff_weight;
                         $effTotal  = (float) $row->eff_total;
-                        $productDiscount = max(0, (float) ($row->discount_total ?? 0));
+                        $priceAdjustment = (float) ($row->price_adjustment ?? 0);
 
                         $unitLabel = \App\Enums\ProductUnit::tryFrom($row->product_unit ?? '')?->label() ?? 'Cái';
 
@@ -518,19 +522,20 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         </td>
                         <td class="text-muted small">{{ $unitLabel }}</td>
                         <td class="text-center text-muted">{{ $showWeight }}</td>
+                        <td class="text-center">{{ number_format((float) $row->company_price, 0, ',', '.') }}</td>
                         <td class="text-center">
                             {{ number_format($effPrice, 0, ',', '.') }}
                         </td>
                         <td class="text-end fw-bold text-success">
                             {{ number_format($effTotal, 0, ',', '.') }}
                         </td>
-                        <td class="text-end fw-bold {{ $productDiscount > 0 ? 'text-danger' : 'text-muted' }}">
-                            {{ $productDiscount > 0 ? '-'.number_format($productDiscount, 0, ',', '.').'đ' : '—' }}
+                        <td class="text-end fw-bold {{ $priceAdjustment > 0 ? 'ds-price-increase' : ($priceAdjustment < 0 ? 'text-danger' : 'text-muted') }}">
+                            {{ $priceAdjustment != 0 ? ($priceAdjustment > 0 ? '+' : '').number_format($priceAdjustment, 0, ',', '.').'đ' : '—' }}
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="13" class="text-center text-muted py-4">
+                        <td colspan="14" class="text-center text-muted py-4">
                             <i class="bi bi-inbox fs-4 d-block mb-2"></i>
                             Không có dữ liệu cho bộ lọc này.
                         </td>
@@ -549,10 +554,14 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                             {{ $fmtN((float)$items->sum('eff_weight')) }}
                         </td>
                         <td></td>
+                        <td></td>
                         <td class="text-end text-success">
                             {{ number_format($items->sum('eff_total'), 0, ',', '.') }}đ
                         </td>
-                        <td></td>
+                        @php $pageAdjustment = (float) $items->sum('price_adjustment'); @endphp
+                        <td class="text-end {{ $pageAdjustment > 0 ? 'ds-price-increase' : ($pageAdjustment < 0 ? 'text-danger' : 'text-muted') }}">
+                            {{ $pageAdjustment > 0 ? '+' : '' }}{{ number_format($pageAdjustment, 0, ',', '.') }}đ
+                        </td>
                     </tr>
                 </tfoot>
                 @endif

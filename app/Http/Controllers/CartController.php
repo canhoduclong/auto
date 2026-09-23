@@ -201,11 +201,7 @@ class CartController extends Controller
                 }
 
                 if (!array_key_exists('unit_weight', $details) || (float) $details['unit_weight'] <= 0) {
-                    $variantKg = (float) ($variant->kg ?? 0);
-                    $productKg = (float) ($variant->product?->kg ?? 0);
-                    $resolvedKg = $variantKg > 0
-                        ? $variantKg
-                        : ($productKg > 0 ? $productKg : $this->parseWeightToKg($variant->size));
+                    $resolvedKg = $variant->order_unit_weight;
                     $cart[$variantId]['unit_weight'] = max(0.01, round($resolvedKg, 3));
                 }
 
@@ -326,14 +322,7 @@ class CartController extends Controller
 
         $cart = session()->get('cart', []);
 
-        $resolvedKg = (float) ($variant->kg ?? 0);
-        if ($resolvedKg <= 0) {
-            $resolvedKg = (float) ($variant->product?->kg ?? 0);
-        }
-        if ($resolvedKg <= 0) {
-            $resolvedKg = $this->parseWeightToKg($variant->size);
-        }
-        $resolvedKg = max(0.01, round($resolvedKg, 3));
+        $resolvedKg = $variant->order_unit_weight;
         $isPricedByKg = $variant->is_priced_by_kg !== null
             ? (bool) $variant->is_priced_by_kg
             : (bool) ($variant->product?->is_priced_by_kg ?? true);

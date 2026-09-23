@@ -42,6 +42,17 @@ class Order extends Model
         'operational_completion_note', 'operational_completed_by', 'operational_completed_at',
     ];
 
+    public function getMeasurementLabelAttribute(): string
+    {
+        return in_array((string) $this->status, [
+            self::STATUS_PACKED, self::STATUS_READY_TO_SHIP,
+            self::STATUS_DELIVERING, self::STATUS_IN_DELIVERY,
+            self::STATUS_DELIVERED, self::STATUS_COMPLETED,
+            self::STATUS_RETURNING, self::STATUS_RETURNED, self::STATUS_RETURNED_COMPLETED,
+            'shipping', 'picked_up',
+        ], true) ? 'Thực tế' : 'Khối lượng';
+    }
+
     protected $casts = [
         'proof_images' => 'array',
         'cancel_images' => 'array',

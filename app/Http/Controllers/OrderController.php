@@ -119,22 +119,7 @@ class OrderController extends Controller
 
     private function resolveVariantKg(ProductVariant $variant): float
     {
-        $variantKg = (float) ($variant->kg ?? 0);
-        if ($variantKg > 0) {
-            return $variantKg;
-        }
-
-        $productKg = (float) ($variant->product?->kg ?? 0);
-        if ($productKg > 0) {
-            return $productKg;
-        }
-
-        $sizeKg = $this->parseWeightToKg($variant->size);
-        if ($sizeKg > 0) {
-            return $sizeKg;
-        }
-
-        return 1.0;
+        return $variant->order_unit_weight;
     }
 
     private function resolveVariantPricedByKg(ProductVariant $variant): bool
