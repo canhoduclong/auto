@@ -3703,7 +3703,7 @@ class WarehouseDashboardController extends Controller
 
         $rules = [
             'item_id' => ['nullable', 'integer'],
-            'item_actual_weight' => ['nullable', 'numeric', 'min:0'],
+            'item_actual_weight' => ['nullable', 'numeric', 'min:0.001'],
             'item_packed_quantity' => ['nullable', 'integer', 'min:1', 'max:100000'],
             'packed_quantity_only' => ['nullable', 'boolean'],
             'clear_packed_quantity' => ['nullable', 'boolean'],
@@ -3712,7 +3712,7 @@ class WarehouseDashboardController extends Controller
         ];
 
         if ($request->filled('item_id') && ! $request->boolean('clear_item_weight') && ! $request->boolean('packed_quantity_only')) {
-            $rules['item_actual_weight'] = ['required', 'numeric', 'min:0'];
+            $rules['item_actual_weight'] = ['required', 'numeric', 'min:0.001'];
         }
 
         if ($request->boolean('packing_details')) {

@@ -532,9 +532,10 @@
                                                
                                                 @if(!$isPackedReadonly && $canProcessThisOrder)
                                                     @php
-                                                        $defaultComputedWeight = round((float) $item->effective_unit_weight * $orderedQty, 3);
+                                                        // Chỉ hiển thị khối lượng đã được kho lưu; không tự điền
+                                                        // theo khối lượng chuẩn để buộc nhập số cân thực tế.
                                                         $itemWeightDefault = is_null($item->warehouse_packed_weight)
-                                                            ? ($defaultComputedWeight > 0 ? number_format($defaultComputedWeight, 3, '.', '') : '')
+                                                            ? ''
                                                             : number_format((float) $item->warehouse_packed_weight, 3, '.', '');
                                                     @endphp
                                                     @if($pricedByKg)
@@ -548,7 +549,7 @@
                                                                 <input type="number" name="item_actual_weight" class="form-control form-control-sm actual_weight js-weight-input"
                                                                     value="{{ $itemWeightDefault }}"
                                                                     placeholder="{{ $weightUnitLabel }}"
-                                                                    min="0" step="0.001" required
+                                                                    min="0.001" step="0.001" required
                                                                     inputmode="decimal"
                                                                     data-qty="{{ $orderedQty }}"
                                                                     data-size="{{ !$isCutPackingItem ? $item->packingAverageSize() : 0 }}"

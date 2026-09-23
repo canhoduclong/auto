@@ -144,7 +144,7 @@
                                     <input type="number" min="1" max="{{ max(1, $variant['available']) }}" name="items[{{ $index }}][quantity]" class="form-control text-center qty-input" value="{{ $item['quantity'] ?? 1 }}" required>
                                 </td>
                                 <td>
-                                    <input type="number" min="0.001" step="0.001" name="items[{{ $index }}][weight_kg]" class="form-control text-end weight-input" value="{{ number_format((float) ($item['weight_kg'] ?? (($item['quantity'] ?? 1) * $variant['weight_per_unit'])), 3, '.', '') }}" data-unit-weight="{{ $variant['weight_per_unit'] }}" data-auto-weight="0" required>
+                                    <input type="number" min="0.001" step="0.001" name="items[{{ $index }}][weight_kg]" class="form-control text-end weight-input" value="{{ isset($item['weight_kg']) && $item['weight_kg'] !== '' ? number_format((float) $item['weight_kg'], 3, '.', '') : '' }}" placeholder="Nhập kg thực tế" required>
                                     <div class="small text-muted text-end">Chuẩn: {{ number_format($variant['weight_per_unit'], 3, ',', '.') }} kg/đv</div>
                                 </td>
                                 <td>
@@ -358,17 +358,12 @@
                 if (max > 0 && value > max) {
                     qtyInput.value = String(max);
                 }
-                if (weightInput?.dataset.autoWeight === '1') {
-                    const unitWeight = parseFloat(weightInput.dataset.unitWeight || '1') || 1;
-                    weightInput.value = (Math.max(1, parseInt(qtyInput.value || '1', 10)) * unitWeight).toFixed(3);
-                }
                 updateTotalWeight();
             });
         }
 
         if (weightInput) {
             weightInput.addEventListener('input', function () {
-                weightInput.dataset.autoWeight = '0';
                 updateTotalWeight();
             });
         }
@@ -413,7 +408,7 @@
                     <input type="number" min="1" max="${Math.max(1, available)}" name="items[${rowIndex}][quantity]" class="form-control text-center qty-input" value="1" required>
                 </td>
                 <td>
-                    <input type="number" min="0.001" step="0.001" name="items[${rowIndex}][weight_kg]" class="form-control text-end weight-input" value="${unitWeight.toFixed(3)}" data-unit-weight="${unitWeight}" data-auto-weight="1" required>
+                    <input type="number" min="0.001" step="0.001" name="items[${rowIndex}][weight_kg]" class="form-control text-end weight-input" value="" placeholder="Nhập kg thực tế" required>
                     <div class="small text-muted text-end">Chuẩn: ${unitWeight.toLocaleString('vi-VN', {minimumFractionDigits: 3, maximumFractionDigits: 3})} kg/đv</div>
                 </td>
                 <td>
