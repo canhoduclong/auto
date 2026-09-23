@@ -401,6 +401,17 @@ class OrderController extends Controller
             'customer_id' => 'required|exists:customers,id',
             'delivery_time' => 'required|date_format:H:i',
             'delivery_time_note' => 'nullable|string|max:1000',
+            'recipient_name' => 'required|string|max:255',
+            'recipient_phone' => 'required|string|max:50',
+            'recipient_email' => 'nullable|email|max:255',
+            'recipient_address' => 'required|string|max:1000',
+            'note' => 'nullable|string|max:2000',
+            'use_truck_station' => 'nullable|boolean',
+            'truck_station_id' => 'nullable|integer|exists:truck_stations,id',
+            'truck_station_name' => 'nullable|string|max:255',
+            'truck_station_address' => 'nullable|string|max:255',
+            'truck_station_phone' => 'nullable|string|max:30',
+            'truck_receive_time' => 'nullable|string|max:255',
             'item_discount' => 'nullable|array',
             'item_discount.*' => 'nullable|numeric|min:0',
             'item_discount_type' => 'nullable|array',
@@ -438,14 +449,27 @@ class OrderController extends Controller
             ];
         })->values()->all();
 
+        $useTruckStation = $request->boolean('use_truck_station');
+
         try {
             $order = $this->createOrderWithUnifiedStockFlow(
                 items: $items,
                 orderData: [
                     'customer_id' => $customerId,
                     'user_id' => auth()->id(),
+                    'recipient_name' => $request->input('recipient_name'),
+                    'recipient_phone' => $request->input('recipient_phone'),
+                    'recipient_email' => $request->input('recipient_email'),
+                    'recipient_address' => $request->input('recipient_address'),
                     'delivery_time' => $orderDeliveryTime,
                     'delivery_time_note' => $request->input('delivery_time_note') ?: Customer::query()->whereKey($customerId)->value('delivery_time_note'),
+                    'note' => $request->input('note'),
+                    'use_truck_station' => $useTruckStation,
+                    'truck_station_id' => $useTruckStation ? $request->input('truck_station_id') : null,
+                    'truck_station_name' => $useTruckStation ? $request->input('truck_station_name') : null,
+                    'truck_station_address' => $useTruckStation ? $request->input('truck_station_address') : null,
+                    'truck_station_phone' => $useTruckStation ? $request->input('truck_station_phone') : null,
+                    'truck_receive_time' => $useTruckStation ? $request->input('truck_receive_time') : null,
                     'status' => OrderStatus::Pending->value,
                     'payment_status' => PaymentStatus::Unpaid->value,
                     'delivery_status' => DeliveryStatus::NotShipped->value,
@@ -852,6 +876,77 @@ class OrderController extends Controller
 
         return back()->with('success', 'Đã cập nhật giờ giao hàng cho đơn.');
     }
+
+    public function refreshDeliveryFromCustomer(Order $order)
+    {
+        $user = auth()->user();
+        if (!$user) {
+            abort(403);
+        }
+
+        $canUpdate = $this->hasAnyRole($user, [
+            'admin', 'leader_sale', 'leader', 'sale_manager', 'manager_sale', 'manager', 'director',
+        ]) || (int) $order->user_id === (int) $user->id;
+
+        if (!$canUpdate) {
+            abort(403, 'Bạn không có quyền cập nhật thông tin giao hàng cho đơn này.');
+        }
+
+        if (in_array((string) $order->status, [
+            Order::STATUS_DELIVERED,
+            Order::STATUS_COMPLETED,
+            Order::STATUS_CANCELLED,
+            Order::STATUS_RETURNED,
+            Order::STATUS_RETURNED_COMPLETED,
+        ], true)) {
+            return back()->with('error', 'Đơn đã kết thúc giao hàng, không thể cập nhật thông tin giao nhận.');
+        }
+
+        $order->loadMissing([
+            'customer.addresses',
+            'customer.truckStation',
+        ]);
+        $customer = $order->customer;
+        if (!$customer) {
+            return back()->with('error', 'Đơn hàng không còn thông tin khách hàng để đồng bộ.');
+        }
+
+        $defaultAddress = $customer->addresses->firstWhere('is_default', 1)
+            ?: $customer->addresses->first();
+        $useTruckStation = (bool) $customer->use_truck_station && !empty($customer->truck_station_id);
+        $station = $useTruckStation ? $customer->truckStation : null;
+        $stationAddress = trim((string) ($customer->truck_station_address ?: $station?->address));
+        $recipientAddress = $useTruckStation && $stationAddress !== ''
+            ? $stationAddress
+            : trim((string) ($defaultAddress?->note ?: $customer->address));
+        $statusBefore = (string) $order->status;
+
+        $order->update($this->filterExistingColumns('orders', [
+            'recipient_name' => $customer->name,
+            'recipient_phone' => $customer->phone,
+            'recipient_email' => $customer->email,
+            'recipient_address' => $recipientAddress ?: null,
+            'delivery_time' => $customer->delivery_time,
+            'delivery_time_note' => $customer->delivery_time_note,
+            'use_truck_station' => $useTruckStation,
+            'truck_station_id' => $useTruckStation ? $station?->id : null,
+            'truck_station_name' => $useTruckStation ? $station?->name : null,
+            'truck_station_address' => $useTruckStation ? ($stationAddress ?: null) : null,
+            'truck_station_phone' => $useTruckStation ? ($customer->truck_station_phone ?: $station?->phone) : null,
+            'truck_receive_time' => $useTruckStation ? $customer->truck_receive_time : null,
+        ]));
+
+        $this->logOrderHistory(
+            $order->fresh(),
+            'refresh_delivery_from_customer',
+            $statusBefore,
+            $statusBefore,
+            'Cập nhật thông tin giao hàng từ hồ sơ khách; không thay đổi trạng thái đơn.'
+        );
+
+        return back()->with('success', 'Đã cập nhật thông tin giao hàng mới nhất cho đơn. Trạng thái đơn không thay đổi.');
+    }
+
     public function test(Request $request)
     {
         echo "oks";
@@ -2030,8 +2125,10 @@ class OrderController extends Controller
                 'warehouse_allowed_sizes' => $orderData['warehouse_allowed_sizes'] ?? null,
                 'recipient_name' => $orderData['recipient_name'] ?? null,
                 'recipient_phone' => $orderData['recipient_phone'] ?? null,
+                'recipient_email' => $orderData['recipient_email'] ?? null,
                 'recipient_address' => $orderData['recipient_address'] ?? null,
                 'delivery_time' => $orderData['delivery_time'] ?? null,
+                'delivery_time_note' => $orderData['delivery_time_note'] ?? null,
                 'delivery_date' => $orderData['delivery_date'] ?? now()->addDay()->toDateString(),
                 'use_truck_station' => array_key_exists('use_truck_station', $orderData)
                     ? (bool) $orderData['use_truck_station']

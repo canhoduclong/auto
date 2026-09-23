@@ -1527,9 +1527,10 @@ class ShipperDashboardController extends Controller
             ]);
         }
 
-        $order->loadMissing('customer.truckStation');
-        $isTruckStationDelivery = (bool) ($order->customer?->use_truck_station ?? false)
-            && ! empty($order->customer?->truck_station_id);
+        $order->loadMissing(['customer.truckStation', 'truckStation']);
+        $isTruckStationDelivery = $order->use_truck_station === null
+            ? ((bool) ($order->customer?->use_truck_station ?? false) && ! empty($order->customer?->truck_station_id))
+            : (bool) $order->use_truck_station;
 
         $validationRules = [
             'collected_amount' => 'nullable|numeric|min:0',

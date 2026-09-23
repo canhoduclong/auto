@@ -70,6 +70,7 @@
                                 data-customer-company="{{ $customer->company_name ?? '' }}"
                                 data-customer-code="{{ $customer->customer_code ?? '' }}"
                                 data-customer-address="{{ $customer->address ?? '' }}"
+                                data-customer-note="{{ $customer->note ?? '' }}"
                                 data-customer-use-truck-station="{{ $customer->use_truck_station ? '1' : '0' }}"
                                 data-customer-truck-station-id="{{ $customer->truck_station_id ?? '' }}"
                                 data-customer-truck-station-name="{{ $customer->truckStation?->name ?? '' }}"

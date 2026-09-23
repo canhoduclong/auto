@@ -321,12 +321,15 @@ class ShipperMobileController extends Controller
     private function assignmentOrderPayload(Order $order, $shippers): array
     {
         $customer = $order->customer;
-        $selectedRoute = $customer?->truckRoute;
-        if (!$selectedRoute && $customer?->truck_station_id) {
-            $selectedRoute = $customer?->truckRouteByStation;
-        }
-        $truckStation = $customer?->truckStation ?: ($selectedRoute?->stops?->last()?->station);
-        $truckStationText = trim(collect([$truckStation?->name, $truckStation?->address])->filter()->join(' - '));
+        $usesTruckStation = $order->use_truck_station === null
+            ? (bool) ($customer?->use_truck_station ?? false)
+            : (bool) $order->use_truck_station;
+        $truckStationText = $usesTruckStation
+            ? trim(collect([
+                $order->truck_station_name ?: $order->truckStation?->name,
+                $order->truck_station_address ?: $order->truckStation?->address,
+            ])->filter()->join(' - '))
+            : '';
         $defaultShippingFee = (bool) ($order->charge_shipping_fee ?? true)
             ? (float) ($order->shipping_fee ?? $customer?->shipping_fee ?? 0)
             : 0;
@@ -338,9 +341,9 @@ class ShipperMobileController extends Controller
             'status' => (string) (\App\Models\Order::statusOptions()[$order->status] ?? $order->status),
             'status_code' => (string) $order->status,
             'customer_id' => $order->customer_id ? (int) $order->customer_id : null,
-            'customer' => (string) ($order->customer?->name ?? 'Khách hàng'),
-            'phone' => (string) ($order->customer?->phone ?? ''),
-            'address' => (string) ($order->customer?->address ?? ''),
+            'customer' => (string) ($order->recipient_name ?: ($order->customer?->name ?? 'Khách hàng')),
+            'phone' => (string) ($order->recipient_phone ?: ($order->customer?->phone ?? '')),
+            'address' => (string) ($order->recipient_address ?: ($order->customer?->address ?? '')),
             'origin' => (string) ($order->warehouse?->name ?? 'Chưa chọn kho'),
             'destination' => (string) ($truckStationText ?: $order->recipient_address ?: $customer?->truck_station_address ?: $customer?->address ?: ''),
             'sale_name' => (string) ($order->user?->name ?? 'Chưa có sale'),

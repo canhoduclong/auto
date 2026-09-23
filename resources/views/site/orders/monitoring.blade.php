@@ -2084,6 +2084,33 @@
                             $canCancel = in_array($order->status, \App\Models\Order::CANCELLABLE_STATUSES, true)
                                 && ($isAdminUser || $canManageOrder);
                             $canRequestAdjustment = $canManageOrder && $order->canRequestAdjustment();
+                            $currentCustomer = $order->customer;
+                            $currentUsesTruckStation = (bool) ($currentCustomer?->use_truck_station ?? false)
+                                && !empty($currentCustomer?->truck_station_id);
+                            $currentStation = $currentUsesTruckStation ? $currentCustomer?->truckStation : null;
+                            $currentStationAddress = trim((string) ($currentCustomer?->truck_station_address ?: $currentStation?->address));
+                            $currentRecipientAddress = $currentUsesTruckStation && $currentStationAddress !== ''
+                                ? $currentStationAddress
+                                : trim((string) ($defaultAddress?->note ?: $currentCustomer?->address));
+                            $normalizeDeliveryValue = static fn ($value): string => trim((string) $value);
+                            $deliverySnapshotChanged = collect([
+                                [$order->recipient_name, $currentCustomer?->name],
+                                [$order->recipient_phone, $currentCustomer?->phone],
+                                [$order->recipient_address, $currentRecipientAddress],
+                                [$order->delivery_time, $currentCustomer?->delivery_time],
+                                [$order->delivery_time_note, $currentCustomer?->delivery_time_note],
+                                [(bool) $order->use_truck_station, $currentUsesTruckStation],
+                                [$order->truck_station_id, $currentUsesTruckStation ? $currentStation?->id : null],
+                                [$order->truck_station_name, $currentUsesTruckStation ? $currentStation?->name : null],
+                                [$order->truck_station_address, $currentUsesTruckStation ? $currentStationAddress : null],
+                                [$order->truck_station_phone, $currentUsesTruckStation ? ($currentCustomer?->truck_station_phone ?: $currentStation?->phone) : null],
+                                [$order->truck_receive_time, $currentUsesTruckStation ? $currentCustomer?->truck_receive_time : null],
+                            ])->contains(fn ($values) => $normalizeDeliveryValue($values[0]) !== $normalizeDeliveryValue($values[1]));
+                            $canRefreshDelivery = $canManageOrder
+                                && $warehouseAccepted
+                                && !$deliveryDone
+                                && !$isCancelled
+                                && $deliverySnapshotChanged;
                             $saleAdjustments = $canManageOrder
                                 ? $order->adjustments
                                     ->where('requested_by', auth()->id())
@@ -2198,8 +2225,19 @@
                                     @endif
                                     @if($order->use_truck_station)
                                         <span><i class="bi bi-building me-1"></i>Nhà xe: {{ $order->truck_station_name ?: ($order->truckStation?->name ?: 'Chưa cập nhật') }}</span>
+                                        <span><i class="bi bi-geo-fill me-1"></i>Địa chỉ trạm xe: {{ $order->truck_station_address ?: ($order->truckStation?->address ?: 'Chưa cập nhật') }}</span>
                                     @endif
                                 </div>
+
+                                @if($canRefreshDelivery)
+                                    <form method="POST" action="{{ route('pages.my_orders.monitoring.refresh_delivery', $order) }}" class="mt-2"
+                                          onsubmit="return confirm('Cập nhật lại tên người nhận, địa chỉ, giờ giao và thông tin trạm xe theo hồ sơ khách hàng hiện tại? Trạng thái đơn sẽ được giữ nguyên.');">
+                                        @csrf
+                                        <button type="submit" class="btn btn-sm btn-warning text-dark">
+                                            <i class="bi bi-arrow-repeat me-1"></i>Cập nhật thông tin giao hàng
+                                        </button>
+                                    </form>
+                                @endif
 
                                 @if(trim((string) $order->note) !== '')
                                     <div class="alert alert-warning mt-2 mb-3" role="note">
@@ -2962,9 +3000,13 @@ document.addEventListener('click', async event => {
         const preview = document.getElementById('monitorSelectedCustomer');
         preview.hidden = !selectedCustomer;
         if (!selectedCustomer) return;
+        const stationDetails = selectedCustomer.useTruckStation
+            ? `<div class="small text-primary mt-1"><i class="bi bi-truck me-1"></i>${escapeHtml(selectedCustomer.truckStationName || 'Trạm xe')}${selectedCustomer.truckStationAddress ? ' · ' + escapeHtml(selectedCustomer.truckStationAddress) : ''}</div>`
+            : '';
         preview.innerHTML = `<strong>${escapeHtml(selectedCustomer.name)}</strong>
             <div class="small text-muted"><i class="bi bi-telephone me-1"></i>${escapeHtml(selectedCustomer.phone || 'Chưa có SĐT')}</div>
-            <div class="small text-muted"><i class="bi bi-geo-alt me-1"></i>${escapeHtml(selectedCustomer.address || 'Chưa có địa chỉ')}</div>`;
+            <div class="small text-muted"><i class="bi bi-geo-alt me-1"></i>${escapeHtml(selectedCustomer.address || 'Chưa có địa chỉ')}</div>
+            ${stationDetails}`;
     }
 
     function applyCustomerTruckStation() {
@@ -2980,9 +3022,14 @@ document.addEventListener('click', async event => {
 
     function renderConfirmation() {
         if (!selectedCustomer) return;
+        const stationDetails = selectedCustomer.useTruckStation
+            ? `<div class="alert alert-info py-2 px-3 mt-2 mb-0"><strong>Giao tại trạm:</strong> ${escapeHtml(selectedCustomer.truckStationName || 'Chưa cập nhật')}<br><strong>Địa chỉ:</strong> ${escapeHtml(selectedCustomer.truckStationAddress || 'Chưa cập nhật')}</div>`
+            : '';
         document.getElementById('monitorConfirmCustomer').innerHTML = `<strong>${escapeHtml(selectedCustomer.name)}</strong>
-            <div>${escapeHtml(selectedCustomer.phone || 'Chưa có SĐT')}</div>`;
-        document.getElementById('monitorRecipientAddress').value = selectedCustomer.address || '';
+            <div>${escapeHtml(selectedCustomer.phone || 'Chưa có SĐT')}</div>${stationDetails}`;
+        document.getElementById('monitorRecipientAddress').value = selectedCustomer.useTruckStation
+            ? (selectedCustomer.truckStationAddress || selectedCustomer.address || '')
+            : (selectedCustomer.address || '');
         document.getElementById('monitorConfirmItems').innerHTML = Array.from(selectedItems.values()).map(item => `
             <div class="d-flex justify-content-between gap-2 border-bottom py-2 small">
                 <span><strong>${escapeHtml(item.name)}</strong> · ${escapeHtml(item.size || '—')} × ${item.quantity}
@@ -3111,6 +3158,7 @@ document.addEventListener('click', async event => {
                 phone: customerButton.dataset.customerPhone || '',
                 email: customerButton.dataset.customerEmail || '',
                 address: customerButton.dataset.customerAddress || '',
+                note: customerButton.dataset.customerNote || '',
                 useTruckStation: customerButton.dataset.customerUseTruckStation === '1',
                 truckStationId: customerButton.dataset.customerTruckStationId || '',
                 truckStationName: customerButton.dataset.customerTruckStationName || '',
@@ -3119,6 +3167,7 @@ document.addEventListener('click', async event => {
                 truckReceiveTime: customerButton.dataset.customerTruckReceiveTime || ''
             };
             applyCustomerTruckStation();
+            document.getElementById('monitorOrderNote').value = selectedCustomer.note || '';
             renderSelectedCustomer();
             return;
         }

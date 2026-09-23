@@ -5195,9 +5195,14 @@ public function apiTruckRoutes(Request $request)
     {
         $this->ensureManagedCustomer($customer);
 
-        $customer->load(['addresses' => function ($query) {
-            $query->orderByDesc('is_default')->orderByDesc('id');
-        }]);
+        $customer->load([
+            'addresses' => function ($query) {
+                $query->orderByDesc('is_default')->orderByDesc('id');
+            },
+            'truckStation.brand',
+            'truckStation.province',
+            'truckStation.ward',
+        ]);
 
         return view('site.my_customer.order_create', [
             'customer' => $customer,
@@ -5217,7 +5222,7 @@ public function apiTruckRoutes(Request $request)
 
         $customerUpdates = [];
 
-        if ($newAddress !== '' && $newAddress !== (string) ($customer->address ?? '')) {
+        if (!$customer->use_truck_station && $newAddress !== '' && $newAddress !== (string) ($customer->address ?? '')) {
             $customerUpdates['address'] = mb_substr($newAddress, 0, 1000);
         }
 

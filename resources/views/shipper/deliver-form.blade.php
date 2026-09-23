@@ -10,7 +10,8 @@
         $formatted = rtrim(rtrim($formatted, '0'), ',');
         return $formatted . ' kg';
     };
-    $customerAddress = $order->customer?->address
+    $customerAddress = $order->recipient_address
+        ?? $order->customer?->address
         ?? $order->customer?->addresses?->first()?->address
         ?? 'Chưa có địa chỉ';
     $deliveryTime = $order->delivery_time
@@ -29,12 +30,11 @@
     $customerShippingFee = (bool) ($order->collect_customer_shipping_fee ?? false) ? (float) ($order->customer_shipping_fee ?? 0) : 0;
     $codAmount = (float) ($order->total ?? ($itemsSubtotal + $billableShippingFee + $foamBoxFee + $vatAmount + $customerShippingFee));
     $hasKgItem = $order->items->contains(fn($item) => (bool) $item->effective_priced_by_kg);
-    $isTruckStationDelivery = (bool) ($order->customer?->use_truck_station ?? false)
-        && !empty($order->customer?->truck_station_id);
-    $truckStationName = $order->customer?->truckStation?->name;
-    $truckStationAddress = $order->customer?->truckStation?->address;
-    $selectedTruckRoute = $order->customer?->truckRoute ?: $order->customer?->truckRouteByStation;
-    $truckRouteName = $selectedTruckRoute?->name;
+    $isTruckStationDelivery = $order->use_truck_station === null
+        ? ((bool) ($order->customer?->use_truck_station ?? false) && !empty($order->customer?->truck_station_id))
+        : (bool) $order->use_truck_station;
+    $truckStationName = $order->truck_station_name ?: $order->truckStation?->name;
+    $truckStationAddress = $order->truck_station_address ?: $order->truckStation?->address;
 @endphp
 <style>
     .shipper-deliver-shell .card {
@@ -245,15 +245,18 @@
                     <div class="shipper-meta-key">Mã đơn:</div>
                     <div class="fw-semibold">{{ $order->code }}</div>
                     <div class="shipper-meta-key">Khách hàng:</div>
-                    <div>{{ $order->customer?->name ?? '—' }}</div>
+                    <div>{{ $order->recipient_name ?: ($order->customer?->name ?? '—') }}</div>
                     <div class="shipper-meta-key">Số điện thoại:</div>
-                    <div>{{ $order->customer?->phone ?? '—' }}</div>
+                    <div>{{ $order->recipient_phone ?: ($order->customer?->phone ?? '—') }}</div>
                     
                 </div>
 
                 <div class="shipper-customer my-4">
                     <div class="shipper-customer-title">Thông tin giao hàng</div>
                     <div class="small mb-2"><i class="bi bi-geo-alt me-1"></i><strong>Địa chỉ:</strong> {{ $customerAddress }}</div>
+                    @if(trim((string) $order->note) !== '')
+                        <div class="alert alert-warning py-2 px-3 mb-2" style="white-space:pre-wrap;"><strong><i class="bi bi-sticky me-1"></i>Ghi chú đơn:</strong> {{ $order->note }}</div>
+                    @endif
                     <div class="small"><i class="bi bi-clock me-1"></i><strong>Giờ giao:</strong> {{ $deliveryTime }}</div>
                 </div>
             
@@ -362,7 +365,6 @@
                         <div class="small mb-1">Vui lòng upload chứng từ bàn giao cho nhà xe nếu có.</div>
                         <div class="small text-muted">
                             Trạm xe: {{ $truckStationName ?: 'Chưa cấu hình' }}
-                            | Tuyến giao hàng: {{ $truckRouteName ?: 'Chưa cấu hình' }}
                             @if($truckStationAddress)
                                 | Địa chỉ: {{ $truckStationAddress }}
                             @endif

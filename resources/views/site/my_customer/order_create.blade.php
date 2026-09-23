@@ -374,7 +374,12 @@
 <section class="checkout-page">
     @php
         $defaultAddress = $customer->addresses->firstWhere('is_default', 1) ?: $customer->addresses->first();
-        $preferredAddress = $defaultAddress->note ?? $customer->address;
+        $usesTruckStation = (bool) $customer->use_truck_station && !empty($customer->truck_station_id);
+        $selectedTruckStation = $customer->truckStation;
+        $truckStationAddress = $customer->truck_station_address ?: $selectedTruckStation?->address;
+        $preferredAddress = $usesTruckStation
+            ? ($truckStationAddress ?: ($defaultAddress->note ?? $customer->address))
+            : ($defaultAddress->note ?? $customer->address);
     @endphp
     <div class="container checkout-shell">
         <div class="checkout-hero">
@@ -423,25 +428,28 @@
                                     <label class="form-label fw-bold">Email</label>
                                     <input type="email" class="form-control" value="{{ $customer->email }}" readonly>
                                 </div>
-                                @php
-                                    $selectedRoute = $customer->truckRoute;
-                                    if (!$selectedRoute && $customer->truck_station_id) {
-                                        $selectedRoute = $customer->truckRouteByStation;
-                                    }
-                                    $hasTransportSelection = !empty($customer->truck_route_id) || !empty($customer->truck_station_id);
-                                    $truckStationName = $customer->truckStation?->name
-                                        ?: ($selectedRoute?->stops?->first()?->station?->name);
-                                    $selectedRouteName = $selectedRoute?->name;
-                                @endphp
-                                @if($hasTransportSelection)
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label fw-bold">Trạm nhận</label>
-                                        <input type="text" class="form-control" value="{{ $truckStationName ?: 'Chưa cập nhật' }}" readonly>
+                                @if($usesTruckStation)
+                                    <input type="hidden" name="use_truck_station" value="1">
+                                    <input type="hidden" name="truck_station_id" value="{{ $selectedTruckStation?->id }}">
+                                    <input type="hidden" name="truck_station_name" value="{{ $selectedTruckStation?->name }}">
+                                    <input type="hidden" name="truck_station_address" value="{{ $truckStationAddress }}">
+                                    <input type="hidden" name="truck_station_phone" value="{{ $customer->truck_station_phone ?: $selectedTruckStation?->phone }}">
+                                    <input type="hidden" name="truck_receive_time" value="{{ $customer->truck_receive_time }}">
+                                    <div class="col-12 mb-3">
+                                        <div class="alert alert-info mb-0">
+                                            <div class="fw-bold mb-1"><i class="bi bi-truck me-1"></i>Giao hàng tại trạm xe</div>
+                                            <div><strong>Trạm:</strong> {{ $selectedTruckStation?->name ?: 'Chưa cập nhật' }}{{ $selectedTruckStation?->brand?->name ? ' · '.$selectedTruckStation->brand->name : '' }}</div>
+                                            <div><strong>Địa chỉ trạm:</strong> {{ $truckStationAddress ?: 'Chưa cập nhật' }}</div>
+                                            @if($customer->truck_station_phone || $selectedTruckStation?->phone)
+                                                <div><strong>Điện thoại:</strong> {{ $customer->truck_station_phone ?: $selectedTruckStation?->phone }}</div>
+                                            @endif
+                                            @if($customer->truck_receive_time)
+                                                <div><strong>Giờ nhận hàng:</strong> {{ $customer->truck_receive_time }}</div>
+                                            @endif
+                                        </div>
                                     </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label class="form-label fw-bold">Tuyến vận chuyển</label>
-                                        <input type="text" class="form-control" value="{{ $selectedRouteName ?: 'Chưa cập nhật' }}" readonly>
-                                    </div>
+                                @else
+                                    <input type="hidden" name="use_truck_station" value="0">
                                 @endif
                                 <div class="col-md-6 mb-3">
                                     <label class="form-label fw-bold">Giờ giao hàng <span class="text-danger">*</span></label>

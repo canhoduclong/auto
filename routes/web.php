@@ -1180,6 +1180,8 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
         ->name('pages.my_orders.monitoring.customer_classification');
     Route::post('/my-orders/monitoring/orders', [OrderController::class, 'storeFromMonitoring'])
         ->name('pages.my_orders.monitoring.store');
+    Route::post('/my-orders/monitoring/orders/{order}/refresh-delivery', [OrderController::class, 'refreshDeliveryFromCustomer'])
+        ->name('pages.my_orders.monitoring.refresh_delivery');
     Route::put('/my-orders/monitoring/orders/{order}/supplier', [PageController::class, 'myOrdersMonitoringSupplier'])
         ->name('pages.my_orders.monitoring.supplier');
     Route::put('/my-orders/monitoring/orders/{order}/warehouse', [OrderController::class, 'updateWarehouseFromMonitoring'])

@@ -936,12 +936,15 @@
                                                     @foreach($shipperOrders as $order)
                                                         @php
                                                             $customer = $order->customer;
-                                                            $selectedRoute = $customer?->truckRoute;
-                                                            if (!$selectedRoute && $customer?->truck_station_id) {
-                                                                $selectedRoute = $customer?->truckRouteByStation;
-                                                            }
-                                                            $truckStation = $customer?->truckStation ?: ($selectedRoute?->stops?->last()?->station);
-                                                            $truckStationText = trim(collect([$truckStation?->name, $truckStation?->address])->filter()->join(' - '));
+                                                            $usesTruckStation = $order->use_truck_station === null
+                                                                ? (bool) ($customer?->use_truck_station ?? false)
+                                                                : (bool) $order->use_truck_station;
+                                                            $truckStationText = $usesTruckStation
+                                                                ? trim(collect([
+                                                                    $order->truck_station_name ?: $order->truckStation?->name,
+                                                                    $order->truck_station_address ?: $order->truckStation?->address,
+                                                                ])->filter()->join(' - '))
+                                                                : '';
                                                             $destination = $truckStationText
                                                                 ?: $order->recipient_address
                                                                 ?: $customer?->truck_station_address
@@ -950,7 +953,7 @@
                                                             $quantity = (float) $order->items->sum('quantity');
                                                             $defaultShippingFee = (float) ($customer?->shipping_fee ?? 0);
                                                             $baseFee = (float) ($order->shipping_fee ?? $defaultShippingFee);
-                                                            $customerName = $customer?->name ?? $order->recipient_name ?? 'Khách hàng';
+                                                            $customerName = $order->recipient_name ?? $customer?->name ?? 'Khách hàng';
                                                             $deliveryTime = $order->delivery_time ?: $customer?->delivery_time ?: '';
                                                             $saleName = $order->user?->name ?: 'Chưa có sale';
                                                             $originName = $order->assignment_origin_warehouse_name ?: 'Chưa chọn kho';
