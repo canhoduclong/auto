@@ -99,7 +99,17 @@
     }
     #pdfExportContent > * { flex-shrink: 0; }
     .sp-company-card { padding: 0; text-align: left; }
-    .sp-company-header { display: flex; align-items: center; justify-content: center; gap: 18px; }
+    .sp-company-header {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 18px;
+        width: fit-content;
+        max-width: 100%;
+        margin-left: auto;
+        margin-right: auto;
+        text-align: left;
+    }
     .sp-company-header > :first-child { flex-shrink: 0; }
     .sp-company-header > :last-child { min-width: 0; }
     .sp-company-logo-wrap { display: flex; justify-content: center; }
@@ -154,7 +164,7 @@
     }
     .sp-table-wrap { padding: 0; }
     .sp-table { width: 100%; margin-bottom: 0; color: #29271f; border-collapse: collapse; }
-    .sp-table > :not(caption) > * > * { background: transparent; box-shadow: none; border: 1px solid #a59d87; }
+    .sp-table > :not(caption) > * > * { background: transparent; box-shadow: none; border: 0.5px solid #bdb7a4; }
     .sp-table thead th { padding: 13px 10px; text-align: center; vertical-align: middle; font-size: .9rem; font-weight: 800; text-transform: uppercase; color: #29271f; }
     .sp-table tbody td { padding: 12px 10px; vertical-align: middle; }
     .sp-number-col { width: 46px; text-align: center; }
