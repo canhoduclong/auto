@@ -98,19 +98,17 @@
         box-shadow: 0 12px 36px rgba(63, 53, 27, .12);
     }
     #pdfExportContent > * { flex-shrink: 0; }
-    .sp-company-card { padding: 0; text-align: left; }
+    .sp-company-card { padding: 0; width: 100%; text-align: center; }
     .sp-company-header {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 18px;
-        width: fit-content;
+        display: inline-table;
+        border-collapse: collapse;
+        width: auto;
         max-width: 100%;
-        margin-left: auto;
-        margin-right: auto;
+        vertical-align: top;
         text-align: left;
     }
-    .sp-company-header > :first-child { flex-shrink: 0; }
+    .sp-company-header > div { display: table-cell; vertical-align: middle; }
+    .sp-company-header > :first-child { width: 90px; padding-right: 18px; box-sizing: content-box; }
     .sp-company-header > :last-child { min-width: 0; }
     .sp-company-logo-wrap { display: flex; justify-content: center; }
     .sp-company-logo { width: 90px; height: 90px; object-fit: contain; }
@@ -242,7 +240,7 @@
         }
         #pdfExportContent { padding: 18px 12px; min-height: 950px; }
         .sp-company-title { font-size: 1.05rem; }
-        .sp-company-header { gap: 10px; }
+        .sp-company-header > :first-child { width: 65px; padding-right: 10px; }
         .sp-company-logo { width: 65px; height: 65px; }
         .sp-quotation-heading h2 { font-size: 1.9rem; }
         .sp-table { min-width: 560px; }
@@ -260,7 +258,7 @@
     }
     #pdfExportContent.sp-pdf-page { box-sizing: border-box; padding: 28px; min-height: 0; display: block; position: relative; }
     .sp-pdf-page > .sp-bank { position: absolute; bottom: 24px; left: 28px; right: 28px; padding-top: 0; margin: 0; }
-    .sp-pdf-page .sp-company-header { gap: 16px; }
+    .sp-pdf-page .sp-company-header > :first-child { width: 90px; padding-right: 16px; }
     .sp-pdf-page .sp-company-logo { width: 90px; height: 90px; }
     .sp-pdf-page .sp-company-title { font-size: 1.2rem; }
     .sp-pdf-page .sp-quotation-heading h2 { font-size: 2.5rem; }
