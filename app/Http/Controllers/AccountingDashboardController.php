@@ -2050,6 +2050,20 @@ class AccountingDashboardController extends Controller
                 ->when($customerId > 0, fn ($q) => $q->where('orders.customer_id', $customerId));
         };
 
+        // Compare the applied sale price with the company's price for this order,
+        // not today's catalogue price or a cached discount from before weighing.
+        $companyPriceExpr = 'COALESCE(order_items.company_price_at_order, order_items.base_price, order_items.price, 0)';
+        $effectivePriceExpr = 'COALESCE(adj.adjusted_price, order_items.price, 0)';
+        $effectiveWeightExpr = "COALESCE(adj.adjusted_weight, CASE
+            WHEN orders.status IN ('delivered', 'completed', 'returning', 'returned', 'returned_completed')
+                THEN COALESCE(order_items.actual_weight, order_items.packed_weight, order_items.total_weight)
+            WHEN orders.status IN ('packing', 'packed', 'packed_waiting_pickup', 'delivering', 'in_delivery', 'shipping', 'picked_up')
+                THEN COALESCE(order_items.packed_weight, order_items.actual_weight, order_items.total_weight)
+            ELSE order_items.total_weight END, 0)";
+        $pricingQuantityExpr = "CASE WHEN order_items.is_priced_by_kg = 1 THEN {$effectiveWeightExpr}
+            ELSE COALESCE(adj.adjusted_quantity, order_items.quantity, 0) END";
+        $priceAdjustmentExpr = "ROUND(({$effectivePriceExpr} - {$companyPriceExpr}) * ({$pricingQuantityExpr}), 2)";
+
         // ── Paginated list ────────────────────────────────────────────
         $listQ = $makeBase()->select([
             'order_items.id',
@@ -2071,6 +2085,8 @@ class AccountingDashboardController extends Controller
             'order_items.quantity',
             'order_items.price',
             'order_items.discount_total',
+            DB::raw("{$companyPriceExpr} as company_price"),
+            DB::raw("{$priceAdjustmentExpr} as price_adjustment"),
             'order_items.total',
             'order_items.total_weight',
             'order_items.is_priced_by_kg',
@@ -2079,7 +2095,7 @@ class AccountingDashboardController extends Controller
             'orders.extra_discount_total as order_extra_discount_total',
             DB::raw('COALESCE(adj.adjusted_quantity, order_items.quantity) as eff_qty'),
             DB::raw('COALESCE(adj.adjusted_price,    order_items.price)    as eff_price'),
-            DB::raw('COALESCE(adj.adjusted_weight,   order_items.total_weight) as eff_weight'),
+            DB::raw("{$effectiveWeightExpr} as eff_weight"),
             DB::raw('CASE WHEN adj.id IS NOT NULL THEN 1 ELSE 0 END as has_adj'),
             'adj.order_adjustment_id as adjustment_id',
             DB::raw('CASE WHEN adj.id IS NOT NULL THEN
@@ -2128,7 +2144,10 @@ class AccountingDashboardController extends Controller
             COUNT(DISTINCT order_items.id)                                                          as item_count,
             COUNT(DISTINCT order_items.order_id)                                                    as order_count,
             SUM(COALESCE(adj.adjusted_quantity,  order_items.quantity))                             as grand_qty,
-            SUM(COALESCE(adj.adjusted_weight,    order_items.total_weight))                         as grand_weight,
+            SUM({$effectiveWeightExpr}) as grand_weight,
+            COALESCE(SUM({$priceAdjustmentExpr}), 0) as item_adjustment,
+            COALESCE(SUM(CASE WHEN ({$priceAdjustmentExpr}) < 0 THEN -({$priceAdjustmentExpr}) ELSE 0 END), 0) as item_discount,
+            COALESCE(SUM(CASE WHEN ({$priceAdjustmentExpr}) > 0 THEN ({$priceAdjustmentExpr}) ELSE 0 END), 0) as item_increase,
             SUM({$effTotalExpr})                                                                     as grand_total
         ")->first();
 
@@ -2146,10 +2165,14 @@ class AccountingDashboardController extends Controller
             ->whereRaw("{$businessDateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
             ->when($saleId > 0, fn ($query) => $query->where('orders.user_id', $saleId))
             ->when($customerId > 0, fn ($query) => $query->where('orders.customer_id', $customerId))
-            ->selectRaw('COALESCE(SUM(orders.total_discount), 0) as total_discount')
+            ->selectRaw('COALESCE(SUM(orders.extra_discount_total), 0) as extra_discount_total')
+            ->selectRaw('COALESCE(SUM(CASE WHEN orders.extra_discount_total > 0 THEN orders.extra_discount_total ELSE 0 END), 0) as extra_discount')
+            ->selectRaw('COALESCE(SUM(CASE WHEN orders.extra_discount_total < 0 THEN -orders.extra_discount_total ELSE 0 END), 0) as extra_increase')
             ->selectRaw('COALESCE(SUM(orders.shipping_fee), 0) as total_shipping_fee')
             ->first();
-        $summary->total_discount = (float) ($orderCostSummary->total_discount ?? 0);
+        $summary->total_discount = (float) $summary->item_discount + (float) ($orderCostSummary->extra_discount ?? 0);
+        $summary->total_increase = (float) $summary->item_increase + (float) ($orderCostSummary->extra_increase ?? 0);
+        $summary->total_adjustment = (float) $summary->item_adjustment - (float) ($orderCostSummary->extra_discount_total ?? 0);
         $summary->total_shipping_fee = (float) ($orderCostSummary->total_shipping_fee ?? 0);
 
         $lossTransfers = WarehouseTransfer::query()
@@ -2178,7 +2201,7 @@ class AccountingDashboardController extends Controller
             'products.name as product_name',
             'products.unit as product_unit',
             DB::raw('SUM(COALESCE(adj.adjusted_quantity,  order_items.quantity))         as total_qty'),
-            DB::raw('SUM(COALESCE(adj.adjusted_weight,    order_items.total_weight))     as total_weight'),
+            DB::raw("SUM({$effectiveWeightExpr}) as total_weight"),
             DB::raw("SUM({$effTotalExpr})                                                as total_amount"),
         ])->groupBy('products.id', 'products.name', 'products.unit')
             ->orderByDesc('total_amount')
