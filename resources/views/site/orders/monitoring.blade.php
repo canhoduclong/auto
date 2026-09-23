@@ -1891,7 +1891,7 @@
                                     <th>Sản phẩm</th>
                                     <th>Size</th>
                                     <th class="text-end">Số lượng</th>
-                                    <th class="text-end">Số liệu thực tế</th>
+                                    <th class="text-end">Khối lượng / Thực tế</th>
                                     <th class="text-end">Giá bán</th>
                                     <th class="text-end">Tiền bán</th>
                                     <th>Nhà cung cấp</th>
@@ -1924,6 +1924,7 @@
                                             <td class="text-end">
                                                 @if($listItem)
                                                     <span class="fw-semibold">{{ $listItem->displayLabelForStage((string) $order->status) }}</span>
+                                                    <small class="d-block text-muted">{{ $order->measurement_label }}</small>
                                                 @else
                                                     —
                                                 @endif
@@ -2214,7 +2215,7 @@
                                                 <th>Sản phẩm</th>
                                                 <th class="text-end">SL</th>
                                                 <th class="text-end">Size</th>
-                                                <th class="text-end">Số liệu thực tế</th>
+                                                <th class="text-end">{{ $order->measurement_label }}</th>
                                                 <th class="text-end">Đơn giá</th>
                                                 <th class="text-end">Thành tiền</th>
                                             </tr>
@@ -2268,7 +2269,7 @@
                                             <div class="monitor-mobile-item-grid">
                                                 <div class="monitor-mobile-item-field"><span>Số lượng</span><strong>{{ $formatQuantity($item->quantity) }}</strong></div>
                                                 <div class="monitor-mobile-item-field"><span>Size</span><strong>{{ $item->variant?->size ?? '—' }}</strong></div>
-                                                <div class="monitor-mobile-item-field"><span>Số liệu thực tế</span><strong>{{ $item->displayLabelForStage((string) $order->status) }}</strong></div>
+                                                <div class="monitor-mobile-item-field"><span>{{ $order->measurement_label }}</span><strong>{{ $item->displayLabelForStage((string) $order->status) }}</strong></div>
                                                 <div class="monitor-mobile-item-field"><span>Đơn giá</span><strong>{{ number_format((float) $item->price, 0, ',', '.') }}đ</strong></div>
                                                 <div class="monitor-mobile-item-field is-total"><span>Thành tiền</span><strong>{{ number_format($lineTotal, 0, ',', '.') }}đ</strong></div>
                                             </div>

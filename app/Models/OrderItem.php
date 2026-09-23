@@ -82,7 +82,7 @@ class OrderItem extends Model
         }
 
         if ($this->variant) {
-            $variantKg = (float) ($this->variant->effective_kg ?? 0);
+            $variantKg = (float) ($this->variant->order_unit_weight ?? 0);
             if ($variantKg > 0) {
                 return $variantKg;
             }
@@ -211,7 +211,6 @@ class OrderItem extends Model
     private function warehouseMeasuredStatuses(): array
     {
         return [
-            Order::STATUS_PACKING,
             Order::STATUS_PACKED,
             Order::STATUS_READY_TO_SHIP,
             Order::STATUS_DELIVERING,
