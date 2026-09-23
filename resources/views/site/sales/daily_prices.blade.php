@@ -82,47 +82,41 @@
         border-radius: 14px;
         font-weight: 700;
     }
-    .sp-company-card {
-        padding: 24px;
+    .sp-quotation-card { background: transparent; border: 0; box-shadow: none; }
+    #pdfExportContent {
+        max-width: 900px;
+        width: 100%;
+        margin: 0 auto;
+        padding: 32px;
+        color: #29271f;
+        background: #f7f4e9;
+        border: 6px double #c8c0a8;
+        border-radius: 4px;
+        box-shadow: 0 12px 36px rgba(63, 53, 27, .12);
     }
-    .sp-company-header {
-        display: grid;
-        grid-template-columns: 160px minmax(0, 1fr);
-        gap: 20px;
-        align-items: start;
+    .sp-company-card { padding: 0 0 18px; text-align: center; border-bottom: 1px solid #a59d87; }
+    .sp-company-logo-wrap { display: flex; justify-content: center; margin-bottom: 16px; }
+    .sp-company-logo { width: 90px; height: 90px; object-fit: contain; }
+    .sp-company-monogram {
+        display: flex; align-items: center; justify-content: center;
+        width: 82px; height: 82px; border-radius: 50%; border: 4px double #a68a43;
+        background: linear-gradient(135deg, #f5e8b8, #a68a43); color: #655021;
+        font: bold 32px Georgia, serif;
     }
-    .sp-company-logo-wrap {
-        min-height: 120px;
-         text-align: center 
-         
-    }
-    .sp-company-logo {
-        max-height: 88px;
-        max-width: 100%;
-        object-fit: contain;
-    }
-    .sp-company-title {
-        font-weight: 900;
-        font-size: 1.15rem;
-        color: #0f172a;
-        margin-bottom: 10px;
-    }
-    .sp-company-grid {
-         
-        color: #475569;
-    }
-    .sp-company-line {
-         
-        padding: 2px 10px;
-    }
-    .sp-company-line.full {
-        grid-column: 1 / -1;
-    }
-    .sp-company-label {
-        color: #0f172a;
-        font-weight: 700;
-        margin-right: 6px;
-    }
+    .sp-company-title { font-size: 1.4rem; font-weight: 800; text-transform: uppercase; line-height: 1.4; margin-bottom: 6px; }
+    .sp-company-grid { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 14px; font-size: .85rem; }
+    .sp-company-line { overflow-wrap: anywhere; }
+    .sp-company-line.full { flex-basis: 100%; }
+    .sp-company-label { font-weight: 600; margin-right: 4px; }
+    .sp-quotation-heading { text-align: center; padding: 22px 0; }
+    .sp-quotation-heading h2 { font-family: Georgia, 'Times New Roman', serif; font-size: 2.5rem; color: #29271f; margin: 0; }
+    .sp-quotation-heading::after { content: ''; display: block; width: 150px; height: 3px; margin: 12px auto 0; background: #a59d87; }
+    .sp-quotation-footer { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 20px; padding-top: 14px; font-size: .88rem; }
+    .sp-notes { margin-top: 8px; }
+    .sp-notes ul { margin: 2px 0 0; padding-left: 20px; }
+    .sp-bank { margin-top: 20px; overflow-wrap: anywhere; line-height: 1.5; }
+    .sp-bank-title { font-weight: 700; text-transform: uppercase; }
+    .sp-quotation-validity { grid-column: 1 / -1; text-align: center; border-top: 1px solid #a59d87; padding-top: 10px; }
     .sp-actions {
         display: flex;
         gap: 10px;
@@ -151,47 +145,20 @@
         color: #0f172a;
         font-weight: 600;
     }
-    .sp-table-wrap {
-        padding: 0 18px 18px;
-    }
-    .sp-table {
-        margin-bottom: 0;
-        min-width: 900px;
-    }
-    .sp-table thead th {
-        font-size: .78rem;
-        text-transform: uppercase;
-        letter-spacing: .05em;
-        color: #64748b;
-        border-bottom: 1px solid #e8edf5;
-        padding: 16px 14px;
-        white-space: nowrap;
-    }
-    .sp-table tbody td {
-        padding: 18px 14px;
-        border-color: #edf2f7;
-        vertical-align: middle;
-    }
-    .sp-avatar {
-        width: 52px;
-        height: 52px;
-        border-radius: 10px;
-        object-fit: cover;
-        border: 1px solid #e8edf5;
-    }
-    .sp-product-name {
-        font-weight: 800;
-        color: #0f172a;
-    }
-    .sp-product-sub {
-        font-size: .82rem;
-        color: #64748b;
-    }
-    .sp-price {
-        font-size: 1rem;
-        font-weight: 800;
-        color: #0f172a;
-    }
+    .sp-table-wrap { padding: 0; }
+    .sp-table { width: 100%; margin-bottom: 0; color: #29271f; border-collapse: collapse; }
+    .sp-table > :not(caption) > * > * { background: transparent; box-shadow: none; border: 1px solid #a59d87; }
+    .sp-table thead th { padding: 13px 10px; text-align: center; vertical-align: middle; font-size: .9rem; font-weight: 800; text-transform: uppercase; color: #29271f; }
+    .sp-table tbody td { padding: 12px 10px; vertical-align: middle; }
+    .sp-number-col { width: 46px; text-align: center; }
+    .sp-unit-col { width: 130px; text-align: center; }
+    .sp-price-col { width: 155px; text-align: center; }
+    .sp-avatar { flex-shrink: 0; width: 62px; height: 62px; border-radius: 9px; object-fit: cover; border: 1px solid #d6ceba; }
+    .sp-product-name { font-weight: 800; font-size: 1.08rem; color: #29271f; overflow-wrap: anywhere; }
+    .sp-product-sub { font-size: .82rem; color: #6b6658; }
+    .sp-price { font-size: 1.15rem; font-weight: 800; color: #29271f; white-space: nowrap; }
+    .sp-unit-size { display: block; font-size: .82rem; color: #6b6658; }
+    .sp-variant-row { font-size: .88rem; }
     .sp-page-badge {
         display: inline-flex;
         align-items: center;
@@ -207,7 +174,7 @@
     .sp-select-col { width: 48px; text-align: center; }
     .sp-product-check,
     #spSelectAll { width: 18px; height: 18px; cursor: pointer; }
-    .sp-product-row.is-selected td { background: #f0f9ff; }
+    .sp-product-row.is-selected td { background: #ede6cf; }
     .sp-product-row { cursor: pointer; }
     .sp-selection-toolbar {
         display: flex;
@@ -247,23 +214,33 @@
         .sp-kpi-value {
             font-size: 1.35rem;
         }
-        .sp-company-grid {
-            grid-template-columns: 1fr;
-        }
-        .sp-company-header {
-            grid-template-columns: 1fr;
-        }
+        #pdfExportContent { padding: 18px 12px; }
+        .sp-company-title { font-size: 1.05rem; }
+        .sp-quotation-heading h2 { font-size: 1.9rem; }
+        .sp-table { min-width: 560px; }
+        .sp-quotation-footer { grid-template-columns: minmax(0, 1fr) 150px; gap: 14px; }
+        .sp-signature-title { margin-bottom: 40px; }
+
         .sp-actions {
             justify-content: flex-start;
         }
     }
 
+    @media (max-width: 479.98px) {
+        .sp-quotation-footer { grid-template-columns: 1fr; }
+        .sp-signature { justify-self: end; max-width: 190px; }
+    }
     @media print {
+        @page { size: A4 portrait; margin: 10mm; }
+        #pdfExportContent { max-width: none; box-shadow: none; padding: 18px; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        .sp-table { min-width: 0; }
+        .sp-table tr, .sp-quotation-footer { break-inside: avoid; }
+
         .breadcrumb,
         .sp-hero,
         .sp-filter,
         .sp-actions,
-        .sp-non-export,
+        .sp-selection-control,
         .btn,
         .pagination,
         .card-footer {
@@ -386,8 +363,7 @@
             $logoMedia       = $logoMediaId ? App\Models\Media::find($logoMediaId) : null;
             $displayPhone    = $user->phone ?: ($user->customer?->phone ?: $brandPhone);
         @endphp
-        <div class="card sp-card mb-4">
-            
+        <div class="card sp-card sp-quotation-card mb-4">
             <div id="pdfExportContent">
                 <div class="sp-company-card">
                     <div class="sp-company-header">
@@ -396,7 +372,7 @@
                                 @if($logoMedia)
                                     <img src="{{ asset('storage/' . $logoMedia->file_path) }}" alt="{{ $brandName }}" class="sp-company-logo">
                                 @else
-                                    <div style="height: 64px; width: 64px; display: flex; align-items: center; justify-content: center;    font-weight: 900; font-size: 1.4rem; color: #334155;">
+                                    <div class="sp-company-monogram">
                                         {{ mb_substr($companyLegal ?? $brandName ?? 'C', 0, 1) }}
                                     </div>
                                 @endif
@@ -407,43 +383,28 @@
                             <div class="sp-company-title">{{ $companyLegal ?? $brandName ?? '-' }}</div>
 
                             <div class="sp-company-grid">
-                                @if($brandTax)
-                                    <div class="sp-company-line"><span class="sp-company-label">Mã số thuế:</span>{{ $brandTax }}</div>
+                                @if($brandAddr)
+                                    <div class="sp-company-line full"><span class="sp-company-label">Địa chỉ:</span>{{ $brandAddr }}</div>
                                 @endif
-                                @if($displayPhone)
-                                    <div class="sp-company-line"><span class="sp-company-label">Điện thoại:</span>{{ $displayPhone }}</div>
+                                @if($brandTax)
+                                    <div class="sp-company-line"><span class="sp-company-label">MST:</span>{{ $brandTax }}</div>
                                 @endif
                                 @if($user->email)
                                     <div class="sp-company-line"><span class="sp-company-label">Email:</span>{{ $user->email }}</div>
                                 @endif
-                                @if($brandAddr)
-                                    <div class="sp-company-line full"><span class="sp-company-label">Địa chỉ:</span>{{ $brandAddr }}</div>
-                                @endif
-                                @if($bankAccount)
-                                    <div class="sp-company-line"><span class="sp-company-label">Số tài khoản:</span>{{ $bankAccount }}</div>
-                                @endif                                
-                                @if($bankBranch)
-                                    <div class="sp-company-line full"><span class="sp-company-label">Chi nhánh:</span>{{ $bankBranch }}</div>
-                                @endif
-                                @if($bankName)
-                                    <div class="sp-company-line"><span class="sp-company-label">Ngân hàng:</span>{{ $bankName }}</div>
+                                @if($displayPhone)
+                                    <div class="sp-company-line"><span class="sp-company-label">ĐT:</span>{{ $displayPhone }}</div>
                                 @endif
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="p4 Text-center border-top" style="background: #f8f9fa;">
-                    <h2 class="text-center p-4">BẢNG BÁO GIÁ</h2>
+                <div class="sp-quotation-heading">
+                    <h2>BẢNG BÁO GIÁ</h2>
                 </div>
 
                 <div class="sp-table-wrap">
-                    <div class="d-flex justify-content-between align-items-center px-1 py-3">
-                        <span class="date-approved">
-                            <i class="fa fa-calendar"></i>
-                            Hiệu lực: <strong>{{ $asOfDate->format('d/m/Y H:i') }}</strong>
-                        </span> 
-                        <span class="text-muted small sp-page-number">Trang {{ $products->currentPage() }}/{{ max(1, $products->lastPage()) }}</span>
-                    </div>
+                    <div class="text-end small text-muted mb-2 sp-page-number">Trang {{ $products->currentPage() }}/{{ max(1, $products->lastPage()) }}</div>
                     <div class="sp-selection-toolbar sp-selection-control">
                         <div>
                             <div class="fw-bold">Chọn sản phẩm đưa vào báo giá</div>
@@ -455,18 +416,17 @@
                             <button type="button" class="btn btn-sm btn-outline-secondary" id="spClearSelection">Bỏ chọn</button>
                         </div>
                     </div>
-                    <div class="table-responsive border-top">
+                    <div class="table-responsive">
                         <table class="table sp-table mb-0">
                             <thead>
                                 <tr>
                                     <th class="sp-select-col sp-selection-control">
                                         <input type="checkbox" id="spSelectAll" aria-label="Chọn tất cả sản phẩm trên trang">
                                     </th>
-                                    <th>#</th>
+                                    <th class="sp-number-col">STT</th>
                                     <th>Sản phẩm</th>
-                                    <th>DVT</th>
-                                    <th>Size</th>
-                                    <th class="text-end">Bảng giá (VNĐ)</th>
+                                    <th class="sp-unit-col">ĐVT / Size</th>
+                                    <th class="sp-price-col">Bảng giá (VNĐ)</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -481,7 +441,7 @@
                                         <td class="sp-select-col sp-selection-control">
                                             <input type="checkbox" class="form-check-input sp-product-check" value="{{ $product->id }}" aria-label="Chọn {{ $product->name }} để báo giá" @checked(in_array((int) $product->id, $selectedProductIds ?? [], true))>
                                         </td>
-                                        <td>{{ $products->firstItem() + $index }}</td>
+                                        <td class="sp-number-col">{{ $products->firstItem() + $index }}</td>
                                         <td>
                                             <div class="d-flex align-items-center gap-2">
                                                 @if($imagePath)
@@ -502,9 +462,8 @@
                                                 </div>
                                             </div>
                                         </td>
-                                        <td>{{ $product->is_priced_by_kg ? 'kg' : ($product->unit_label ?? '-') }}</td>
-                                        <td>{{ $size }}</td>
-                                        <td class="text-end"><span class="sp-price">{{ number_format($price, 0, ',', '.') }} đ</span></td>
+                                        <td class="sp-unit-col">{{ $product->is_priced_by_kg ? 'kg' : ($product->unit_label ?? '-') }}<span class="sp-unit-size">{{ $size }}</span></td>
+                                        <td class="sp-price-col"><span class="sp-price">{{ number_format($price, 0, ',', '.') }} đ</span></td>
                                     </tr>
 
                                     @foreach(($product->priceDiffVariants ?? collect()) as $diffVariant)
@@ -517,14 +476,13 @@
                                                     <div class="sp-product-sub">SKU: {{ $diffVariant->sku ?: '-' }}</div>
                                                 </div>
                                             </td>
-                                            <td>{{ $product->is_priced_by_kg ? 'kg' : ($product->unit_label ?? '-') }}</td>
-                                            <td>{{ $diffVariant->size ?: '-' }}</td>
-                                            <td class="text-end"><span class="sp-price">{{ number_format((float) ($diffVariant->current_price ?? 0), 0, ',', '.') }} đ</span></td>
+                                            <td class="sp-unit-col">{{ $product->is_priced_by_kg ? 'kg' : ($product->unit_label ?? '-') }}<span class="sp-unit-size">{{ $diffVariant->size ?: '-' }}</span></td>
+                                            <td class="sp-price-col"><span class="sp-price">{{ number_format((float) ($diffVariant->current_price ?? 0), 0, ',', '.') }} đ</span></td>
                                         </tr>
                                     @endforeach
                                 @empty
                                     <tr>
-                                        <td colspan="6"><div class="sp-empty">Không có dữ liệu bảng giá theo bộ lọc hiện tại.</div></td>
+                                        <td colspan="5"><div class="sp-empty">Không có dữ liệu bảng giá theo bộ lọc hiện tại.</div></td>
                                     </tr>
                                 @endforelse
                             </tbody>
@@ -537,19 +495,32 @@
                         {{ $products->links() }}
                     </div>
                 @endif
-                <div class="row mt-4 sp-non-export">
-                    <!-- Notes -->
-                    <div class="col-md-8" >
-                        <div class="pl-4">
-                            <h5 style="font-weight: 700; color: #0f172a; margin-bottom: 12px;">Ghi chú:</h5>
-                            <ul style="margin: 0; padding-left: 24px; color: #64748b; line-height: 1.8; margin-left: 15px;">
+                <div class="sp-quotation-footer">
+                    <div>
+                        <div class="date-approved">Hiệu lực: <strong>{{ $asOfDate->format('d/m/Y H:i') }}</strong></div>
+                        <div class="sp-notes">
+                            <strong>Ghi chú:</strong>
+                            <ul>
                                 <li>Giá trên chưa bao gồm VAT</li>
                                 <li>Các giấy tờ theo yêu cầu</li>
                             </ul>
                         </div>
+                        @if($bankAccount || $bankName || $bankBranch)
+                            <div class="sp-bank">
+                                <div class="sp-bank-title">Thông tin thanh toán / Banking information:</div>
+                                @if($bankAccount)
+                                    <div><strong>STK:</strong> {{ $bankAccount }}</div>
+                                @endif
+                                @if($bankName)
+                                    <div><strong>Ngân hàng:</strong> {{ $bankName }}</div>
+                                @endif
+                                @if($bankBranch)
+                                    <div><strong>Chi nhánh:</strong> {{ $bankBranch }}</div>
+                                @endif
+                            </div>
+                        @endif
                     </div>
-                    <div class="col-md-4" >
-                        <!-- Signature Section -->
+                    <div>
                         @php
                             $userRole = $user->roles->first();
                             $roleTitleMap = [
@@ -581,8 +552,8 @@
 
                     </div>
 
-                    <div style="text-align: center; margin-top: 32px; padding-top: 24px; border-top: 1px solid #e8edf5;">
-                        <div style="font-size: 0.8rem; color: #94a3b8;" class="pb-3">
+                    <div class="sp-quotation-validity">
+                        <div>
                             Bảng giá có hiệu lực từ lúc {{ $asOfDate->format('H:i:s') }} ngày {{ $asOfDate->format('d/m/Y') }}
                         </div>
                     </div>
@@ -705,8 +676,8 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             var renderHost = document.createElement('div');
-            renderHost.style.cssText = 'position:fixed;left:-12000px;top:0;width:1120px;background:#fff;padding:20px;z-index:-1';
-            exportClone.style.cssText = 'width:1080px;background:#fff;box-shadow:none;border:0';
+            renderHost.style.cssText = 'position:fixed;left:-12000px;top:0;width:820px;background:#f7f4e9;padding:0;z-index:-1';
+            exportClone.style.cssText = 'width:820px;max-width:none;box-shadow:none';
             exportClone.querySelectorAll('.table-responsive').forEach(function (node) { node.style.overflow = 'visible'; });
             exportClone.querySelectorAll('.sp-table').forEach(function (node) { node.style.minWidth = '0'; });
             renderHost.appendChild(exportClone);
@@ -719,11 +690,12 @@ document.addEventListener('DOMContentLoaded', function () {
             try {
                 var canvas = await window.html2canvas(exportClone, {
                     scale: 1.5,
+                    windowWidth: 1024,
                     useCORS: true,
                     backgroundColor: '#ffffff',
                     logging: false
                 });
-                var pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4', compress: true });
+                var pdf = new window.jspdf.jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true });
                 var pageWidth = pdf.internal.pageSize.getWidth();
                 var pageHeight = pdf.internal.pageSize.getHeight();
                 var margin = 8;
@@ -734,7 +706,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 var offset = 0;
 
                 do {
-                    if (offset > 0) pdf.addPage('a4', 'landscape');
+                    if (offset > 0) pdf.addPage('a4', 'portrait');
                     pdf.addImage(imageData, 'JPEG', margin, margin - offset, imageWidth, imageHeight, undefined, 'FAST');
                     offset += printableHeight;
                 } while (offset < imageHeight);
