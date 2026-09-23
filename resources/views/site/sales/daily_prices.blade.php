@@ -80,7 +80,7 @@
     .sp-filter .btn {
         height: 48px;
         border-radius: 14px;
-        font-weight: 700;
+        font-weight: 700; 
     }
     .sp-quotation-card { background: transparent; border: 0; box-shadow: none; }
     #pdfExportContent {
