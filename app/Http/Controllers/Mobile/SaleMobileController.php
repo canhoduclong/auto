@@ -223,7 +223,7 @@ class SaleMobileController extends Controller
         $user = $request->user();
         $validated = $request->validate([
             'customer_id' => ['required', 'integer', 'exists:customers,id'],
-            'delivery_date' => ['nullable', 'date'],
+            'delivery_date' => ['nullable', 'date', 'date_equals:tomorrow'],
             'delivery_time' => ['nullable', 'string', 'max:50'],
             'note' => ['nullable', 'string', 'max:500'],
             'items' => ['required', 'array', 'min:1'],
@@ -262,7 +262,9 @@ class SaleMobileController extends Controller
                 'code' => 'ORD-' . strtoupper(substr(bin2hex(random_bytes(5)), 0, 10)),
                 'status' => Order::STATUS_ORDER_PLACED,
                 'payment_status' => 'unpaid',
-                'delivery_date' => $validated['delivery_date'] ?? now()->addDay()->toDateString(),
+                // Ngày giao tiêu chuẩn luôn là ngày kế tiếp; hồi ngày cũ chỉ
+                // được thực hiện qua màn hình nghiệp vụ dành riêng cho admin.
+                'delivery_date' => now()->addDay()->toDateString(),
                 'delivery_time' => $validated['delivery_time'] ?? $customer->delivery_time,
                 'recipient_name' => $customer->name,
                 'recipient_phone' => $customer->phone,

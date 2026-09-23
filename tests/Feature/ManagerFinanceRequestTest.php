@@ -115,6 +115,9 @@ class ManagerFinanceRequestTest extends TestCase
 
     public function test_manager_can_search_edit_and_delete_manageable_requests(): void
     {
+        Storage::fake('public');
+        Storage::disk('public')->put('transactions/request-documents/chung-tu.png', 'image');
+        Storage::disk('public')->put('transactions/request-documents/bao-gia.pdf', 'pdf');
         $manager = $this->manager();
         $request = Transaction::query()->create([
             'amount' => 100000,
@@ -131,6 +134,10 @@ class ManagerFinanceRequestTest extends TestCase
             'request_subtotal' => 100000,
             'request_vat' => 0,
             'request_total' => 100000,
+            'request_attachments' => [
+                ['name' => 'chung-tu.png', 'path' => 'transactions/request-documents/chung-tu.png', 'mime_type' => 'image/png', 'size' => 5],
+                ['name' => 'bao-gia.pdf', 'path' => 'transactions/request-documents/bao-gia.pdf', 'mime_type' => 'application/pdf', 'size' => 3],
+            ],
         ]);
 
         $this->actingAs($manager)
@@ -141,7 +148,11 @@ class ManagerFinanceRequestTest extends TestCase
             ->assertSee(route('manager.finance-requests.edit', $request), false);
 
         $this->get(route('manager.finance-requests.edit', $request))
-            ->assertOk()->assertSee('Sửa phiếu #'.$request->id);
+            ->assertOk()
+            ->assertSee('Sửa phiếu #'.$request->id)
+            ->assertSee('chung-tu.png')
+            ->assertSee('bao-gia.pdf')
+            ->assertSee('remove_attachments[]', false);
 
         $this->put(route('manager.finance-requests.update', $request), [
             'request_form_type' => Transaction::REQUEST_FORM_CASH,
@@ -153,6 +164,7 @@ class ManagerFinanceRequestTest extends TestCase
             'request_vat' => 10000,
             'method' => 'cash',
             'note' => 'Nội dung đã sửa',
+            'remove_attachments' => [0],
         ])->assertRedirect(route('manager.finance-requests.index'))->assertSessionHasNoErrors();
 
         $request->refresh();
@@ -160,6 +172,10 @@ class ManagerFinanceRequestTest extends TestCase
         $this->assertSame('Phiếu xin cấp ngân sách', $request->request_document_title);
         $this->assertSame('160000.00', $request->amount);
         $this->assertSame(Transaction::STATUS_PENDING_APPROVAL, $request->status);
+        $this->assertCount(1, $request->request_attachments);
+        $this->assertSame('bao-gia.pdf', $request->request_attachments[0]['name']);
+        Storage::disk('public')->assertMissing('transactions/request-documents/chung-tu.png');
+        Storage::disk('public')->assertExists('transactions/request-documents/bao-gia.pdf');
 
         $this->delete(route('manager.finance-requests.destroy', $request))
             ->assertRedirect(route('manager.finance-requests.index'));
@@ -199,7 +215,8 @@ class ManagerFinanceRequestTest extends TestCase
             ->assertSee('Tên TK:')
             ->assertSee('Nguyễn Đình Huy')
             ->assertSee('Ngân hàng:')
-            ->assertSee('Vietcombank - Tân Định');
+            ->assertSee('Vietcombank - Tân Định')
+            ->assertDontSee('Nơi nhận tiền:');
     }
 
     private function manager(): User

@@ -40,6 +40,7 @@ class OrderActivityController extends Controller
             fputcsv($handle, [
                 'activity_id', 'activity_at', 'order_code', 'customer_name', 'action',
                 'role', 'actor_name', 'status_before', 'status_after', 'note',
+                'source', 'ip_address', 'request_method', 'route_name', 'request_path', 'user_agent',
                 'order_created_at', 'delivery_date',
             ]);
 
@@ -55,6 +56,12 @@ class OrderActivityController extends Controller
                     $history->status_before,
                     $history->status_after,
                     $history->note,
+                    $history->source,
+                    $history->ip_address,
+                    $history->request_method,
+                    $history->route_name,
+                    $history->request_path,
+                    $history->user_agent,
                     optional($history->order?->created_at)->format('Y-m-d H:i:s'),
                     optional($history->order?->delivery_date)->toDateString(),
                 ]);

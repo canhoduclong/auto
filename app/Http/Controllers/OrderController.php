@@ -1870,6 +1870,15 @@ class OrderController extends Controller
         $actorUserId = (int) ($orderData['actor_user_id'] ?? auth()->id() ?? 0);
         $actorUser = $actorUserId > 0 ? User::query()->find($actorUserId) : null;
 
+        // Every interactive order uses today's creation date and tomorrow's
+        // delivery date. Only admins may explicitly use the business-date
+        // exception exposed by the monitoring order form.
+        if ($actorUser && !$actorUser->isAdmin()) {
+            unset($orderData['created_at']);
+            $orderData['delivery_date'] = now()->addDay()->toDateString();
+            $orderData['skip_auto_cancel'] = false;
+        }
+
         return DB::transaction(function () use ($items, $orderData, $approvalService, $allowBackorder, $actorUserId, $actorUser) {
             if (!empty($orderData['creation_token'])) {
                 // Serialize retries for this sale; distinct tokens remain distinct orders.

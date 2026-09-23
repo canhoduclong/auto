@@ -49,6 +49,7 @@
                         <th>Loai</th>
                         <th>Hanh dong</th>
                         <th>Nguoi thuc hien</th>
+                        <th>Nguồn / IP</th>
                         <th>Noi dung</th>
                         <th></th>
                     </tr>
@@ -61,6 +62,10 @@
                             <td><span class="badge bg-light text-dark">{{ $event->event_type }}</span></td>
                             <td><span class="badge bg-info text-dark">{{ $event->action }}</span></td>
                             <td>{{ $event->actor->name ?? 'System' }}</td>
+                            <td class="small">
+                                <div>{{ strtoupper(data_get($event->metadata, 'source', 'system')) }}</div>
+                                <div class="text-muted">{{ data_get($event->metadata, 'ip_address', '-') }}</div>
+                            </td>
                             <td>{{ $event->message ?? '-' }}</td>
                             <td>
                                 @if($event->url)
@@ -70,7 +75,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="text-center text-muted">Chua co su kien nao duoc ghi nhan.</td>
+                            <td colspan="8" class="text-center text-muted">Chua co su kien nao duoc ghi nhan.</td>
                         </tr>
                     @endforelse
                 </tbody>

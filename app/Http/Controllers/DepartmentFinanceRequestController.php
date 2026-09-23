@@ -160,6 +160,8 @@ class DepartmentFinanceRequestController extends Controller
         $this->authorizeLeaderEdit($transaction);
         $isResubmission = $transaction->status === Transaction::STATUS_REJECTED;
         $data = $this->validatedRequestData($request, 'leader');
+        $removedAttachmentPaths = $data['_removed_attachment_paths'] ?? [];
+        unset($data['_removed_attachment_paths']);
         unset($data['status'], $data['submitted_by'], $data['request_source'], $data['request_department']);
 
         DB::transaction(function () use ($transaction, $data, $isResubmission): void {
@@ -181,6 +183,7 @@ class DepartmentFinanceRequestController extends Controller
                 app(\App\Services\ApprovalService::class)->initTransactionApproval($transaction);
             }
         });
+        $this->deleteUnreferencedRequestAttachments($removedAttachmentPaths, $transaction->id);
 
         return redirect()
             ->route('leader.finance-requests.index')
@@ -264,6 +267,8 @@ class DepartmentFinanceRequestController extends Controller
     {
         $this->authorizeManagerMutation($transaction);
         $data = $this->validatedRequestData($request, 'manager');
+        $removedAttachmentPaths = $data['_removed_attachment_paths'] ?? [];
+        unset($data['_removed_attachment_paths']);
         unset($data['status'], $data['submitted_by'], $data['request_source'], $data['request_department']);
 
         DB::transaction(function () use ($transaction, $data): void {
@@ -278,6 +283,7 @@ class DepartmentFinanceRequestController extends Controller
             ]));
             app(\App\Services\ApprovalService::class)->initTransactionApproval($transaction);
         });
+        $this->deleteUnreferencedRequestAttachments($removedAttachmentPaths, $transaction->id);
 
         return redirect()->route('manager.finance-requests.index')
             ->with('success', 'Đã cập nhật phiếu #'.$transaction->id.' và khởi tạo lại luồng duyệt.');
@@ -539,6 +545,7 @@ class DepartmentFinanceRequestController extends Controller
         $this->authorizeSource($config);
 
         $data = $this->validatedRequestData($request, $source);
+        unset($data['_removed_attachment_paths']);
 
         $transaction = Transaction::create($data);
         app(\App\Services\ApprovalService::class)->initTransactionApproval($transaction);
@@ -575,6 +582,8 @@ class DepartmentFinanceRequestController extends Controller
             'receipt_image' => ['nullable', 'image', 'max:5120'],
             'attachments' => ['nullable', 'array', 'max:10'],
             'attachments.*' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx', 'max:20480'],
+            'remove_attachments' => ['nullable', 'array'],
+            'remove_attachments.*' => ['integer', 'min:0', 'distinct'],
         ]);
 
         if ($validated['request_form_type'] === Transaction::REQUEST_FORM_PAYMENT) {
@@ -677,32 +686,52 @@ class DepartmentFinanceRequestController extends Controller
             $data['receipt_image_path'] = $request->file('receipt_image')->store('transactions/requests', 'public');
         }
 
-        if ($request->hasFile('attachments')) {
-            $storedAttachments = [];
+        $editingTransaction = $request->route('transaction');
+        $editingTransaction = $editingTransaction instanceof Transaction ? $editingTransaction : null;
+        $existingAttachments = collect($editingTransaction?->request_attachments ?: [])->values();
+        $removeIndexes = collect($validated['remove_attachments'] ?? [])->map(fn ($index) => (int) $index)->unique();
+        $removedAttachments = $existingAttachments->filter(fn ($attachment, $index) => $removeIndexes->contains($index));
+        $retainedAttachments = $existingAttachments->reject(fn ($attachment, $index) => $removeIndexes->contains($index))->values();
+
+        if ($editingTransaction || $request->hasFile('attachments')) {
+            $storedAttachments = $retainedAttachments->all();
+            $newAttachments = [];
 
             try {
-                foreach ($request->file('attachments') as $file) {
+                foreach ($request->file('attachments', []) as $file) {
                     if (! $file || ! $file->isValid()) {
                         continue;
                     }
 
                     $path = $file->store('transactions/request-documents', 'public');
-                    $storedAttachments[] = [
+                    $attachment = [
                         'name' => $file->getClientOriginalName(),
                         'path' => $path,
                         'mime_type' => $file->getClientMimeType(),
                         'size' => $file->getSize(),
                     ];
+                    $storedAttachments[] = $attachment;
+                    $newAttachments[] = $attachment;
                 }
             } catch (\Throwable $exception) {
-                foreach ($storedAttachments as $attachment) {
+                foreach ($newAttachments as $attachment) {
                     Storage::disk('public')->delete($attachment['path']);
                 }
 
                 throw $exception;
             }
 
+            if (count($storedAttachments) > 10) {
+                foreach ($newAttachments as $attachment) {
+                    Storage::disk('public')->delete($attachment['path']);
+                }
+                throw ValidationException::withMessages([
+                    'attachments' => 'Mỗi phiếu chỉ được lưu tối đa 10 chứng từ.',
+                ]);
+            }
+
             $data['request_attachments'] = $storedAttachments;
+            $data['_removed_attachment_paths'] = $removedAttachments->pluck('path')->filter()->values()->all();
         }
 
         return $data;
@@ -729,6 +758,22 @@ class DepartmentFinanceRequestController extends Controller
             $user->hasRole('admin') || (int) $transaction->submitted_by === (int) $user->id,
             403
         );
+    }
+
+    private function deleteUnreferencedRequestAttachments(array $paths, int $excludingTransactionId): void
+    {
+        foreach (array_unique(array_filter($paths)) as $path) {
+            $isStillReferenced = Transaction::query()
+                ->whereKeyNot($excludingTransactionId)
+                ->whereNotNull('request_attachments')
+                ->get(['request_attachments'])
+                ->contains(fn (Transaction $transaction) => collect($transaction->request_attachments ?: [])
+                    ->contains(fn ($attachment) => ($attachment['path'] ?? null) === $path));
+
+            if (! $isStillReferenced) {
+                Storage::disk('public')->delete($path);
+            }
+        }
     }
 
     private function authorizeManagerMutation(Transaction $transaction): void

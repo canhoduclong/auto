@@ -90,6 +90,25 @@
         gap: 16px;
         align-items: start;
     }
+    .fr-existing-attachment {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        padding: 8px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #f8fafc;
+    }
+    .fr-attachment-preview {
+        width: 72px;
+        height: 56px;
+        flex: 0 0 auto;
+        border-radius: 6px;
+        object-fit: cover;
+        border: 1px solid #dbe3ec;
+        background: #fff;
+    }
     .fr-summary-box {
         border: 1px solid #dbe4ee;
         border-radius: 8px;
@@ -358,6 +377,34 @@
                                 </button>
                             </div>
                             <div id="requestAttachments" class="d-grid gap-2">
+                                @if($editingRequest && !empty($editingRequest->request_attachments))
+                                    @foreach($editingRequest->request_attachments as $attachmentIndex => $attachment)
+                                        @php
+                                            $attachmentMime = strtolower((string) ($attachment['mime_type'] ?? ''));
+                                            $attachmentPath = (string) ($attachment['path'] ?? '');
+                                            $isImageAttachment = str_starts_with($attachmentMime, 'image/') || preg_match('/\.(jpe?g|png|webp|gif)$/i', $attachmentPath);
+                                            $attachmentUrl = Storage::disk('public')->url($attachmentPath);
+                                        @endphp
+                                        <div class="fr-existing-attachment">
+                                            @if($isImageAttachment)
+                                                <a href="{{ $attachmentUrl }}" target="_blank" rel="noopener" title="Mở ảnh chứng từ">
+                                                    <img src="{{ $attachmentUrl }}" class="fr-attachment-preview" alt="{{ $attachment['name'] ?? 'Chứng từ' }}">
+                                                </a>
+                                            @else
+                                                <a href="{{ $attachmentUrl }}" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm flex-shrink-0">
+                                                    <i class="bi bi-file-earmark-arrow-down me-1"></i>Mở file
+                                                </a>
+                                            @endif
+                                            <a href="{{ $attachmentUrl }}" target="_blank" rel="noopener" class="text-decoration-none text-truncate flex-grow-1" title="{{ $attachment['name'] ?? 'Chứng từ' }}">
+                                                {{ $attachment['name'] ?? 'Chứng từ' }}
+                                            </a>
+                                            <button type="button" class="btn btn-outline-danger btn-sm remove-existing-attachment" title="Xóa chứng từ">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                            <input type="checkbox" class="d-none remove-existing-attachment-input" name="remove_attachments[]" value="{{ $attachmentIndex }}">
+                                        </div>
+                                    @endforeach
+                                @endif
                                 <div class="input-group request-attachment-row">
                                     <input type="file" name="attachments[]" class="form-control" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">
                                     <button type="button" class="btn btn-outline-danger remove-request-attachment" title="Bỏ chứng từ"><i class="bi bi-x-lg"></i></button>
@@ -662,6 +709,13 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (attachmentsContainer) {
+        attachmentsContainer.querySelectorAll('.remove-existing-attachment').forEach((button) => {
+            button.addEventListener('click', function () {
+                const row = this.closest('.fr-existing-attachment');
+                row.querySelector('.remove-existing-attachment-input').checked = true;
+                row.classList.add('d-none');
+            });
+        });
         attachmentsContainer.querySelectorAll('.request-attachment-row').forEach(bindAttachmentRow);
         addAttachmentButton?.addEventListener('click', function () {
             if (attachmentsContainer.querySelectorAll('.request-attachment-row').length >= 10) return;

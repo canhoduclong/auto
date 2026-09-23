@@ -234,6 +234,7 @@
                             <th>{{ __('orders.labels.status_before') }}</th>
                             <th>{{ __('orders.labels.status_after') }}</th>
                             <th>{{ __('orders.labels.note') }}</th>
+                            <th>Nguồn truy vết</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -246,10 +247,14 @@
                                 <td>{{ $history->status_before ?? '-' }}</td>
                                 <td>{{ $history->status_after ?? '-' }}</td>
                                 <td>{{ $history->note ?? '-' }}</td>
+                                <td class="small">
+                                    <div>{{ strtoupper($history->source ?? 'system') }}{{ $history->route_name ? ' · '.$history->route_name : '' }}</div>
+                                    <div class="text-muted">{{ $history->ip_address ?: '-' }}</div>
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="text-center">{{ __('orders.empty.history') }}</td>
+                                <td colspan="8" class="text-center">{{ __('orders.empty.history') }}</td>
                             </tr>
                         @endforelse
                     </tbody>

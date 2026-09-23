@@ -293,12 +293,17 @@ class UserController extends Controller
             $historicalPoints = AdminEvent::query()
                 ->where('actor_id', $user->id)
                 ->where('created_at', '>=', $usageFrom)
-                ->get(['created_at', 'title', 'action', 'url'])
+                ->get(['created_at', 'title', 'action', 'url', 'metadata'])
                 ->map(fn (AdminEvent $event) => [
                     'at' => $event->created_at,
-                    'source' => 'Web',
+                    'source' => match (data_get($event->metadata, 'source')) {
+                        'api' => 'API/Mobile',
+                        'mobile' => 'Mobile',
+                        'system' => 'Hệ thống',
+                        default => 'Web',
+                    },
                     'reason' => $event->title ?: $event->action,
-                    'ip' => null,
+                    'ip' => data_get($event->metadata, 'ip_address'),
                 ]);
             $usagePoints = $usagePoints->concat($historicalPoints);
         }

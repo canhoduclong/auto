@@ -25,7 +25,14 @@ class OrderObserver
             $order,
             'Tao moi don hang',
             'Don hang "'.($order->code ?: ('#'.$order->id)).'" vua duoc tao.',
-            ['order_id' => $order->id, 'code' => $order->code, 'status' => $order->status],
+            [
+                'order_id' => $order->id,
+                'code' => $order->code,
+                'status' => $order->status,
+                'created_at' => optional($order->created_at)->toIso8601String(),
+                'delivery_date' => optional($order->delivery_date)->toDateString(),
+                'is_backdated' => Order::isNonCurrentBusinessDate($order->created_at),
+            ],
             route('orders.show', $order)
         );
 

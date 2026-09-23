@@ -25,6 +25,18 @@ class AdminActivityService
             return new AdminEvent();
         }
 
+        $request = app()->runningInConsole() ? null : request();
+        $requestContext = $request ? [
+            'source' => $request->is('api/*') ? 'api' : ($request->is('mobile/*') ? 'mobile' : 'web'),
+            'ip_address' => $request->ip(),
+            'method' => $request->method(),
+            'route_name' => $request->route()?->getName(),
+            'path' => $request->path(),
+            'user_agent' => $request->userAgent(),
+        ] : [
+            'source' => 'system',
+        ];
+
         $event = AdminEvent::create([
             'actor_id' => Auth::id(),
             'event_type' => $eventType,
@@ -33,7 +45,7 @@ class AdminActivityService
             'subject_id' => $subject?->getKey(),
             'title' => $title,
             'message' => $message,
-            'metadata' => $metadata,
+            'metadata' => array_merge($requestContext, $metadata),
             'url' => $url,
         ]);
 
