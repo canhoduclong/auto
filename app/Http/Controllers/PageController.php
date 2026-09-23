@@ -4303,11 +4303,25 @@ public function apiTruckRoutes(Request $request)
         $this->ensureManagedCustomer($customer);
         $customer->load('addresses');
         $provinces = Province::query()->orderBy('name')->get(['id', 'name']);
-        // Không load nhà xe (truckStations) ở đây nữa
+        $truckStations = TruckStation::query()
+            ->where(function ($query) use ($customer) {
+                $query->where('is_active', true);
+
+                // Vẫn hiển thị trạm cũ nếu trạm đã ngừng hoạt động để người dùng
+                // có thể nhận biết và đổi sang một trạm khác.
+                if ($customer->truck_station_id) {
+                    $query->orWhereKey($customer->truck_station_id);
+                }
+            })
+            ->with(['brand:id,name', 'province:id,name', 'ward:id,name'])
+            ->orderBy('name')
+            ->get(['id', 'name', 'brand_id', 'province_id', 'ward_id', 'address', 'phone', 'is_active']);
+
         return view('site.my_customer.edit', [
             'customer' => $customer,
             'settings' => $this->settings,
             'provinces' => $provinces,
+            'truckStations' => $truckStations,
         ]);
     }
 
@@ -4411,6 +4425,13 @@ public function apiTruckRoutes(Request $request)
 
         if (array_key_exists('use_truck_station', $validated) && !(bool) $validated['use_truck_station']) {
             $validated['truck_station_id'] = null;
+            $validated['truck_route_id'] = null;
+        }
+
+        // Khách hàng được giao tại một trạm cụ thể, không còn phụ thuộc tuyến xe.
+        if (array_key_exists('truck_station_id', $validated)) {
+            $validated['use_truck_station'] = !empty($validated['truck_station_id']);
+            $validated['truck_route_id'] = null;
         }
 
         if (!empty($validated['ward_id']) && !empty($validated['province_id'])) {
