@@ -4301,27 +4301,81 @@ public function apiTruckRoutes(Request $request)
     public function myCustomerEdit(Customer $customer)
     {
         $this->ensureManagedCustomer($customer);
-        $customer->load('addresses');
+        $customer->load(['addresses', 'truckStation.brand', 'truckStation.province', 'truckStation.ward']);
         $provinces = Province::query()->orderBy('name')->get(['id', 'name']);
-        $truckStations = TruckStation::query()
-            ->where(function ($query) use ($customer) {
-                $query->where('is_active', true);
-
-                // Vẫn hiển thị trạm cũ nếu trạm đã ngừng hoạt động để người dùng
-                // có thể nhận biết và đổi sang một trạm khác.
-                if ($customer->truck_station_id) {
-                    $query->orWhereKey($customer->truck_station_id);
-                }
-            })
-            ->with(['brand:id,name', 'province:id,name', 'ward:id,name'])
-            ->orderBy('name')
-            ->get(['id', 'name', 'brand_id', 'province_id', 'ward_id', 'address', 'phone', 'is_active']);
+        $selectedTruckStationId = old('truck_station_id', $customer->truck_station_id);
+        $selectedTruckStation = $selectedTruckStationId
+            ? TruckStation::query()->with(['brand:id,name', 'province:id,name', 'ward:id,name'])->find($selectedTruckStationId)
+            : null;
 
         return view('site.my_customer.edit', [
             'customer' => $customer,
             'settings' => $this->settings,
             'provinces' => $provinces,
-            'truckStations' => $truckStations,
+            'selectedTruckStation' => $selectedTruckStation,
+        ]);
+    }
+
+    public function myCustomerTruckStations(Request $request)
+    {
+        $validated = $request->validate([
+            'q' => ['nullable', 'string', 'max:255'],
+            'sort_by' => ['nullable', Rule::in(['name', 'brand', 'address', 'phone'])],
+            'sort_dir' => ['nullable', Rule::in(['asc', 'desc'])],
+            'per_page' => ['nullable', 'integer', Rule::in([10, 20, 50])],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
+
+        $keyword = trim((string) ($validated['q'] ?? ''));
+        $sortBy = $validated['sort_by'] ?? 'name';
+        $sortDir = $validated['sort_dir'] ?? 'asc';
+        $perPage = (int) ($validated['per_page'] ?? 10);
+
+        $query = TruckStation::query()
+            ->where('is_active', true)
+            ->with(['brand:id,name', 'province:id,name', 'ward:id,name']);
+
+        if ($keyword !== '') {
+            $query->where(function ($subQuery) use ($keyword) {
+                $subQuery->where('name', 'like', "%{$keyword}%")
+                    ->orWhere('address', 'like', "%{$keyword}%")
+                    ->orWhere('phone', 'like', "%{$keyword}%")
+                    ->orWhereHas('brand', fn ($brandQuery) => $brandQuery->where('name', 'like', "%{$keyword}%"))
+                    ->orWhereHas('province', fn ($provinceQuery) => $provinceQuery->where('name', 'like', "%{$keyword}%"))
+                    ->orWhereHas('ward', fn ($wardQuery) => $wardQuery->where('name', 'like', "%{$keyword}%"));
+            });
+        }
+
+        if ($sortBy === 'brand') {
+            $query->orderBy(
+                TruckBrand::query()->select('name')->whereColumn('truck_brands.id', 'truck_stations.brand_id'),
+                $sortDir
+            );
+        } else {
+            $query->orderBy($sortBy, $sortDir);
+        }
+        $query->orderBy('id');
+
+        $stations = $query->paginate($perPage);
+
+        return response()->json([
+            'data' => $stations->getCollection()->map(fn (TruckStation $station) => [
+                'id' => $station->id,
+                'name' => $station->name,
+                'brand' => $station->brand?->name,
+                'address' => $station->address,
+                'phone' => $station->phone,
+                'province' => $station->province?->name,
+                'ward' => $station->ward?->name,
+            ])->values(),
+            'meta' => [
+                'current_page' => $stations->currentPage(),
+                'last_page' => $stations->lastPage(),
+                'per_page' => $stations->perPage(),
+                'total' => $stations->total(),
+                'from' => $stations->firstItem(),
+                'to' => $stations->lastItem(),
+            ],
         ]);
     }
 

@@ -1040,6 +1040,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/my-customer/ajax', [PageController::class, 'myCustomerAjax'])->name('pages.my_customer.ajax');
         Route::get('/my-customer/create', [PageController::class, 'myCustomerCreate'])->name('my_customer.create');
         Route::get('/my-customer/check-duplicate', [PageController::class, 'myCustomerCheckDuplicate'])->name('my_customer.check_duplicate');
+        Route::get('/my-customer/truck-stations/picker', [PageController::class, 'myCustomerTruckStations'])->name('my_customer.truck_stations');
         Route::post('/my-customer', [PageController::class, 'myCustomerStore'])->name('my_customer.store');
         Route::get('/my-customer/{customer}/edit', [PageController::class, 'myCustomerEdit'])->name('my_customer.edit');
         Route::put('/my-customer/{customer}', [PageController::class, 'myCustomerUpdate'])->name('my_customer.update');

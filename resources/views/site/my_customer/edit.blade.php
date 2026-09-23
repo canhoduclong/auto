@@ -359,23 +359,29 @@
                             <input type="hidden" name="use_truck_station" id="use_truck_station_hidden" value="{{ old('truck_station_id', $customer->truck_station_id) ? '1' : '0' }}">
                             <input type="hidden" name="truck_route_id" value="">
 
-                            <label for="truck_station_id" class="form-label mc-form-label">Trạm nhận hàng</label>
-                            <select class="form-select mc-form-control @error('truck_station_id') is-invalid @enderror" name="truck_station_id" id="truck_station_id">
-                                <option value="">Không giao qua trạm xe</option>
-                                @foreach($truckStations as $station)
-                                    @php
-                                        $stationLocation = collect([$station->address, $station->ward?->name, $station->province?->name])->filter()->implode(', ');
-                                    @endphp
-                                    <option value="{{ $station->id }}"
-                                        data-address="{{ $stationLocation }}"
-                                        data-phone="{{ $station->phone }}"
-                                        @selected((string) old('truck_station_id', $customer->truck_station_id) === (string) $station->id)>
-                                        {{ $station->name }}{{ $station->brand ? ' — '.$station->brand->name : '' }}{{ $stationLocation ? ' — '.$stationLocation : '' }}{{ !$station->is_active ? ' (đã ngừng hoạt động)' : '' }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('truck_station_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            <div class="mc-help mt-2">Chọn đúng trạm mà bạn sẽ giao hàng cho khách. Không cần quản lý hoặc chọn tuyến xe.</div>
+                            <input type="hidden" name="truck_station_id" id="truck_station_id" value="{{ old('truck_station_id', $customer->truck_station_id) }}">
+                            <label class="form-label mc-form-label">Trạm nhận hàng</label>
+                            <div class="border rounded-3 p-3 bg-light" id="truck-station-selection">
+                                <div id="truck-station-empty" class="{{ $selectedTruckStation ? 'd-none' : '' }}">
+                                    <div class="text-muted mb-2">Chưa chọn trạm giao hàng.</div>
+                                </div>
+                                <div id="truck-station-selected" class="{{ $selectedTruckStation ? '' : 'd-none' }}">
+                                    <div class="fw-bold text-primary" id="truck-station-selected-name">{{ $selectedTruckStation?->name }}</div>
+                                    <div class="small text-muted" id="truck-station-selected-brand">{{ $selectedTruckStation?->brand?->name }}</div>
+                                    <div class="small mt-1" id="truck-station-selected-location">{{ collect([$selectedTruckStation?->address, $selectedTruckStation?->ward?->name, $selectedTruckStation?->province?->name])->filter()->implode(', ') }}</div>
+                                    <div class="small text-danger mt-1 {{ $selectedTruckStation && !$selectedTruckStation->is_active ? '' : 'd-none' }}" id="truck-station-selected-inactive">Trạm hiện tại đã ngừng hoạt động. Vui lòng chọn trạm khác.</div>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2 mt-3">
+                                    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#truckStationPickerModal">
+                                        <i class="bi bi-search me-1"></i> Tìm và chọn trạm xe
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger btn-sm {{ $selectedTruckStation ? '' : 'd-none' }}" id="clear-truck-station">
+                                        <i class="bi bi-x-circle me-1"></i> Bỏ chọn
+                                    </button>
+                                </div>
+                            </div>
+                            @error('truck_station_id')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                            <div class="mc-help mt-2">Danh sách trạm được tải trong popup, hỗ trợ tìm kiếm, sắp xếp và phân trang.</div>
 
                             <div class="row g-3 mt-1">
                                 <div class="col-12 col-md-8">
@@ -400,6 +406,74 @@
 
                 </form>
             </div> 
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="truckStationPickerModal" tabindex="-1" aria-labelledby="truckStationPickerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title fw-bold" id="truckStationPickerModalLabel"><i class="bi bi-truck me-2"></i>Chọn trạm xe giao hàng</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 align-items-end mb-3">
+                    <div class="col-12 col-lg-6">
+                        <label for="truck-station-search" class="form-label small fw-semibold mb-1">Tìm kiếm</label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="search" class="form-control" id="truck-station-search" placeholder="Tên trạm, nhà xe, địa chỉ, điện thoại..." autocomplete="off">
+                            <button type="button" class="btn btn-outline-secondary" id="truck-station-search-clear">Xóa</button>
+                        </div>
+                    </div>
+                    <div class="col-7 col-lg-3">
+                        <label for="truck-station-sort" class="form-label small fw-semibold mb-1">Sắp xếp</label>
+                        <select class="form-select" id="truck-station-sort">
+                            <option value="name:asc">Tên trạm A → Z</option>
+                            <option value="name:desc">Tên trạm Z → A</option>
+                            <option value="brand:asc">Nhà xe A → Z</option>
+                            <option value="address:asc">Địa chỉ A → Z</option>
+                            <option value="phone:asc">Điện thoại tăng dần</option>
+                        </select>
+                    </div>
+                    <div class="col-5 col-lg-3">
+                        <label for="truck-station-per-page" class="form-label small fw-semibold mb-1">Hiển thị</label>
+                        <select class="form-select" id="truck-station-per-page">
+                            <option value="10">10 trạm / trang</option>
+                            <option value="20">20 trạm / trang</option>
+                            <option value="50">50 trạm / trang</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-2 small text-muted">
+                    <span id="truck-station-count">Đang tải...</span>
+                    <span id="truck-station-page-info">Trang 1/1</span>
+                </div>
+                <div class="table-responsive border rounded-3">
+                    <table class="table table-hover align-middle mb-0 truck-station-table">
+                        <thead>
+                            <tr>
+                                <th>Tên trạm</th>
+                                <th>Nhà xe</th>
+                                <th>Địa chỉ</th>
+                                <th>Điện thoại</th>
+                                <th class="text-end" style="width:90px">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="truck-station-picker-body"></tbody>
+                    </table>
+                </div>
+                <div id="truck-station-picker-status" class="text-center text-muted py-4">Đang tải danh sách...</div>
+            </div>
+            <div class="modal-footer d-flex justify-content-between">
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-secondary" id="truck-station-prev"><i class="bi bi-chevron-left"></i> Trang trước</button>
+                    <button type="button" class="btn btn-outline-secondary" id="truck-station-next">Trang sau <i class="bi bi-chevron-right"></i></button>
+                </div>
+                <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Đóng</button>
+            </div>
         </div>
     </div>
 </div>
@@ -527,17 +601,186 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     /* ── Trạm xe giao hàng ── */
-    const truckStationSelect = document.getElementById('truck_station_id');
+    const truckStationPickerUrl = @json(route('my_customer.truck_stations'));
+    const truckStationModal = document.getElementById('truckStationPickerModal');
+    const truckStationId = document.getElementById('truck_station_id');
     const useTruckStation = document.getElementById('use_truck_station_hidden');
     const truckStationAddress = document.getElementById('truck_station_address');
     const truckStationPhone = document.getElementById('truck_station_phone');
+    const truckStationEmpty = document.getElementById('truck-station-empty');
+    const truckStationSelected = document.getElementById('truck-station-selected');
+    const truckStationSelectedName = document.getElementById('truck-station-selected-name');
+    const truckStationSelectedBrand = document.getElementById('truck-station-selected-brand');
+    const truckStationSelectedLocation = document.getElementById('truck-station-selected-location');
+    const truckStationSelectedInactive = document.getElementById('truck-station-selected-inactive');
+    const clearTruckStation = document.getElementById('clear-truck-station');
+    const truckStationSearch = document.getElementById('truck-station-search');
+    const truckStationSearchClear = document.getElementById('truck-station-search-clear');
+    const truckStationSort = document.getElementById('truck-station-sort');
+    const truckStationPerPage = document.getElementById('truck-station-per-page');
+    const truckStationBody = document.getElementById('truck-station-picker-body');
+    const truckStationStatus = document.getElementById('truck-station-picker-status');
+    const truckStationCount = document.getElementById('truck-station-count');
+    const truckStationPageInfo = document.getElementById('truck-station-page-info');
+    const truckStationPrev = document.getElementById('truck-station-prev');
+    const truckStationNext = document.getElementById('truck-station-next');
+    let truckStationRows = [];
+    let truckStationSearchTimer;
+    let truckStationRequest;
+    let truckStationLoaded = false;
+    const truckStationState = { page: 1, lastPage: 1 };
 
-    truckStationSelect?.addEventListener('change', function () {
-        const option = this.options[this.selectedIndex];
-        useTruckStation.value = this.value ? '1' : '0';
-        truckStationAddress.value = this.value ? (option.dataset.address || '') : '';
-        truckStationPhone.value = this.value ? (option.dataset.phone || '') : '';
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function stationLocation(station) {
+        return [station.address, station.ward, station.province].filter(Boolean).join(', ');
+    }
+
+    function renderSelectedTruckStation(station) {
+        const hasStation = Boolean(station?.id);
+        truckStationId.value = hasStation ? station.id : '';
+        useTruckStation.value = hasStation ? '1' : '0';
+        truckStationEmpty.classList.toggle('d-none', hasStation);
+        truckStationSelected.classList.toggle('d-none', !hasStation);
+        clearTruckStation.classList.toggle('d-none', !hasStation);
+        truckStationSelectedInactive.classList.add('d-none');
+
+        if (!hasStation) {
+            truckStationAddress.value = '';
+            truckStationPhone.value = '';
+            return;
+        }
+
+        const location = stationLocation(station);
+        truckStationSelectedName.textContent = station.name || '';
+        truckStationSelectedBrand.textContent = station.brand || '';
+        truckStationSelectedLocation.textContent = location;
+        truckStationAddress.value = location;
+        truckStationPhone.value = station.phone || '';
+    }
+
+    function setTruckStationLoading(loading) {
+        truckStationStatus.style.display = loading ? '' : 'none';
+        truckStationStatus.innerHTML = loading
+            ? '<span class="spinner-border spinner-border-sm me-2"></span>Đang tải danh sách...'
+            : '';
+    }
+
+    async function loadTruckStations() {
+        if (truckStationRequest) truckStationRequest.abort();
+        truckStationRequest = new AbortController();
+        setTruckStationLoading(true);
+        truckStationBody.innerHTML = '';
+
+        const [sortBy, sortDir] = truckStationSort.value.split(':');
+        const params = new URLSearchParams({
+            q: truckStationSearch.value.trim(),
+            sort_by: sortBy,
+            sort_dir: sortDir,
+            per_page: truckStationPerPage.value,
+            page: String(truckStationState.page),
+        });
+
+        try {
+            const response = await fetch(truckStationPickerUrl + '?' + params.toString(), {
+                signal: truckStationRequest.signal,
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!response.ok) throw new Error('Không thể tải danh sách trạm xe.');
+
+            const payload = await response.json();
+            truckStationRows = Array.isArray(payload.data) ? payload.data : [];
+            const meta = payload.meta || {};
+            truckStationState.page = Number(meta.current_page || 1);
+            truckStationState.lastPage = Number(meta.last_page || 1);
+            truckStationCount.textContent = Number(meta.total || 0)
+                ? `Hiển thị ${meta.from || 0}-${meta.to || 0} / ${meta.total} trạm`
+                : '0 trạm';
+            truckStationPageInfo.textContent = `Trang ${truckStationState.page}/${truckStationState.lastPage}`;
+            truckStationPrev.disabled = truckStationState.page <= 1;
+            truckStationNext.disabled = truckStationState.page >= truckStationState.lastPage;
+
+            if (!truckStationRows.length) {
+                truckStationStatus.style.display = '';
+                truckStationStatus.textContent = 'Không tìm thấy trạm xe phù hợp.';
+                return;
+            }
+
+            truckStationStatus.style.display = 'none';
+            truckStationBody.innerHTML = truckStationRows.map(station => {
+                const active = String(station.id) === String(truckStationId.value);
+                return `<tr class="${active ? 'table-primary' : ''}" data-station-id="${station.id}">
+                    <td><div class="fw-semibold">${escapeHtml(station.name)}</div></td>
+                    <td>${escapeHtml(station.brand || '—')}</td>
+                    <td>${escapeHtml(stationLocation(station) || '—')}</td>
+                    <td>${escapeHtml(station.phone || '—')}</td>
+                    <td class="text-end"><button type="button" class="btn btn-sm ${active ? 'btn-success' : 'btn-primary'}" data-select-station="${station.id}">${active ? '<i class="bi bi-check-circle me-1"></i>Đã chọn' : 'Chọn'}</button></td>
+                </tr>`;
+            }).join('');
+        } catch (error) {
+            if (error.name === 'AbortError') return;
+            truckStationStatus.style.display = '';
+            truckStationStatus.textContent = error.message || 'Có lỗi khi tải danh sách trạm xe.';
+            truckStationCount.textContent = 'Không thể tải dữ liệu';
+        }
+    }
+
+    truckStationModal?.addEventListener('shown.bs.modal', function () {
+        if (!truckStationLoaded) {
+            truckStationLoaded = true;
+            loadTruckStations();
+        }
+        truckStationSearch.focus();
     });
+    truckStationSearch?.addEventListener('input', function () {
+        clearTimeout(truckStationSearchTimer);
+        truckStationSearchTimer = setTimeout(function () {
+            truckStationState.page = 1;
+            loadTruckStations();
+        }, 300);
+    });
+    truckStationSearchClear?.addEventListener('click', function () {
+        truckStationSearch.value = '';
+        truckStationState.page = 1;
+        loadTruckStations();
+        truckStationSearch.focus();
+    });
+    [truckStationSort, truckStationPerPage].forEach(control => control?.addEventListener('change', function () {
+        truckStationState.page = 1;
+        loadTruckStations();
+    }));
+    truckStationPrev?.addEventListener('click', function () {
+        if (truckStationState.page > 1) {
+            truckStationState.page--;
+            loadTruckStations();
+        }
+    });
+    truckStationNext?.addEventListener('click', function () {
+        if (truckStationState.page < truckStationState.lastPage) {
+            truckStationState.page++;
+            loadTruckStations();
+        }
+    });
+    truckStationBody?.addEventListener('click', function (event) {
+        const button = event.target.closest('[data-select-station]');
+        if (!button) return;
+        const station = truckStationRows.find(item => String(item.id) === String(button.dataset.selectStation));
+        if (!station) return;
+        renderSelectedTruckStation(station);
+        bootstrap.Modal.getInstance(truckStationModal)?.hide();
+    });
+    clearTruckStation?.addEventListener('click', function () {
+        renderSelectedTruckStation(null);
+        if (truckStationLoaded) loadTruckStations();
+    });
+
     /* ── Dynamic product rows ── */
     const extraRows  = document.getElementById('extra-product-rows');
     const btnAddProd = document.getElementById('btn-add-product');
