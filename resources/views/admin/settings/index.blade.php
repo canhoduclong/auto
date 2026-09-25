@@ -1,0 +1,760 @@
+@extends('layouts.app')
+
+@section('content')
+<div class="container-fluid settings-page py-3 py-lg-4">
+    <div class="settings-hero card border-0 mb-3">
+        <div class="card-body d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2">
+            <div>
+                <h2 class="mb-1">Website Settings</h2>
+                <p class="mb-0">Quản trị cấu hình thương hiệu, hình ảnh hiển thị và thông tin liên hệ từ một màn hình tập trung.</p>
+            </div>
+            <span class="badge text-bg-light px-3 py-2">Admin Panel</span>
+        </div>
+    </div>
+
+    @if (session('success'))
+        <div class="alert alert-success border-0 shadow-sm">{{ session('success') }}</div>
+    @endif
+
+    @if (session('error'))
+        <div class="alert alert-danger border-0 shadow-sm">{{ session('error') }}</div>
+    @endif
+
+    @if ($errors->any())
+        <div class="alert alert-danger border-0 shadow-sm mb-3">
+            <div class="fw-semibold mb-1">Không thể thực hiện thao tác</div>
+            <ul class="mb-0 ps-3">
+                @foreach ($errors->all() as $message)
+                    <li>{{ $message }}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
+    <div class="row">
+        @if(session('deploy_output'))
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm mb-3 border-{{ session('deploy_status') === 'error' ? 'danger' : 'success' }}">
+                <div class="card-header bg-{{ session('deploy_status') === 'error' ? 'danger' : 'success' }} bg-opacity-10 border-0">
+                    <strong>
+                        <i class="bi {{ session('deploy_status') === 'error' ? 'bi-exclamation-triangle' : 'bi-terminal' }} me-1"></i>
+                        Deploy Notification
+                    </strong>
+                </div>
+                <div class="card-body">
+                    <pre class="settings-deploy-log mb-0">{{ session('deploy_output') }}</pre>
+                </div>
+            </div>
+        </div>
+        @endif
+        @if(($showPushFeature ?? true) && session('push_output'))
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm mb-3 border-{{ session('push_status') === 'error' ? 'danger' : 'success' }}">
+                <div class="card-header bg-{{ session('push_status') === 'error' ? 'danger' : 'success' }} bg-opacity-10 border-0">
+                    <strong>
+                        <i class="bi {{ session('push_status') === 'error' ? 'bi-exclamation-triangle' : 'bi-git' }} me-1"></i>
+                        Push Notification
+                    </strong>
+                </div>
+                <div class="card-body">
+                    <pre class="settings-deploy-log mb-0">{{ session('push_output') }}</pre>
+                </div>
+            </div>
+        </div>
+        @endif 
+        
+        @if($showPushFeature ?? true)
+        <div class="col-md-6">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white border-0 pt-3 pb-0">
+                    <h5 class="mb-1">Push code lên GitHub</h5>
+                    <p class="text-muted small mb-0">Commit message lấy từ ô nhập liệu bên dưới, source local: /var/www/auto.com.</p>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ route('admin.settings.push') }}" onsubmit="return confirm('Xác nhận commit và push code lên GitHub?');">
+                        @csrf
+                        <input type="hidden" name="key" value="huy2024">
+                        <div class="mb-2">
+                            <label for="commit_message" class="form-label">Commit message</label>
+                            <textarea id="commit_message" name="commit_message" class="form-control" rows="3" placeholder="Nhập nội dung commit..." required>{{ old('commit_message') }}</textarea>
+                        </div>
+                        <div class="d-flex gap-2 flex-wrap align-items-center">
+                            <button type="submit" class="btn btn-dark btn-sm">
+                                <i class="bi bi-git me-1"></i>Commit & Push
+                            </button>
+                            <a href="#push-history-section" class="btn btn-outline-secondary btn-sm">
+                                <i class="bi bi-clock-history me-1"></i>Xem lịch sử push gần đây
+                            </a>
+                            <small class="text-muted">Kết quả push sẽ hiển thị tại khối Push Notification phía trên.</small>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        @endif
+       
+         <div class="col-md-6">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-header bg-white border-0 pt-3 pb-0 d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                    <div>
+                        <h5 class="mb-1">Deploy hệ thống</h5>
+                        <p class="text-muted small mb-0">Pull code mới nhất từ branch hoanglong và chạy các bước migrate/cache.</p>
+                    </div>
+                    <form method="POST" action="{{ route('admin.settings.deploy') }}" class="d-inline" onsubmit="return confirm('Xác nhận deploy code mới nhất?');">
+                        @csrf
+                        <input type="hidden" name="key" value="huy2024">
+                        <button type="submit" class="btn btn-warning btn-sm">
+                            <i class="bi bi-cloud-arrow-down me-1"></i>Deploy
+                        </button>
+                    </form>
+                </div>
+                <div class="card-body pt-2">
+                    <small class="text-muted">Kết quả deploy sẽ hiển thị ngay tại khối Deploy Notification phía trên.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if(session('artisan_output'))
+        <div class="card border-0 shadow-sm mb-3 border-success">
+            <div class="card-header bg-success bg-opacity-10 border-0">
+                <strong><i class="bi bi-terminal me-1"></i>Kết quả: {{ session('artisan_title') }}</strong>
+            </div>
+            <div class="card-body">
+                <pre class="settings-deploy-log mb-0">{{ session('artisan_output') }}</pre>
+            </div>
+        </div>
+    @endif
+
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-white border-0 pt-3 pb-0">
+            <h5 class="mb-1">Lệnh hệ thống</h5>
+            <p class="text-muted small mb-0">Thực thi các lệnh artisan / composer / PHP-FPM cần thiết sau khi pull code.</p>
+        </div>
+        <div class="card-body d-flex flex-wrap gap-2">
+            @foreach([
+                ['cmd' => 'dump-autoload',  'label' => 'composer dump-autoload',     'icon' => 'bi-arrow-repeat',        'color' => 'btn-primary'],
+                ['cmd' => 'fpm-reload',     'label' => 'PHP-FPM reload',             'icon' => 'bi-lightning-charge',    'color' => 'btn-warning text-dark'],
+                ['cmd' => 'fpm-restart',    'label' => 'PHP-FPM restart',            'icon' => 'bi-arrow-counterclockwise','color' => 'btn-danger'],
+                ['cmd' => 'optimize-clear', 'label' => 'optimize:clear',             'icon' => 'bi-trash3',              'color' => 'btn-secondary'],
+                ['cmd' => 'view-clear',     'label' => 'view:clear',                 'icon' => 'bi-eye-slash',           'color' => 'btn-outline-secondary'],
+                ['cmd' => 'cache-clear',    'label' => 'cache:clear',                'icon' => 'bi-database-x',          'color' => 'btn-outline-secondary'],
+                ['cmd' => 'config-clear',   'label' => 'config:clear',               'icon' => 'bi-gear-wide',           'color' => 'btn-outline-secondary'],
+                ['cmd' => 'route-clear',    'label' => 'route:clear',                'icon' => 'bi-signpost-split',      'color' => 'btn-outline-secondary'],
+                ['cmd' => 'migrate',        'label' => 'migrate --force',            'icon' => 'bi-database-up',         'color' => 'btn-danger'],
+                ['cmd' => 'queue-restart',  'label' => 'queue:restart',              'icon' => 'bi-arrow-clockwise',     'color' => 'btn-outline-dark'],
+            ] as $btn)
+                <form method="POST" action="{{ route('admin.settings.artisan') }}" class="d-inline" onsubmit="return confirm('Chạy lệnh: {{ $btn['label'] }}?')">
+                    @csrf
+                    <input type="hidden" name="cmd" value="{{ $btn['cmd'] }}">
+                    <button type="submit" class="btn btn-sm {{ $btn['color'] }}">
+                        <i class="bi {{ $btn['icon'] }} me-1"></i>{{ $btn['label'] }}
+                    </button>
+                </form>
+            @endforeach
+        </div>
+    </div>
+
+    @if($showPushFeature ?? true)
+        <div class="card border-0 shadow-sm mb-3" id="push-history-section">
+            <div class="card-header bg-white border-0 pt-3 pb-0">
+                <h5 class="mb-1">Lịch sử Push gần đây</h5>
+                <p class="text-muted small mb-0">Theo dõi các lần thay đổi code local đã đẩy lên GitHub.</p>
+            </div>
+            <div class="card-body">
+                @if(!empty($pushHistory))
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Thời gian</th>
+                                    <th>Branch</th>
+                                    <th>Commit</th>
+                                    <th>Trạng thái</th>
+                                    <th>User</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($pushHistory as $log)
+                                    <tr>
+                                        <td>{{ $log['time'] ?? '-' }}</td>
+                                        <td>{{ $log['branch'] ?? '-' }}</td>
+                                        <td>{{ $log['commit_message'] ?? '-' }}</td>
+                                        <td>
+                                            <span class="badge {{ ($log['status'] ?? '') === 'success' ? 'bg-success' : 'bg-danger' }}">
+                                                {{ strtoupper($log['status'] ?? 'unknown') }}
+                                            </span>
+                                        </td>
+                                        <td>{{ $log['user'] ?? '-' }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @else
+                    <div class="text-muted small">Chưa có lịch sử push nào.</div>
+                @endif
+            </div>
+        </div>
+    @endif
+
+    <form action="{{ route('admin.settings.update') }}" method="POST" enctype="multipart/form-data" id="settings-form">
+        @csrf
+
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3 pb-0">
+                <h5 class="mb-1">Thông tin thương hiệu</h5>
+                <p class="text-muted small mb-0">Các thông tin văn bản cơ bản hiển thị ở trang chủ và footer.</p>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-lg-6">
+                        <label for="brand_name" class="form-label">Brand Name</label>
+                        <input type="text" class="form-control" id="brand_name" name="brand_name" value="{{ $settings['brand_name']->value ?? '' }}" placeholder="VD: Auto.com">
+                    </div>
+                    <div class="col-lg-6">
+                        <label for="slogan" class="form-label">Slogan</label>
+                        <input type="text" class="form-control" id="slogan" name="slogan" value="{{ $settings['slogan']->value ?? '' }}" placeholder="VD: Chất lượng tạo niềm tin">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label">Privacy Policy URL (legacy)</label>
+                        <input type="text" class="form-control" id="policy_page" name="policy_page" value="{{ $settings['policy_page']->value ?? '' }}" placeholder="https://...">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3 pb-0">
+                <h5 class="mb-1">Hình ảnh thương hiệu</h5>
+                <p class="text-muted small mb-0">Chọn ảnh từ thư viện media. Có thể thay đổi bất kỳ lúc nào.</p>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-xl-4 col-md-6">
+                        @php $logoMedia = isset($settings['logo']) ? App\Models\Media::find($settings['logo']->value) : null; @endphp
+                        <div class="media-field">
+                            <div class="media-field__label">Logo</div>
+                            <div class="media-preview" id="logo-preview">
+                                @if($logoMedia)
+                                    <img src="{{ asset('storage/' . $logoMedia->file_path) }}" class="media-preview__img" alt="Logo">
+                                @else
+                                    <span class="media-preview__empty">Chưa chọn ảnh</span>
+                                @endif
+                            </div>
+                            <input type="hidden" name="logo" id="logo-media-id" value="{{ $settings['logo']->value ?? '' }}">
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-primary btn-sm" id="btnSelectLogo">Chọn ảnh</button>
+                                <button type="button" class="btn btn-light btn-sm border" data-clear-target="logo">Bỏ chọn</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-4 col-md-6">
+                        @php $bannerMedia = isset($settings['banner']) ? App\Models\Media::find($settings['banner']->value) : null; @endphp
+                        <div class="media-field">
+                            <div class="media-field__label">Banner</div>
+                            <div class="media-preview" id="banner-preview">
+                                @if($bannerMedia)
+                                    <img src="{{ asset('storage/' . $bannerMedia->file_path) }}" class="media-preview__img" alt="Banner">
+                                @else
+                                    <span class="media-preview__empty">Chưa chọn ảnh</span>
+                                @endif
+                            </div>
+                            <input type="hidden" name="banner" id="banner-media-id" value="{{ $settings['banner']->value ?? '' }}">
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-primary btn-sm" id="btnSelectBanner">Chọn ảnh</button>
+                                <button type="button" class="btn btn-light btn-sm border" data-clear-target="banner">Bỏ chọn</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-4 col-md-6">
+                        @php $footerLogoMedia = isset($settings['footer_logo']) ? App\Models\Media::find($settings['footer_logo']->value) : null; @endphp
+                        <div class="media-field">
+                            <div class="media-field__label">Footer Logo</div>
+                            <div class="media-preview" id="footer-logo-preview">
+                                @if($footerLogoMedia)
+                                    <img src="{{ asset('storage/' . $footerLogoMedia->file_path) }}" class="media-preview__img" alt="Footer Logo">
+                                @else
+                                    <span class="media-preview__empty">Chưa chọn ảnh</span>
+                                @endif
+                            </div>
+                            <input type="hidden" name="footer_logo" id="footer-logo-media-id" value="{{ $settings['footer_logo']->value ?? '' }}">
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-primary btn-sm" id="btnSelectFooterLogo">Chọn ảnh</button>
+                                <button type="button" class="btn btn-light btn-sm border" data-clear-target="footer-logo">Bỏ chọn</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-4 col-md-6">
+                        @php $priceLogoMedia = isset($settings['price_logo']) ? App\Models\Media::find($settings['price_logo']->value) : null; @endphp
+                        <div class="media-field">
+                            <div class="media-field__label">Logo Bảng Giá <small class="text-muted fw-normal">(dùng trong trang báo giá hàng ngày)</small></div>
+                            <div class="media-preview" id="price-logo-preview">
+                                @if($priceLogoMedia)
+                                    <img src="{{ asset('storage/' . $priceLogoMedia->file_path) }}" class="media-preview__img" alt="Price Logo">
+                                @else
+                                    <span class="media-preview__empty">Chưa chọn ảnh</span>
+                                @endif
+                            </div>
+                            <input type="hidden" name="price_logo" id="price-logo-media-id" value="{{ $settings['price_logo']->value ?? '' }}">
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-primary btn-sm" id="btnSelectPriceLogo">Chọn ảnh</button>
+                                <button type="button" class="btn btn-light btn-sm border" data-clear-target="price-logo">Bỏ chọn</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-xl-4 col-md-6">
+                        @php $alertLogoMedia = isset($settings['alert_logo']) ? App\Models\Media::find($settings['alert_logo']->value) : null; @endphp
+                        <div class="media-field">
+                            <div class="media-field__label">Logo Thông Báo <small class="text-muted fw-normal">(dùng trong các thông báo, alert)</small></div>
+                            <div class="media-preview" id="alert-logo-preview">
+                                @if($alertLogoMedia)
+                                    <img src="{{ asset('storage/' . $alertLogoMedia->file_path) }}" class="media-preview__img" alt="Alert Logo">
+                                @else
+                                    <span class="media-preview__empty">Chưa chọn ảnh</span>
+                                @endif
+                            </div>
+                            <input type="hidden" name="alert_logo" id="alert-logo-media-id" value="{{ $settings['alert_logo']->value ?? '' }}">
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-primary btn-sm" id="btnSelectAlertLogo">Chọn ảnh</button>
+                                <button type="button" class="btn btn-light btn-sm border" data-clear-target="alert-logo">Bỏ chọn</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3 pb-0">
+                <h5 class="mb-1">Thông tin liên hệ doanh nghiệp</h5>
+                <p class="text-muted small mb-0">Thông tin hiển thị tại footer, hóa đơn hoặc trang liên hệ.</p>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label for="address" class="form-label">Address</label>
+                        <textarea class="form-control" id="address" name="address" rows="3">{{ $settings['address']->value ?? '' }}</textarea>
+                    </div>
+                    <div class="col-lg-4">
+                        <label for="hotline" class="form-label">Hotline</label>
+                        <input type="text" class="form-control" id="hotline" name="hotline" value="{{ $settings['hotline']->value ?? '' }}">
+                    </div>
+                    <div class="col-lg-4">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" value="{{ $settings['email']->value ?? '' }}">
+                    </div>
+                    <div class="col-lg-4">
+                        <label for="tax_number" class="form-label">Tax Number</label>
+                        <input type="text" class="form-control" id="tax_number" name="tax_number" value="{{ $settings['tax_number']->value ?? '' }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3 pb-0">
+                <h5 class="mb-1">Thông tin công ty (bảng báo giá)</h5>
+                <p class="text-muted small mb-0">Tên pháp lý, tài khoản ngân hàng dùng trên bảng báo giá.</p>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-lg-6">
+                        <label for="company_legal_name" class="form-label">Tên công ty (pháp lý)</label>
+                        <input type="text" class="form-control" id="company_legal_name" name="company_legal_name" value="{{ $settings['company_legal_name']->value ?? '' }}" placeholder="VD: CÔNG TY TNHH HOÀNG LONG TNT">
+                    </div>
+                    <div class="col-lg-6">
+                        <label for="bank_account" class="form-label">Số tài khoản</label>
+                        <input type="text" class="form-control" id="bank_account" name="bank_account" value="{{ $settings['bank_account']->value ?? '' }}" placeholder="VD: 123456789">
+                    </div>
+                    <div class="col-lg-6">
+                        <label for="bank_name" class="form-label">Ngân hàng</label>
+                        <input type="text" class="form-control" id="bank_name" name="bank_name" value="{{ $settings['bank_name']->value ?? '' }}" placeholder="VD: Vietcombank">
+                    </div>
+                    <div class="col-lg-6">
+                        <label for="bank_branch" class="form-label">Chi nhánh</label>
+                        <input type="text" class="form-control" id="bank_branch" name="bank_branch" value="{{ $settings['bank_branch']->value ?? '' }}" placeholder="VD: Chi nhánh TP. Hồ Chí Minh">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3 pb-0">
+                <h5 class="mb-1">Quản lý Priority + Khách tự do</h5>
+                <p class="text-muted small mb-0">Cấu hình số ngày hiệu lực theo từng Priority và số ngày chuyển khách về trạng thái tự do.</p>
+            </div>
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-lg-3">
+                        <label for="priority_1_days" class="form-label">Priority 1 (ngày)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            class="form-control"
+                            id="priority_1_days"
+                            name="priority_1_days"
+                            value="{{ $settings['priority_1_days']->value ?? 30 }}"
+                            placeholder="30"
+                        >
+                    </div>
+                    <div class="col-lg-3">
+                        <label for="priority_2_days" class="form-label">Priority 2 (ngày)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            class="form-control"
+                            id="priority_2_days"
+                            name="priority_2_days"
+                            value="{{ $settings['priority_2_days']->value ?? 21 }}"
+                            placeholder="21"
+                        >
+                    </div>
+                    <div class="col-lg-3">
+                        <label for="priority_3_days" class="form-label">Priority 3 (ngày)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            class="form-control"
+                            id="priority_3_days"
+                            name="priority_3_days"
+                            value="{{ $settings['priority_3_days']->value ?? 14 }}"
+                            placeholder="14"
+                        >
+                    </div>
+                    <div class="col-lg-3">
+                        <label for="free_customer_days" class="form-label">Không có đơn mới (ngày)</label>
+                        <input
+                            type="number"
+                            min="0"
+                            class="form-control"
+                            id="free_customer_days"
+                            name="free_customer_days"
+                            value="{{ $settings['free_customer_days']->value ?? ($settings['customer_free_days']->value ?? 0) }}"
+                            placeholder="0"
+                        >
+                        <input type="hidden" name="customer_free_days" value="{{ $settings['free_customer_days']->value ?? ($settings['customer_free_days']->value ?? 0) }}">
+                    </div>
+                    <div class="col-lg-12">
+                        <div class="small text-muted pt-lg-4">
+                            `0` nghĩa là không tự chuyển trạng thái theo thời gian. Nên cấu hình thêm `customer_free_days` cũ nếu cần tương thích logic hiện hành.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white border-0 pt-3 pb-0">
+                <h5 class="mb-1">Slider trang chủ</h5>
+                <p class="text-muted small mb-0">Nên dùng ảnh cùng tỉ lệ để hiển thị đẹp và đồng nhất.</p>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    @for ($i = 1; $i <= 5; $i++)
+                        @php $sliderMedia = isset($settings['slider_' . $i]) ? App\Models\Media::find($settings['slider_' . $i]->value) : null; @endphp
+                        <div class="col-xl-4 col-md-6">
+                            <div class="media-field">
+                                <div class="media-field__label">Slider Image {{ $i }}</div>
+                                <div class="media-preview" id="slider_{{ $i }}-preview">
+                                    @if($sliderMedia)
+                                        <img src="{{ asset('storage/' . $sliderMedia->file_path) }}" class="media-preview__img" alt="Slider {{ $i }}">
+                                    @else
+                                        <span class="media-preview__empty">Chưa chọn ảnh</span>
+                                    @endif
+                                </div>
+                                <input type="hidden" name="slider_{{ $i }}" id="slider_{{ $i }}-media-id" value="{{ $settings['slider_' . $i]->value ?? '' }}">
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-primary btn-sm" id="btnSelectSlider{{ $i }}">Chọn ảnh</button>
+                                    <button type="button" class="btn btn-light btn-sm border" data-clear-target="slider_{{ $i }}">Bỏ chọn</button>
+                                </div>
+                            </div>
+                        </div>
+                    @endfor
+                </div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3 pb-0">
+                <h5 class="mb-1"><i class="bi bi-person-plus me-2 text-primary"></i>Đăng ký & tạo User</h5>
+                <p class="text-muted small mb-0">Bật/tắt toàn bộ chức năng tạo user mới từ trang Users và link đăng ký.</p>
+            </div>
+            <div class="card-body">
+                <input type="hidden" name="user_registration_enabled" value="0">
+                <div class="form-check form-switch">
+                    <input
+                        class="form-check-input"
+                        type="checkbox"
+                        role="switch"
+                        id="user_registration_enabled"
+                        name="user_registration_enabled"
+                        value="1"
+                        {{ (($settings['user_registration_enabled']->value ?? '1') === '1') ? 'checked' : '' }}
+                    >
+                    <label class="form-check-label" for="user_registration_enabled">
+                        Cho phép tạo user mới (Users + /register)
+                    </label>
+                </div>
+                <div class="form-text">Khi tắt, hệ thống sẽ chặn truy cập các đường dẫn đăng ký/tạo user mới.</div>
+            </div>
+        </div>
+
+        {{-- ─── Cài đặt Kho ─────────────────────────────────────────────── --}}
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white border-0 pt-3 pb-0">
+                <h5 class="mb-1"><i class="bi bi-box-seam me-2 text-warning"></i>Cài đặt Kho</h5>
+                <p class="text-muted small mb-0">Các thông số liên quan đến module quản lý kho hàng.</p>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label for="stock_in_max_edits" class="form-label fw-600">
+                            Số lần sửa tối đa mỗi phiếu nhập kho
+                        </label>
+                        <input type="number" class="form-control" id="stock_in_max_edits" name="stock_in_max_edits"
+                               min="0" max="99" value="{{ $settings['stock_in_max_edits']->value ?? 3 }}">
+                        <div class="form-text">Mặc định: 3. Đặt 0 để không cho phép sửa phiếu.</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="warehouse_return_warning_days" class="form-label fw-600">
+                            Cảnh báo phiếu trả quá hạn (ngày)
+                        </label>
+                        <input
+                            type="number"
+                            class="form-control"
+                            id="warehouse_return_warning_days"
+                            name="warehouse_return_warning_days"
+                            min="0"
+                            max="60"
+                            value="{{ $settings['warehouse_return_warning_days']->value ?? 2 }}"
+                        >
+                        <div class="form-text">Mặc định: 2 ngày. Đặt 0 để tắt cảnh báo quá hạn trên màn hình đơn trả.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-actions card border-0 shadow-sm">
+            <div class="card-body d-flex flex-column flex-md-row gap-2 justify-content-between align-items-md-center">
+                <p class="mb-0 text-muted small">Lưu ý: Thay đổi sẽ áp dụng ngay sau khi bấm lưu.</p>
+                <button type="submit" class="btn btn-primary px-4">Save Settings</button>
+            </div>
+        </div>
+    </form>
+</div>
+@endsection
+
+@push('styles')
+<style>
+.settings-page {
+    background: linear-gradient(180deg, #f4f7fb 0%, #eef3f9 100%);
+}
+
+.settings-hero {
+    background: linear-gradient(125deg, #163d63 0%, #0f7f77 100%);
+    color: #f8fbff;
+}
+
+.settings-hero p {
+    color: #d8e8f7;
+}
+
+.media-field {
+    border: 1px solid #d8e2ee;
+    border-radius: 12px;
+    padding: 12px;
+    background: #fff;
+}
+
+.media-field__label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #516176;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+.media-preview {
+    width: 100%;
+    min-height: 145px;
+    border: 1px dashed #cfd9e6;
+    background: #f8fbff;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.media-preview__img {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    display: block;
+}
+
+.media-preview__empty {
+    font-size: 13px;
+    color: #7a8ea8;
+}
+
+.settings-actions {
+    position: sticky;
+    bottom: 12px;
+    z-index: 10;
+}
+
+.settings-deploy-log {
+    white-space: pre-wrap;
+    word-break: break-word;
+    background: #0f172a;
+    color: #e2e8f0;
+    border-radius: 8px;
+    padding: 12px;
+    max-height: 420px;
+    overflow: auto;
+}
+</style>
+@endpush
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var currentTarget = null;
+    var popupUrl = '{{ route('media.library.popup') }}';
+
+    function ensureMediaModal() {
+        var existing = document.getElementById('settingsMediaModal');
+        if (existing) {
+            return existing;
+        }
+
+        var modalHtml = `
+            <div class="modal fade" id="settingsMediaModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable" style="max-width: 1180px;">
+                    <div class="modal-content border-0 shadow-lg">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Thư viện hình ảnh</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body p-0" style="height: min(82vh, 860px);">
+                            <iframe id="settingsMediaIframe" src="about:blank" frameborder="0" style="width:100%; height:100%;"></iframe>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+
+        var wrapper = document.createElement('div');
+        wrapper.innerHTML = modalHtml;
+        document.body.appendChild(wrapper.firstElementChild);
+
+        return document.getElementById('settingsMediaModal');
+    }
+
+    function openMediaModal(previewId, inputId) {
+        currentTarget = { previewId: previewId, inputId: inputId };
+
+        var modalEl = ensureMediaModal();
+        var iframe = document.getElementById('settingsMediaIframe');
+        iframe.src = popupUrl + '?picker=settings&t=' + Date.now();
+
+        var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
+    }
+
+    window.addEventListener('message', function(event) {
+        if (!event.data || !event.data.type) {
+            return;
+        }
+
+        if (event.data.type === 'mediaSelected' && currentTarget) {
+            var input = document.getElementById(currentTarget.inputId);
+            var preview = document.getElementById(currentTarget.previewId);
+
+            if (input) {
+                input.value = event.data.mediaId;
+            }
+
+            if (preview) {
+                preview.innerHTML = `<img src="${event.data.url}" class="media-preview__img">`;
+            }
+
+            var modalEl = document.getElementById('settingsMediaModal');
+            if (modalEl) {
+                bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+            }
+        }
+
+        if (event.data.type === 'closeMediaPopup') {
+            var modalEl = document.getElementById('settingsMediaModal');
+            if (modalEl) {
+                bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+            }
+        }
+    });
+
+    function setupMediaSelector(buttonId, previewId, inputId) {
+        var btn = document.getElementById(buttonId);
+        if (!btn) {
+            return;
+        }
+
+        btn.addEventListener('click', function() {
+            openMediaModal(previewId, inputId);
+        });
+    }
+
+    setupMediaSelector('btnSelectLogo', 'logo-preview', 'logo-media-id');
+    setupMediaSelector('btnSelectBanner', 'banner-preview', 'banner-media-id');
+    setupMediaSelector('btnSelectFooterLogo', 'footer-logo-preview', 'footer-logo-media-id');
+    setupMediaSelector('btnSelectPriceLogo', 'price-logo-preview', 'price-logo-media-id');
+    setupMediaSelector('btnSelectAlertLogo', 'alert-logo-preview', 'alert-logo-media-id');
+    @for ($i = 1; $i <= 5; $i++)
+        setupMediaSelector('btnSelectSlider{{ $i }}', 'slider_{{ $i }}-preview', 'slider_{{ $i }}-media-id');
+    @endfor
+
+    var clearMap = {
+        'logo': { previewId: 'logo-preview', inputId: 'logo-media-id' },
+        'banner': { previewId: 'banner-preview', inputId: 'banner-media-id' },
+        'footer-logo': { previewId: 'footer-logo-preview', inputId: 'footer-logo-media-id' },
+        'price-logo': { previewId: 'price-logo-preview', inputId: 'price-logo-media-id' },
+        'alert-logo': { previewId: 'alert-logo-preview', inputId: 'alert-logo-media-id' },
+        @for ($i = 1; $i <= 5; $i++)
+        'slider_{{ $i }}': { previewId: 'slider_{{ $i }}-preview', inputId: 'slider_{{ $i }}-media-id' },
+        @endfor
+    };
+
+    function clearMediaField(targetKey) {
+        var target = clearMap[targetKey];
+        if (!target) {
+            return;
+        }
+
+        var input = document.getElementById(target.inputId);
+        var preview = document.getElementById(target.previewId);
+
+        if (input) {
+            input.value = '';
+        }
+
+        if (preview) {
+            preview.innerHTML = '<span class="media-preview__empty">Chưa chọn ảnh</span>';
+        }
+    }
+
+    document.querySelectorAll('[data-clear-target]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            clearMediaField(btn.getAttribute('data-clear-target'));
+        });
+    });
+
+});
+</script>
+@endpush

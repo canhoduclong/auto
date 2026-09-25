@@ -1,0 +1,62 @@
+@extends($layout ?? 'layouts.warehouse')
+
+@section('title', $slip->code)
+
+@section('content')
+@php
+    $formatKg = static fn (float|int|string $value): string => rtrim(rtrim(number_format((float) $value, 3, ',', '.'), '0'), ',').' kg';
+    $dispatchRoutePrefix = $dispatchRoutePrefix ?? 'warehouse.dispatch-slips';
+    $readOnly = $readOnly ?? false;
+@endphp
+<div id="dispatchSlipShareContent" class="bg-white p-2">
+<div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+    <div><a href="{{ route($dispatchRoutePrefix.'.index') }}" class="small text-decoration-none"><i class="bi bi-arrow-left"></i> Danh sách phiếu</a><h4 class="fw-bold mt-1 mb-1">{{ $slip->code }}</h4><div class="text-muted">{{ $slip->sourceWarehouse?->name }} → {{ $slip->targetWarehouse?->name }} · {{ $slip->business_date->format('d/m/Y') }}</div></div>
+    <div class="d-flex gap-2 flex-wrap" data-share-exclude>
+        <a target="_blank" href="{{ route($dispatchRoutePrefix.'.print-export', $slip) }}" class="btn btn-outline-primary"><i class="bi bi-printer me-1"></i>In phiếu xuất tổng</a>
+        <button type="button" class="btn btn-outline-info" data-share-dispatch-slip data-share-target="#dispatchSlipShareContent" data-share-filename="chi-tiet-{{ $slip->code }}" data-share-title="Chi tiết {{ $slip->code }}"><i class="bi bi-share me-1"></i>Chia sẻ ảnh Zalo</button>
+        @unless($readOnly)
+        <a target="_blank" href="{{ route($dispatchRoutePrefix.'.print-import', $slip) }}" class="btn btn-outline-success"><i class="bi bi-printer me-1"></i>In phiếu nhập tổng</a>
+        @if($slip->status === 'draft' && (auth()->user()->hasRole('admin') || !auth()->user()->warehouse_id || (int) auth()->user()->warehouse_id === (int) $slip->source_warehouse_id))
+            <a href="{{ route($dispatchRoutePrefix.'.edit', $slip) }}" class="btn btn-warning"><i class="bi bi-pencil-square me-1"></i>Sửa phiếu</a>
+            <form method="POST" action="{{ route($dispatchRoutePrefix.'.finalize', $slip) }}" onsubmit="return confirm('Chốt phiếu và khóa danh sách bàn giao?');">@csrf<button class="btn btn-success fw-bold">Chốt phiếu</button></form>
+            <form method="POST" action="{{ route($dispatchRoutePrefix.'.destroy', $slip) }}" onsubmit="return confirm('Xóa phiếu đang mở này?');">@csrf @method('DELETE')<button class="btn btn-outline-danger">Xóa</button></form>
+        @endif
+        @if(!$readOnly && request()->routeIs('admin.warehouse-dispatch-slips.*') && $slip->status === 'finalized' && $slip->can_release_for_driver_pickup)
+            <form method="POST" action="{{ route($dispatchRoutePrefix.'.unfinalize', $slip) }}" onsubmit="return confirm('Gỡ chốt phiếu để chỉnh sửa lại?');">@csrf<button class="btn btn-warning"><i class="bi bi-unlock me-1"></i>Gỡ chốt</button></form>
+            <form method="POST" action="{{ route($dispatchRoutePrefix.'.destroy', $slip) }}" onsubmit="return confirm('Xóa phiếu này? Nội dung sẽ được trả về danh sách để lập phiếu khác.');">@csrf @method('DELETE')<button class="btn btn-outline-danger">Xóa</button></form>
+        @endif
+        @endunless
+    </div>
+</div>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="small text-muted">Trạng thái chứng từ</div><div class="fw-bold {{ $slip->status === 'draft' ? 'text-warning' : 'text-success' }}">{{ $slip->status === 'draft' ? 'Đang mở' : 'Đã chốt' }}</div></div></div></div>
+    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="small text-muted">Tài xế điều chuyển</div><div class="fw-bold">{{ $slip->shipper?->short_name ?: $slip->shipper?->name }}</div><div class="small">{{ $slip->shipper?->phone }}</div></div></div></div>
+    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="small text-muted">Tiến độ kho nhận</div><div class="fw-bold">{{ $slip->progress_label }}</div></div></div></div>
+    <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="small text-muted">Người lập/chốt</div><div class="fw-bold">{{ $slip->creator?->name }}</div><div class="small">{{ $slip->finalizer?->name ?: 'Chưa chốt' }}</div></div></div></div>
+</div>
+
+@if($slip->notes)<div class="alert alert-light border"><strong>Ghi chú bàn giao:</strong> {{ $slip->notes }}</div>@endif
+@if(!$readOnly && request()->routeIs('admin.warehouse-dispatch-slips.*') && $slip->status === 'finalized' && ($slip->mismatched_order_count ?? 0) > 0)
+    <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 flex-wrap">
+        <div><strong>Cảnh báo ngày:</strong> Có {{ $slip->mismatched_order_count }} đơn được tạo khác ngày nghiệp vụ {{ $slip->business_date->format('d/m/Y') }}.</div>
+        <form method="POST" action="{{ route($dispatchRoutePrefix.'.mismatched-orders.remove', $slip) }}" onsubmit="return confirm('Gỡ tất cả đơn khác ngày khỏi phiếu? Các đơn đã bắt đầu vận chuyển sẽ được giữ lại.');">
+            @csrf
+            <button type="submit" class="btn btn-warning btn-sm"><i class="bi bi-calendar-x me-1"></i>Gỡ tất cả đơn khác ngày</button>
+        </form>
+    </div>
+@endif
+
+<div class="card mb-3"><div class="card-header bg-white fw-bold">Danh sách đơn hoàn thiện</div><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead class="table-light"><tr><th>STT</th><th>Khách hàng / Mã đơn</th><th>Sale</th><th>Size</th><th class="text-end">Số lượng hàng</th><th class="text-end">KL thực tế đóng</th><th class="text-end">Giá trị hàng</th><th class="text-end">KL nhận</th><th>Trạng thái</th></tr></thead><tbody>
+@forelse($orderRows as $row)<tr><td>{{ $loop->iteration }}</td><td><div class="fs-5 fw-bold lh-sm text-dark">{{ $row['customer_name'] ?: 'Không rõ khách hàng' }}</div><div class="small fw-normal text-muted mt-1">Mã đơn: {{ $row['code'] }}</div><div class="small text-muted">Ngày tạo đơn: {{ optional($row['order']->created_at)->format('d/m/Y H:i') ?: '—' }}</div></td><td>{{ $row['sale_name'] }}</td><td class="fw-semibold">{{ $row['sizes'] }}</td><td class="text-end fw-bold text-nowrap">{{ number_format($row['item_quantity']) }}</td><td class="text-end fw-semibold text-nowrap">{{ $formatKg($row['packed_weight']) }}</td><td class="text-end fw-semibold text-nowrap">{{ number_format($row['product_amount'], 0, ',', '.') }}đ</td><td class="text-end text-nowrap">{{ $row['movement']?->received_total_weight !== null ? $formatKg($row['movement']->received_total_weight) : '—' }}</td><td><span class="badge {{ $row['received'] ? 'bg-success' : 'bg-warning text-dark' }}">{{ $row['received'] ? 'Đã tiếp nhận' : 'Chưa tiếp nhận' }}</span>@if(request()->routeIs('admin.warehouse-dispatch-slips.*') && $slip->status === 'finalized' && !$row['received'] && $row['movement']?->status === \App\Models\WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP)<form method="POST" action="{{ route($dispatchRoutePrefix.'.orders.remove', [$slip, $row['order']]) }}" class="mt-1" onsubmit="return confirm('Bỏ đơn {{ $row['code'] }} khỏi phiếu? Đơn vẫn giữ nguyên để lập phiếu lại.');">@csrf<button type="submit" class="btn btn-outline-danger btn-sm py-0">Bỏ khỏi phiếu</button></form>@endif</td></tr>@empty<tr><td colspan="9" class="text-center text-muted py-3">Phiếu không có đơn hoàn thiện.</td></tr>@endforelse
+</tbody></table></div></div>
+
+<div class="card"><div class="card-header bg-white fw-bold">Tổng hợp hàng hóa trên phiếu</div><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead class="table-light"><tr><th>Sản phẩm</th><th>SKU/Size</th><th class="text-end">SL xuất</th><th class="text-end">KL thực tế đóng</th><th class="text-end">Giá</th><th class="text-end">Thành tiền</th><th class="text-end">SL đã nhận</th><th class="text-end">KL đã nhận</th></tr></thead><tbody>
+@forelse($summaryRows as $row)<tr><td><strong>{{ $row['product_name'] }}</strong></td><td>{{ $row['sku'] ?: '—' }} / {{ $row['size'] ?: '—' }}</td><td class="text-end">{{ number_format($row['quantity']) }}</td><td class="text-end text-nowrap">{{ $formatKg($row['weight']) }}</td><td class="text-end text-nowrap">{{ number_format($row['price'], 0, ',', '.') }}đ/{{ $row['priced_by_kg'] ? 'kg' : 'đv' }}</td><td class="text-end fw-semibold text-nowrap">{{ number_format($row['amount'], 0, ',', '.') }}đ</td><td class="text-end">{{ $row['received_quantity'] === null ? '—' : number_format($row['received_quantity']) }}</td><td class="text-end text-nowrap">{{ $row['received_weight'] === null ? '—' : $formatKg($row['received_weight']) }}</td></tr>@empty<tr><td colspan="8" class="text-center text-muted py-3">Chưa có hàng hóa.</td></tr>@endforelse
+</tbody><tfoot class="table-light fw-bold"><tr><td colspan="2">Tổng cộng</td><td class="text-end">{{ number_format($summaryRows->sum('quantity')) }}</td><td class="text-end text-nowrap">{{ $formatKg($summaryRows->sum('weight')) }}</td><td></td><td class="text-end text-nowrap">{{ number_format($summaryRows->sum('amount'), 0, ',', '.') }}đ</td><td class="text-end">{{ number_format((int) $summaryRows->sum(fn($row) => $row['received_quantity'] ?? 0)) }}</td><td class="text-end text-nowrap">{{ $formatKg($summaryRows->sum(fn($row) => $row['received_weight'] ?? 0)) }}</td></tr></tfoot></table></div></div>
+</div>
+@push('scripts')
+<script src="{{ asset('js/html2canvas.min.js') }}"></script>
+<script src="{{ asset('js/share-dispatch-slip.js') }}"></script>
+@endpush
+@endsection

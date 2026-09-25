@@ -1,0 +1,300 @@
+@php
+    $statusLabels = \App\Models\Order::statusOptions() + [
+        \App\Models\Order::STATUS_READY_TO_PACK => 'Chờ đóng gói',
+        \App\Models\Order::STATUS_PACKING => 'Đang đóng gói',
+        \App\Models\Order::STATUS_READY_TO_SHIP => 'Chờ giao vận chuyển',
+        \App\Models\Order::STATUS_DELIVERING => 'Đang giao hàng',
+        \App\Models\Order::STATUS_RETURNING => 'Đang trả hàng',
+        \App\Models\Order::STATUS_RETURNED_COMPLETED => 'Đã nhập kho trả hàng',
+        'shipping' => 'Đang vận chuyển',
+        'picked_up' => 'Đã lấy hàng',
+    ];
+    $currentSortBy = $sortBy ?? request('sort_by', 'created_at');
+    $currentSortDir = strtolower($sortDir ?? request('sort_dir', 'desc'));
+    $isTrashView = (bool) ($isTrashView ?? false);
+    $sampleDraftCustomerIds = array_map('intval', $sampleDraftCustomerIds ?? []);
+    $returnableCount = $orders->getCollection()->filter(
+        fn ($order) => in_array($order->status, ['picked_up', 'shipping', 'completed'], true)
+    )->count();
+    $sortDirFor = fn (string $field): string => $currentSortBy === $field && $currentSortDir === 'asc' ? 'desc' : 'asc';
+    $sortIconFor = fn (string $field): string => $currentSortBy !== $field
+        ? 'fa-sort'
+        : ($currentSortDir === 'asc' ? 'fa-sort-asc' : 'fa-sort-desc');
+@endphp
+
+<style>
+    .monitor-my-orders { display: grid; gap: 18px; }
+    .monitor-my-orders-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-left: 7px solid #f1f5f9; background: #fff; }
+    .monitor-my-orders-head h2 { margin: 0; font-size: 1rem; font-weight: 900; }
+    .monitor-my-orders-head p { margin: 2px 0 0; color: #64748b; font-size: .75rem; }
+    .monitor-my-orders-sort { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 4px; }
+    .monitor-my-orders-sort-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .monitor-my-orders-sort .btn { border-radius: 4px; font-size: .72rem; }
+    .monitor-my-order { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 14px; align-items: start; }
+    .monitor-my-order-card { min-width: 0; padding: 14px 16px; border: 1px solid #dce6f1; border-radius: 7px; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .06); }
+    .monitor-my-order-card.is-cancelled { border-color: #fecaca; background: #fffafa; }
+    .monitor-my-order-card.is-overdue { border-color: #c2410c; background: #fff7ed; }
+    .monitor-my-order-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; }
+    .monitor-my-order-name { color: #0f172a; font-size: .82rem; font-weight: 900; text-transform: uppercase; }
+    .monitor-my-order-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 3px; color: #64748b; font-size: .68rem; }
+    .monitor-my-order-status { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 999px; background: #fff1f2; color: #be123c; font-size: .68rem; font-weight: 800; white-space: nowrap; }
+    .monitor-my-order-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .monitor-my-order-status.is-overdue { background: #ffedd5; color: #c2410c; }
+    .monitor-my-order-delivery { padding: 9px 0; border-bottom: 1px dashed #dce6f1; }
+    .monitor-my-order-section-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; color: #334155; font-size: .67rem; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+    .monitor-my-order-section-title button { border: 0; background: transparent; color: #1d4ed8; font-size: .65rem; font-weight: 900; text-transform: uppercase; }
+    .monitor-my-order-delivery-lines { display: grid; gap: 4px; color: #64748b; font-size: .7rem; }
+    .monitor-my-order-products { width: 100%; margin: 0; font-size: .7rem; }
+    .monitor-my-order-products th { padding: 6px 4px; border-color: #dce6f1; color: #64748b; font-size: .61rem; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+    .monitor-my-order-products td { padding: 7px 4px; border-color: #edf2f7; vertical-align: middle; }
+    .monitor-my-order-thumb { width: 34px; height: 34px; border-radius: 5px; object-fit: cover; border: 1px solid #e2e8f0; }
+    .monitor-my-order-product-name { color: #0f172a; font-weight: 800; }
+    .monitor-my-order-totals { display: grid; justify-content: end; margin-top: 5px; font-size: .72rem; }
+    .monitor-my-order-total-line { display: grid; grid-template-columns: 95px 100px; gap: 8px; padding: 4px 0; text-align: right; }
+    .monitor-my-order-total-line.is-total { border-top: 1px solid #dce6f1; font-size: .8rem; font-weight: 900; }
+    .monitor-adjustments { display: grid; gap: 8px; margin-top: 12px; padding-top: 11px; border-top: 1px solid #dce6f1; }
+    .monitor-adjustments-title { display: flex; align-items: center; gap: 6px; color: #334155; font-size: .68rem; font-weight: 900; letter-spacing: .04em; text-transform: uppercase; }
+    .monitor-adjustment { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; border-radius: 7px; background: #fffbeb; }
+    .monitor-adjustment.is-success { border-color: #bbf7d0; border-left-color: #22c55e; background: #f0fdf4; }
+    .monitor-adjustment.is-danger { border-color: #fecaca; border-left-color: #ef4444; background: #fef2f2; }
+    .monitor-adjustment.is-secondary { border-color: #dbe4ef; border-left-color: #94a3b8; background: #f8fafc; }
+    .monitor-adjustment-name { color: #0f172a; font-size: .75rem; font-weight: 900; }
+    .monitor-adjustment-meta { margin-top: 3px; color: #64748b; font-size: .67rem; line-height: 1.45; }
+    .monitor-adjustment-state { display: inline-flex; align-items: center; gap: 5px; color: #92400e; font-size: .7rem; font-weight: 900; }
+    .monitor-adjustment.is-success .monitor-adjustment-state { color: #166534; }
+    .monitor-adjustment.is-danger .monitor-adjustment-state { color: #b91c1c; }
+    .monitor-adjustment.is-secondary .monitor-adjustment-state { color: #475569; }
+    .monitor-adjustment-link { white-space: nowrap; font-size: .69rem; font-weight: 800; }
+    .monitor-my-order-actions { display: grid; gap: 8px; }
+    .monitor-my-order-actions .btn { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; border-radius: 6px; font-size: .72rem; font-weight: 800; }
+    .monitor-my-order-actions form { margin: 0; }
+    .monitor-my-order-actions form .btn { width: 100%; }
+    .monitor-my-order-cancel { margin-top: 8px !important; padding-top: 8px; border-top: 1px solid #e2e8f0; }
+    .monitor-my-orders-empty { padding: 44px 20px; border: 1px solid #dce6f1; border-radius: 8px; background: #fff; color: #64748b; text-align: center; }
+    .monitor-my-orders-pagination {
+        position: sticky;
+        z-index: 24;
+        bottom: 0;
+        display: flex;
+        justify-content: center;
+        margin-top: 2px;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+        border: 1px solid #dce6f1;
+        border-radius: 9px 9px 0 0;
+        background: rgba(255, 255, 255, .96);
+        box-shadow: 0 -5px 18px rgba(15, 23, 42, .1);
+        backdrop-filter: blur(8px);
+    }
+    .monitor-my-orders-pagination nav { width: 100%; }
+    .monitor-my-orders-pagination .pagination { justify-content: center; margin: 0; }
+    @media (max-width: 767.98px) {
+        .monitor-my-order { grid-template-columns: 1fr; }
+        .monitor-my-order-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .monitor-adjustment { grid-template-columns: 1fr; }
+        .monitor-adjustment-link { justify-self: start; }
+        .monitor-my-orders-sort { align-items: flex-start; flex-direction: column; }
+        .monitor-my-order-products { min-width: 650px; }
+    }
+</style>
+
+<div class="monitor-my-orders">
+    <div class="monitor-my-orders-head">
+        <div>
+            <h2>Danh sách đơn hàng</h2>
+            <p>Hiển thị {{ $orders->firstItem() ?? 0 }} - {{ $orders->lastItem() ?? 0 }} trên tổng {{ $orders->total() }} đơn.</p>
+        </div>
+        <span class="small text-muted">Có thể trả hàng: <strong class="text-dark">{{ $returnableCount }}</strong></span>
+    </div>
+
+    @if($orders->count())
+        <div class="monitor-my-orders-sort">
+            <div class="d-flex align-items-center gap-2 small text-muted">
+                <a href="{{ request()->fullUrlWithQuery(['trash' => $isTrashView ? 0 : 1, 'page' => 1]) }}" class="btn btn-sm {{ $isTrashView ? 'btn-danger' : 'btn-outline-danger' }}" title="{{ $isTrashView ? 'Xem đơn đang hoạt động' : 'Xem thùng rác' }}"><i class="bi bi-trash"></i></a>
+                <span>Sắp xếp nhanh:</span>
+            </div>
+            <div class="monitor-my-orders-sort-actions">
+                @foreach(['created_at' => 'Ngày tạo', 'total' => 'Tổng tiền', 'customer_name' => 'Khách hàng', 'status' => 'Trạng thái'] as $field => $label)
+                    <a data-order-sort-link="1" href="{{ request()->fullUrlWithQuery(['sort_by' => $field, 'sort_dir' => $sortDirFor($field), 'page' => 1]) }}" class="btn btn-sm btn-outline-secondary">{{ $label }} <i class="fa {{ $sortIconFor($field) }}"></i></a>
+                @endforeach
+            </div>
+        </div>
+
+        @foreach($orders as $order)
+            @php
+                $isCancelled = $order->status === \App\Models\Order::STATUS_CANCELLED;
+                $isOverdue = $order->status === \App\Models\Order::STATUS_OVERDUE_DELIVERY;
+                $isWaitingWarehouse = (int) ($order->stock_sufficient ?? 1) === 0 && $order->created_at?->isToday();
+                $statusLabel = $isWaitingWarehouse ? 'Chờ Kho Ráp Hàng' : ($statusLabels[$order->status] ?? str_replace('_', ' ', $order->status));
+                $canEdit = !$isTrashView && (int) $order->user_id === (int) $user->id && $order->canBeDirectlyEditedByOwner();
+                $canCancel = !$isTrashView && ($user->hasRole('admin') || (int) $order->user_id === (int) $user->id) && $order->canBeCancelled();
+                $canRequestAdjustment = !$isTrashView
+                    && (int) $order->user_id === (int) $user->id
+                    && $order->status === \App\Models\Order::STATUS_COMPLETED
+                    && $order->canRequestAdjustment();
+                $canApprove = !$isTrashView && !$isCancelled && $user->hasRole(['admin', 'manager', 'manager_sale', 'director']);
+                $defaultAddress = $order->customer?->addresses?->firstWhere('is_default', 1) ?? $order->customer?->addresses?->first();
+                $address = $order->recipient_address ?: ($defaultAddress?->note ?: ($order->customer?->address ?: 'Chưa cập nhật'));
+                $area = collect([$defaultAddress?->ward, $defaultAddress?->city])->filter()->implode(', ');
+                $deliveryTime = $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật');
+                $itemsTotal = (float) $order->items->sum('total');
+                $orderAdjustment = $itemsTotal - (float) $order->total;
+                $hasSampleDraft = $order->customer_id
+                    && in_array((int) $order->customer_id, $sampleDraftCustomerIds, true);
+                $canSeeAllOrderAdjustments = $user->hasRole(['admin', 'manager', 'manager_sale', 'director']);
+                $canSeeTeamOrderAdjustments = $user->hasRole(['leader', 'leader_sale', 'sale_manager'])
+                    && (int) ($user->team_id ?? 0) > 0
+                    && (int) ($order->user?->team_id ?? 0) === (int) $user->team_id;
+                $visibleAdjustments = $order->adjustments->filter(
+                    fn ($adjustment) => (int) $adjustment->requested_by === (int) $user->id
+                        || $canSeeAllOrderAdjustments
+                        || $canSeeTeamOrderAdjustments
+                );
+                $adjustmentRoleLabels = [
+                    'leader' => 'Leader', 'leader_sale' => 'Leader', 'sale_manager' => 'Leader',
+                    'manager' => 'Manager', 'manager_sale' => 'Manager', 'director' => 'Manager',
+                    'account' => 'Kế toán', 'accountant' => 'Kế toán', 'accounting' => 'Kế toán',
+                    'warehouse' => 'Kho',
+                ];
+            @endphp
+            <article class="monitor-my-order" id="my-order-card-{{ $order->id }}">
+                <div class="monitor-my-order-card {{ $isCancelled ? 'is-cancelled' : ($isOverdue ? 'is-overdue' : '') }}">
+                    <div class="monitor-my-order-head">
+                        <div>
+                            <div class="monitor-my-order-name">{{ $order->customer?->name ?? 'Khách hàng' }}</div>
+                            <div class="monitor-my-order-meta">
+                                <span>{{ $order->created_at?->format('d/m/Y H:i') }}</span>
+                                @if($order->customer?->phone)<span><i class="bi bi-telephone me-1"></i>{{ $order->customer->phone }}</span>@endif
+                                <span>{{ $order->code ?: ('#' . $order->id) }}</span>
+                            </div>
+                        </div>
+                        <span class="monitor-my-order-status {{ $isOverdue ? 'is-overdue' : '' }}">{{ $statusLabel }}</span>
+                    </div>
+
+                    <div class="monitor-my-order-delivery">
+                        <div class="monitor-my-order-section-title">
+                            <span>Giao hàng</span>
+                            <button type="button" data-bs-toggle="collapse" data-bs-target="#myOrderDelivery{{ $order->id }}" aria-expanded="true">Ẩn/Hiện</button>
+                        </div>
+                        <div class="collapse show monitor-my-order-delivery-lines" id="myOrderDelivery{{ $order->id }}">
+                            <span><i class="bi bi-geo-alt me-1"></i>Địa chỉ nhận hàng: {{ $address }}</span>
+                            @if($area !== '')<span><i class="bi bi-pin-map me-1"></i>Khu vực: {{ $area }}</span>@endif
+                            <span><i class="bi bi-clock me-1"></i>Giờ giao: {{ $deliveryTime }}</span>
+                        </div>
+                    </div>
+
+                    <div class="monitor-my-order-section-title mt-2"><span>Danh sách sản phẩm</span></div>
+                    <div class="table-responsive">
+                        <table class="table table-sm monitor-my-order-products">
+                            <thead><tr><th>Ảnh</th><th>Sản phẩm</th><th class="text-end">SL</th><th class="text-end">Size</th><th class="text-end">Tổng</th><th class="text-end">Đơn giá</th><th class="text-end">Thành tiền</th></tr></thead>
+                            <tbody>
+                                @forelse($order->items as $item)
+                                    @php
+                                        $variant = $item->variant;
+                                        $product = $item->product ?: $variant?->product;
+                                        $productName = $item->display_name;
+                                        $imagePath = $variant?->avatar?->media?->file_path ?? $product?->avatar?->media?->file_path;
+                                        $lineTotal = (float) ($item->total ?? 0);
+                                    @endphp
+                                    <tr>
+                                        <td>@if($imagePath)<img class="monitor-my-order-thumb" src="{{ asset('storage/' . $imagePath) }}" alt="{{ $productName }}">@else<span class="text-muted"><i class="bi bi-image"></i></span>@endif</td>
+                                        <td><span class="monitor-my-order-product-name">{{ $productName }}</span>@if($variant?->sku)<span class="d-block text-muted">{{ $variant->sku }}</span>@endif</td>
+                                        <td class="text-end fw-bold">{{ rtrim(rtrim(number_format((float) $item->quantity, 3, ',', '.'), '0'), ',') }}</td>
+                                        <td class="text-end">{{ $variant?->size ?: '—' }}</td>
+                                        <td class="text-end fw-bold">{{ $item->display_total_label }}</td>
+                                        <td class="text-end">{{ number_format((float) $item->price, 0, ',', '.') }}đ</td>
+                                        <td class="text-end fw-bold">{{ number_format($lineTotal, 0, ',', '.') }}đ</td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="7" class="text-center text-muted py-3">Đơn chưa có sản phẩm.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="monitor-my-order-totals">
+                        @if(abs($orderAdjustment) > .01)<div class="monitor-my-order-total-line"><span>Điều chỉnh:</span><strong>{{ $orderAdjustment > 0 ? '-' : '+' }}{{ number_format(abs($orderAdjustment), 0, ',', '.') }}đ</strong></div>@endif
+                        <div class="monitor-my-order-total-line is-total"><span>Tổng cộng:</span><strong>{{ number_format((float) $order->total, 0, ',', '.') }}đ</strong></div>
+                    </div>
+
+                    @if($visibleAdjustments->isNotEmpty())
+                        <section class="monitor-adjustments" aria-label="Yêu cầu thay đổi đã gửi">
+                            <div class="monitor-adjustments-title"><i class="bi bi-arrow-left-right"></i>Yêu cầu thay đổi đã gửi</div>
+                            @foreach($visibleAdjustments as $adjustment)
+                                @php
+                                    $currentApproval = $adjustment->approvalSteps
+                                        ->where('status', 'pending')
+                                        ->filter(fn ($approval) => $approval->step)
+                                        ->sortBy(fn ($approval) => (int) ($approval->step?->step_order ?? PHP_INT_MAX))
+                                        ->first();
+                                    $currentRole = strtolower((string) ($currentApproval?->step?->role_slug ?? ''));
+                                    [$adjustmentTone, $adjustmentIcon, $adjustmentState] = match($adjustment->status) {
+                                        \App\Models\OrderAdjustment::STATUS_DRAFT => ['secondary', 'bi-pencil-square', 'Bản nháp, chưa gửi duyệt'],
+                                        \App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL => ['warning', 'bi-hourglass-split', $currentApproval ? 'Đang chờ '.($adjustmentRoleLabels[$currentRole] ?? $currentRole).' duyệt' : 'Đang chờ duyệt'],
+                                        \App\Models\OrderAdjustment::STATUS_APPROVED => ['success', 'bi-check2-circle', $adjustment->warehouse_confirmation_status === 'pending' ? 'Đã duyệt, chờ Kho xác nhận' : 'Đã được duyệt'],
+                                        \App\Models\OrderAdjustment::STATUS_REJECTED => ['danger', 'bi-x-circle', 'Đã bị từ chối'],
+                                        \App\Models\OrderAdjustment::STATUS_COMPLETED => ['success', 'bi-check-circle-fill', 'Đã duyệt và hoàn tất'],
+                                        default => ['secondary', 'bi-info-circle', str_replace('_', ' ', $adjustment->status)],
+                                    };
+                                    $processedSteps = $adjustment->approvalSteps
+                                        ->whereIn('status', ['approved', 'rejected'])
+                                        ->sortBy(fn ($approval) => (int) ($approval->step?->step_order ?? PHP_INT_MAX))
+                                        ->map(function ($approval) use ($adjustmentRoleLabels) {
+                                            $role = strtolower((string) ($approval->step?->role_slug ?? ''));
+                                            return ($adjustmentRoleLabels[$role] ?? $role).($approval->status === 'rejected' ? ' từ chối' : ' đã duyệt');
+                                        })->implode(' · ');
+                                    $canDeleteAdjustment = (int) $adjustment->requested_by === (int) $user->id
+                                        && $adjustment->canBeDeletedBy($user);
+                                @endphp
+                                <div class="monitor-adjustment is-{{ $adjustmentTone }}">
+                                    <div>
+                                        <div class="monitor-adjustment-name">Yêu cầu #{{ $adjustment->id }} · {{ optional($adjustment->submitted_at ?? $adjustment->created_at)->format('d/m/Y H:i') }}</div>
+                                        <div class="monitor-adjustment-state"><i class="bi {{ $adjustmentIcon }}"></i>{{ $adjustmentState }}</div>
+                                        @if($processedSteps !== '')<div class="monitor-adjustment-meta">{{ $processedSteps }}</div>@endif
+                                        @if($adjustment->reject_reason)<div class="monitor-adjustment-meta text-danger"><strong>Lý do:</strong> {{ $adjustment->reject_reason }}</div>@endif
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        <a class="btn btn-sm btn-outline-primary monitor-adjustment-link" href="{{ route('site.order-adjustments.show', $adjustment) }}">Xem tiến trình</a>
+                                        @if($canDeleteAdjustment)
+                                            <form method="POST" action="{{ route('site.order-adjustments.destroy', $adjustment) }}" onsubmit="return confirm('Xóa yêu cầu điều chỉnh #{{ $adjustment->id }}? Thao tác này không thể hoàn tác.');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button class="btn btn-sm btn-outline-danger monitor-adjustment-link"><i class="bi bi-trash me-1"></i>Xóa</button>
+                                            </form>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endforeach
+                        </section>
+                    @endif
+                </div>
+
+                <div class="monitor-my-order-actions">
+                    @if($canApprove)
+                        <form method="POST" action="{{ route('site.orders.approve', $order) }}" class="js-monitor-approval-form">@csrf<input type="hidden" name="note" value="Duyệt từ danh sách đơn của tôi"><button class="btn btn-sm btn-success"><i class="bi bi-check2"></i>Duyệt</button></form>
+                    @endif
+                    @if($canEdit)<a href="{{ route('site.orders.edit', $order) }}" class="btn btn-sm btn-success"><i class="bi bi-pencil"></i>Sửa</a>@endif
+                    <a href="{{ route('site.orders.show', $order) }}" class="btn btn-sm btn-outline-info"><i class="bi bi-eye"></i>Chi tiết</a>
+                    @if($canRequestAdjustment)
+                        <a href="{{ route('site.order-adjustments.create', $order) }}" class="btn btn-sm btn-warning text-dark">
+                            <i class="bi bi-arrow-left-right"></i>Gửi điều chỉnh
+                        </a>
+                    @endif
+                    @if(!$isTrashView)<a href="{{ route('site.orders.copy', $order->id) }}" class="btn btn-sm btn-outline-secondary" onclick="return confirm('Sao chép đơn {{ $order->code }}?')"><i class="bi bi-files"></i>Sao chép đơn</a>@endif
+                    @if(!$isTrashView && $order->customer_id && !$hasSampleDraft)
+                        <button class="btn btn-sm btn-outline-primary monitor-add-to-sample" type="button" data-sample-customer-id="{{ $order->customer_id }}" data-sample-url="{{ route('pages.my_order_drafts.add_from_order', $order) }}">
+                            <i class="bi bi-bookmark-plus"></i>Cho vào đơn mẫu
+                        </button>
+                    @endif
+                    @if($canCancel)<form class="monitor-my-order-cancel" method="POST" action="{{ route('site.orders.cancel', $order) }}" onsubmit="return confirm('Bạn chắc chắn muốn hủy đơn hàng này?');">@csrf<button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle"></i>Hủy đơn hàng</button></form>@endif
+                </div>
+            </article>
+        @endforeach
+
+        @if($orders->hasPages())
+            <footer class="monitor-my-orders-pagination" aria-label="Phân trang danh sách đơn hàng">
+                {{ $orders->appends(request()->input())->links('pagination::bootstrap-5') }}
+            </footer>
+        @endif
+    @else
+        <div class="monitor-my-orders-empty"><i class="bi bi-inbox fs-2 d-block mb-2"></i>Chưa có đơn hàng phù hợp.</div>
+    @endif
+</div>

@@ -1,0 +1,3780 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Account;
+use App\Models\AccountBalanceRefreshLog;
+use App\Models\AccountingReconciliation;
+use App\Models\Customer;
+use App\Models\Inventory;
+use App\Models\InventoryDocumentItem;
+use App\Models\Order;
+use App\Models\OrderAdjustment;
+use App\Models\ProcurementPurchase;
+use App\Models\Transaction;
+use App\Models\TransactionCategory;
+use App\Models\User;
+use App\Models\Warehouse;
+use App\Models\WarehouseTransfer;
+use App\Notifications\AccountingOrderRevenueConfirmed;
+use App\Services\ApprovalService;
+use App\Services\CompletedSalesJournalService;
+use App\Services\GoogleSheetsJournalService;
+use App\Services\SupplierDebtService;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+class AccountingDashboardController extends Controller
+{
+    public function __construct()
+    {
+        $this->middleware(['auth', 'role:account,accountant,accounting,ceo,director,Director,admin']);
+    }
+
+    public function index(Request $request)
+    {
+        [$from, $to, $rangeLabel] = $this->resolveDateRange($request);
+
+        $receivableTotal = Schema::hasColumn('orders', 'amount_due')
+            ? (float) Order::query()->where('amount_due', '>', 0)->sum('amount_due')
+            : 0.0;
+
+        $payableTotal = Schema::hasTable('procurement_purchases')
+            ? (float) ProcurementPurchase::query()->where('remaining_amount', '>', 0)->sum('remaining_amount')
+            : 0.0;
+
+        $todayIncome = (float) Transaction::query()
+            ->whereDate('created_at', now()->toDateString())
+            ->where('type', 'payment')
+            ->sum('amount');
+
+        $todayExpense = (float) Transaction::query()
+            ->whereDate('created_at', now()->toDateString())
+            ->whereIn('type', ['refund', 'fee', 'expense', 'extra_expense'])
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->sum('amount');
+
+        $unpaidOrders = Schema::hasColumn('orders', 'amount_due')
+            ? (int) Order::query()->where('amount_due', '>', 0)->count()
+            : (int) Order::query()->where('payment_status', '!=', 'paid')->count();
+
+        $overdueOrders = Schema::hasColumn('orders', 'amount_due')
+            ? (int) Order::query()->where('amount_due', '>', 0)->whereDate('created_at', '<', now()->subDays(7)->toDateString())->count()
+            : 0;
+
+        return view('accounting.dashboard', [
+            'user' => $request->user(),
+            'from' => $from,
+            'to' => $to,
+            'rangeLabel' => $rangeLabel,
+            'cards' => [
+                'receivable_total' => $receivableTotal,
+                'payable_total' => $payableTotal,
+                'today_income' => $todayIncome,
+                'today_expense' => $todayExpense,
+                'unpaid_orders' => $unpaidOrders,
+                'overdue_orders' => $overdueOrders,
+            ],
+        ]);
+    }
+
+    public function orderAdjustments(Request $request, ApprovalService $approvalService)
+    {
+        $keyword = trim((string) $request->input('keyword', ''));
+        $status = (string) $request->input('status', 'pending');
+        if (! in_array($status, ['pending', 'processed', 'all'], true)) {
+            $status = 'pending';
+        }
+
+        $pendingAdjustments = $approvalService->pendingAccountingAdjustments();
+        $reviewedAdjustments = $approvalService->reviewedAccountingAdjustments();
+        $adjustments = match ($status) {
+            'processed' => $reviewedAdjustments,
+            'all' => $pendingAdjustments->concat($reviewedAdjustments)->unique('id')->values(),
+            default => $pendingAdjustments,
+        };
+
+        if ($keyword !== '') {
+            $needle = mb_strtolower($keyword);
+            $adjustments = $adjustments->filter(function (OrderAdjustment $adjustment) use ($needle): bool {
+                return str_contains(mb_strtolower((string) $adjustment->order?->code), $needle)
+                    || str_contains(mb_strtolower((string) $adjustment->order?->customer?->name), $needle)
+                    || str_contains(mb_strtolower((string) $adjustment->order?->user?->name), $needle)
+                    || str_contains(mb_strtolower((string) $adjustment->requester?->name), $needle)
+                    || str_contains((string) $adjustment->id, $needle);
+            })->values();
+        }
+
+        $perPage = 20;
+        $page = max(1, (int) $request->input('page', 1));
+        $paginator = new LengthAwarePaginator(
+            $adjustments->forPage($page, $perPage)->values(),
+            $adjustments->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
+
+        return view('accounting.order_adjustments', [
+            'adjustments' => $paginator,
+            'keyword' => $keyword,
+            'status' => $status,
+            'pendingCount' => $pendingAdjustments->count(),
+            'processedCount' => $reviewedAdjustments->count(),
+        ]);
+    }
+
+    public function customerDebts(Request $request)
+    {
+        $query = Customer::query()->with('assignedTo:id,name');
+        $debtDaysMin = $request->filled('debt_days_min') ? max(0, (int) $request->input('debt_days_min')) : null;
+        $debtDaysMax = $request->filled('debt_days_max') ? max(0, (int) $request->input('debt_days_max')) : null;
+        $sortBy = (string) $request->input('sort_by', 'latest_debt_desc');
+        $fromDate = $request->filled('from_date')
+            ? Carbon::parse($request->input('from_date'))->startOfDay()
+            : null;
+        $toDate = $request->filled('to_date')
+            ? Carbon::parse($request->input('to_date'))->endOfDay()
+            : null;
+
+        if ($fromDate && $toDate && $fromDate->gt($toDate)) {
+            [$fromDate, $toDate] = [$toDate->copy()->startOfDay(), $fromDate->copy()->endOfDay()];
+        }
+
+        if ($keyword = trim((string) $request->input('keyword', ''))) {
+            $query->where(function ($q) use ($keyword) {
+                $q->where('name', 'like', "%{$keyword}%")
+                    ->orWhere('phone', 'like', "%{$keyword}%")
+                    ->orWhere('email', 'like', "%{$keyword}%");
+            });
+        }
+
+        $rows = $query->get()->map(function (Customer $customer) use ($fromDate, $toDate) {
+            $summary = $this->customerDebtSummary($customer, $fromDate, $toDate);
+            $debt = $summary['current_debt'];
+
+            $lastPaymentAt = Transaction::query()
+                ->where('customer_id', $customer->id)
+                ->where('type', 'payment')
+                ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+                ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
+                ->max('created_at');
+
+            $firstOrderDebtAt = Order::query()
+                ->where('customer_id', $customer->id)
+                ->whereHas('accountingReconciliation', fn ($query) => $query->where('status', AccountingReconciliation::STATUS_CONFIRMED))
+                ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+                ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
+                ->min('created_at');
+
+            $firstAdjustmentDebtAt = Transaction::query()
+                ->where('customer_id', $customer->id)
+                ->whereIn('type', $this->customerDebtAdjustmentTypes())
+                ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+                ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
+                ->min('created_at');
+
+            $latestOrderDebtAt = Order::query()
+                ->where('customer_id', $customer->id)
+                ->whereHas('accountingReconciliation', fn ($query) => $query->where('status', AccountingReconciliation::STATUS_CONFIRMED))
+                ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+                ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
+                ->max('created_at');
+
+            $latestAdjustmentDebtAt = Transaction::query()
+                ->where('customer_id', $customer->id)
+                ->whereIn('type', $this->customerDebtAdjustmentTypes())
+                ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+                ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
+                ->max('created_at');
+
+            $firstDebtAt = collect([$firstOrderDebtAt, $firstAdjustmentDebtAt])
+                ->filter()
+                ->map(fn ($date) => Carbon::parse($date))
+                ->sort()
+                ->first();
+
+            $latestDebtAt = collect([$latestOrderDebtAt, $latestAdjustmentDebtAt])
+                ->filter()
+                ->map(fn ($date) => Carbon::parse($date))
+                ->sortDesc()
+                ->first();
+
+            return [
+                'customer' => $customer,
+                'debt' => $debt,
+                'debt_increase' => $summary['debt_increase'],
+                'payments' => $summary['payments'],
+                'debt_type' => $this->customerDebtTypeMeta((string) ($customer->debt_type ?: 'normal')),
+                'due_date' => $firstDebtAt ? $firstDebtAt->copy()->addDays(7) : null,
+                'first_debt_at' => $firstDebtAt,
+                'latest_debt_at' => $latestDebtAt,
+                'unpaid_days' => $debt > 0 && $firstDebtAt ? $firstDebtAt->diffInDays(now()) : 0,
+                'status' => $debt <= 0 ? 'Đã thanh toán' : 'Còn nợ',
+                'payment_history' => $lastPaymentAt ? ('Lần gần nhất: '.Carbon::parse($lastPaymentAt)->format('d/m/Y H:i')) : 'Chưa có thanh toán',
+            ];
+        })
+            ->filter(function (array $row) use ($debtDaysMin, $debtDaysMax): bool {
+                if ($debtDaysMin === null && $debtDaysMax === null) {
+                    return true;
+                }
+
+                if ($row['debt'] <= 0) {
+                    return false;
+                }
+
+                if ($debtDaysMin !== null && $row['unpaid_days'] < $debtDaysMin) {
+                    return false;
+                }
+
+                if ($debtDaysMax !== null && $row['unpaid_days'] > $debtDaysMax) {
+                    return false;
+                }
+
+                return true;
+            });
+
+        $rows = (match ($sortBy) {
+            'customer_asc' => $rows->sortBy(fn (array $row) => mb_strtolower((string) $row['customer']->name)),
+            'customer_desc' => $rows->sortByDesc(fn (array $row) => mb_strtolower((string) $row['customer']->name)),
+            'debt_type_asc' => $rows->sortBy(fn (array $row) => $row['debt_type']['label']),
+            'debt_type_desc' => $rows->sortByDesc(fn (array $row) => $row['debt_type']['label']),
+            'debt_increase_asc' => $rows->sortBy('debt_increase'),
+            'debt_increase_desc' => $rows->sortByDesc('debt_increase'),
+            'payments_asc' => $rows->sortBy('payments'),
+            'payments_desc' => $rows->sortByDesc('payments'),
+            'debt_asc' => $rows->sortBy('debt'),
+            'debt_desc' => $rows->sortByDesc('debt'),
+            'status_asc' => $rows->sortBy('status'),
+            'status_desc' => $rows->sortByDesc('status'),
+            'unpaid_days_asc' => $rows->sortBy('unpaid_days'),
+            'unpaid_days_desc' => $rows->sortByDesc('unpaid_days'),
+            'latest_debt_asc' => $rows->sortBy(fn (array $row) => optional($row['latest_debt_at'])->timestamp ?? 0),
+            'latest_debt_desc' => $rows->sortByDesc(fn (array $row) => optional($row['latest_debt_at'])->timestamp ?? 0),
+            default => $rows->sortByDesc('debt'),
+        })->values();
+
+        $perPage = 20;
+        $currentPage = LengthAwarePaginator::resolveCurrentPage();
+        $customers = new LengthAwarePaginator(
+            $rows->forPage($currentPage, $perPage)->values(),
+            $rows->count(),
+            $perPage,
+            $currentPage,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
+
+        return view('accounting.customer_debts', [
+            'customers' => $customers,
+            'rows' => $customers->getCollection(),
+            'keyword' => (string) $request->input('keyword', ''),
+            'debtDaysMin' => $debtDaysMin,
+            'debtDaysMax' => $debtDaysMax,
+            'sortBy' => $sortBy,
+            'fromDate' => $fromDate,
+            'toDate' => $toDate,
+            'debtTypeOptions' => $this->customerDebtTypeOptions(),
+            'totalDebt' => $customers->getCollection()->sum('debt'),
+        ]);
+    }
+
+    public function customerDebtShow(Request $request, Customer $customer)
+    {
+        $customer->loadMissing(['assignedTo:id,name']);
+
+        $fromDate = $request->filled('from_date')
+            ? Carbon::parse($request->input('from_date'))->startOfDay()
+            : null;
+        $toDate = $request->filled('to_date')
+            ? Carbon::parse($request->input('to_date'))->endOfDay()
+            : null;
+
+        if ($fromDate && $toDate && $fromDate->gt($toDate)) {
+            [$fromDate, $toDate] = [$toDate->copy()->startOfDay(), $fromDate->copy()->endOfDay()];
+        }
+
+        $summary = $this->customerDebtSummary($customer, $fromDate, $toDate);
+
+        $orders = Order::query()
+            ->where('customer_id', $customer->id)
+            ->whereHas('accountingReconciliation', fn ($query) => $query->where('status', AccountingReconciliation::STATUS_CONFIRMED))
+            ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
+            ->with([
+                'items.product',
+                'items.variant.product',
+                'transactions' => fn ($query) => $query->whereIn('type', ['payment', 'refund']),
+                'accountingReconciliation',
+            ])
+            ->latest()
+            ->get();
+
+        $orderDebtRows = $orders->map(function (Order $order): array {
+            $payments = (float) $order->transactions->where('type', 'payment')->sum('amount');
+            $refunds = (float) $order->transactions->where('type', 'refund')->sum('amount');
+            $paid = max($payments - $refunds, 0);
+            $total = (float) ($order->accountingReconciliation?->recognized_revenue ?? 0);
+
+            return [
+                'date' => $order->created_at,
+                'label' => $order->code ?: ('#'.$order->id),
+                'description' => $order->note ?: 'Phát sinh công nợ theo đơn hàng',
+                'amount' => $total,
+                'paid' => $paid,
+                'remaining' => max($total - $paid, 0),
+                'url' => accounting_route('orders.detail', $order),
+                'items' => $order->items->map(function ($item): array {
+                    $variant = $item->variant;
+                    $product = $item->product ?? $variant?->product;
+
+                    return [
+                        'product_name' => $product?->name ?: '-',
+                        'size' => $variant?->size ?: ($variant?->name ?: ($variant?->sku ?: '-')),
+                        'quantity' => (float) ($item->quantity ?? 0),
+                        'weight' => (float) ($item->total_weight ?? $item->display_total_value ?? 0),
+                        'price' => (float) ($item->price ?? 0),
+                        'total' => (float) ($item->total ?? ((float) ($item->price ?? 0) * (float) ($item->quantity ?? 0))),
+                    ];
+                })->values(),
+            ];
+        });
+
+        $adjustments = Transaction::query()
+            ->where('customer_id', $customer->id)
+            ->whereIn('type', $this->customerDebtAdjustmentTypes())
+            ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
+            ->latest()
+            ->get()
+            ->map(function (Transaction $transaction): array {
+                return [
+                    'date' => $transaction->created_at,
+                    'label' => $transaction->type === 'customer_opening_debt' ? 'Công nợ đầu kỳ' : 'Công nợ bổ sung',
+                    'description' => $transaction->note ?: '-',
+                    'amount' => (float) $transaction->amount,
+                    'paid' => 0.0,
+                    'remaining' => (float) $transaction->amount,
+                    'url' => null,
+                    'items' => collect(),
+                ];
+            });
+
+        $debtIncreases = $orderDebtRows
+            ->concat($adjustments)
+            ->sortByDesc(fn (array $row) => optional($row['date'])->timestamp ?? 0)
+            ->values();
+
+        $payments = Transaction::query()
+            ->where('customer_id', $customer->id)
+            ->where('type', 'payment')
+            ->where(function ($query): void {
+                $query->whereNull('order_id')
+                    ->orWhereHas('order.accountingReconciliation', fn ($reconciliation) => $reconciliation->where('status', AccountingReconciliation::STATUS_CONFIRMED));
+            })
+            ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
+            ->with('order:id,code')
+            ->latest()
+            ->get();
+
+        return view('accounting.customer_debt_show', [
+            'customer' => $customer,
+            'summary' => $summary,
+            'debtIncreases' => $debtIncreases,
+            'payments' => $payments,
+            'fromDate' => $fromDate,
+            'toDate' => $toDate,
+            'debtTypeOptions' => $this->customerDebtTypeOptions(),
+            'currentDebtType' => (string) ($customer->debt_type ?: 'normal'),
+            'currentDebtTypeMeta' => $this->customerDebtTypeMeta((string) ($customer->debt_type ?: 'normal')),
+        ]);
+    }
+
+    public function orderDetail(Order $order)
+    {
+        $order->load([
+            'customer:id,name,phone,email,address,company_name,tax_code',
+            'user:id,name',
+            'shipper:id,name',
+            'warehouse:id,name',
+            'items.product:id,name',
+            'items.variant:id,product_id,name,sku,size,kg,is_priced_by_kg',
+            'items.variant.latestPriceRule',
+            'transactions' => fn ($query) => $query->latest(),
+            'histories.user:id,name',
+            'returnRecords.returnItems.productVariant.product:id,name',
+            'returnRecords.warehouse:id,name',
+            'returnRecords.warehouseConfirmer:id,name',
+            'accountingReconciliation.confirmer:id,name',
+        ]);
+
+        $returnAmount = $this->returnAmountForOrder($order);
+        $recognizedRevenue = $this->recognizedRevenueForOrder($order);
+        $effectivePaid = $this->effectivePaidForOrder($order);
+        $effectiveDue = max(0, $recognizedRevenue - $effectivePaid);
+
+        return view('accounting.order_detail', [
+            'order' => $order,
+            'returnAmount' => $returnAmount,
+            'recognizedRevenue' => $recognizedRevenue,
+            'effectivePaid' => $effectivePaid,
+            'effectiveDue' => $effectiveDue,
+            'reconciliationUrl' => accounting_route('reconciliation', [
+                'date' => optional($order->delivered_at ?? $order->created_at)->toDateString(),
+                'order_id' => $order->id,
+            ]),
+        ]);
+    }
+
+    public function customerDebtTypeUpdate(Request $request, Customer $customer)
+    {
+        $options = $this->customerDebtTypeOptions();
+
+        $validated = $request->validate([
+            'debt_type' => ['required', 'in:'.implode(',', array_keys($options))],
+        ]);
+
+        $customer->update([
+            'debt_type' => $validated['debt_type'],
+        ]);
+
+        return redirect()
+            ->route(accounting_route_name('customer-debts.show'), $customer)
+            ->with('success', 'Đã cập nhật loại công nợ khách hàng.');
+    }
+
+    public function customerDebtAdjustmentStore(Request $request, Customer $customer)
+    {
+        $rawAmount = str_replace(['.', ',', ' '], '', (string) $request->input('amount', ''));
+        $request->merge(['amount' => $rawAmount]);
+
+        $validated = $request->validate([
+            'adjustment_type' => ['required', 'in:opening,additional'],
+            'amount' => ['required', 'numeric', 'min:1000'],
+            'effective_date' => ['nullable', 'date'],
+            'note' => ['required', 'string', 'max:255'],
+        ]);
+
+        $createdAt = ! empty($validated['effective_date'])
+            ? Carbon::parse($validated['effective_date'])->setTimeFrom(now())
+            : now();
+
+        $transaction = Transaction::create([
+            'customer_id' => $customer->id,
+            'amount' => round((float) $validated['amount'], 2),
+            'type' => $validated['adjustment_type'] === 'opening'
+                ? 'customer_opening_debt'
+                : 'customer_debt_adjustment',
+            'method' => $validated['adjustment_type'],
+            'note' => $validated['note'],
+            'submitted_by' => auth()->id(),
+            'status' => Transaction::STATUS_APPROVED,
+            'approved_by' => auth()->id(),
+            'approved_at' => now(),
+        ]);
+
+        $transaction->forceFill([
+            'created_at' => $createdAt,
+            'updated_at' => now(),
+        ])->save();
+
+        return redirect()
+            ->route(accounting_route_name('customer-debts.show'), $customer)
+            ->with('success', 'Đã cập nhật công nợ khách hàng.');
+    }
+
+    private function customerDebtAdjustmentTypes(): array
+    {
+        return ['customer_opening_debt', 'customer_debt_adjustment'];
+    }
+
+    private function customerDebtTypeOptions(): array
+    {
+        return [
+            'hard_to_recover' => 'Khó thu hồi',
+            'doubtful' => 'Khó đòi',
+            'high_risk' => 'Rủi ro cao',
+            'risk' => 'Rủi ro',
+            'normal' => 'Bình Thường',
+        ];
+    }
+
+    private function customerDebtTypeMeta(string $type): array
+    {
+        $labels = $this->customerDebtTypeOptions();
+        $classes = [
+            'hard_to_recover' => 'text-bg-danger',
+            'doubtful' => 'text-bg-dark',
+            'high_risk' => 'text-bg-warning',
+            'risk' => 'text-bg-secondary',
+            'normal' => 'text-bg-success',
+        ];
+
+        return [
+            'value' => array_key_exists($type, $labels) ? $type : 'normal',
+            'label' => $labels[$type] ?? $labels['normal'],
+            'class' => $classes[$type] ?? $classes['normal'],
+        ];
+    }
+
+    private function customerDebtSummary(Customer $customer, ?Carbon $fromDate = null, ?Carbon $toDate = null): array
+    {
+        $ordersTotal = (float) AccountingReconciliation::query()
+            ->where('status', AccountingReconciliation::STATUS_CONFIRMED)
+            ->whereHas('order', function ($query) use ($customer, $fromDate, $toDate): void {
+                $query->where('customer_id', $customer->id)
+                    ->when($fromDate, fn ($orderQuery) => $orderQuery->where('created_at', '>=', $fromDate))
+                    ->when($toDate, fn ($orderQuery) => $orderQuery->where('created_at', '<=', $toDate));
+            })
+            ->sum('recognized_revenue');
+
+        $adjustmentsTotal = (float) Transaction::query()
+            ->where('customer_id', $customer->id)
+            ->whereIn('type', $this->customerDebtAdjustmentTypes())
+            ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
+            ->sum('amount');
+
+        $paymentsTotal = (float) Transaction::query()
+            ->where('customer_id', $customer->id)
+            ->where('type', 'payment')
+            ->where(function ($query): void {
+                $query->whereNull('order_id')
+                    ->orWhereHas('order.accountingReconciliation', fn ($reconciliation) => $reconciliation->where('status', AccountingReconciliation::STATUS_CONFIRMED));
+            })
+            ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
+            ->sum('amount');
+
+        $refundsTotal = (float) Transaction::query()
+            ->where('customer_id', $customer->id)
+            ->where('type', 'refund')
+            ->whereHas('order.accountingReconciliation', fn ($query) => $query->where('status', AccountingReconciliation::STATUS_CONFIRMED))
+            ->when($fromDate, fn ($query) => $query->where('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->where('created_at', '<=', $toDate))
+            ->sum('amount');
+
+        $debtIncrease = $ordersTotal + $adjustmentsTotal + $refundsTotal;
+
+        return [
+            'orders_total' => $ordersTotal,
+            'adjustments_total' => $adjustmentsTotal,
+            'refunds_total' => $refundsTotal,
+            'debt_increase' => $debtIncrease,
+            'payments' => $paymentsTotal,
+            'current_debt' => max($debtIncrease - $paymentsTotal, 0),
+        ];
+    }
+
+    public function supplierDebts(Request $request)
+    {
+        $keyword = trim((string) $request->input('keyword', ''));
+        $debtStatus = in_array($request->input('debt_status'), ['outstanding', 'overdue', 'due_soon', 'paid', 'all'], true)
+            ? $request->input('debt_status')
+            : 'outstanding';
+        $sourceType = in_array($request->input('source_type'), ['farm', 'supplier'], true)
+            ? $request->input('source_type')
+            : null;
+
+        $query = ProcurementPurchase::query()->with([
+            'farm', 'supplier', 'warehouse', 'paymentRequest', 'items', 'productItems.productVariant.product',
+            'debtPayments' => fn ($paymentQuery) => $paymentQuery->with(['transaction', 'recorder:id,name'])->latest('paid_at'),
+        ]);
+
+        $query->when($keyword !== '', function ($purchaseQuery) use ($keyword): void {
+            $purchaseQuery->where(function ($sourceQuery) use ($keyword): void {
+                $sourceQuery->where('code', 'like', '%'.$keyword.'%')
+                    ->orWhereHas('farm', fn ($farmQuery) => $farmQuery
+                        ->where('name', 'like', '%'.$keyword.'%')
+                        ->orWhere('phone', 'like', '%'.$keyword.'%'))
+                    ->orWhereHas('supplier', fn ($supplierQuery) => $supplierQuery
+                        ->where('name', 'like', '%'.$keyword.'%')
+                        ->orWhere('phone', 'like', '%'.$keyword.'%'));
+            });
+        });
+
+        if ($sourceType === 'farm') {
+            $query->whereNotNull('duck_farm_id');
+        } elseif ($sourceType === 'supplier') {
+            $query->whereNotNull('supplier_id');
+        }
+
+        $query->when($request->filled('from_date'), fn ($q) => $q->whereDate('purchased_at', '>=', $request->input('from_date')))
+            ->when($request->filled('to_date'), fn ($q) => $q->whereDate('purchased_at', '<=', $request->input('to_date')));
+
+        match ($debtStatus) {
+            'overdue' => $query->where('remaining_amount', '>', 0)->whereNotNull('payment_due_date')->whereDate('payment_due_date', '<', today()),
+            'due_soon' => $query->where('remaining_amount', '>', 0)->whereBetween('payment_due_date', [today(), today()->addDays(7)]),
+            'paid' => $query->where('remaining_amount', '<=', 0),
+            'all' => null,
+            default => $query->where('remaining_amount', '>', 0),
+        };
+
+        $purchases = $query->latest('purchased_at')->get();
+        $supplierDebts = $purchases
+            ->groupBy(fn (ProcurementPurchase $purchase) => $purchase->duck_farm_id
+                ? 'farm:'.$purchase->duck_farm_id
+                : 'supplier:'.$purchase->supplier_id)
+            ->map(function ($sourcePurchases, string $key): array {
+                $source = $sourcePurchases->first()->farm ?? $sourcePurchases->first()->supplier;
+                $overdue = $sourcePurchases->filter(fn ($purchase) => (float) $purchase->remaining_amount > 0
+                    && $purchase->payment_due_date?->isBefore(today()));
+
+                return [
+                    'key' => str_replace(':', '-', $key),
+                    'type' => str_starts_with($key, 'farm:') ? 'Trang trại' : 'Nhà cung cấp',
+                    'source' => $source,
+                    'purchases' => $sourcePurchases,
+                    'purchase_count' => $sourcePurchases->count(),
+                    'quantity' => (int) $sourcePurchases->sum('quantity'),
+                    'weight' => (float) $sourcePurchases->sum('total_weight'),
+                    'total_amount' => (float) $sourcePurchases->sum('total_amount'),
+                    'paid_amount' => (float) $sourcePurchases->sum('paid_amount'),
+                    'remaining_amount' => (float) $sourcePurchases->sum('remaining_amount'),
+                    'overdue_amount' => (float) $overdue->sum('remaining_amount'),
+                    'nearest_due_date' => $sourcePurchases->where('remaining_amount', '>', 0)->whereNotNull('payment_due_date')->min('payment_due_date'),
+                ];
+            })
+            ->sortByDesc('remaining_amount')
+            ->values();
+
+        $legacyPayables = Schema::hasTable('accounting_supplier_payables')
+            ? DB::table('accounting_supplier_payables as payable')
+                ->join('companies as company', 'company.id', '=', 'payable.company_id')
+                ->select('payable.*', 'company.name as company_name')
+                ->orderByDesc('payable.amount')
+                ->get()
+            : collect();
+
+        return view('accounting.supplier_debts', [
+            'supplierDebts' => $supplierDebts,
+            'totalDebt' => (float) $supplierDebts->sum('remaining_amount'),
+            'totalPaid' => (float) $supplierDebts->sum('paid_amount'),
+            'totalOverdue' => (float) $supplierDebts->sum('overdue_amount'),
+            'accounts' => Account::active()->orderBy('name')->get(['id', 'name', 'balance']),
+            'legacyPayables' => $legacyPayables,
+            'keyword' => $keyword,
+            'debtStatus' => $debtStatus,
+            'sourceType' => $sourceType,
+        ]);
+    }
+
+    public function supplierDebtPaymentStore(Request $request, ProcurementPurchase $purchase, SupplierDebtService $debtService)
+    {
+        if ((float) $purchase->remaining_amount <= 0) {
+            return back()->with('error', 'Lần mua '.$purchase->code.' đã được thanh toán đủ.');
+        }
+        if (in_array($purchase->paymentRequest?->status, [
+            Transaction::STATUS_PENDING_APPROVAL,
+            Transaction::STATUS_APPROVED_PENDING_COMPLETION,
+        ], true)) {
+            return back()->with('error', 'Lần mua '.$purchase->code.' đang có phiếu thanh toán chưa hoàn tất. Vui lòng xử lý trên phiếu để tránh ghi nhận trùng.');
+        }
+
+        $validated = $request->validate([
+            'amount' => ['required', 'numeric', 'gt:0', 'lte:'.$purchase->remaining_amount],
+            'account_id' => ['required', 'integer', 'exists:accounts,id'],
+            'paid_at' => ['required', 'date'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $account = Account::active()->findOrFail((int) $validated['account_id']);
+        $category = TransactionCategory::query()
+            ->where('flow_direction', 'out')
+            ->where('is_active', true)
+            ->where(fn ($q) => $q->where('name', 'like', '%thu mua%')->orWhere('name', 'like', '%mua hàng%'))
+            ->first();
+        $category ??= TransactionCategory::updateOrCreate(
+            ['code' => 'PROCUREMENT'],
+            ['name' => 'Chi phí thu mua', 'flow_direction' => 'out', 'sort_order' => (int) TransactionCategory::max('sort_order') + 1, 'is_active' => true]
+        );
+        $sourceName = $purchase->farm?->name ?? $purchase->supplier?->name ?? 'Nhà cung cấp';
+
+        $transaction = DB::transaction(function () use ($validated, $purchase, $account, $category, $sourceName, $debtService): Transaction {
+            $transaction = Transaction::create([
+                'amount' => (float) $validated['amount'],
+                'type' => 'extra_expense',
+                'transaction_category_id' => $category->id,
+                'account_id' => $account->id,
+                'destination_type' => 'external',
+                'external_recipient' => $sourceName,
+                'note' => 'Thanh toán công nợ '.$purchase->code.($validated['note'] ? ': '.$validated['note'] : ''),
+                'status' => Transaction::STATUS_APPROVED,
+                'submitted_by' => auth()->id(),
+                'approved_by' => auth()->id(),
+                'approved_at' => now(),
+            ]);
+            $transaction->forceFill(['created_at' => Carbon::parse($validated['paid_at'])])->save();
+
+            $debtService->recordPayment(
+                $purchase,
+                (float) $validated['amount'],
+                Carbon::parse($validated['paid_at']),
+                auth()->id(),
+                $validated['note'] ?? 'Kế toán ghi nhận thanh toán trực tiếp',
+                $transaction->id,
+            );
+
+            return $transaction;
+        });
+
+        $this->applyTransactionToOrder($transaction);
+
+        return back()->with('success', 'Đã ghi nhận thanh toán '.number_format((float) $validated['amount']).'đ cho '.$purchase->code.'.');
+    }
+
+    public function cashflow(Request $request)
+    {
+        [$from, $to, $rangeLabel] = $this->resolveDateRange($request);
+        $categoryId = (int) $request->input('category_id', 0);
+        $accountId = (int) $request->input('account_id', 0);
+
+        $baseQuery = Transaction::query()
+            ->whereBetween('created_at', [$from, $to])
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->when($categoryId > 0, fn ($q) => $q->where('transaction_category_id', $categoryId))
+            ->when($accountId > 0, fn ($q) => $q->where('account_id', $accountId));
+
+        $pendingRequests = Transaction::query()
+            ->with([
+                'submitter:id,name',
+                'transactionCategory:id,code,name,flow_direction',
+                'account:id,name,type',
+                'approvalSteps.step:id,role_slug,step_order',
+            ])
+            ->whereIn('status', [
+                Transaction::STATUS_PENDING_APPROVAL,
+                Transaction::STATUS_APPROVED_PENDING_COMPLETION,
+            ])
+            ->whereNotNull('request_source')
+            ->latest('created_at')
+            ->limit(20)
+            ->get();
+        $approvalService = app(\App\Services\ApprovalService::class);
+        $pendingRequests->each(function (Transaction $transaction) use ($approvalService): void {
+            if ($transaction->status === Transaction::STATUS_PENDING_APPROVAL) {
+                $approvalService->ensureTransactionApprovalFlow($transaction);
+            }
+        });
+        $pendingRequests->loadMissing('approvalSteps.step:id,role_slug,step_order');
+        if (str_starts_with((string) $request->route()?->getName(), 'director.')) {
+            $user = $request->user();
+            $pendingRequests = $pendingRequests
+                ->filter(fn (Transaction $transaction) => $transaction->status === Transaction::STATUS_PENDING_APPROVAL
+                    && ($user?->hasRole('admin') || $approvalService->canApproveTransactionStep($transaction, $user)))
+                ->values();
+        }
+
+        $transactions = (clone $baseQuery)
+            ->with([
+                'customer:id,name',
+                'order:id,code',
+                'submitter:id,name',
+                'transactionCategory:id,code,name,flow_direction',
+                'account:id,name,type,balance,warning_threshold',
+            ])
+            ->latest('created_at')
+            ->paginate(25)
+            ->appends($request->query());
+
+        $accountSummaries = DB::table('accounts as a')
+            ->leftJoin('transactions as t', function ($join) use ($from, $to, $categoryId) {
+                $join->on('t.account_id', '=', 'a.id')
+                    ->whereBetween('t.created_at', [$from, $to])
+                    ->where('t.status', '=', Transaction::STATUS_APPROVED);
+                if ($categoryId > 0) {
+                    $join->where('t.transaction_category_id', '=', $categoryId);
+                }
+            })
+            ->leftJoin('transaction_categories as tc', 'tc.id', '=', 't.transaction_category_id')
+            ->when($accountId > 0, fn ($q) => $q->where('a.id', $accountId))
+            ->selectRaw('a.id, a.name, a.type, a.balance, a.warning_threshold')
+            ->selectRaw('COUNT(t.id) as txn_count')
+            ->selectRaw("COALESCE(SUM(CASE WHEN COALESCE(tc.flow_direction, CASE WHEN t.type IN ('payment','extra_income') THEN 'in' ELSE 'out' END) = 'in' THEN t.amount ELSE 0 END), 0) as total_in")
+            ->selectRaw("COALESCE(SUM(CASE WHEN COALESCE(tc.flow_direction, CASE WHEN t.type IN ('payment','extra_income') THEN 'in' ELSE 'out' END) = 'out' THEN t.amount ELSE 0 END), 0) as total_out")
+            ->groupBy('a.id', 'a.name', 'a.type', 'a.balance', 'a.warning_threshold')
+            ->orderBy('a.name')
+            ->get();
+
+        return view('accounting.cashflow', [
+            'transactions' => $transactions,
+            'accounts' => Account::active()->orderBy('name')->get(['id', 'name']),
+            'accountId' => $accountId,
+            'categoryId' => $categoryId,
+            'type' => $request->input('type', ''),
+            'transactionCategories' => TransactionCategory::active()->orderBy('sort_order')->get(['id', 'code', 'name', 'flow_direction']),
+            'accountSummaries' => $accountSummaries,
+            'pendingRequests' => $pendingRequests,
+            'from' => $from,
+            'to' => $to,
+            'rangeLabel' => $rangeLabel,
+            'incomeTotal' => (float) (clone $baseQuery)->whereIn('type', ['payment', 'extra_income'])->sum('amount'),
+            'expenseTotal' => (float) (clone $baseQuery)->whereIn('type', ['refund', 'fee', 'expense', 'extra_expense'])->sum('amount'),
+        ]);
+    }
+
+    public function cashflowShow(Transaction $transaction)
+    {
+        $this->synchronizeFinanceRequestAmount($transaction);
+        $transaction->load([
+            'customer:id,name',
+            'order:id,code,total',
+            'submitter:id,name,job_title',
+            'approver:id,name',
+            'rejecter:id,name',
+            'transferProofUploader:id,name',
+            'expenseType:id,name',
+            'payeeUser:id,name',
+            'transactionCategory:id,code,name,flow_direction',
+            'account:id,name,type,balance',
+            'destinationAccount:id,name,type,balance,account_number,bank_name',
+            'approvalSteps.approver:id,name',
+            'approvalSteps.step:id,role_slug,step_order',
+        ]);
+
+        $user = auth()->user();
+        $approvalService = app(\App\Services\ApprovalService::class);
+        if ($transaction->status === Transaction::STATUS_PENDING_APPROVAL && $transaction->request_source) {
+            $approvalService->ensureTransactionApprovalFlow($transaction);
+            $transaction->load([
+                'approvalSteps.approver:id,name',
+                'approvalSteps.step:id,role_slug,step_order',
+            ]);
+        }
+        $canReview = $transaction->status === Transaction::STATUS_PENDING_APPROVAL && (
+            $user->hasRole('admin') ||
+            $approvalService->canApproveTransactionStep($transaction, $user)
+        );
+        $canComplete = $transaction->request_source
+            && $transaction->status === Transaction::STATUS_APPROVED_PENDING_COMPLETION
+            && ($user->hasRole('admin') || $user->hasRole('account') || $user->hasRole('accountant') || $user->hasRole('accounting'));
+
+        return view('accounting.cashflow_show', [
+            'transaction' => $transaction,
+            'canReview' => $canReview,
+            'canComplete' => $canComplete,
+            'accounts' => Account::active()->orderBy('name')->get(['id', 'name', 'type', 'balance']),
+            'transactionCategories' => TransactionCategory::active()
+                ->orderBy('flow_direction')
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'code', 'name', 'flow_direction']),
+        ]);
+    }
+
+    public function cashflowPrint(Transaction $transaction)
+    {
+        abort_unless($transaction->request_source, 404);
+
+        $transaction->load([
+            'submitter:id,name,email,department_id,block_id',
+            'submitter.department:id,name,block_id',
+            'submitter.block:id,name',
+            'approver:id,name',
+            'rejecter:id,name',
+            'transactionCategory:id,code,name,flow_direction',
+            'account:id,name,type',
+            'destinationAccount:id,name,type,account_number,bank_name',
+        ]);
+
+        return view('department_finance_requests.print', [
+            'config' => [
+                'label' => 'Kế toán',
+            ],
+            'transaction' => $transaction,
+        ]);
+    }
+
+    public function reconciliation(Request $request)
+    {
+        $usesCombinedDateFilters = $request->hasAny([
+            'business_date', 'business_date_from', 'business_date_to',
+            'delivered_date', 'delivered_date_from', 'delivered_date_to',
+        ]);
+        if ($usesCombinedDateFilters) {
+            $validatedDates = $request->validate([
+                'business_date' => ['nullable', 'date_format:Y-m-d'],
+                'delivered_date' => ['nullable', 'date_format:Y-m-d'],
+                'business_date_from' => ['nullable', 'date_format:Y-m-d'],
+                'business_date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:business_date_from'],
+                'delivered_date_from' => ['nullable', 'date_format:Y-m-d'],
+                'delivered_date_to' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:delivered_date_from'],
+            ]);
+            $businessDateFrom = $validatedDates['business_date_from'] ?? $validatedDates['business_date'] ?? null;
+            $businessDateTo = $validatedDates['business_date_to'] ?? $validatedDates['business_date'] ?? null;
+            $deliveredDateFrom = $validatedDates['delivered_date_from'] ?? $validatedDates['delivered_date'] ?? null;
+            $deliveredDateTo = $validatedDates['delivered_date_to'] ?? $validatedDates['delivered_date'] ?? null;
+            if (! $businessDateFrom && ! $businessDateTo && ! $deliveredDateFrom && ! $deliveredDateTo) {
+                $businessDateFrom = $businessDateTo = now()->toDateString();
+            }
+        } else {
+            // Giữ tương thích với các liên kết cũ dùng date_field + date.
+            $legacyDate = Carbon::parse((string) $request->input('date', now()->toDateString()))->toDateString();
+            $legacyDateField = (string) $request->input('date_field', 'business_date');
+            $businessDateFrom = $businessDateTo = $legacyDateField === 'delivered_at' ? null : $legacyDate;
+            $deliveredDateFrom = $deliveredDateTo = $legacyDateField === 'delivered_at' ? $legacyDate : null;
+        }
+        $businessDate = $businessDateFrom === $businessDateTo ? $businessDateFrom : null;
+        $deliveredDate = $deliveredDateFrom === $deliveredDateTo ? $deliveredDateFrom : null;
+        $dateField = ($businessDateFrom || $businessDateTo) ? 'business_date' : 'delivered_at';
+        $selectedDate = $businessDateFrom ?? $businessDateTo ?? $deliveredDateFrom ?? $deliveredDateTo ?? now()->toDateString();
+        $orderId = (int) $request->input('order_id', 0);
+        $saleId = (int) $request->input('sale_id', 0);
+        $shipperId = (int) $request->input('shipper_id', 0);
+        $status = trim((string) $request->input('status', ''));
+        $paymentStatus = trim((string) $request->input('payment_status', ''));
+        $accountingStatus = trim((string) $request->input('accounting_status', ''));
+        $sort = (string) $request->input('sort', 'date');
+        $sortDirection = strtolower((string) $request->input('direction', 'desc'));
+        $sortableColumns = ['code', 'customer', 'status', 'paid', 'due', 'sale', 'shipper', 'shipping_fee', 'accounting_status', 'date'];
+        if (! in_array($sort, $sortableColumns, true)) {
+            $sort = 'date';
+        }
+        if (! in_array($sortDirection, ['asc', 'desc'], true)) {
+            $sortDirection = 'desc';
+        }
+        $hasExclusionTable = Schema::hasTable('accounting_reconciliation_exclusions');
+        $canExcludeMissingOrders = $hasExclusionTable
+            && Schema::hasColumn('accounting_reconciliation_exclusions', 'deleted_order_id');
+
+        $baseQuery = Order::query()
+            ->with([
+                'customer:id,name,phone,address',
+                'user:id,name,short_name',
+                'shipper:id,name',
+                'returnRecords:id,order_id,status,refund_amount',
+                'accountingReconciliation.confirmer:id,name',
+            ])
+            ->withSum('items as total_item_quantity', 'quantity')
+            ->withSum('returnRecords as return_amount_sum', 'refund_amount')
+            ->withExists([
+                'histories as is_restored_order' => fn ($historyQuery) => $historyQuery
+                    ->where('action', 'restore_cancelled_order'),
+            ])
+            ->when($hasExclusionTable, fn ($query) => $query->whereNotExists(fn ($exclusionQuery) => $exclusionQuery
+                ->selectRaw('1')
+                ->from('accounting_reconciliation_exclusions')
+                ->whereColumn('accounting_reconciliation_exclusions.order_id', 'orders.id')))
+            ->when($businessDateFrom || $businessDateTo, function ($dateQuery) use ($businessDateFrom, $businessDateTo): void {
+                $dateQuery->where(function ($regularBusinessDateQuery) use ($businessDateFrom, $businessDateTo): void {
+                    $regularBusinessDateQuery
+                        ->whereDoesntHave('histories', fn ($historyQuery) => $historyQuery
+                            ->where('action', 'restore_cancelled_order'))
+                        ->where(function ($businessDateQuery) use ($businessDateFrom, $businessDateTo): void {
+                            // Đồng bộ với màn Theo dõi đơn hàng ngày: đơn thường
+                            // theo ngày tạo, đơn nhập kế toán theo ngày nghiệp vụ.
+                            $businessDateQuery->where(function ($normalQuery) use ($businessDateFrom, $businessDateTo): void {
+                                $normalQuery->whereNull('accounting_sales_import_batch_id');
+                                if ($businessDateFrom) $normalQuery->whereDate('created_at', '>=', $businessDateFrom);
+                                if ($businessDateTo) $normalQuery->whereDate('created_at', '<=', $businessDateTo);
+                            })->orWhere(function ($importQuery) use ($businessDateFrom, $businessDateTo): void {
+                                $importQuery->whereNotNull('accounting_sales_import_batch_id');
+                                if ($businessDateFrom) $importQuery->whereDate('delivery_date', '>=', $businessDateFrom);
+                                if ($businessDateTo) $importQuery->whereDate('delivery_date', '<=', $businessDateTo);
+                            });
+                        });
+                })->orWhere(function ($restoredOrderQuery) use ($businessDateFrom, $businessDateTo): void {
+                    // Đơn phục hồi có ngày tạo cũ nhưng phải được kế toán nhận
+                    // tại ngày Shipper thực sự giao lại đơn.
+                    $restoredOrderQuery
+                        ->whereHas('histories', fn ($historyQuery) => $historyQuery
+                            ->where('action', 'restore_cancelled_order'))
+                        ->when($businessDateFrom, fn ($q) => $q->whereDate('delivered_at', '>=', $businessDateFrom))
+                        ->when($businessDateTo, fn ($q) => $q->whereDate('delivered_at', '<=', $businessDateTo));
+                });
+            })
+            ->when($deliveredDateFrom, fn ($q) => $q->whereDate('delivered_at', '>=', $deliveredDateFrom))
+            ->when($deliveredDateTo, fn ($q) => $q->whereDate('delivered_at', '<=', $deliveredDateTo))
+            ->when($orderId > 0, fn ($q) => $q->whereKey($orderId))
+            ->when($saleId > 0, fn ($q) => $q->where('user_id', $saleId))
+            ->when($shipperId > 0, fn ($q) => $q->where('shipper_id', $shipperId))
+            ->when(
+                $status !== '',
+                fn ($q) => $q->where('status', $status),
+                fn ($q) => $q->where(function ($statusQuery): void {
+                    $statusQuery
+                        ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_CANCELLED])
+                        ->orWhereNotNull('trash_at');
+                })
+            )
+            ->when($paymentStatus !== '', fn ($q) => $q->where('payment_status', $paymentStatus))
+            ->when($accountingStatus === 'confirmed', fn ($q) => $q->whereHas('accountingReconciliation', fn ($r) => $r->where('status', AccountingReconciliation::STATUS_CONFIRMED)))
+            ->when($accountingStatus === 'pending', fn ($q) => $q->whereDoesntHave('accountingReconciliation', fn ($r) => $r->where('status', AccountingReconciliation::STATUS_CONFIRMED)));
+
+        $ordersQuery = clone $baseQuery;
+        match ($sort) {
+            'code' => $ordersQuery->orderBy('orders.code', $sortDirection),
+            'customer' => $ordersQuery->orderBy(
+                Customer::query()->select('name')->whereColumn('customers.id', 'orders.customer_id'),
+                $sortDirection
+            ),
+            'status' => $ordersQuery->orderBy('orders.status', $sortDirection),
+            'paid' => $ordersQuery->orderBy('orders.amount_paid', $sortDirection),
+            'due' => $ordersQuery->orderBy('orders.amount_due', $sortDirection),
+            'sale' => $ordersQuery->orderBy(
+                User::query()
+                    ->selectRaw("COALESCE(NULLIF(short_name, ''), name)")
+                    ->whereColumn('users.id', 'orders.user_id'),
+                $sortDirection
+            ),
+            'shipper' => $ordersQuery->orderBy(
+                User::query()->select('name')->whereColumn('users.id', 'orders.shipper_id'),
+                $sortDirection
+            ),
+            'shipping_fee' => $ordersQuery->orderBy('orders.customer_shipping_fee', $sortDirection),
+            'accounting_status' => $ordersQuery->orderBy(
+                AccountingReconciliation::query()->select('status')->whereColumn('accounting_reconciliations.order_id', 'orders.id'),
+                $sortDirection
+            ),
+            'date' => $dateField === 'delivered_at'
+                ? $ordersQuery->orderBy('orders.delivered_at', $sortDirection)
+                : $ordersQuery->orderByRaw(
+                    'CASE WHEN orders.accounting_sales_import_batch_id IS NOT NULL THEN orders.delivery_date ELSE orders.created_at END '.$sortDirection
+                ),
+        };
+
+        $orders = $ordersQuery
+            ->orderBy('orders.id', $sortDirection)
+            ->paginate(25)
+            ->appends($request->query());
+        $orders->getCollection()->transform(function (Order $order) {
+            $order->setAttribute('reconciliation_paid_amount', $this->effectivePaidForOrder($order));
+            $order->setAttribute('reconciliation_due_amount', $this->effectiveDueForOrder($order));
+            [$canConfirm, $blockReason] = $this->canAccountingConfirmOrder($order);
+            $isConfirmed = $order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED;
+            $order->setAttribute('reconciliation_can_confirm', $canConfirm && ! $isConfirmed);
+            $order->setAttribute('reconciliation_block_reason', $isConfirmed ? 'Đơn đã được kế toán xác nhận.' : $blockReason);
+
+            return $order;
+        });
+
+        $allForStats = (clone $baseQuery)->get();
+        $confirmedCount = $allForStats->filter(fn (Order $order) => $order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED)->count();
+        $returnOrdersCount = $allForStats->filter(fn (Order $order) => (float) ($order->return_amount_sum ?? 0) > 0 || (bool) ($order->has_return_order ?? false))->count();
+
+        $stats = [
+            'total_orders' => $allForStats->count(),
+            'total_items' => (float) $allForStats->sum('total_item_quantity'),
+            'total_goods' => (float) $allForStats->sum(fn (Order $order) => (float) ($order->subtotal_amount ?? $order->total ?? 0)),
+            'total_revenue' => (float) $allForStats->sum(fn (Order $order) => $this->recognizedRevenueForOrder($order)),
+            'total_paid' => (float) $allForStats->sum(fn (Order $order) => $this->effectivePaidForOrder($order)),
+            'total_due' => (float) $allForStats->sum(fn (Order $order) => $this->effectiveDueForOrder($order)),
+            'total_shipping_fee' => (float) $allForStats->sum(fn (Order $order) => $this->customerDeliveryFeeForOrder($order)),
+            'return_orders' => $returnOrdersCount,
+            'confirmed' => $confirmedCount,
+            'pending' => max(0, $allForStats->count() - $confirmedCount),
+        ];
+
+        $missingOrders = collect();
+        if (Schema::hasTable('admin_deleted_orders')) {
+            $excludedDeletedIds = $canExcludeMissingOrders
+                ? DB::table('accounting_reconciliation_exclusions')
+                    ->whereNotNull('deleted_order_id')
+                    ->pluck('deleted_order_id')
+                : collect();
+            $missingOrders = DB::table('admin_deleted_orders')
+                ->whereNotIn('id', $excludedDeletedIds)
+                ->orderByDesc('deleted_at')
+                ->get()
+                ->map(function ($deleted) {
+                    $snapshot = json_decode((string) $deleted->snapshot, true) ?: [];
+                    $attributes = (array) ($snapshot['order'] ?? []);
+
+                    return (object) [
+                        'deleted_record_id' => (int) $deleted->id,
+                        'order_id' => (int) $deleted->order_id,
+                        'code' => (string) ($deleted->order_code ?: '#'.$deleted->order_id),
+                        'customer_name' => (string) ($snapshot['customer']['name'] ?? '-'),
+                        'sale_name' => (string) ($snapshot['sale']['short_name'] ?? $snapshot['sale']['name'] ?? '-'),
+                        'sale_id' => (int) ($deleted->sale_user_id ?? 0),
+                        'shipper_id' => (int) ($attributes['shipper_id'] ?? 0),
+                        'shipper_name' => '-',
+                        'status' => (string) ($attributes['status'] ?? 'deleted'),
+                        'payment_status' => (string) ($attributes['payment_status'] ?? ''),
+                        'total' => (float) ($deleted->order_total ?? 0),
+                        'paid_amount' => (float) ($attributes['amount_paid'] ?? 0),
+                        'shipping_fee' => (bool) ($attributes['collect_customer_shipping_fee'] ?? false)
+                            ? (float) ($attributes['customer_shipping_fee'] ?? 0)
+                            : 0,
+                        'created_at' => $attributes['created_at'] ?? null,
+                        'delivery_date' => $attributes['delivery_date'] ?? null,
+                        'delivered_at' => $attributes['delivered_at'] ?? null,
+                        'import_batch_id' => $deleted->accounting_sales_import_batch_id,
+                        'admin_delete_reason' => (string) $deleted->reason,
+                        'deleted_at' => $deleted->deleted_at,
+                    ];
+                })
+                ->filter(function ($deleted) use ($businessDateFrom, $businessDateTo, $deliveredDateFrom, $deliveredDateTo, $saleId, $shipperId, $status, $paymentStatus, $accountingStatus): bool {
+                    $businessDateValue = $deleted->import_batch_id ? $deleted->delivery_date : $deleted->created_at;
+                    try {
+                        $businessDay = $businessDateValue ? Carbon::parse($businessDateValue)->toDateString() : null;
+                        $deliveredDay = $deleted->delivered_at ? Carbon::parse($deleted->delivered_at)->toDateString() : null;
+                        $matchesBusinessDate = (! $businessDateFrom || ($businessDay && $businessDay >= $businessDateFrom))
+                            && (! $businessDateTo || ($businessDay && $businessDay <= $businessDateTo));
+                        $matchesDeliveredDate = (! $deliveredDateFrom || ($deliveredDay && $deliveredDay >= $deliveredDateFrom))
+                            && (! $deliveredDateTo || ($deliveredDay && $deliveredDay <= $deliveredDateTo));
+                    } catch (\Throwable) {
+                        return false;
+                    }
+
+                    return $matchesBusinessDate
+                        && $matchesDeliveredDate
+                        && ($saleId <= 0 || $deleted->sale_id === $saleId)
+                        && ($shipperId <= 0 || $deleted->shipper_id === $shipperId)
+                        && ($status === '' || $deleted->status === $status)
+                        && ($paymentStatus === '' || $deleted->payment_status === $paymentStatus)
+                        && $accountingStatus !== 'confirmed';
+                })
+                ->values();
+
+            if ($missingOrders->isNotEmpty()) {
+                $shipperNames = User::query()
+                    ->whereIn('id', $missingOrders->pluck('shipper_id')->filter()->unique())
+                    ->pluck('name', 'id');
+                $missingOrders->each(function ($deleted) use ($shipperNames): void {
+                    $deleted->shipper_name = (string) ($shipperNames[$deleted->shipper_id] ?? '-');
+                });
+                $stats['total_orders'] += $missingOrders->count();
+                $stats['total_revenue'] += $missingOrders->sum('total');
+                $stats['total_paid'] += $missingOrders->sum('paid_amount');
+                $stats['total_due'] += $missingOrders->sum(fn ($deleted) => max(0, $deleted->total - $deleted->paid_amount));
+                $stats['total_shipping_fee'] += $missingOrders->sum('shipping_fee');
+                $stats['pending'] += $missingOrders->count();
+            }
+        }
+
+        return view('accounting.reconciliation', [
+            'orders' => $orders,
+            'stats' => $stats,
+            'selectedDate' => $selectedDate,
+            'businessDate' => $businessDate,
+            'deliveredDate' => $deliveredDate,
+            'businessDateFrom' => $businessDateFrom,
+            'businessDateTo' => $businessDateTo,
+            'deliveredDateFrom' => $deliveredDateFrom,
+            'deliveredDateTo' => $deliveredDateTo,
+            'sales' => User::query()->whereHas('roles', fn ($q) => $q->whereIn('name', ['sale', 'leader_sale', 'sale_manager', 'manager_sale']))->orderBy('name')->get(['id', 'name']),
+            'shippers' => User::query()->whereHas('roles', fn ($q) => $q->whereIn('name', ['shipper', 'ship']))->orderBy('name')->get(['id', 'name']),
+            'saleId' => $saleId,
+            'shipperId' => $shipperId,
+            'status' => $status,
+            'paymentStatus' => $paymentStatus,
+            'accountingStatus' => $accountingStatus,
+            'dateField' => $dateField,
+            'sort' => $sort,
+            'sortDirection' => $sortDirection,
+            'missingOrders' => $missingOrders,
+            'canExcludeReconciliationOrders' => $hasExclusionTable,
+            'canExcludeMissingOrders' => $canExcludeMissingOrders,
+        ]);
+    }
+
+    public function excludeInvalidReconciliationOrder(Request $request, Order $order)
+    {
+        abort_unless(Schema::hasTable('accounting_reconciliation_exclusions'), 503, 'Chức năng đang được cập nhật dữ liệu.');
+        $isMissing = $order->trash_at !== null;
+        $isCancelled = $order->status === Order::STATUS_CANCELLED;
+        if (! $isMissing && ! $isCancelled) {
+            return back()->with('error', 'Chỉ được xóa khỏi đối soát các đơn không còn tồn tại hoặc đã bị hủy.');
+        }
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ], [
+            'reason.required' => 'Vui lòng nhập lý do xóa đơn khỏi danh sách đối soát.',
+        ]);
+
+        DB::table('accounting_reconciliation_exclusions')->updateOrInsert(
+            ['order_id' => $order->id],
+            [
+                'excluded_by' => auth()->id(),
+                'reason' => trim((string) $validated['reason']),
+                'excluded_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+
+        return back()->with('success', 'Đã xóa đơn '.$order->code.' khỏi danh sách đối soát kế toán. Dữ liệu gốc vẫn được giữ nguyên.');
+    }
+
+    public function excludeMissingReconciliationOrder(Request $request, int $deletedOrderId)
+    {
+        abort_unless(
+            Schema::hasTable('accounting_reconciliation_exclusions')
+                && Schema::hasColumn('accounting_reconciliation_exclusions', 'deleted_order_id'),
+            503,
+            'Chức năng đang được cập nhật dữ liệu.'
+        );
+        $deletedOrder = DB::table('admin_deleted_orders')->where('id', $deletedOrderId)->first();
+        abort_unless($deletedOrder, 404);
+        if (Order::query()->whereKey($deletedOrder->order_id)->exists()) {
+            return back()->with('error', 'Đơn thực tế vẫn còn tồn tại nên không thể xóa theo chức năng này.');
+        }
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:1000'],
+        ]);
+        DB::table('accounting_reconciliation_exclusions')->updateOrInsert(
+            ['deleted_order_id' => $deletedOrderId],
+            [
+                'order_id' => null,
+                'excluded_by' => auth()->id(),
+                'reason' => trim((string) $validated['reason']),
+                'excluded_at' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]
+        );
+
+        return back()->with('success', 'Đã xóa dòng kế toán của đơn không còn tồn tại '.$deletedOrder->order_code.'.');
+    }
+
+    public function paymentMatching(Request $request)
+    {
+        return view('accounting.payment_matching', [
+            'accounts' => Account::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'type', 'balance']),
+            'incomeCategories' => TransactionCategory::active()->where('flow_direction', 'in')->orderBy('sort_order')->get(['id', 'name', 'code']),
+        ]);
+    }
+
+    public function paymentMatchingCustomers(Request $request)
+    {
+        $mode = (string) $request->input('mode', 'keyword');
+        $keyword = trim((string) $request->input('keyword', ''));
+        $transferContent = trim((string) $request->input('transfer_content', ''));
+        $transferTokens = $this->paymentMatchingTokens($transferContent);
+
+        $query = Customer::query()
+            ->select(['id', 'name', 'phone', 'customer_code', 'customer_card_codes'])
+            ->when($mode !== 'card' && $keyword !== '', function ($query) use ($keyword) {
+                $query->where(function ($sub) use ($keyword) {
+                    $sub->where('name', 'like', "%{$keyword}%")
+                        ->orWhere('phone', 'like', "%{$keyword}%")
+                        ->orWhere('customer_code', 'like', "%{$keyword}%");
+                });
+            })
+            ->when($mode === 'card' && Schema::hasColumn('customers', 'customer_card_codes'), fn ($query) => $query->whereNotNull('customer_card_codes'))
+            ->orderBy('name');
+
+        $customers = $query
+            ->limit($mode === 'card' ? 500 : 30)
+            ->get()
+            ->map(function (Customer $customer) use ($transferTokens) {
+                $codes = collect($customer->customer_card_codes ?: [])
+                    ->map(fn ($code) => trim((string) $code))
+                    ->filter()
+                    ->values();
+                $matchedCodes = $codes->filter(function (string $code) use ($transferTokens) {
+                    $normalized = $this->normalizePaymentText($code);
+
+                    return $normalized !== '' && collect($transferTokens)->contains(function (string $token) use ($normalized) {
+                        return str_contains($token, $normalized) || str_contains($normalized, $token);
+                    });
+                })->values();
+
+                return [
+                    'id' => $customer->id,
+                    'name' => $customer->name,
+                    'phone' => $customer->phone,
+                    'code' => $customer->customer_code,
+                    'card_codes' => $codes,
+                    'matched_codes' => $matchedCodes,
+                ];
+            })
+            ->when($mode === 'card', fn ($rows) => $rows->filter(fn (array $row) => count($row['matched_codes']) > 0)->values());
+
+        return response()->json(['data' => $customers]);
+    }
+
+    public function paymentMatchingOrders(Request $request)
+    {
+        $rawAmount = preg_replace('/[^\d]/', '', (string) $request->input('amount', '')) ?: '0';
+        $customerId = (int) $request->input('customer_id', 0);
+        $amount = (float) $rawAmount;
+
+        if ($customerId <= 0 || $amount <= 0) {
+            return response()->json(['data' => []]);
+        }
+
+        $orders = Order::query()
+            ->with(['customer:id,name', 'transactions' => fn ($query) => $query->where('status', Transaction::STATUS_APPROVED)->whereIn('type', ['payment', 'refund'])])
+            ->where('customer_id', $customerId)
+            ->whereNotIn('status', ['cancelled', 'canceled', 'rejected'])
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get()
+            ->map(function (Order $order) use ($amount) {
+                $paid = (float) $order->transactions->where('type', 'payment')->sum('amount')
+                    - (float) $order->transactions->where('type', 'refund')->sum('amount');
+                $remaining = (float) ($order->amount_due ?? 0);
+                if ($remaining <= 0) {
+                    $remaining = max(0, (float) ($order->total ?? 0) - $paid);
+                }
+                $isEnough = $remaining + 0.0001 >= $amount;
+
+                return [
+                    'id' => $order->id,
+                    'code' => $order->code ?: ('#'.$order->id),
+                    'created_at' => $order->created_at?->format('d/m/Y'),
+                    'note' => $order->note ?: 'Đơn hàng',
+                    'total' => (float) ($order->total ?? 0),
+                    'amount_paid' => max($paid, 0),
+                    'amount_due' => $remaining,
+                    'payment_status' => $order->payment_status,
+                    'is_enough' => $isEnough,
+                    'short_amount' => $isEnough ? 0 : max(0, $amount - $remaining),
+                ];
+            })
+            ->filter(fn (array $order) => (float) $order['amount_due'] > 0)
+            ->sortByDesc(fn (array $order) => $order['is_enough'] ? 1 : 0)
+            ->values();
+
+        return response()->json(['data' => $orders]);
+    }
+
+    public function storeMatchedPayment(Request $request)
+    {
+        $rawAmount = preg_replace('/[^\d]/', '', (string) $request->input('amount', '')) ?: '0';
+        $request->merge(['amount' => $rawAmount]);
+
+        $validated = $request->validate([
+            'transfer_content' => ['required', 'string', 'max:2000'],
+            'amount' => ['required', 'numeric', 'min:0.01'],
+            'customer_id' => ['required', 'exists:customers,id'],
+            'order_id' => ['required', 'exists:orders,id'],
+            'account_id' => ['nullable', 'exists:accounts,id'],
+            'transaction_category_id' => ['nullable', 'exists:transaction_categories,id'],
+            'card_codes' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $order = Order::query()
+            ->with(['transactions' => fn ($query) => $query->where('status', Transaction::STATUS_APPROVED)->whereIn('type', ['payment', 'refund'])])
+            ->where('customer_id', $validated['customer_id'])
+            ->whereNotIn('status', ['cancelled', 'canceled', 'rejected'])
+            ->findOrFail($validated['order_id']);
+        $paid = (float) $order->transactions->where('type', 'payment')->sum('amount')
+            - (float) $order->transactions->where('type', 'refund')->sum('amount');
+        $remaining = (float) ($order->amount_due ?? 0);
+        if ($remaining <= 0) {
+            $remaining = max(0, (float) ($order->total ?? 0) - $paid);
+        }
+        if ((float) $validated['amount'] > $remaining + 0.0001) {
+            return back()
+                ->withErrors(['amount' => 'Số tiền chuyển khoản lớn hơn công nợ còn lại của đơn đã chọn.'])
+                ->withInput();
+        }
+
+        $categoryId = $validated['transaction_category_id'] ?? null;
+        if (! $categoryId) {
+            $categoryId = TransactionCategory::active()->where('flow_direction', 'in')->orderBy('sort_order')->value('id');
+        }
+
+        $transaction = null;
+        DB::transaction(function () use ($validated, $request, $order, $categoryId, &$transaction): void {
+            $customer = Customer::query()->lockForUpdate()->findOrFail($validated['customer_id']);
+            $cardCodes = collect(preg_split('/[\r\n,;]+/', (string) ($validated['card_codes'] ?? ''), -1, PREG_SPLIT_NO_EMPTY))
+                ->map(fn ($code) => trim((string) $code))
+                ->filter()
+                ->merge($this->paymentMatchingCardCodeCandidates((string) $validated['transfer_content']))
+                ->unique()
+                ->values();
+
+            if (Schema::hasColumn('customers', 'customer_card_codes')) {
+                $existing = collect($customer->customer_card_codes ?: [])->map(fn ($code) => trim((string) $code))->filter();
+                $customer->customer_card_codes = $existing->merge($cardCodes)->unique()->values()->all();
+                $customer->save();
+            }
+
+            $transaction = Transaction::create([
+                'order_id' => $order->id,
+                'customer_id' => $customer->id,
+                'amount' => (float) $validated['amount'],
+                'type' => 'payment',
+                'method' => 'bank',
+                'transaction_category_id' => $categoryId,
+                'account_id' => $validated['account_id'] ?? null,
+                'note' => mb_substr('Thanh toán CK: '.$validated['transfer_content'], 0, 255),
+                'status' => Transaction::STATUS_APPROVED,
+                'submitted_by' => $request->user()->id,
+                'approved_by' => $request->user()->id,
+                'approved_at' => now(),
+            ]);
+
+            $this->applyTransactionToOrder($transaction);
+        });
+
+        return redirect()->route(accounting_route_name('payment-matching'))
+            ->with('success', 'Đã ghi nhận thanh toán #'.($transaction?->id ?? '').' cho đơn '.($order->code ?: ('#'.$order->id)).'.');
+    }
+
+    public function inventory(Request $request)
+    {
+        $timeFilter = (string) $request->input('time_filter', 'today');
+        if (! in_array($timeFilter, ['today', 'date'], true)) {
+            $timeFilter = 'today';
+        }
+
+        $selectedDate = (string) $request->input('selected_date', now()->toDateString());
+        $targetDate = $timeFilter === 'today' ? now()->toDateString() : $selectedDate;
+        $warehouseId = (int) $request->input('warehouse_id', 0);
+        $sortBy = (string) $request->input('sort_by', 'product_variant');
+        if (! in_array($sortBy, ['product_variant', 'warehouse', 'quantity', 'selling_price', 'amount'], true)) {
+            $sortBy = 'product_variant';
+        }
+        $sortDir = strtolower((string) $request->input('sort_dir', 'asc'));
+        if (! in_array($sortDir, ['asc', 'desc'], true)) {
+            $sortDir = 'asc';
+        }
+
+        $today = now()->toDateString();
+        $activeRuleSub = DB::table('product_price_rules as ppr_s')
+            ->selectRaw('ppr_s.product_variant_id, MAX(ppr_s.id) as latest_rule_id')
+            ->where(function ($q) use ($today) {
+                $q->whereNull('ppr_s.start_date')
+                    ->orWhereDate('ppr_s.start_date', '<=', $today);
+            })
+            ->where(function ($q) use ($today) {
+                $q->whereNull('ppr_s.end_date')
+                    ->orWhereDate('ppr_s.end_date', '>=', $today);
+            })
+            ->groupBy('ppr_s.product_variant_id');
+
+        $inventoryBase = Inventory::query()
+            ->leftJoin('product_variants as pv', 'pv.id', '=', 'inventories.product_variant_id')
+            ->leftJoin('products as p', 'p.id', '=', 'pv.product_id')
+            ->leftJoin('warehouses as wh', 'wh.id', '=', 'inventories.warehouse_id')
+            ->leftJoinSub($activeRuleSub, 'active_rule', 'active_rule.product_variant_id', '=', 'inventories.product_variant_id')
+            ->leftJoin('product_price_rules as ppr', 'ppr.id', '=', 'active_rule.latest_rule_id')
+            ->select([
+                'inventories.*',
+                DB::raw('COALESCE(ppr.price, p.price, 0) as selling_price'),
+            ])
+            ->with(['productVariant.product:id,name', 'warehouse:id,name'])
+            ->when($warehouseId > 0, fn ($q) => $q->where('warehouse_id', $warehouseId));
+
+        $inventoryQuery = clone $inventoryBase;
+
+        if ($sortBy === 'warehouse') {
+            $inventoryQuery
+                ->orderBy('wh.name', $sortDir)
+                ->orderBy('p.name')
+                ->orderByRaw("COALESCE(pv.name, '')")
+                ->orderByRaw("COALESCE(pv.size, '')")
+                ->orderByDesc('inventories.quantity');
+        } elseif ($sortBy === 'quantity') {
+            $inventoryQuery
+                ->orderBy('inventories.quantity', $sortDir)
+                ->orderBy('p.name')
+                ->orderByRaw("COALESCE(pv.name, '')")
+                ->orderByRaw("COALESCE(pv.size, '')")
+                ->orderBy('wh.name');
+        } elseif ($sortBy === 'selling_price') {
+            $inventoryQuery
+                ->orderByRaw('COALESCE(ppr.price, p.price, 0) '.strtoupper($sortDir))
+                ->orderBy('p.name')
+                ->orderByRaw("COALESCE(pv.name, '')")
+                ->orderByRaw("COALESCE(pv.size, '')")
+                ->orderBy('wh.name');
+        } elseif ($sortBy === 'amount') {
+            $inventoryQuery
+                ->orderByRaw('inventories.quantity * COALESCE(ppr.price, p.price, 0) '.strtoupper($sortDir))
+                ->orderBy('p.name')
+                ->orderByRaw("COALESCE(pv.name, '')")
+                ->orderByRaw("COALESCE(pv.size, '')")
+                ->orderBy('wh.name');
+        } else {
+            $inventoryQuery
+                ->orderBy('p.name', $sortDir)
+                ->orderByRaw("COALESCE(pv.name, '')")
+                ->orderByRaw("COALESCE(pv.size, '')")
+                ->orderBy('wh.name')
+                ->orderByDesc('inventories.quantity');
+        }
+
+        $inventories = $inventoryQuery
+            ->paginate(25)
+            ->appends($request->query());
+
+        $totalAmount = (float) DB::table('inventories')
+            ->leftJoin('product_variants as pv', 'pv.id', '=', 'inventories.product_variant_id')
+            ->leftJoin('products as p', 'p.id', '=', 'pv.product_id')
+            ->leftJoinSub($activeRuleSub, 'active_rule', 'active_rule.product_variant_id', '=', 'inventories.product_variant_id')
+            ->leftJoin('product_price_rules as ppr', 'ppr.id', '=', 'active_rule.latest_rule_id')
+            ->when($warehouseId > 0, fn ($q) => $q->where('warehouse_id', $warehouseId))
+            ->selectRaw('SUM(inventories.quantity * COALESCE(ppr.price, p.price, 0)) as total_amount')
+            ->value('total_amount');
+
+        $documentBase = InventoryDocumentItem::query()
+            ->join('inventory_documents', 'inventory_documents.id', '=', 'inventory_document_items.inventory_document_id')
+            ->when($warehouseId > 0, fn ($q) => $q->where('inventory_documents.warehouse_id', $warehouseId))
+            ->whereDate('inventory_documents.document_date', $targetDate);
+
+        $imports = (int) (clone $documentBase)
+            ->where('inventory_documents.type', 'import')
+            ->sum('inventory_document_items.quantity');
+
+        $exports = (int) (clone $documentBase)
+            ->where('inventory_documents.type', 'export')
+            ->sum('inventory_document_items.quantity');
+
+        $rangeLabel = $timeFilter === 'today'
+            ? 'Hom nay'
+            : ('Ngay da chon: '.Carbon::parse($targetDate)->format('d/m/Y'));
+
+        return view('accounting.inventory', [
+            'inventories' => $inventories,
+            'warehouses' => Warehouse::query()->orderBy('name')->get(),
+            'warehouseId' => $warehouseId,
+            'sortBy' => $sortBy,
+            'sortDir' => $sortDir,
+            'timeFilter' => $timeFilter,
+            'selectedDate' => $selectedDate,
+            'rangeLabel' => $rangeLabel,
+            'imports' => $imports,
+            'exports' => $exports,
+            'totalAmount' => $totalAmount,
+            'closingStock' => (int) Inventory::query()->when($warehouseId > 0, fn ($q) => $q->where('warehouse_id', $warehouseId))->sum('quantity'),
+        ]);
+    }
+
+    public function commissions(Request $request)
+    {
+        $salesUsers = User::query()
+            ->whereHas('roles', fn ($query) => $query->whereIn(DB::raw('LOWER(name)'), [
+                'sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale',
+            ]))
+            ->orderBy('name')
+            ->get(['id', 'name', 'short_name']);
+
+        $customerQuery = Customer::query()
+            ->with(['currentOwner:id,name,short_name', 'assignedTo:id,name,short_name'])
+            ->select([
+                'id', 'name', 'customer_code', 'commission_percent',
+                'current_owner_sale_id', 'assigned_to',
+            ])
+            ->when($request->filled('sale_id'), function ($query) use ($request): void {
+                $saleId = (int) $request->input('sale_id');
+                $query->where(function ($ownerQuery) use ($saleId): void {
+                    $ownerQuery->where('current_owner_sale_id', $saleId)
+                        ->orWhere(function ($fallbackQuery) use ($saleId): void {
+                            $fallbackQuery->whereNull('current_owner_sale_id')
+                                ->where('assigned_to', $saleId);
+                        });
+                });
+            })
+            ->when($request->filled('q'), function ($query) use ($request): void {
+                $term = trim((string) $request->input('q'));
+                $query->where(function ($searchQuery) use ($term): void {
+                    $searchQuery->where('name', 'like', '%'.$term.'%')
+                        ->orWhere('customer_code', 'like', '%'.$term.'%');
+                });
+            })
+            ->when($request->input('commission_status') === 'configured', fn ($query) => $query->where('commission_percent', '>', 0))
+            ->when($request->input('commission_status') === 'not_configured', fn ($query) => $query->where('commission_percent', '<=', 0))
+            ->orderBy('name');
+
+        $customerRows = $customerQuery->paginate(50, ['*'], 'customer_page')->withQueryString();
+
+        if (! Schema::hasTable('accounting_customer_commissions')) {
+            return view('accounting.commissions', [
+                'rows' => collect(),
+                'customerRows' => $customerRows,
+                'salesUsers' => $salesUsers,
+                'missingTable' => true,
+            ]);
+        }
+
+        $rows = DB::table('accounting_customer_commissions as c')
+            ->leftJoin('customers', 'customers.id', '=', 'c.customer_id')
+            ->select('c.*', 'customers.name as customer_name')
+            ->orderByDesc('c.effective_date')
+            ->orderByDesc('c.id')
+            ->paginate(25, ['*'], 'commission_history_page');
+
+        return view('accounting.commissions', [
+            'rows' => $rows,
+            'customerRows' => $customerRows,
+            'salesUsers' => $salesUsers,
+            'missingTable' => false,
+        ]);
+    }
+
+    public function bulkUpdateCommissions(Request $request)
+    {
+        $validated = $request->validate([
+            'customer_ids' => ['required', 'array', 'min:1'],
+            'customer_ids.*' => ['required', 'integer', 'distinct', 'exists:customers,id'],
+            'commission_percent' => ['required', 'numeric', 'min:0', 'max:100'],
+            'note' => ['nullable', 'string', 'max:500'],
+            'recalculate_existing' => ['nullable', 'boolean'],
+        ], [
+            'customer_ids.required' => 'Vui lòng chọn ít nhất một khách hàng.',
+            'commission_percent.required' => 'Vui lòng nhập mức hoa hồng.',
+        ]);
+
+        $customerIds = array_values(array_unique(array_map('intval', $validated['customer_ids'])));
+        $percent = round((float) $validated['commission_percent'], 2);
+        $recalculate = (bool) ($validated['recalculate_existing'] ?? false);
+        $affectedCommissions = 0;
+
+        DB::transaction(function () use ($customerIds, $percent, $recalculate, $validated, &$affectedCommissions): void {
+            Customer::query()->whereIn('id', $customerIds)->update([
+                'commission_percent' => $percent,
+                'updated_at' => now(),
+            ]);
+
+            if (Schema::hasTable('accounting_customer_commissions')) {
+                $now = now();
+                $historyRows = array_map(fn (int $customerId) => [
+                    'customer_id' => $customerId,
+                    'type' => 'percent',
+                    'value' => $percent,
+                    'effective_date' => $now->toDateString(),
+                    'note' => $validated['note'] ?? 'Cập nhật hoa hồng hàng loạt',
+                    'is_active' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ], $customerIds);
+                DB::table('accounting_customer_commissions')->insert($historyRows);
+            }
+
+            if (! $recalculate || ! Schema::hasTable('order_commissions')) {
+                return;
+            }
+
+            $commissions = DB::table('order_commissions')
+                ->whereIn('customer_id', $customerIds)
+                ->get(['id', 'order_id', 'order_total']);
+            $affectedCommissions = $commissions->count();
+
+            foreach ($commissions->chunk(500) as $chunk) {
+                foreach ($chunk as $commission) {
+                    $amount = round((float) $commission->order_total * $percent / 100, 2);
+                    DB::table('order_commissions')->where('id', $commission->id)->update([
+                        'commission_percent' => $percent,
+                        'commission_amount' => $amount,
+                        'updated_at' => now(),
+                    ]);
+                    Order::query()->whereKey($commission->order_id)->update([
+                        'commission_percent_snapshot' => $percent,
+                        'commission_amount_snapshot' => $amount,
+                        'commission_created_at' => DB::raw('COALESCE(commission_created_at, NOW())'),
+                    ]);
+                }
+            }
+        });
+
+        $message = 'Đã áp dụng hoa hồng '.number_format($percent, 2, ',', '.').'% cho '.count($customerIds).' khách hàng.';
+        if ($recalculate) {
+            $message .= ' Đã tính lại '.$affectedCommissions.' bản ghi hoa hồng đơn hàng.';
+        }
+
+        return back()->with('success', $message);
+    }
+
+    public function storeCommission(Request $request)
+    {
+        if (! Schema::hasTable('accounting_customer_commissions')) {
+            return back()->with('error', 'Bang hoa hong chua duoc tao. Vui long chay migrate.');
+        }
+
+        $validated = $request->validate([
+            'customer_id' => ['required', 'integer', 'exists:customers,id'],
+            'type' => ['required', 'in:percent,fixed'],
+            'value' => ['required', 'numeric', 'min:0'],
+            'effective_date' => ['required', 'date'],
+            'note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        DB::table('accounting_customer_commissions')->insert([
+            'customer_id' => $validated['customer_id'],
+            'type' => $validated['type'],
+            'value' => $validated['value'],
+            'effective_date' => $validated['effective_date'],
+            'note' => $validated['note'] ?? null,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        if ($validated['type'] === 'percent') {
+            Customer::query()->whereKey($validated['customer_id'])->update([
+                'commission_percent' => $validated['value'],
+                'updated_at' => now(),
+            ]);
+        }
+
+        return back()->with('success', 'Da luu muc hoa hong khach hang.');
+    }
+
+    public function discounts(Request $request)
+    {
+        if (! Schema::hasTable('accounting_customer_discounts')) {
+            return view('accounting.discounts', [
+                'rows' => collect(),
+                'customers' => Customer::query()->orderBy('name')->limit(200)->get(),
+                'missingTable' => true,
+            ]);
+        }
+
+        $rows = DB::table('accounting_customer_discounts as d')
+            ->leftJoin('customers', 'customers.id', '=', 'd.customer_id')
+            ->select('d.*', 'customers.name as customer_name')
+            ->orderByDesc('d.effective_date')
+            ->paginate(25);
+
+        return view('accounting.discounts', [
+            'rows' => $rows,
+            'customers' => Customer::query()->orderBy('name')->limit(200)->get(),
+            'missingTable' => false,
+        ]);
+    }
+
+    public function storeDiscount(Request $request)
+    {
+        if (! Schema::hasTable('accounting_customer_discounts')) {
+            return back()->with('error', 'Bang chiet khau chua duoc tao. Vui long chay migrate.');
+        }
+
+        $validated = $request->validate([
+            'customer_id' => ['required', 'integer', 'exists:customers,id'],
+            'type' => ['required', 'in:percent,fixed'],
+            'value' => ['required', 'numeric', 'min:0'],
+            'effective_date' => ['required', 'date'],
+            'condition_note' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        DB::table('accounting_customer_discounts')->insert([
+            'customer_id' => $validated['customer_id'],
+            'type' => $validated['type'],
+            'value' => $validated['value'],
+            'effective_date' => $validated['effective_date'],
+            'condition_note' => $validated['condition_note'] ?? null,
+            'is_active' => true,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return back()->with('success', 'Da luu muc chiet khau khach hang.');
+    }
+
+    public function dailyOrders(Request $request)
+    {
+        $filterMode = (string) $request->input('filter_mode', 'day');
+        if (! in_array($filterMode, ['day', 'month', 'custom'], true)) {
+            $filterMode = 'day';
+        }
+
+        $date = (string) $request->input('date', now()->toDateString());
+        $month = (string) $request->input('month', now()->format('Y-m'));
+        $fromDate = (string) $request->input('from_date', now()->toDateString());
+        $toDate = (string) $request->input('to_date', now()->toDateString());
+
+        $from = now()->startOfDay();
+        $to = now()->endOfDay();
+
+        if ($filterMode === 'month') {
+            $monthStart = Carbon::createFromFormat('Y-m', $month)->startOfMonth();
+            $from = $monthStart->copy()->startOfDay();
+            $to = $monthStart->copy()->endOfMonth()->endOfDay();
+        } elseif ($filterMode === 'custom') {
+            $from = Carbon::parse($fromDate)->startOfDay();
+            $to = Carbon::parse($toDate)->endOfDay();
+            if ($from->gt($to)) {
+                [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+            }
+        } else {
+            $from = Carbon::parse($date)->startOfDay();
+            $to = Carbon::parse($date)->endOfDay();
+        }
+
+        $customerId = (int) $request->input('customer_id', 0);
+        $paymentStatus = (string) $request->input('payment_status', '');
+        $warehouseId = (int) $request->input('warehouse_id', 0);
+
+        $orders = Order::query()
+            ->with(['customer:id,name', 'warehouse:id,name', 'user:id,name'])
+            ->whereBetween('created_at', [$from, $to])
+            ->when($customerId > 0, fn ($q) => $q->where('customer_id', $customerId))
+            ->when($paymentStatus !== '', fn ($q) => $q->where('payment_status', $paymentStatus))
+            ->when($warehouseId > 0, fn ($q) => $q->where('warehouse_id', $warehouseId))
+            ->latest('created_at')
+            ->paginate(30)
+            ->appends($request->query());
+
+        return view('accounting.daily_orders', [
+            'orders' => $orders,
+            'filterMode' => $filterMode,
+            'date' => $date,
+            'month' => $month,
+            'fromDate' => $fromDate,
+            'toDate' => $toDate,
+            'customerId' => $customerId,
+            'paymentStatus' => $paymentStatus,
+            'warehouseId' => $warehouseId,
+            'customers' => Customer::query()->orderBy('name')->limit(300)->get(),
+            'warehouses' => Warehouse::query()->orderBy('name')->get(),
+        ]);
+    }
+
+    public function orders(Request $request)
+    {
+        $date = (string) $request->input('date', now()->toDateString());
+        $customerId = (int) $request->input('customer_id', 0);
+        $saleId = (int) $request->input('sale_id', 0);
+        $paymentStatus = trim((string) $request->input('payment_status', ''));
+        $status = trim((string) $request->input('status', ''));
+        $keyword = trim((string) $request->input('keyword', ''));
+
+        $allowedPerPage = [10, 20, 50, 100];
+        $perPage = (int) $request->input('per_page', 20);
+        if (! in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 20;
+        }
+
+        $allowedSortBy = ['created_at', 'code', 'total', 'customer_name', 'sale_name'];
+        $sortBy = (string) $request->input('sort_by', 'created_at');
+        if (! in_array($sortBy, $allowedSortBy, true)) {
+            $sortBy = 'created_at';
+        }
+
+        $sortDir = strtolower((string) $request->input('sort_dir', 'desc'));
+        $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
+
+        $query = Order::query()
+            ->with([
+                'customer:id,name,address,delivery_time,delivery_time_note',
+                'user:id,name',
+                'shipper:id,name',
+                'warehouse:id,name',
+                'items.product.avatar.media',
+                'items.variant.avatar.media',
+                'accountingReconciliation.confirmer:id,name',
+                'adjustments' => function ($q) {
+                    $q->with(['requester:id,name', 'items.variant.product'])
+                        ->whereIn('status', [
+                            OrderAdjustment::STATUS_PENDING_APPROVAL,
+                            OrderAdjustment::STATUS_APPROVED,
+                            OrderAdjustment::STATUS_REJECTED,
+                        ])
+                        ->latest();
+                },
+            ])
+            ->withSum('items as total_item_quantity', 'quantity')
+            ->whereDate('created_at', $date)
+            ->when($customerId > 0, fn ($q) => $q->where('customer_id', $customerId))
+            ->when($saleId > 0, fn ($q) => $q->where('user_id', $saleId))
+            ->when($paymentStatus !== '', fn ($q) => $q->where('payment_status', $paymentStatus))
+            ->when($status !== '', fn ($q) => $q->where('status', $status))
+            ->when($keyword !== '', function ($q) use ($keyword) {
+                $q->where(function ($sub) use ($keyword) {
+                    $sub->where('code', 'like', "%{$keyword}%")
+                        ->orWhereHas('customer', fn ($customerQ) => $customerQ->where('name', 'like', "%{$keyword}%"))
+                        ->orWhereHas('user', fn ($userQ) => $userQ->where('name', 'like', "%{$keyword}%"));
+                });
+            });
+
+        if ($sortBy === 'customer_name') {
+            $query->orderBy(
+                DB::table('customers')
+                    ->select('name')
+                    ->whereColumn('customers.id', 'orders.customer_id')
+                    ->limit(1),
+                $sortDir
+            );
+        } elseif ($sortBy === 'sale_name') {
+            $query->orderBy(
+                DB::table('users')
+                    ->select('name')
+                    ->whereColumn('users.id', 'orders.user_id')
+                    ->limit(1),
+                $sortDir
+            );
+        } else {
+            $query->orderBy($sortBy, $sortDir);
+        }
+
+        $orders = $query->paginate($perPage)->appends($request->query());
+
+        $dailyOrderIds = Order::query()
+            ->whereDate('created_at', $date)
+            ->pluck('id');
+
+        $dailyTotalItemQuantity = (float) DB::table('order_items')
+            ->whereIn('order_id', $dailyOrderIds)
+            ->sum('quantity');
+
+        $dailyTotalOrders = (int) $dailyOrderIds->count();
+
+        $filteredItemQuantity = (float) $orders->getCollection()->sum(function ($order) {
+            return (float) ($order->total_item_quantity ?? 0);
+        });
+
+        $sales = User::query()
+            ->whereIn('id', Order::query()->select('user_id')->whereNotNull('user_id')->distinct())
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return view('accounting.orders', [
+            'orders' => $orders,
+            'date' => $date,
+            'customerId' => $customerId,
+            'saleId' => $saleId,
+            'paymentStatus' => $paymentStatus,
+            'status' => $status,
+            'keyword' => $keyword,
+            'perPage' => $perPage,
+            'sortBy' => $sortBy,
+            'sortDir' => $sortDir,
+            'customers' => Customer::query()->orderBy('name')->limit(300)->get(['id', 'name']),
+            'sales' => $sales,
+            'dailyTotalOrders' => $dailyTotalOrders,
+            'dailyTotalItemQuantity' => $dailyTotalItemQuantity,
+            'filteredItemQuantity' => $filteredItemQuantity,
+            'authUser' => auth()->user(),
+        ]);
+    }
+
+    public function dailySales(Request $request)
+    {
+        $tab = (string) $request->input('tab', 'overview');
+        if (! in_array($tab, ['overview', 'journal'], true)) {
+            $tab = 'overview';
+        }
+
+        $fromDate = (string) $request->input('from_date', now()->toDateString());
+        $toDate = (string) $request->input('to_date', now()->toDateString());
+        $from = Carbon::parse($fromDate)->startOfDay();
+        $to = Carbon::parse($toDate)->endOfDay();
+        if ($from->gt($to)) {
+            [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+            [$fromDate, $toDate] = [$toDate, $fromDate];
+        }
+
+        $saleId = (int) $request->input('sale_id', 0);
+        $customerId = (int) $request->input('customer_id', 0);
+        $sort = (string) $request->input('sort', 'date_desc');
+
+        $allowedPerPage = [10, 20, 50, 100, 200];
+        $perPage = (int) $request->input('per_page', 20);
+        if (! in_array($perPage, $allowedPerPage, true)) {
+            $perPage = 20;
+        }
+
+        $sales = User::query()->orderBy('name')->select('id', 'name')->get();
+        $customers = Customer::query()->orderBy('name')->select('id', 'name', 'customer_code')->get();
+
+        // Hiển thị hồ sơ theo ngày nghiệp vụ của đơn, không theo ngày sale gửi
+        // yêu cầu. Ví dụ yêu cầu gửi ngày 24 cho đơn ngày 23 phải nằm ở báo cáo 23.
+        $businessDateExpression = 'DATE(CASE
+            WHEN orders.accounting_sales_import_batch_id IS NOT NULL
+                THEN COALESCE(orders.delivery_date, orders.created_at)
+            ELSE orders.created_at
+        END)';
+        $completedAdjustments = OrderAdjustment::query()
+            ->where('status', OrderAdjustment::STATUS_COMPLETED)
+            ->whereHas('order', function ($orders) use ($businessDateExpression, $fromDate, $toDate, $saleId, $customerId): void {
+                $orders->whereRaw("{$businessDateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
+                    ->when($saleId > 0, fn ($query) => $query->where('user_id', $saleId))
+                    ->when($customerId > 0, fn ($query) => $query->where('customer_id', $customerId));
+            })
+            ->with([
+                'order:id,code,customer_id,user_id,created_at,delivery_date,accounting_sales_import_batch_id',
+                'order.customer:id,name,customer_code',
+                'order.user:id,name',
+                'requester:id,name',
+                'items:id,order_adjustment_id,order_item_id,original_quantity,adjusted_quantity,original_price,adjusted_price,original_weight,adjusted_weight',
+            ])
+            ->orderByDesc('completed_at')
+            ->orderByDesc('id')
+            ->get();
+
+        if ($tab === 'journal') {
+            $journal = app(CompletedSalesJournalService::class)->paginate(
+                $fromDate,
+                $toDate,
+                $saleId,
+                $customerId,
+                $sort,
+                $perPage,
+                (int) $request->input('page', 1),
+                $request->url(),
+                $request->query()
+            );
+
+            return view('accounting.daily_sales', [
+                'tab' => $tab,
+                'journalRows' => $journal['rows'],
+                'journalSummary' => $journal['summary'],
+                'fromDate' => $fromDate,
+                'toDate' => $toDate,
+                'saleId' => $saleId,
+                'customerId' => $customerId,
+                'sort' => $sort,
+                'perPage' => $perPage,
+                'sales' => $sales,
+                'customers' => $customers,
+                'completedAdjustments' => $completedAdjustments,
+                'googleSheetsConfigured' => app(GoogleSheetsJournalService::class)->isConfigured(),
+            ]);
+        }
+
+        // Sub-query: one completed/applied adjustment item per order_item (latest id wins)
+        $approvedAdjSub = DB::table('order_adjustment_items as oai_s')
+            ->join('order_adjustments as oa_s', function ($j) {
+                $j->on('oa_s.id', '=', 'oai_s.order_adjustment_id')
+                    ->where('oa_s.status', '=', OrderAdjustment::STATUS_COMPLETED);
+            })
+            ->selectRaw('oai_s.order_item_id, MAX(oai_s.id) as adj_item_id')
+            ->groupBy('oai_s.order_item_id');
+
+        $makeBase = function () use ($approvedAdjSub, $businessDateExpression, $fromDate, $toDate, $saleId, $customerId) {
+            return DB::table('order_items')
+                ->join('orders', 'order_items.order_id', '=', 'orders.id')
+                ->join('products', 'order_items.product_id', '=', 'products.id')
+                ->leftJoin('product_variants', 'order_items.product_variant_id', '=', 'product_variants.id')
+                ->leftJoin('customers', 'orders.customer_id', '=', 'customers.id')
+                ->leftJoin('users', 'orders.user_id', '=', 'users.id')
+                ->leftJoinSub($approvedAdjSub, 'adj_max', 'adj_max.order_item_id', '=', 'order_items.id')
+                ->leftJoin('order_adjustment_items as adj', 'adj.id', '=', 'adj_max.adj_item_id')
+                ->whereNotIn('orders.status', ['rejected', 'cancelled'])
+                ->whereRaw("{$businessDateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
+                ->when($saleId > 0, fn ($q) => $q->where('orders.user_id', $saleId))
+                ->when($customerId > 0, fn ($q) => $q->where('orders.customer_id', $customerId));
+        };
+
+        // Compare the applied sale price with the company's price for this order,
+        // not today's catalogue price or a cached discount from before weighing.
+        $companyPriceExpr = 'COALESCE(order_items.company_price_at_order, order_items.base_price, order_items.price, 0)';
+        $effectivePriceExpr = 'COALESCE(adj.adjusted_price, order_items.price, 0)';
+        $effectiveWeightExpr = "COALESCE(adj.adjusted_weight, CASE
+            WHEN orders.status IN ('delivered', 'completed', 'returning', 'returned', 'returned_completed')
+                THEN COALESCE(order_items.actual_weight, order_items.packed_weight, order_items.total_weight)
+            WHEN orders.status IN ('packing', 'packed', 'packed_waiting_pickup', 'delivering', 'in_delivery', 'shipping', 'picked_up')
+                THEN COALESCE(order_items.packed_weight, order_items.actual_weight, order_items.total_weight)
+            ELSE order_items.total_weight END, 0)";
+        $pricingQuantityExpr = "CASE WHEN order_items.is_priced_by_kg = 1 THEN {$effectiveWeightExpr}
+            ELSE COALESCE(adj.adjusted_quantity, order_items.quantity, 0) END";
+        $priceAdjustmentExpr = "ROUND(({$effectivePriceExpr} - {$companyPriceExpr}) * ({$pricingQuantityExpr}), 2)";
+
+        // ── Paginated list ────────────────────────────────────────────
+        $listQ = $makeBase()->select([
+            'order_items.id',
+            'orders.id as order_id_val',
+            DB::raw('CASE
+                WHEN orders.accounting_sales_import_batch_id IS NOT NULL
+                    THEN COALESCE(orders.delivery_date, orders.created_at)
+                ELSE orders.created_at
+            END as order_date'),
+            'orders.code as order_code',
+            'orders.daily_sequence',
+            'products.name as product_name',
+            'products.unit as product_unit',
+            DB::raw("COALESCE(product_variants.size, '') as variant_size"),
+            DB::raw("COALESCE(product_variants.name, '') as variant_name"),
+            'customers.name as customer_name',
+            DB::raw("COALESCE(customers.customer_code, '') as customer_code"),
+            'users.name as sale_name',
+            'order_items.quantity',
+            'order_items.price',
+            'order_items.discount_total',
+            DB::raw("{$companyPriceExpr} as company_price"),
+            DB::raw("{$priceAdjustmentExpr} as price_adjustment"),
+            'order_items.total',
+            'order_items.total_weight',
+            'order_items.is_priced_by_kg',
+            'orders.total_discount as order_total_discount',
+            'orders.item_discount_total as order_item_discount_total',
+            'orders.extra_discount_total as order_extra_discount_total',
+            DB::raw('COALESCE(adj.adjusted_quantity, order_items.quantity) as eff_qty'),
+            DB::raw('COALESCE(adj.adjusted_price,    order_items.price)    as eff_price'),
+            DB::raw("{$effectiveWeightExpr} as eff_weight"),
+            DB::raw('CASE WHEN adj.id IS NOT NULL THEN 1 ELSE 0 END as has_adj'),
+            'adj.order_adjustment_id as adjustment_id',
+            DB::raw('CASE WHEN adj.id IS NOT NULL THEN
+                        CASE WHEN order_items.is_priced_by_kg = 1
+                            THEN COALESCE(adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price)
+                            ELSE COALESCE(adj.adjusted_quantity, order_items.quantity)   * COALESCE(adj.adjusted_price, order_items.price)
+                        END
+                     ELSE order_items.total END as eff_total'),
+        ]);
+
+        $orderByDateAndPriority = static function ($query, string $direction) use ($businessDateExpression) {
+            return $query
+                ->orderByRaw($businessDateExpression.' '.$direction)
+                ->orderByRaw('CASE WHEN orders.daily_sequence IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('orders.daily_sequence')
+                ->orderBy('orders.created_at')
+                ->orderBy('orders.id')
+                ->orderBy('order_items.id');
+        };
+
+        match ($sort) {
+            'date_asc' => $orderByDateAndPriority($listQ, 'asc'),
+            'date_desc' => $orderByDateAndPriority($listQ, 'desc'),
+            'product_asc' => $listQ->orderBy('products.name')->orderByDesc('orders.created_at'),
+            'product_desc' => $listQ->orderByDesc('products.name')->orderByDesc('orders.created_at'),
+            'amount_asc' => $listQ->orderBy('order_items.total')->orderByDesc('orders.created_at'),
+            'amount_desc' => $listQ->orderByDesc('order_items.total')->orderByDesc('orders.created_at'),
+            'qty_asc' => $listQ->orderBy('order_items.quantity')->orderByDesc('orders.created_at'),
+            'qty_desc' => $listQ->orderByDesc('order_items.quantity')->orderByDesc('orders.created_at'),
+            'weight_asc' => $listQ->orderBy('order_items.total_weight')->orderByDesc('orders.created_at'),
+            'weight_desc' => $listQ->orderByDesc('order_items.total_weight')->orderByDesc('orders.created_at'),
+            default => $orderByDateAndPriority($listQ, 'desc'),
+        };
+
+        $items = $listQ->paginate($perPage)->appends($request->query());
+
+        // ── Grand summary (all pages) ──────────────────────────────────
+        $effTotalExpr = 'CASE WHEN adj.id IS NOT NULL THEN
+            CASE WHEN order_items.is_priced_by_kg = 1
+                THEN COALESCE(adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price)
+                ELSE COALESCE(adj.adjusted_quantity, order_items.quantity)   * COALESCE(adj.adjusted_price, order_items.price)
+            END
+         ELSE order_items.total END';
+
+        $summary = $makeBase()->selectRaw("
+            COUNT(DISTINCT order_items.id)                                                          as item_count,
+            COUNT(DISTINCT order_items.order_id)                                                    as order_count,
+            SUM(COALESCE(adj.adjusted_quantity,  order_items.quantity))                             as grand_qty,
+            SUM({$effectiveWeightExpr}) as grand_weight,
+            COALESCE(SUM({$priceAdjustmentExpr}), 0) as item_adjustment,
+            COALESCE(SUM(CASE WHEN ({$priceAdjustmentExpr}) < 0 THEN -({$priceAdjustmentExpr}) ELSE 0 END), 0) as item_discount,
+            COALESCE(SUM(CASE WHEN ({$priceAdjustmentExpr}) > 0 THEN ({$priceAdjustmentExpr}) ELSE 0 END), 0) as item_increase,
+            SUM({$effTotalExpr})                                                                     as grand_total
+        ")->first();
+
+        // Tổng đơn phải gồm cả phí/chiết khấu đã áp dụng, không chỉ cộng các
+        // dòng sản phẩm. order.total đã được cập nhật khi hồ sơ hoàn tất.
+        $summary->grand_total = (float) DB::table('orders')
+            ->whereNotIn('orders.status', ['rejected', 'cancelled'])
+            ->whereRaw("{$businessDateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
+            ->when($saleId > 0, fn ($query) => $query->where('orders.user_id', $saleId))
+            ->when($customerId > 0, fn ($query) => $query->where('orders.customer_id', $customerId))
+            ->sum('orders.total');
+
+        $orderCostSummary = DB::table('orders')
+            ->whereNotIn('orders.status', ['rejected', 'cancelled'])
+            ->whereRaw("{$businessDateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
+            ->when($saleId > 0, fn ($query) => $query->where('orders.user_id', $saleId))
+            ->when($customerId > 0, fn ($query) => $query->where('orders.customer_id', $customerId))
+            ->selectRaw('COALESCE(SUM(orders.extra_discount_total), 0) as extra_discount_total')
+            ->selectRaw('COALESCE(SUM(CASE WHEN orders.extra_discount_total > 0 THEN orders.extra_discount_total ELSE 0 END), 0) as extra_discount')
+            ->selectRaw('COALESCE(SUM(CASE WHEN orders.extra_discount_total < 0 THEN -orders.extra_discount_total ELSE 0 END), 0) as extra_increase')
+            ->selectRaw('COALESCE(SUM(orders.shipping_fee), 0) as total_shipping_fee')
+            ->first();
+        $summary->total_discount = (float) $summary->item_discount + (float) ($orderCostSummary->extra_discount ?? 0);
+        $summary->total_increase = (float) $summary->item_increase + (float) ($orderCostSummary->extra_increase ?? 0);
+        $summary->total_adjustment = (float) $summary->item_adjustment - (float) ($orderCostSummary->extra_discount_total ?? 0);
+        $summary->total_shipping_fee = (float) ($orderCostSummary->total_shipping_fee ?? 0);
+
+        $lossTransfers = WarehouseTransfer::query()
+            ->with(['order.items:id,order_id,price,total,total_weight,packed_weight,actual_weight,is_priced_by_kg'])
+            ->where('weight_loss', '>', 0)
+            ->whereHas('order', function ($orders) use ($businessDateExpression, $fromDate, $toDate, $saleId, $customerId): void {
+                $orders->whereNotIn('status', ['rejected', 'cancelled'])
+                    ->whereRaw("{$businessDateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
+                    ->when($saleId > 0, fn ($query) => $query->where('user_id', $saleId))
+                    ->when($customerId > 0, fn ($query) => $query->where('customer_id', $customerId));
+            })
+            ->get();
+        $summary->loss_weight = (float) $lossTransfers->sum('weight_loss');
+        $summary->loss_value = (float) $lossTransfers->sum(function (WarehouseTransfer $transfer): float {
+            $items = $transfer->order?->items ?? collect();
+            $pricedWeight = (float) $items->sum(fn ($item) => max(0, (float) ($item->packed_weight ?? $item->actual_weight ?? $item->total_weight ?? 0)));
+            $salesValue = (float) $items->sum(fn ($item) => max(0, (float) ($item->total ?? 0)));
+            $averageSalePrice = $pricedWeight > 0 ? $salesValue / $pricedWeight : 0;
+
+            return round(max(0, (float) $transfer->weight_loss) * $averageSalePrice, 2);
+        });
+
+        // ── Product stats ──────────────────────────────────────────────
+        $productStats = $makeBase()->select([
+            'products.id as product_id',
+            'products.name as product_name',
+            'products.unit as product_unit',
+            DB::raw('SUM(COALESCE(adj.adjusted_quantity,  order_items.quantity))         as total_qty'),
+            DB::raw("SUM({$effectiveWeightExpr}) as total_weight"),
+            DB::raw("SUM({$effTotalExpr})                                                as total_amount"),
+        ])->groupBy('products.id', 'products.name', 'products.unit')
+            ->orderByDesc('total_amount')
+            ->get();
+
+        return view('accounting.daily_sales', compact(
+            'items', 'productStats', 'summary',
+            'fromDate', 'toDate', 'saleId', 'customerId',
+            'sort', 'perPage', 'sales', 'customers', 'tab', 'completedAdjustments',
+        ));
+    }
+
+    public function syncDailySalesJournalToGoogleSheets(
+        Request $request,
+        CompletedSalesJournalService $journalService,
+        GoogleSheetsJournalService $googleSheets
+    ) {
+        $validated = $request->validate([
+            'from_date' => ['required', 'date_format:Y-m-d'],
+            'to_date' => ['required', 'date_format:Y-m-d'],
+            'sale_id' => ['nullable', 'integer', 'min:0'],
+            'customer_id' => ['nullable', 'integer', 'min:0'],
+            'sort' => ['nullable', 'in:date_desc,date_asc,product_asc,product_desc,amount_desc,amount_asc,qty_desc,qty_asc,weight_desc,weight_asc'],
+        ]);
+
+        $fromDate = $validated['from_date'];
+        $toDate = $validated['to_date'];
+        if ($fromDate > $toDate) {
+            [$fromDate, $toDate] = [$toDate, $fromDate];
+        }
+
+        try {
+            $rows = $journalService->all(
+                $fromDate,
+                $toDate,
+                (int) ($validated['sale_id'] ?? 0),
+                (int) ($validated['customer_id'] ?? 0),
+                (string) ($validated['sort'] ?? 'date_desc')
+            );
+            $dates = collect();
+            for ($date = Carbon::parse($fromDate); $date->lte(Carbon::parse($toDate)); $date->addDay()) {
+                $dates->push($date->toDateString());
+            }
+            $result = $googleSheets->syncJournalDates($rows, $dates->all());
+        } catch (\Throwable $exception) {
+            report($exception);
+
+            return back()->withInput()->with('error', 'Không thể ghi Google Sheets: '.$exception->getMessage());
+        }
+
+        return back()
+            ->with('success', "Đã ghi thêm {$result['rows']} dòng của {$result['dates']} ngày vào trang tính “{$result['sheet_name']}”.")
+            ->with('google_sheets_url', $result['spreadsheet_url']);
+    }
+
+    public function financialReports(Request $request)
+    {
+        [$from, $to, $rangeLabel] = $this->resolveDateRange($request);
+
+        $revenue = (float) Order::query()->whereBetween('created_at', [$from, $to])->sum('total');
+
+        $received = (float) Transaction::query()
+            ->whereBetween('created_at', [$from, $to])
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->where('type', 'payment')
+            ->sum('amount');
+
+        $cost = (float) Transaction::query()
+            ->whereBetween('created_at', [$from, $to])
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->whereIn('type', ['refund', 'expense'])
+            ->sum('amount');
+
+        $profit = $received - $cost;
+
+        $series = Transaction::query()
+            ->selectRaw('DATE(created_at) as day_key')
+            ->selectRaw("SUM(CASE WHEN type = 'payment' THEN amount ELSE 0 END) as income")
+            ->selectRaw("SUM(CASE WHEN type IN ('refund', 'expense') THEN amount ELSE 0 END) as expense")
+            ->whereBetween('created_at', [$from, $to])
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->groupBy('day_key')
+            ->orderBy('day_key')
+            ->get();
+
+        // Transaction by category with customers and accounts
+        $accountFilterId = $request->input('account_id');
+        $catStatsQuery = Transaction::query()
+            ->with([
+                'transactionCategory:id,code,name,flow_direction',
+                'customer:id,name',
+                'account:id,name,type',
+            ])
+            ->whereBetween('created_at', [$from, $to])
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->whereNotNull('transaction_category_id');
+
+        if ($accountFilterId) {
+            $catStatsQuery->where('account_id', $accountFilterId);
+        }
+
+        $allTransactionsByCategory = $catStatsQuery->get();
+
+        // Group and aggregate
+        $catStats = collect();
+        foreach ($allTransactionsByCategory->groupBy('transaction_category_id') as $categoryId => $transactions) {
+            $totalAmount = $transactions->sum('amount');
+            $totalCount = $transactions->count();
+
+            // Get unique customers and accounts for this category
+            $customers = $transactions
+                ->filter(fn ($t) => $t->customer_id)
+                ->map(fn ($t) => ['id' => $t->customer_id, 'name' => $t->customer?->name ?? 'N/A'])
+                ->unique('id')
+                ->values();
+
+            $accounts = $transactions
+                ->filter(fn ($t) => $t->account_id)
+                ->map(fn ($t) => ['id' => $t->account_id, 'name' => $t->account?->name ?? 'N/A', 'type' => $t->account?->type ?? 'N/A'])
+                ->unique('id')
+                ->values();
+
+            $catStats->push((object) [
+                'transaction_category_id' => $categoryId,
+                'transactionCategory' => $transactions->first()?->transactionCategory,
+                'total_count' => $totalCount,
+                'total_amount' => $totalAmount,
+                'customers' => $customers,
+                'accounts' => $accounts,
+            ]);
+        }
+
+        $catStats = $catStats->sortByDesc('total_amount')->values();
+
+        // Get available accounts for filter
+        $accounts = Account::active()->orderBy('name')->get(['id', 'name', 'type']);
+
+        return view('accounting.financial_reports', compact('revenue', 'received', 'cost', 'profit', 'series', 'from', 'to', 'rangeLabel', 'catStats', 'accounts', 'accountFilterId'));
+    }
+
+    private function resolveDateRange(Request $request): array
+    {
+        $range = (string) $request->input('range', 'month');
+        $today = Carbon::today();
+
+        $from = match ($range) {
+            'day' => $today->copy()->startOfDay(),
+            'week' => $today->copy()->startOfWeek(),
+            'year' => $today->copy()->startOfYear(),
+            'custom' => $request->filled('from_date')
+                ? Carbon::parse((string) $request->input('from_date'))->startOfDay()
+                : $today->copy()->startOfMonth(),
+            default => $today->copy()->startOfMonth(),
+        };
+
+        $to = match ($range) {
+            'day' => $today->copy()->endOfDay(),
+            'week' => $today->copy()->endOfWeek(),
+            'year' => $today->copy()->endOfYear(),
+            'custom' => $request->filled('to_date')
+                ? Carbon::parse((string) $request->input('to_date'))->endOfDay()
+                : $today->copy()->endOfDay(),
+            default => $today->copy()->endOfMonth(),
+        };
+
+        if ($from->gt($to)) {
+            [$from, $to] = [$to->copy()->startOfDay(), $from->copy()->endOfDay()];
+        }
+
+        $rangeLabel = match ($range) {
+            'day' => 'Theo ngay',
+            'week' => 'Theo tuan',
+            'year' => 'Theo nam',
+            'custom' => 'Tuy chon',
+            default => 'Theo thang',
+        };
+
+        return [$from, $to, $rangeLabel];
+    }
+
+    public function transactionCreate(Request $request)
+    {
+        $transactionCategories = \App\Models\TransactionCategory::active()->orderBy('sort_order')->get();
+        $accounts = \App\Models\Account::active()->orderBy('name')->get(['id', 'name', 'type', 'balance', 'warning_threshold']);
+
+        return view('accounting.transaction_create', compact('transactionCategories', 'accounts'));
+    }
+
+    public function transactionEdit(Transaction $transaction)
+    {
+        abort_if($transaction->request_source, 403, 'Số tiền phiếu yêu cầu phải được sửa từ nội dung chi tiết của phiếu.');
+        $transaction->load(['transactionCategory:id,code,name,flow_direction', 'order.customer:id,name', 'customer:id,name', 'account:id,name,type,balance,warning_threshold']);
+
+        $transactionCategories = \App\Models\TransactionCategory::active()->orderBy('sort_order')->get();
+        $accounts = \App\Models\Account::active()->orderBy('name')->get(['id', 'name', 'type', 'balance', 'warning_threshold']);
+
+        return view('accounting.transaction_create', compact('transactionCategories', 'accounts', 'transaction'));
+    }
+
+    public function transactionStore(Request $request)
+    {
+        // Strip thousand-separator formatting from amount
+        $raw = str_replace(['.', ' '], '', $request->input('amount', ''));
+        $request->merge(['amount' => $raw]);
+
+        $data = $request->validate([
+            'order_id' => 'nullable|exists:orders,id',
+            'customer_id' => 'nullable|exists:customers,id',
+            'amount' => 'required|numeric|min:0.01',
+            'expense_type_id' => 'nullable|exists:expense_types,id',
+            'payee_user_id' => 'nullable|exists:users,id',
+            'method' => 'nullable|string|max:50',
+            'transaction_category_id' => 'required|exists:transaction_categories,id',
+            'account_id' => 'nullable|exists:accounts,id',
+            'note' => 'nullable|string|max:1000',
+            'receipt_image' => 'nullable|image|max:5120',
+        ]);
+
+        // Infer 'type' from transaction category's flow_direction
+        $category = \App\Models\TransactionCategory::find($data['transaction_category_id']);
+        $flowDirection = $category?->flow_direction ?? 'out';
+        $data['type'] = $flowDirection === 'in' ? 'payment' : 'refund';
+
+        if ($request->hasFile('receipt_image')) {
+            $data['receipt_image_path'] = $request->file('receipt_image')->store('transactions/receipts', 'public');
+        }
+        unset($data['receipt_image']);
+
+        $data['submitted_by'] = auth()->id();
+        $data['status'] = Transaction::STATUS_PENDING_APPROVAL;
+
+        $transaction = Transaction::create($data);
+
+        $approvalService = app(\App\Services\ApprovalService::class);
+        $hasWorkflow = $approvalService->initTransactionApproval($transaction);
+
+        if (! $hasWorkflow) {
+            // No workflow configured → auto-approve
+            $transaction->update([
+                'status' => Transaction::STATUS_APPROVED,
+                'approved_by' => auth()->id(),
+                'approved_at' => now(),
+            ]);
+            $this->applyTransactionToOrder($transaction);
+
+            return redirect()->route(accounting_route_name('transactions.create'))
+                ->with('success', 'Da tao va duyet giao dich #'.$transaction->id.' thanh cong.');
+        }
+
+        return redirect()->route(accounting_route_name('transactions.create'))
+            ->with('success', 'Da gui giao dich #'.$transaction->id.' cho quy trinh duyet. Cho cap tren xac nhan.');
+    }
+
+    public function transactionUpdate(Request $request, Transaction $transaction)
+    {
+        abort_if($transaction->request_source, 403, 'Không được sửa trực tiếp số tiền của phiếu yêu cầu trong giao dịch kế toán.');
+        $previousAccountId = $transaction->account_id;
+        $previousOrderId = $transaction->order_id;
+
+        $raw = str_replace(['.', ' '], '', $request->input('amount', ''));
+        $request->merge(['amount' => $raw]);
+
+        $data = $request->validate([
+            'order_id' => 'nullable|exists:orders,id',
+            'customer_id' => 'nullable|exists:customers,id',
+            'amount' => 'required|numeric|min:0.01',
+            'expense_type_id' => 'nullable|exists:expense_types,id',
+            'payee_user_id' => 'nullable|exists:users,id',
+            'method' => 'nullable|string|max:50',
+            'transaction_category_id' => 'required|exists:transaction_categories,id',
+            'account_id' => 'nullable|exists:accounts,id',
+            'note' => 'nullable|string|max:1000',
+            'receipt_image' => 'nullable|image|max:5120',
+        ]);
+
+        $category = \App\Models\TransactionCategory::find($data['transaction_category_id']);
+        $flowDirection = $category?->flow_direction ?? 'out';
+        $data['type'] = $flowDirection === 'in' ? 'payment' : 'refund';
+
+        if ($request->hasFile('receipt_image')) {
+            $data['receipt_image_path'] = $request->file('receipt_image')->store('transactions/receipts', 'public');
+        }
+        unset($data['receipt_image']);
+
+        $transaction->update($data);
+
+        $this->syncTransactionAccountingState($transaction, $previousAccountId, $previousOrderId);
+
+        return redirect()->route(accounting_route_name('cashflow.show'), $transaction)
+            ->with('success', 'Đã cập nhật giao dịch #'.$transaction->id.'.');
+    }
+
+    public function transactionApprove(Request $request, Transaction $transaction)
+    {
+        $this->synchronizeFinanceRequestAmount($transaction);
+        $user = auth()->user();
+        $approvalService = app(\App\Services\ApprovalService::class);
+        if ($transaction->status === Transaction::STATUS_PENDING_APPROVAL && $transaction->request_source) {
+            $approvalService->ensureTransactionApprovalFlow($transaction);
+        }
+        abort_unless(
+            $user->hasRole('admin') ||
+            $approvalService->canApproveTransactionStep($transaction, $user),
+            403
+        );
+
+        if ($transaction->status !== Transaction::STATUS_PENDING_APPROVAL) {
+            return back()->with('error', 'Giao dich khong o trang thai cho duyet.');
+        }
+
+        $note = trim((string) $request->input('note', ''));
+        $currentStep = $approvalService->getCurrentPendingTransactionStep($transaction);
+        $currentRole = strtolower((string) ($currentStep?->step?->role_slug ?? ''));
+        $isAccountingStep = in_array($currentRole, $approvalService->financeAccountingRoleSlugs(), true);
+
+        $approvalRules = ['note' => ['nullable', 'string', 'max:1000']];
+        if ($transaction->request_source && $currentRole === 'director' && ! $transaction->transfer_proof_path) {
+            $approvalRules['transfer_proof'] = ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'];
+        }
+        $request->validate($approvalRules);
+
+        if ($request->hasFile('transfer_proof')) {
+            if (! $transaction->request_source || $currentRole !== 'director' || $transaction->transfer_proof_path) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'transfer_proof' => 'Không thể thay thế chứng từ chuyển khoản đã được tải lên.',
+                ]);
+            }
+
+            $this->storeTransferProof($request, $transaction, $user->id);
+        }
+
+        if ($transaction->request_source && $isAccountingStep) {
+            $validated = $request->validate([
+                'transaction_category_id' => ['required', 'integer', 'exists:transaction_categories,id'],
+                'account_id' => ['required', 'integer', 'exists:accounts,id'],
+            ]);
+
+            $requestedFlow = in_array((string) $transaction->type, ['payment', 'extra_income'], true) ? 'in' : 'out';
+            $category = TransactionCategory::query()
+                ->whereKey((int) $validated['transaction_category_id'])
+                ->where('flow_direction', $requestedFlow)
+                ->first();
+
+            if (! $category) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'transaction_category_id' => 'Danh mục kế toán không phù hợp với dòng tiền của phiếu.',
+                ]);
+            }
+
+            if (
+                $category->flow_direction === 'out'
+                && $transaction->destination_type === 'internal'
+                && (int) $validated['account_id'] === (int) $transaction->destination_account_id
+            ) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'account_id' => 'Tài khoản thực hiện phải khác tài khoản nhận khi chuyển khoản nội bộ.',
+                ]);
+            }
+
+            $transaction->forceFill([
+                'transaction_category_id' => $category->id,
+                'account_id' => (int) $validated['account_id'],
+                'type' => $category->flow_direction === 'in' ? 'extra_income' : 'extra_expense',
+            ])->save();
+        }
+
+        $hasPendingStep = $transaction->approvalSteps()->where('status', 'pending')->exists();
+        $allApproved = true;
+
+        if ($hasPendingStep) {
+            $allApproved = $approvalService->approveTransactionStep($transaction, $user, $note ?: null);
+        }
+
+        if ($allApproved) {
+            if ($transaction->request_source) {
+                $transaction->update([
+                    'status' => Transaction::STATUS_APPROVED_PENDING_COMPLETION,
+                    'approved_by' => $user->id,
+                    'approved_at' => now(),
+                ]);
+
+                return back()->with('success', 'Director đã duyệt phiếu #'.$transaction->id.'. Phiếu đã chuyển về kế toán để hoàn thành chuyển tiền.');
+            }
+
+            $transaction->update([
+                'status' => Transaction::STATUS_APPROVED,
+                'approved_by' => $user->id,
+                'approved_at' => now(),
+            ]);
+            $this->applyTransactionToOrder($transaction);
+
+            return back()->with('success', 'Da duyet giao dich #'.$transaction->id.' thanh cong.');
+        }
+
+        return back()->with('success', 'Da duyet buoc nay. Giao dich chuyen sang buoc tiep theo.');
+    }
+
+    public function transactionComplete(Request $request, Transaction $transaction)
+    {
+        $this->synchronizeFinanceRequestAmount($transaction);
+        $user = auth()->user();
+
+        abort_unless(
+            $user->hasRole('admin') || $user->hasRole('account') || $user->hasRole('accountant') || $user->hasRole('accounting'),
+            403
+        );
+
+        if (! $transaction->request_source || $transaction->status !== Transaction::STATUS_APPROVED_PENDING_COMPLETION) {
+            return back()->with('error', 'Phiếu không ở trạng thái chờ kế toán hoàn thành.');
+        }
+
+        $completionRules = ['note' => ['nullable', 'string', 'max:1000']];
+        if ($transaction->transfer_proof_path) {
+            $completionRules['transfer_proof'] = ['prohibited'];
+        } else {
+            $completionRules['transfer_proof'] = ['required', 'file', 'mimes:jpg,jpeg,png,webp,pdf', 'max:10240'];
+        }
+        $validated = $request->validate($completionRules, [
+            'transfer_proof.required' => 'Vui lòng tải chứng từ chuyển khoản trước khi hoàn thành phiếu.',
+            'transfer_proof.prohibited' => 'Director đã tải chứng từ; kế toán không cần và không thể tải lại.',
+        ]);
+
+        if (! $transaction->transaction_category_id || ! $transaction->account_id) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'account_id' => 'Phiếu chưa có danh mục kế toán hoặc tài khoản thực hiện. Vui lòng quay lại bước kế toán xác nhận.',
+            ]);
+        }
+
+        $note = trim((string) ($validated['note'] ?? ''));
+        $currentNote = trim((string) $transaction->note);
+
+        if (! $transaction->transfer_proof_path) {
+            $this->storeTransferProof($request, $transaction, $user->id);
+        }
+
+        DB::transaction(function () use ($transaction, $note, $currentNote): void {
+            $transaction->forceFill([
+                'note' => $note !== '' ? trim($currentNote."\nKế toán hoàn thành: ".$note) : $transaction->note,
+                'status' => Transaction::STATUS_APPROVED,
+            ])->save();
+
+            app(SupplierDebtService::class)->recordApprovedTransaction($transaction);
+            $this->applyTransactionToOrder($transaction);
+        });
+
+        return back()->with('success', 'Đã hoàn thành phiếu #'.$transaction->id.' và ghi nhận chuyển tiền thực tế.');
+    }
+
+    private function storeTransferProof(Request $request, Transaction $transaction, int $userId): void
+    {
+        $path = $request->file('transfer_proof')->store('transactions/transfer-proofs', 'public');
+
+        $transaction->forceFill([
+            'transfer_proof_path' => $path,
+            'transfer_proof_uploaded_by' => $userId,
+            'transfer_proof_uploaded_at' => now(),
+        ])->save();
+    }
+
+    public function transactionReject(Request $request, Transaction $transaction)
+    {
+        $user = auth()->user();
+        $approvalService = app(\App\Services\ApprovalService::class);
+        if ($transaction->status === Transaction::STATUS_PENDING_APPROVAL && $transaction->request_source) {
+            $approvalService->ensureTransactionApprovalFlow($transaction);
+        }
+
+        abort_unless(
+            $user->hasRole('admin') ||
+            $approvalService->canApproveTransactionStep($transaction, $user),
+            403
+        );
+
+        if ($transaction->status !== Transaction::STATUS_PENDING_APPROVAL) {
+            return back()->with('error', 'Giao dich khong o trang thai cho duyet.');
+        }
+
+        $data = $request->validate(['reason' => 'required|string|max:2000']);
+
+        $hasPendingStep = $transaction->approvalSteps()->where('status', 'pending')->exists();
+        if ($hasPendingStep) {
+            $approvalService->rejectTransactionStep($transaction, $user, $data['reason']);
+        }
+
+        $transaction->update([
+            'status' => Transaction::STATUS_REJECTED,
+            'rejected_by' => $user->id,
+            'rejected_at' => now(),
+            'reject_reason' => $data['reason'],
+        ]);
+
+        ProcurementPurchase::query()
+            ->where('payment_transaction_id', $transaction->id)
+            ->update(['payment_transaction_id' => null]);
+
+        return back()->with('success', 'Da tu choi giao dich #'.$transaction->id.'.');
+    }
+
+    public function reconciliationDetail(Order $order)
+    {
+        $order->load([
+            'customer:id,name,phone,address',
+            'user:id,name',
+            'shipper:id,name',
+            'warehouse:id,name',
+            'items.product:id,name',
+            'items.variant:id,name,sku,size',
+            'items.variant.priceRules' => fn ($query) => $query
+                ->select('id', 'product_variant_id', 'price', 'start_date', 'end_date')
+                ->orderByRaw('CASE WHEN price > 0 THEN 0 ELSE 1 END')
+                ->orderByDesc('start_date')
+                ->orderByDesc('id'),
+            'histories.user:id,name',
+            'transactions.submitter:id,name',
+            'transactions.approver:id,name',
+            'returnRecords.returnItems.productVariant.product:id,name',
+            'returnRecords.warehouse:id,name',
+            'returnRecords.warehouseConfirmer:id,name',
+            'accountingReconciliation.confirmer:id,name',
+        ]);
+
+        $returnAmount = $this->returnAmountForOrder($order);
+        $recognizedRevenue = $this->recognizedRevenueForOrder($order);
+        $effectivePaid = $this->effectivePaidForOrder($order);
+        $effectiveDue = $this->effectiveDueForOrder($order);
+        [$canConfirm, $blockReason] = $this->canAccountingConfirmOrder($order);
+
+        $approvedHistory = $order->histories
+            ->whereIn('action', ['approve_order', 'order_approved', 'approve'])
+            ->sortByDesc('id')
+            ->first();
+        $packingHistory = $order->histories
+            ->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
+            ->sortByDesc('id')
+            ->first();
+        $deliveryHistory = $order->histories
+            ->whereIn('action', ['mark_delivered', 'delivered', 'mobile_update_status'])
+            ->sortByDesc('id')
+            ->first();
+        $paymentTransaction = $order->transactions
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->where('type', 'payment')
+            ->sortByDesc('id')
+            ->first();
+        $pricingChanges = $order->histories
+            ->filter(fn ($history) => in_array($history->action, [
+                'sale_changed_after_packing', 'warehouse_confirmed_sale_changes',
+                'order_adjustment_applied', 'order_updated',
+            ], true) || preg_match('/giảm|chiết khấu|giá/iu', (string) $history->note))
+            ->sortByDesc('id')
+            ->take(10)
+            ->map(fn ($history) => [
+                'action' => $history->action,
+                'note' => $history->note,
+                'user' => $history->user?->name ?? '-',
+                'at' => optional($history->created_at)->format('d/m/Y H:i'),
+            ])->values();
+        $discountReason = trim((string) ($pricingChanges->first()['note'] ?? ''));
+        $orderPriceDate = ($order->created_at ?: now())->toDateString();
+        $reconciliationItems = $order->items->map(function ($item) use ($order, $orderPriceDate): array {
+            $pricingQuantity = max(0, (float) $item->displayValueForStage((string) $order->status));
+            $applicablePriceRule = $item->variant?->priceRules
+                ?->first(fn ($rule) => ($rule->start_date === null || $rule->start_date <= $orderPriceDate)
+                    && ($rule->end_date === null || $rule->end_date >= $orderPriceDate));
+            $currentUnitPrice = (float) ($item->company_price_at_order
+                ?? $applicablePriceRule?->price
+                ?? $item->base_price
+                ?? $item->price
+                ?? 0);
+            $actualUnitPrice = (float) ($item->price ?? $currentUnitPrice);
+            $priceDifference = round($currentUnitPrice - $actualUnitPrice, 2);
+
+            // Legacy/manual orders may contain the actual sale price without
+            // having unit_discount populated. The accounting reconciliation
+            // must derive the adjustment from the company price snapshot and
+            // the actual sale price, otherwise its calculated total is higher
+            // than the order total.
+            if (abs($priceDifference) > 0.0001) {
+                $unitDiscount = abs($priceDifference);
+                $discountType = $priceDifference > 0 ? 'decrease' : 'increase';
+            } else {
+                $unitDiscount = max(0, (float) ($item->unit_discount ?? 0));
+                $discountType = (string) ($item->discount_type ?? 'decrease');
+            }
+            $currentLineTotal = round($pricingQuantity * $currentUnitPrice, 2);
+            $currentDiscountTotal = round($pricingQuantity * $unitDiscount, 2);
+
+            return [
+                'product_name' => $item->product?->name ?? 'San pham',
+                'variant_name' => $item->variant?->name ?? '-',
+                'name' => $item->variant?->name ?? $item->product?->name ?? 'San pham',
+                'sku' => $item->variant?->sku,
+                'size' => $item->variant?->size,
+                'quantity' => (float) ($item->quantity ?? 0),
+                'total_label' => $item->display_total_label,
+                'weight' => (float) ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight ?? 0),
+                'pricing_quantity' => $pricingQuantity,
+                'unit_price' => $currentUnitPrice,
+                'price_effective_date' => $orderPriceDate,
+                'company_price_at_order' => $item->company_price_at_order !== null ? (float) $item->company_price_at_order : null,
+                'base_price' => $currentUnitPrice,
+                'unit_discount' => $unitDiscount,
+                'discount_type' => $discountType,
+                'discount_total' => $currentDiscountTotal,
+                'line_total' => $currentLineTotal,
+            ];
+        })->values();
+        $currentGoodsTotal = round((float) $reconciliationItems->sum('line_total'), 2);
+        $currentItemDiscountTotal = round((float) $reconciliationItems
+            ->filter(fn (array $item): bool => $item['discount_type'] !== 'increase')
+            ->sum('discount_total'), 2);
+        $currentItemIncreaseTotal = round((float) $reconciliationItems
+            ->filter(fn (array $item): bool => $item['discount_type'] === 'increase')
+            ->sum('discount_total'), 2);
+        $orderDiscountAmount = abs((float) ($order->extra_discount_total ?: $order->order_discount ?: 0));
+        $signedOrderDiscount = (string) ($order->order_discount_type ?? 'decrease') === 'increase'
+            ? $orderDiscountAmount
+            : -$orderDiscountAmount;
+        $currentOrderTotal = round(max(0,
+            $currentGoodsTotal
+            - $currentItemDiscountTotal
+            + $currentItemIncreaseTotal
+            + $signedOrderDiscount
+            + $this->customerDeliveryFeeForOrder($order)
+            + (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0)
+            + (float) ($order->vat_amount ?? 0)
+        ), 2);
+
+        return response()->json([
+            'order' => [
+                'id' => $order->id,
+                'code' => $order->code ?: ('#'.$order->id),
+                'created_date' => optional($order->created_at)->format('d/m/Y'),
+                'status' => $order->status,
+                'payment_status' => $order->payment_status,
+                'total' => (float) $order->total,
+                'current_goods_total' => $currentGoodsTotal,
+                'price_effective_date' => $orderPriceDate,
+                'current_item_discount_total' => $currentItemDiscountTotal,
+                'current_item_increase_total' => $currentItemIncreaseTotal,
+                'current_calculated_total' => $currentOrderTotal,
+                'subtotal_amount' => (float) ($order->subtotal_amount ?? $order->total ?? 0),
+                'total_discount' => (float) ($order->total_discount ?? 0),
+                'item_discount_total' => (float) ($order->item_discount_total ?? 0),
+                'extra_discount_total' => (float) ($order->extra_discount_total ?? 0),
+                'order_discount' => (float) ($order->order_discount ?? 0),
+                'order_discount_type' => (string) ($order->order_discount_type ?? 'decrease'),
+                'discount_reason' => $discountReason !== '' ? $discountReason : null,
+                'amount_paid' => $effectivePaid,
+                'amount_due' => $effectiveDue,
+                'accounting_amount_paid' => (float) ($order->amount_paid ?? 0),
+                'shipper_collected_amount' => (float) ($order->collected_amount ?? 0),
+                'customer_shipping_fee' => $this->customerDeliveryFeeForOrder($order),
+                'collect_customer_shipping_fee' => (bool) ($order->collect_customer_shipping_fee ?? false),
+                'vat_percent' => (float) ($order->vat_percent ?? 0),
+                'vat_amount' => (float) ($order->vat_amount ?? 0),
+                'foam_box_fee' => (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0),
+                'return_amount' => $returnAmount,
+                'recognized_revenue' => $recognizedRevenue,
+                'delivered_at' => optional($order->delivered_at)->format('d/m/Y H:i'),
+                'customer' => [
+                    'name' => $order->customer?->name ?? '-',
+                    'phone' => $order->customer?->phone ?? '-',
+                    'address' => $order->customer?->address ?? '-',
+                ],
+                'sale' => $order->user?->name ?? '-',
+                'shipper' => $order->shipper?->name ?? '-',
+                'warehouse' => $order->warehouse?->name ?? '-',
+                'note' => $order->note,
+                'shipper_note' => $order->shipper_note,
+            ],
+            'items' => $reconciliationItems,
+            'pricing_changes' => $pricingChanges,
+            'approval' => [
+                'created_by' => $order->user?->name ?? '-',
+                'approved_by' => $approvedHistory?->user?->name ?? '-',
+                'approved_at' => optional($approvedHistory?->created_at)->format('d/m/Y H:i'),
+                'note' => $approvedHistory?->note,
+            ],
+            'packing' => [
+                'packed_by' => $packingHistory?->user?->name ?? '-',
+                'packed_at' => optional($packingHistory?->created_at)->format('d/m/Y H:i'),
+                'warehouse' => $order->warehouse?->name ?? '-',
+                'note' => $packingHistory?->note,
+            ],
+            'delivery' => [
+                'shipper' => $order->shipper?->name ?? '-',
+                'status' => $order->status,
+                'delivered_at' => optional($order->delivered_at)->format('d/m/Y H:i'),
+                'note' => $deliveryHistory?->note ?? $order->shipper_note,
+            ],
+            'payment' => [
+                'total_due' => (float) $order->total,
+                'paid_amount' => $effectivePaid,
+                'accounting_paid_amount' => (float) ($order->amount_paid ?? 0),
+                'shipper_collected_amount' => (float) ($order->collected_amount ?? 0),
+                'amount_due' => $effectiveDue,
+                'method' => $order->payment_method,
+                'paid_at' => optional($paymentTransaction?->created_at)->format('d/m/Y H:i'),
+                'confirmed_by' => $paymentTransaction?->approver?->name ?? $paymentTransaction?->submitter?->name ?? '-',
+            ],
+            'returns' => $order->returnRecords->map(fn ($return) => [
+                'status' => $return->status,
+                'reason' => $return->reason,
+                'warehouse' => $return->warehouse?->name ?? '-',
+                'confirmed_by' => $return->warehouseConfirmer?->name ?? '-',
+                'confirmed_at' => optional($return->warehouse_confirmed_at)->format('d/m/Y H:i'),
+                'refund_amount' => (float) ($return->refund_amount ?? 0),
+                'items' => $return->returnItems->map(fn ($item) => [
+                    'name' => $item->productVariant?->product?->name ?? $item->productVariant?->name ?? 'San pham',
+                    'quantity' => (float) ($item->quantity ?? 0),
+                    'received_weight' => (float) ($item->received_weight ?? 0),
+                ])->values(),
+            ])->values(),
+            'reconciliation' => [
+                'status' => $order->accountingReconciliation?->status ?? AccountingReconciliation::STATUS_PENDING,
+                'confirmed_by' => $order->accountingReconciliation?->confirmer?->name,
+                'confirmed_at' => optional($order->accountingReconciliation?->confirmed_at)->format('d/m/Y H:i'),
+                'note' => $order->accountingReconciliation?->note,
+                'can_confirm' => $canConfirm,
+                'can_cancel' => $order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED
+                    && ! $order->accounting_sales_import_batch_id,
+                'block_reason' => $blockReason,
+            ],
+        ]);
+    }
+
+    public function confirmReconciliation(Request $request, Order $order)
+    {
+        if (! Schema::hasTable('accounting_reconciliations')) {
+            return response()->json(['message' => 'Bang doi soat ke toan chua duoc tao. Vui long chay migrate.'], 500);
+        }
+
+        $validated = $request->validate([
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $order->load(['returnRecords.returnItems', 'accountingReconciliation', 'user']);
+        [$canConfirm, $blockReason] = $this->canAccountingConfirmOrder($order);
+        if (! $canConfirm) {
+            return response()->json(['message' => $blockReason], 422);
+        }
+
+        if ($order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED) {
+            return response()->json(['message' => 'Don hang da duoc ke toan xac nhan.'], 422);
+        }
+
+        $reconciliation = $this->confirmReconciliationOrder(
+            $order,
+            (int) $request->user()->id,
+            $validated['note'] ?? null
+        );
+
+        $reconciliation?->load(['order', 'sale']);
+        if ($reconciliation?->sale) {
+            $reconciliation->sale->notify(new AccountingOrderRevenueConfirmed($reconciliation));
+        }
+
+        return response()->json([
+            'message' => 'Da xac nhan doi soat va ghi nhan doanh thu.',
+            'reconciliation' => [
+                'status' => AccountingReconciliation::STATUS_CONFIRMED,
+                'confirmed_by' => $request->user()->name,
+                'confirmed_at' => now()->format('d/m/Y H:i'),
+                'recognized_revenue' => (float) ($reconciliation?->recognized_revenue ?? 0),
+            ],
+        ]);
+    }
+
+    public function bulkConfirmReconciliation(Request $request)
+    {
+        if (! Schema::hasTable('accounting_reconciliations')) {
+            return response()->json(['message' => 'Bảng đối soát kế toán chưa được tạo. Vui lòng chạy migrate.'], 500);
+        }
+
+        $validated = $request->validate([
+            'order_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'order_ids.*' => ['required', 'integer', 'distinct', 'exists:orders,id'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $orders = Order::query()
+            ->with(['returnRecords.returnItems', 'accountingReconciliation', 'user'])
+            ->whereKey($validated['order_ids'])
+            ->get()
+            ->keyBy('id');
+        $confirmed = [];
+        $skipped = [];
+
+        foreach ($validated['order_ids'] as $orderId) {
+            $order = $orders->get((int) $orderId);
+            if (! $order) {
+                continue;
+            }
+
+            if ($order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED) {
+                $skipped[] = ['order_id' => $order->id, 'message' => 'Đơn đã được kế toán xác nhận.'];
+
+                continue;
+            }
+
+            [$canConfirm, $blockReason] = $this->canAccountingConfirmOrder($order);
+            if (! $canConfirm) {
+                $skipped[] = ['order_id' => $order->id, 'message' => $blockReason];
+
+                continue;
+            }
+
+            try {
+                $reconciliation = $this->confirmReconciliationOrder(
+                    $order,
+                    (int) $request->user()->id,
+                    $validated['note'] ?? null
+                );
+                $confirmed[] = $order->id;
+            } catch (\Throwable $exception) {
+                report($exception);
+                $skipped[] = ['order_id' => $order->id, 'message' => 'Không thể xác nhận đơn này.'];
+
+                continue;
+            }
+
+            try {
+                $reconciliation->load(['order', 'sale']);
+                if ($reconciliation->sale) {
+                    $reconciliation->sale->notify(new AccountingOrderRevenueConfirmed($reconciliation));
+                }
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
+
+        return response()->json([
+            'message' => sprintf('Đã xác nhận %d đơn, bỏ qua %d đơn.', count($confirmed), count($skipped)),
+            'confirmed_order_ids' => $confirmed,
+            'skipped' => $skipped,
+        ]);
+    }
+
+    public function cancelReconciliation(Request $request, Order $order)
+    {
+        if (! Schema::hasTable('accounting_reconciliations')) {
+            return response()->json(['message' => 'Bảng đối soát kế toán chưa được tạo. Vui lòng chạy migrate.'], 500);
+        }
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'min:3', 'max:1000'],
+        ]);
+
+        if ($order->accounting_sales_import_batch_id) {
+            return response()->json([
+                'message' => 'Không thể hủy riêng đối soát của đơn nhập doanh số lịch sử. Hãy xử lý từ phiên nhập tương ứng.',
+            ], 422);
+        }
+
+        try {
+            $result = $this->cancelReconciliationOrder(
+                $order->id,
+                (int) $request->user()->id,
+                $validated['reason']
+            );
+        } catch (\DomainException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json([
+            'message' => 'Đã hủy đối soát đơn hàng và gỡ doanh thu, hoa hồng liên quan.',
+            'reconciliation' => [
+                'status' => AccountingReconciliation::STATUS_PENDING,
+                'can_confirm' => true,
+            ],
+            'deleted_ledger_entries' => $result['deletedLedgerEntries'],
+            'deleted_commissions' => $result['deletedCommissions'],
+        ]);
+    }
+
+    public function bulkCancelReconciliation(Request $request)
+    {
+        if (! Schema::hasTable('accounting_reconciliations')) {
+            return response()->json(['message' => 'Bảng đối soát kế toán chưa được tạo. Vui lòng chạy migrate.'], 500);
+        }
+
+        $validated = $request->validate([
+            'order_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'order_ids.*' => ['required', 'integer', 'distinct', 'exists:orders,id'],
+            'reason' => ['required', 'string', 'min:3', 'max:1000'],
+        ]);
+
+        $orders = Order::query()
+            ->with('accountingReconciliation')
+            ->whereKey($validated['order_ids'])
+            ->get()
+            ->keyBy('id');
+        $cancelled = [];
+        $skipped = [];
+        $deletedLedgerEntries = 0;
+        $deletedCommissions = 0;
+
+        foreach ($validated['order_ids'] as $orderId) {
+            $order = $orders->get((int) $orderId);
+            if (! $order) {
+                continue;
+            }
+
+            if ($order->accounting_sales_import_batch_id) {
+                $skipped[] = [
+                    'order_id' => $order->id,
+                    'message' => 'Không thể hủy riêng đơn nhập doanh số lịch sử.',
+                ];
+
+                continue;
+            }
+
+            if ($order->accountingReconciliation?->status !== AccountingReconciliation::STATUS_CONFIRMED) {
+                $skipped[] = [
+                    'order_id' => $order->id,
+                    'message' => 'Đơn chưa được xác nhận đối soát hoặc đã được hủy trước đó.',
+                ];
+
+                continue;
+            }
+
+            try {
+                $result = $this->cancelReconciliationOrder(
+                    $order->id,
+                    (int) $request->user()->id,
+                    $validated['reason']
+                );
+                $cancelled[] = $order->id;
+                $deletedLedgerEntries += $result['deletedLedgerEntries'];
+                $deletedCommissions += $result['deletedCommissions'];
+            } catch (\DomainException $exception) {
+                $skipped[] = ['order_id' => $order->id, 'message' => $exception->getMessage()];
+            } catch (\Throwable $exception) {
+                report($exception);
+                $skipped[] = ['order_id' => $order->id, 'message' => 'Không thể hủy đối soát đơn này.'];
+            }
+        }
+
+        return response()->json([
+            'message' => sprintf('Đã hủy đối soát %d đơn, bỏ qua %d đơn.', count($cancelled), count($skipped)),
+            'cancelled_order_ids' => $cancelled,
+            'skipped' => $skipped,
+            'deleted_ledger_entries' => $deletedLedgerEntries,
+            'deleted_commissions' => $deletedCommissions,
+        ]);
+    }
+
+    private function cancelReconciliationOrder(int $orderId, int $cancelledBy, string $reason): array
+    {
+        return DB::transaction(function () use ($orderId, $cancelledBy, $reason): array {
+            $lockedOrder = Order::query()->lockForUpdate()->findOrFail($orderId);
+            $reconciliation = AccountingReconciliation::query()
+                ->where('order_id', $lockedOrder->id)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $reconciliation || $reconciliation->status !== AccountingReconciliation::STATUS_CONFIRMED) {
+                throw new \DomainException('Đơn hàng chưa được xác nhận đối soát hoặc đã được hủy trước đó.');
+            }
+
+            $deletedLedgerEntries = Schema::hasTable('accounting_sales_entries')
+                ? DB::table('accounting_sales_entries')
+                    ->where('order_id', $lockedOrder->id)
+                    ->where('source', \App\Models\AccountingSalesEntry::SOURCE_ORDER)
+                    ->delete()
+                : 0;
+            $deletedCommissions = Schema::hasTable('order_commissions')
+                ? DB::table('order_commissions')->where('order_id', $lockedOrder->id)->delete()
+                : 0;
+
+            $reconciliation->update([
+                'status' => AccountingReconciliation::STATUS_PENDING,
+                'confirmed_by' => null,
+                'confirmed_at' => null,
+            ]);
+
+            $lockedOrder->forceFill(['amount_due' => 0])->save();
+            $lockedOrder->histories()->create([
+                'action' => 'accounting_reconciliation_cancelled',
+                'user_id' => $cancelledBy,
+                'role' => 'accounting',
+                'status_before' => $lockedOrder->status,
+                'status_after' => $lockedOrder->status,
+                'note' => 'Kế toán hủy đối soát. Lý do: '.trim($reason),
+            ]);
+
+            return compact('deletedLedgerEntries', 'deletedCommissions');
+        });
+    }
+
+    private function confirmReconciliationOrder(Order $order, int $confirmedBy, ?string $note = null): AccountingReconciliation
+    {
+        return DB::transaction(function () use ($order, $confirmedBy, $note): AccountingReconciliation {
+            $returnAmount = $this->returnAmountForOrder($order);
+            $recognizedRevenue = $this->recognizedRevenueForOrder($order);
+            $effectivePaid = $this->effectivePaidForOrder($order);
+
+            $reconciliation = AccountingReconciliation::query()->updateOrCreate(
+                ['order_id' => $order->id],
+                [
+                    'sale_id' => $order->user_id,
+                    'shipper_id' => $order->shipper_id,
+                    'total_amount' => $recognizedRevenue,
+                    'paid_amount' => $effectivePaid,
+                    'shipping_fee' => $this->customerDeliveryFeeForOrder($order),
+                    'return_amount' => $returnAmount,
+                    'recognized_revenue' => $recognizedRevenue,
+                    'status' => AccountingReconciliation::STATUS_CONFIRMED,
+                    'confirmed_by' => $confirmedBy,
+                    'confirmed_at' => now(),
+                    'note' => $note,
+                ]
+            );
+
+            $amountDue = max(0, $recognizedRevenue - $effectivePaid);
+            $order->forceFill([
+                'status' => Order::STATUS_COMPLETED,
+                'amount_due' => $amountDue,
+                'needs_operational_completion' => false,
+                'operational_completion_note' => $order->accounting_sales_import_batch_id
+                    ? 'Đã giao hàng và được kế toán xác nhận doanh thu.'
+                    : $order->operational_completion_note,
+                'operational_completed_by' => $order->accounting_sales_import_batch_id ? $confirmedBy : $order->operational_completed_by,
+                'operational_completed_at' => $order->accounting_sales_import_batch_id ? now() : $order->operational_completed_at,
+                'payment_status' => match (true) {
+                    $amountDue <= 0.0001 => 'paid',
+                    $effectivePaid > 0 => 'partially_paid',
+                    default => 'unpaid',
+                },
+            ])->save();
+
+            $this->createCommissionForCompletedOrder($order, $recognizedRevenue, $confirmedBy);
+            $order->unsetRelation('accountingReconciliation');
+            app(\App\Services\AccountingSalesLedgerService::class)->syncOrder($order->fresh());
+
+            return $reconciliation;
+        });
+    }
+
+    public function apiOrdersList(Request $request)
+    {
+        $perPage = min((int) $request->input('per_page', 15), 100);
+        $date = $request->input('date', '');
+        $saleId = (int) $request->input('sale_id', 0);
+        $customerId = (int) $request->input('customer_id', 0);
+        $keyword = trim((string) $request->input('keyword', ''));
+
+        $query = Order::query()
+            ->with(['customer:id,name', 'user:id,name'])
+            ->orderByDesc('created_at')
+            ->when($date !== '', fn ($q) => $q->whereDate('created_at', $date))
+            ->when($saleId > 0, fn ($q) => $q->where('user_id', $saleId))
+            ->when($customerId > 0, fn ($q) => $q->where('customer_id', $customerId))
+            ->when($keyword !== '', function ($q) use ($keyword) {
+                $q->where(function ($sub) use ($keyword) {
+                    $sub->where('code', 'like', "%{$keyword}%")
+                        ->orWhereHas('customer', fn ($cq) => $cq->where('name', 'like', "%{$keyword}%"));
+                });
+            });
+
+        $paginated = $query->paginate($perPage)->appends($request->query());
+
+        $items = $paginated->getCollection()->map(fn ($o) => [
+            'id' => $o->id,
+            'code' => $o->code ?: ('#'.$o->id),
+            'customer_name' => $o->customer?->name ?? '-',
+            'customer_id' => $o->customer_id,
+            'sale_name' => $o->user?->name ?? '-',
+            'total' => (float) $o->total,
+            'amount_due' => (float) $o->amount_due,
+            'amount_paid' => (float) $o->amount_paid,
+            'payment_status' => $o->payment_status,
+            'status' => $o->status,
+            'created_at' => $o->created_at?->format('d/m/Y H:i'),
+        ]);
+
+        return response()->json([
+            'data' => $items,
+            'current_page' => $paginated->currentPage(),
+            'last_page' => $paginated->lastPage(),
+            'total' => $paginated->total(),
+            'per_page' => $paginated->perPage(),
+        ]);
+    }
+
+    public function apiCustomersList(Request $request)
+    {
+        $perPage = min((int) $request->input('per_page', 15), 100);
+        $keyword = trim((string) $request->input('keyword', ''));
+        $sortBy = in_array($request->input('sort_by'), ['name', 'id'], true) ? $request->input('sort_by') : 'name';
+        $sortDir = $request->input('sort_dir', 'asc') === 'desc' ? 'desc' : 'asc';
+
+        $paginated = Customer::query()
+            ->when($keyword !== '', fn ($q) => $q->where(function ($sub) use ($keyword) {
+                $sub->where('name', 'like', "%{$keyword}%")
+                    ->orWhere('phone', 'like', "%{$keyword}%")
+                    ->orWhere('customer_code', 'like', "%{$keyword}%");
+            }))
+            ->orderBy($sortBy, $sortDir)
+            ->paginate($perPage)
+            ->appends($request->query());
+
+        $items = $paginated->getCollection()->map(fn ($c) => [
+            'id' => $c->id,
+            'name' => $c->name,
+            'phone' => $c->phone,
+            'code' => $c->customer_code,
+        ]);
+
+        return response()->json([
+            'data' => $items,
+            'current_page' => $paginated->currentPage(),
+            'last_page' => $paginated->lastPage(),
+            'total' => $paginated->total(),
+            'per_page' => $paginated->perPage(),
+        ]);
+    }
+
+    public function apiOrderDetail(Order $order)
+    {
+        $order->load('customer');
+
+        $totalPaid = (float) $order->transactions()->where('status', Transaction::STATUS_APPROVED)->where('type', 'payment')->sum('amount');
+        $totalRefunded = (float) $order->transactions()->where('status', Transaction::STATUS_APPROVED)->where('type', 'refund')->sum('amount');
+        $debt = max(0, (float) $order->total - $totalPaid + $totalRefunded);
+
+        $customer = $order->customer;
+        $customerDebt = $customer
+            ? (float) Order::where('customer_id', $customer->id)
+                ->whereNotIn('status', ['cancelled', 'rejected'])
+                ->sum('amount_due')
+            : 0;
+
+        return response()->json([
+            'order' => [
+                'id' => $order->id,
+                'code' => $order->code ?: ('#'.$order->id),
+                'total' => (float) $order->total,
+                'amount_paid' => (float) $order->amount_paid,
+                'amount_due' => (float) $order->amount_due,
+                'payment_status' => $order->payment_status,
+                'status' => $order->status,
+                'created_at' => $order->created_at?->format('d/m/Y H:i'),
+            ],
+            'customer' => $customer ? [
+                'id' => $customer->id,
+                'name' => $customer->name,
+                'phone' => $customer->phone,
+                'email' => $customer->email,
+                'total_debt' => $customerDebt,
+            ] : null,
+        ]);
+    }
+
+    public function apiCustomerDetail(Customer $customer)
+    {
+        $totalDebt = (float) Order::where('customer_id', $customer->id)
+            ->whereNotIn('status', ['cancelled', 'rejected'])
+            ->sum('amount_due');
+
+        $totalOrders = Order::where('customer_id', $customer->id)->count();
+        $totalSpent = (float) Order::where('customer_id', $customer->id)
+            ->whereNotIn('status', ['cancelled', 'rejected'])
+            ->sum('total');
+
+        $lastOrder = Order::where('customer_id', $customer->id)->latest()->first();
+
+        return response()->json([
+            'id' => $customer->id,
+            'name' => $customer->name,
+            'phone' => $customer->phone,
+            'email' => $customer->email,
+            'address' => $customer->address,
+            'code' => $customer->customer_code,
+            'total_debt' => $totalDebt,
+            'total_orders' => $totalOrders,
+            'total_spent' => $totalSpent,
+            'last_order_at' => $lastOrder?->created_at?->format('d/m/Y'),
+        ]);
+    }
+
+    private function normalizePaymentText(string $value): string
+    {
+        return preg_replace('/[^a-z0-9]/', '', mb_strtolower($value)) ?: '';
+    }
+
+    private function paymentMatchingTokens(string $value): array
+    {
+        preg_match_all('/[a-zA-Z0-9]{4,}/', $value, $matches);
+
+        return collect($matches[0] ?? [])
+            ->map(fn ($token) => $this->normalizePaymentText((string) $token))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    private function paymentMatchingCardCodeCandidates(string $value): array
+    {
+        return collect($this->paymentMatchingTokens($value))
+            ->filter(fn (string $token) => strlen($token) >= 6 && preg_match('/\d/', $token))
+            ->values()
+            ->all();
+    }
+
+    private function applyTransactionToOrder(Transaction $transaction): void
+    {
+        if ($transaction->status !== Transaction::STATUS_APPROVED) {
+            return;
+        }
+        if ($transaction->account_id) {
+            $this->refreshAccountBalanceById((int) $transaction->account_id);
+        }
+        if ($transaction->destination_type === 'internal' && $transaction->destination_account_id) {
+            $this->refreshAccountBalanceById((int) $transaction->destination_account_id);
+        }
+
+        if ($transaction->order_id) {
+            $this->refreshOrderFinancialState($transaction->order);
+        }
+    }
+
+    private function synchronizeFinanceRequestAmount(Transaction $transaction): void
+    {
+        $amounts = $transaction->calculatedRequestAmounts();
+        if ($amounts === null) {
+            return;
+        }
+
+        if (abs((float) $transaction->amount - $amounts['total']) < 0.005
+            && abs((float) ($transaction->request_total ?? 0) - $amounts['total']) < 0.005
+            && abs((float) ($transaction->request_subtotal ?? 0) - $amounts['subtotal']) < 0.005) {
+            return;
+        }
+
+        $transaction->forceFill([
+            'amount' => $amounts['total'],
+            'request_subtotal' => $amounts['subtotal'],
+            'request_vat' => $amounts['vat'],
+            'request_total' => $amounts['total'],
+        ])->saveQuietly();
+
+        if ($transaction->status === Transaction::STATUS_APPROVED) {
+            $this->syncTransactionAccountingState($transaction, $transaction->account_id, $transaction->order_id);
+        }
+    }
+
+    private function syncTransactionAccountingState(Transaction $transaction, ?int $previousAccountId = null, ?int $previousOrderId = null): void
+    {
+        if ($transaction->status !== Transaction::STATUS_APPROVED) {
+            if ($previousOrderId && $previousOrderId !== $transaction->order_id) {
+                $previousOrder = Order::query()->find($previousOrderId);
+                if ($previousOrder) {
+                    $this->refreshOrderFinancialState($previousOrder);
+                }
+            }
+
+            return;
+        }
+
+        collect([$previousAccountId, $transaction->account_id, $transaction->destination_account_id])
+            ->filter(fn ($accountId) => (int) $accountId > 0)
+            ->unique()
+            ->each(function ($accountId) {
+                $this->refreshAccountBalanceById((int) $accountId);
+            });
+
+        collect([$previousOrderId, $transaction->order_id])
+            ->filter(fn ($orderId) => (int) $orderId > 0)
+            ->unique()
+            ->each(function ($orderId) {
+                $order = Order::query()->find((int) $orderId);
+                if ($order) {
+                    $this->refreshOrderFinancialState($order);
+                }
+            });
+    }
+
+    private function refreshAccountBalanceById(int $accountId): void
+    {
+        $account = Account::query()->find($accountId);
+        if (! $account) {
+            return;
+        }
+
+        $openingBalance = (float) ($account->opening_balance ?? 0);
+        $allTransactions = Transaction::query()
+            ->with('transactionCategory:id,flow_direction')
+            ->where('account_id', $account->id)
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->get(['id', 'amount', 'type', 'transaction_category_id']);
+
+        $txnNet = (float) 0;
+        foreach ($allTransactions as $txn) {
+            $flowDirection = $txn->transactionCategory?->flow_direction
+                ?? (in_array((string) $txn->type, ['payment', 'extra_income'], true) ? 'in' : 'out');
+
+            if ($flowDirection === 'in') {
+                $txnNet += (float) $txn->amount;
+            } else {
+                $txnNet -= (float) $txn->amount;
+            }
+        }
+
+        $internalTransfersIn = (float) Transaction::query()
+            ->where('destination_type', 'internal')
+            ->where('destination_account_id', $account->id)
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->whereHas('transactionCategory', fn ($query) => $query->where('flow_direction', 'out'))
+            ->sum('amount');
+
+        $txnNet += $internalTransfersIn;
+
+        $account->update(['balance' => $openingBalance + $txnNet]);
+    }
+
+    private function refreshOrderFinancialState(Order $order): void
+    {
+        $totalPaid = (float) $order->transactions()->where('status', Transaction::STATUS_APPROVED)->where('type', 'payment')->sum('amount')
+                   - (float) $order->transactions()->where('status', Transaction::STATUS_APPROVED)->where('type', 'refund')->sum('amount');
+
+        $order->amount_paid = $totalPaid;
+        $order->amount_due = max(0, (float) $order->total - $totalPaid);
+        $order->payment_status = match (true) {
+            $totalPaid >= (float) $order->total => 'paid',
+            $totalPaid > 0 => 'partially_paid',
+            default => 'unpaid',
+        };
+
+        $isFullyPaid = $totalPaid >= (float) $order->total;
+        if ($isFullyPaid && ! in_array((string) $order->status, ['completed', 'cancelled', 'returned', 'returned_completed'], true)) {
+            $order->status = 'completed';
+        }
+
+        $order->save();
+    }
+
+    private function canAccountingConfirmOrder(Order $order): array
+    {
+        if (in_array((string) $order->status, ['cancelled', 'canceled', 'rejected'], true)) {
+            return [false, 'Don da huy hoac bi tu choi, khong the xac nhan doanh thu.'];
+        }
+
+        if (! in_array((string) $order->status, ['delivered', 'completed'], true)) {
+            return [false, 'Don chua giao thanh cong.'];
+        }
+
+        $pendingReturn = $order->returnRecords
+            ->filter(fn ($return) => ! in_array((string) $return->status, ['warehouse_confirmed', 'completed', 'cancelled', 'rejected'], true))
+            ->first();
+        if ($pendingReturn) {
+            return [false, 'Don co hang tra chua duoc kho xu ly xong.'];
+        }
+
+        return [true, null];
+    }
+
+    private function returnAmountForOrder(Order $order): float
+    {
+        if (! $order->relationLoaded('returnRecords')) {
+            $order->load('returnRecords');
+        }
+
+        return (float) $order->returnRecords
+            ->whereIn('status', ['warehouse_confirmed', 'completed'])
+            ->sum(fn ($return) => (float) ($return->refund_amount ?? 0));
+    }
+
+    private function effectivePaidForOrder(Order $order): float
+    {
+        $accountingPaid = (float) ($order->amount_paid ?? 0);
+        $shipperCollected = (float) ($order->collected_amount ?? 0);
+
+        return max($accountingPaid, $shipperCollected);
+    }
+
+    private function effectiveDueForOrder(Order $order): float
+    {
+        return max(0, $this->recognizedRevenueForOrder($order) - $this->effectivePaidForOrder($order));
+    }
+
+    private function recognizedRevenueForOrder(Order $order): float
+    {
+        $orderTotal = (float) ($order->total ?? 0);
+        $internalShippingCost = (bool) ($order->charge_shipping_fee ?? false)
+            ? max(0, (float) ($order->shipping_fee ?? 0))
+            : 0;
+
+        return max(0, $orderTotal - $internalShippingCost - $this->returnAmountForOrder($order));
+    }
+
+    private function customerDeliveryFeeForOrder(Order $order): float
+    {
+        return (bool) ($order->collect_customer_shipping_fee ?? false)
+            ? max(0, (float) ($order->customer_shipping_fee ?? 0))
+            : 0;
+    }
+
+    private function createCommissionForCompletedOrder(Order $order, ?float $recognizedRevenue = null, ?int $confirmedBy = null): void
+    {
+        if (! Schema::hasTable('order_commissions')) {
+            return;
+        }
+
+        $saleUserId = (int) ($order->user_id ?? 0);
+        if ($saleUserId <= 0) {
+            return;
+        }
+
+        $snapshotPercent = (float) ($order->commission_percent_snapshot ?? 0);
+        if ($snapshotPercent <= 0 && $order->customer_id) {
+            $snapshotPercent = (float) Customer::query()
+                ->where('id', $order->customer_id)
+                ->value('commission_percent');
+        }
+
+        $orderTotal = (float) ($recognizedRevenue ?? $order->total ?? 0);
+        $commissionAmount = round(($orderTotal * $snapshotPercent) / 100, 2);
+
+        DB::table('order_commissions')->updateOrInsert(
+            ['order_id' => $order->id],
+            [
+                'sale_user_id' => $saleUserId,
+                'customer_id' => $order->customer_id,
+                'order_total' => $orderTotal,
+                'commission_percent' => $snapshotPercent,
+                'commission_amount' => $commissionAmount,
+                'status' => 'confirmed',
+                'confirmed_by' => $confirmedBy ?: auth()->id(),
+                'confirmed_at' => now(),
+                'updated_at' => now(),
+                'created_at' => now(),
+            ]
+        );
+
+        $order->forceFill([
+            'commission_percent_snapshot' => $snapshotPercent,
+            'commission_amount_snapshot' => $commissionAmount,
+            'commission_created_at' => now(),
+        ])->save();
+    }
+
+    public function apiReconcileAccountBalances(Request $request)
+    {
+        $accountId = $request->input('account_id');
+        $fromDate = $request->input('from_date');
+        $toDate = $request->input('to_date');
+
+        $accountsToReconcile = $accountId
+            ? Account::query()->where('id', $accountId)->get()
+            : Account::query()->where('is_active', true)->get();
+
+        $reconciliationResults = [];
+        $totalUpdated = 0;
+        $totalAmount = 0;
+
+        DB::transaction(function () use (
+            $accountsToReconcile,
+            &$reconciliationResults,
+            &$totalUpdated,
+            &$totalAmount,
+            $accountId,
+            $fromDate,
+            $toDate
+        ) {
+            foreach ($accountsToReconcile as $account) {
+                $oldBalance = (float) $account->balance;
+                // opening_balance is the anchor: initial + manual deposits/withdrawals (NOT from transactions)
+                $openingBalance = (float) ($account->opening_balance ?? 0);
+
+                // Calculate transaction net from ALL approved transactions (no date filter)
+                $allTransactions = Transaction::query()
+                    ->with('transactionCategory:id,flow_direction')
+                    ->where('account_id', $account->id)
+                    ->where('status', Transaction::STATUS_APPROVED)
+                    ->get(['id', 'amount', 'type', 'transaction_category_id']);
+
+                $txnNet = (float) 0;
+                foreach ($allTransactions as $txn) {
+                    $flowDirection = $txn->transactionCategory?->flow_direction
+                        ?? (in_array((string) $txn->type, ['payment', 'extra_income'], true) ? 'in' : 'out');
+
+                    if ($flowDirection === 'in') {
+                        $txnNet += (float) $txn->amount;
+                    } else {
+                        $txnNet -= (float) $txn->amount;
+                    }
+                }
+
+                // Correct balance = opening balance + net of all approved transactions
+                $calculatedBalance = $openingBalance + $txnNet;
+
+                $difference = $calculatedBalance - $oldBalance;
+                $hasDiscrepancy = abs($difference) > 0.01; // Allow 1 cent tolerance
+
+                if ($hasDiscrepancy) {
+                    $account->update(['balance' => $calculatedBalance]);
+                    $totalUpdated++;
+                    $totalAmount += abs($difference);
+                }
+
+                $reconciliationResults[] = [
+                    'account_id' => $account->id,
+                    'account_name' => $account->name,
+                    'account_type' => $account->type,
+                    'opening_balance' => $openingBalance,
+                    'txn_net' => $txnNet,
+                    'old_balance' => $oldBalance,
+                    'calculated_balance' => $calculatedBalance,
+                    'difference' => $difference,
+                    'transaction_count' => $allTransactions->count(),
+                    'updated' => $hasDiscrepancy,
+                ];
+            }
+
+            AccountBalanceRefreshLog::create([
+                'refreshed_by' => auth()->id(),
+                'filter_account_id' => $accountId ?: null,
+                'from_date' => $fromDate ?: null,
+                'to_date' => $toDate ?: null,
+                'accounts_reconciled' => count($accountsToReconcile),
+                'accounts_updated' => $totalUpdated,
+                'total_amount_adjusted' => $totalAmount,
+                'results_json' => $reconciliationResults,
+            ]);
+        });
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Da kiem tra va cap nhat '.$totalUpdated.' tai khoan. Tong sai khac: '.number_format($totalAmount).'d',
+            'accounts_reconciled' => count($accountsToReconcile),
+            'accounts_updated' => $totalUpdated,
+            'total_amount_adjusted' => $totalAmount,
+            'results' => $reconciliationResults,
+        ]);
+    }
+
+    public function refreshHistory(Request $request)
+    {
+        $accountId = (int) $request->input('account_id', 0);
+        $fromDate = (string) $request->input('from_date', '');
+        $toDate = (string) $request->input('to_date', '');
+
+        $query = AccountBalanceRefreshLog::query()
+            ->with([
+                'performer:id,name',
+                'filterAccount:id,name,type',
+            ])
+            ->latest();
+
+        if ($accountId > 0) {
+            $query->where('filter_account_id', $accountId);
+        }
+
+        if ($fromDate !== '') {
+            $query->whereDate('created_at', '>=', $fromDate);
+        }
+
+        if ($toDate !== '') {
+            $query->whereDate('created_at', '<=', $toDate);
+        }
+
+        $runs = $query->paginate(20)->appends($request->query());
+        $accounts = Account::active()->orderBy('name')->get(['id', 'name', 'type']);
+
+        return view('accounting.refresh_history', [
+            'runs' => $runs,
+            'accounts' => $accounts,
+            'accountId' => $accountId,
+            'fromDate' => $fromDate,
+            'toDate' => $toDate,
+        ]);
+    }
+}

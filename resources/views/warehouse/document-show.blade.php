@@ -1,0 +1,452 @@
+@extends('layouts.warehouse')
+
+@section('title', $document->type === 'import' ? 'Chi tiết Phiếu Nhập Kho' : 'Chi tiết Phiếu Xuất Kho')
+
+@push('styles')
+<style>
+.doc-show-header { border-radius: 14px; color: #fff; padding: 28px 32px; margin-bottom: 28px; }
+.doc-show-header.import { background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%); }
+.doc-show-header.export { background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%); }
+.doc-show-code { font-size: 1.8rem; font-weight: 900; letter-spacing: .02em; }
+.doc-show-type { display: inline-block; background: rgba(255,255,255,.2); padding: 3px 14px; border-radius: 20px; font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.meta-block { background: #fff; border-radius: 12px; box-shadow: 0 4px 14px rgba(15,23,42,.07); padding: 20px 24px; margin-bottom: 20px; }
+.meta-row { display: flex; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f5f9; font-size: .87rem; }
+.meta-row:last-child { border-bottom: 0; }
+.meta-label { color: #64748b; min-width: 130px; font-weight: 600; }
+.meta-value { color: #0f172a; font-weight: 700; }
+.items-table { background: #fff; border-radius: 12px; box-shadow: 0 4px 14px rgba(15,23,42,.07); overflow: hidden; margin-bottom: 20px; }
+.items-table .table { margin: 0; }
+.items-table thead { background: #f8fafc; border-bottom: 2px solid #e2e8f0; }
+.items-table th { padding: 12px 16px; font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #475569; }
+.items-table td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.items-table tbody tr:last-child td { border-bottom: 0; }
+.user-badge { display: inline-flex; align-items: center; gap: 10px; background: #f1f5f9; border-radius: 10px; padding: 8px 14px; }
+.user-avatar { width: 38px; height: 38px; border-radius: 50%; background: #dbeafe; color: #1d4ed8; font-size: .95rem; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.user-avatar.export { background: #fee2e2; color: #b91c1c; }
+.summary-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: .88rem; color: #475569; }
+.summary-row.total { border-top: 2px solid #e2e8f0; margin-top: 8px; padding-top: 12px; font-weight: 800; color: #0f172a; font-size: 1rem; }
+.edit-history-card { background: #fff; border-radius: 12px; box-shadow: 0 4px 14px rgba(15,23,42,.07); overflow: hidden; }
+.edit-history-head { padding: 14px 18px 10px; font-weight: 700; font-size: .9rem; color: #0f172a; border-bottom: 1px solid #f1f5f9; }
+.edit-history-item { border-bottom: 1px solid #f1f5f9; }
+.edit-history-item:last-child { border-bottom: 0; }
+.edit-history-summary { padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.edit-history-meta { font-size: .8rem; color: #64748b; }
+.edit-history-title { font-weight: 700; color: #0f172a; font-size: .88rem; }
+.edit-history-table th, .edit-history-table td { font-size: .8rem; }
+.stockout-print-sheet { display: none; }
+@media print {
+    @page { size: A4 portrait; margin: 10mm; }
+    body { background: #fff !important; color: #111827 !important; }
+    .screen-document, .wh-sidebar, .wh-topbar, .mobile-drawer-overlay { display: none !important; }
+    .stockout-print-sheet { display: block; width: 100%; font: 10px/1.35 Arial, sans-serif; color: #111827; }
+    .print-company { display: grid; grid-template-columns: 24% 52% 24%; align-items: start; border-bottom: 1px solid #111827; padding-bottom: 6px; }
+    .print-logo { max-width: 34mm; max-height: 16mm; object-fit: contain; }
+    .print-company-name { font-size: 12px; font-weight: 800; text-transform: uppercase; }
+    .print-company-info { font-size: 8.5px; line-height: 1.35; }
+    .print-title { text-align: center; font-size: 18px; font-weight: 800; margin: 4px 0 0; text-transform: uppercase; color: #1f4e79; }
+    .print-subtitle { text-align: center; font-size: 9px; font-style: italic; margin-bottom: 6px; color: #1f4e79; }
+    .print-info { display: grid; grid-template-columns: 1fr 1fr 1fr; border: 1px solid #6b7280; margin-bottom: 7px; }
+    .print-info div { padding: 3px 5px; min-height: 18px; border-bottom: 1px solid #d1d5db; }
+    .print-info div:nth-child(3n+1), .print-info div:nth-child(3n+2) { border-right: 1px solid #d1d5db; }
+    .print-info div:nth-last-child(-n+3) { border-bottom: 0; }
+    .print-label { font-weight: 700; }
+    .print-table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-bottom: 8px; }
+    .print-table th, .print-table td { border: 1px solid #4b5563; padding: 4px 3px; vertical-align: middle; }
+    .print-table th { background: #e8eef5; text-align: center; font-weight: 700; color: #1f4e79; }
+    .print-table .center { text-align: center; }
+    .print-table .right { text-align: right; }
+    .print-table .actual-cell { height: 28px; border-bottom: 1px dotted #374151; }
+    .print-total { width: 45%; margin-left: auto; border-collapse: collapse; margin-bottom: 16px; }
+    .print-total td { padding: 3px 5px; border-bottom: 1px solid #d1d5db; }
+    .print-total td:last-child { text-align: right; font-weight: 700; }
+    .print-signatures { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; text-align: center; margin-top: 24px; page-break-inside: avoid; }
+    .print-signature { min-height: 86px; font-weight: 700; }
+    .print-signature small { display: block; font-weight: 400; font-style: italic; margin-top: 2px; }
+    .print-sign-space { height: 52px; }
+}
+</style>
+@endpush
+
+@section('content')
+
+@php
+    $isImport = $document->type === 'import';
+    $backRoute = $isImport ? 'warehouse.stock-in' : 'warehouse.stock-out';
+    $backLabel = $isImport ? 'Danh sách Nhập Kho' : 'Danh sách Xuất Kho';
+    $packedOrderService = app(\App\Services\WarehousePackedOrderService::class);
+    $packedOrder = !$isImport ? $linkedOrder : null;
+    $documentLines = $document->items->mapWithKeys(fn ($line) => [$line->id => $packedOrderService->documentLine($line, $packedOrder, (float) $document->items->where('product_variant_id', $line->product_variant_id)->sum('quantity'))]);
+    $itemsSubtotal = $documentLines->sum('total');
+    $packedSummary = $packedOrder ? $packedOrderService->summary($packedOrder, useActualWeight: true) : null;
+    $shippingFee = $packedSummary ? $packedSummary['shipping_fee'] : (float) ($document->shipping_fee ?? 0);
+    $orderAdjustment = $packedSummary['extra_discount_total'] ?? 0;
+    $vatAmount = $packedOrder ? $packedOrder->resolvedVatAmount(max(0, $itemsSubtotal - $orderAdjustment)) : 0;
+    $foamBoxFee = $packedSummary['foam_box_fee'] ?? 0;
+    $grandTotal = max(0, $itemsSubtotal - $orderAdjustment) + $vatAmount + $shippingFee + $foamBoxFee;
+    $documentPackedWeight = $documentLines->whereNotNull('weight')->isNotEmpty() ? $documentLines->sum('weight') : null;
+    $customer = $linkedOrder?->customer;
+    $editVariantIds = collect($document->edits)
+        ->flatMap(fn($edit) => collect($edit->changes ?? [])->pluck('variant_id'))
+        ->filter()
+        ->map(fn($id) => (int) $id)
+        ->unique()
+        ->values();
+    $editVariants = \App\Models\ProductVariant::query()
+        ->with('product')
+        ->whereIn('id', $editVariantIds->all())
+        ->get()
+        ->keyBy('id');
+@endphp
+
+<div class="screen-document">
+{{-- Back --}}
+<div class="mb-3">
+    <a href="{{ route($backRoute) }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>{{ $backLabel }}
+    </a>
+</div>
+
+{{-- Header --}}
+<div class="doc-show-header {{ $isImport ? 'import' : 'export' }}">
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <div class="doc-show-code">{{ $document->document_number ?? '#'.$document->id }}</div>
+            <div class="mt-2">
+                <span class="doc-show-type">{{ $isImport ? 'Phiếu Nhập Kho' : 'Phiếu Xuất Kho' }}</span>
+            </div>
+        </div>
+        <div class="text-end">
+            <div style="font-size:.82rem;opacity:.75;">Ngày tạo</div>
+            <div style="font-weight:700;">{{ $document->created_at->format('H:i d/m/Y') }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        {{-- Meta info --}}
+        <div class="meta-block">
+            <div class="meta-row">
+                <div class="meta-label"><i class="bi bi-calendar3 me-2 text-muted"></i>Ngày phiếu</div>
+                <div class="meta-value">{{ $document->document_date->format('d/m/Y') }}</div>
+            </div>
+            <div class="meta-row">
+                <div class="meta-label"><i class="bi bi-building me-2 text-muted"></i>Kho</div>
+                <div class="meta-value">{{ $document->warehouse?->name ?? '—' }}</div>
+            </div>
+            <div class="meta-row">
+                <div class="meta-label"><i class="bi bi-person me-2 text-muted"></i>Người tạo phiếu</div>
+                <div>
+                    <div class="user-badge">
+                        <div class="user-avatar {{ $isImport ? '' : 'export' }}">
+                            {{ strtoupper(substr($document->user?->name ?? 'U', 0, 1)) }}
+                        </div>
+                        <div>
+                            <div style="font-weight:700;font-size:.88rem;">{{ $document->user?->name ?? '—' }}</div>
+                            <div style="font-size:.72rem;color:#64748b;">{{ $document->created_at->format('H:i - d/m/Y') }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            @if($document->notes)
+            <div class="meta-row">
+                <div class="meta-label"><i class="bi bi-chat-left-text me-2 text-muted"></i>Ghi chú</div>
+                <div class="meta-value" style="font-weight:400;">{{ $document->notes }}</div>
+            </div>
+            @endif
+            @if(!$isImport)
+            <div class="meta-row">
+                <div class="meta-label"><i class="bi bi-person-badge me-2 text-muted"></i>Khách hàng</div>
+                <div class="meta-value">{{ $customer?->name ?? '—' }}</div>
+            </div>
+            <div class="meta-row">
+                <div class="meta-label"><i class="bi bi-geo-alt me-2 text-muted"></i>Địa chỉ</div>
+                <div class="meta-value">{{ $linkedOrder?->recipient_address ?: $customer?->address ?: '—' }}</div>
+            </div>
+            <div class="meta-row">
+                <div class="meta-label"><i class="bi bi-telephone me-2 text-muted"></i>Điện thoại</div>
+                <div class="meta-value">{{ $linkedOrder?->recipient_phone ?: $customer?->phone ?: '—' }}</div>
+            </div>
+            @endif
+        </div>
+
+        {{-- Items --}}
+        <div class="items-table">
+            <div style="padding:14px 18px 10px;font-weight:700;font-size:.9rem;color:#0f172a;border-bottom:1px solid #f1f5f9;">
+                <i class="bi bi-list-ul me-1"></i>Chi tiết hàng hoá ({{ $document->items->count() }} dòng)
+            </div>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Sản phẩm</th>
+                        <th>SKU</th>
+                        <th class="text-center">Số lượng</th>
+                        <th class="text-center">ĐVT</th>
+                        <th class="text-center">Khối lượng</th>
+                        @if(!$isImport)<th class="text-center">Thực giao</th>@endif
+                        <th class="text-end">Đơn giá</th>
+                        <th class="text-end">Thành tiền</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($document->items as $i => $item)
+                    @php
+                        $unitLabel = $item->productVariant?->product?->unit_label ?? 'Cái';
+                        $weightUnitLabel = in_array((string) ($item->productVariant?->product?->unit ?? 'cai'), ['con', 'cai'], true)
+                            ? 'Kg'
+                            : $unitLabel;
+                        $lineWeight = $packedOrder ? $documentLines[$item->id]['weight'] : (float) (($item->productVariant?->size ?? 0) * ($item->quantity ?? 0));
+                        if ($unitLabel === 'Cái') { $lineWeight = null; }
+                    @endphp
+                    <tr>
+                        <td class="text-muted small">{{ $i + 1 }}</td>
+                        <td>
+                            <div style="font-weight:700;font-size:.88rem;">{{ $item->productVariant?->product?->name ?? '—' }}</div>
+                            <div style="font-size:.75rem;color:#64748b;">{{ $item->productVariant?->name }}</div>
+                        </td>
+                        <td><code class="text-muted small">{{ $item->productVariant?->sku ?? '—' }}</code></td>
+                        <td class="text-center fw-700 {{ $isImport ? 'text-success' : 'text-danger' }}">
+                            {{ number_format($item->quantity) }}
+                        </td>
+                        <td class="text-center">{{ $unitLabel }}</td>
+                        <td class="text-center">{{ $lineWeight !== null ? format_kg($lineWeight) : '—' }}</td>
+                        @if(!$isImport)<td class="text-center" style="min-width:72px;height:28px;border-bottom:1px dotted #64748b;"></td>@endif
+                        <td class="text-end">{{ number_format($item->unit_cost) }}đ</td>
+                        <td class="text-end fw-700">{{ number_format($documentLines[$item->id]['total']) }}đ</td>
+                    </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        {{-- Summary --}}
+        <div class="meta-block">
+            <div style="font-weight:800;font-size:.9rem;margin-bottom:14px;color:#0f172a;">
+                <i class="bi bi-receipt me-1"></i>Tổng kết
+            </div>
+            <div class="summary-row">
+                <span>Số dòng hàng hoá</span>
+                <strong>{{ $document->items->count() }}</strong>
+            </div>
+            <div class="summary-row">
+                <span>Tổng số lượng</span>
+                <strong>{{ number_format($document->items->sum('quantity')) }}</strong>
+            </div>
+            <div class="summary-row">
+                <span>Tiền hàng</span>
+                <strong>{{ number_format($itemsSubtotal) }}đ</strong>
+            </div>
+            @if($shippingFee > 0)
+            <div class="summary-row">
+                <span>Phí vận chuyển</span>
+                <strong>{{ number_format($shippingFee) }}đ</strong>
+            </div>
+            @endif
+            @if($packedOrder)
+                <div class="summary-row"><span>Khối lượng thực tế</span><strong>{{ $documentPackedWeight !== null ? format_kg($documentPackedWeight) : '—' }}</strong></div>
+                @if($orderAdjustment != 0)<div class="summary-row"><span>Điều chỉnh đơn</span><strong>{{ number_format(-$orderAdjustment) }}đ</strong></div>@endif
+                @if($vatAmount > 0)<div class="summary-row"><span>VAT</span><strong>{{ number_format($vatAmount) }}đ</strong></div>@endif
+                @if($foamBoxFee > 0)<div class="summary-row"><span>Phí thùng xốp</span><strong>{{ number_format($foamBoxFee) }}đ</strong></div>@endif
+            @endif
+            <div class="summary-row total">
+                <span>Tổng cộng</span>
+                <span style="color:{{ $isImport ? '#0ea5e9' : '#ef4444' }}">{{ number_format($grandTotal) }}đ</span>
+            </div>
+        </div>
+
+        {{-- Print --}}
+        <div class="meta-block">
+            <button onclick="window.print()" class="btn btn-outline-secondary w-100 btn-sm">
+                <i class="bi bi-printer me-1"></i> In phiếu
+            </button>
+        </div>
+    </div>
+</div>
+
+@if($isImport)
+<div class="row g-3" id="edit-history">
+    <div class="col-12">
+        <div class="edit-history-card">
+            <div class="edit-history-head">
+                <i class="bi bi-clock-history me-1"></i>Lịch sử chỉnh sửa phiếu nhập
+                <span class="text-muted" style="font-weight:600;">({{ $document->edits->count() }} lần)</span>
+            </div>
+
+            @if($document->edits->isEmpty())
+                <div class="p-4 text-muted small">Phiếu này chưa có lần chỉnh sửa nào.</div>
+            @else
+                @foreach($document->edits->sortByDesc('edit_number') as $edit)
+                    @php
+                        $changes = collect($edit->changes ?? []);
+                        $changedRows = $changes->count();
+                    @endphp
+                    <div class="edit-history-item">
+                        <div class="edit-history-summary">
+                            <div>
+                                <div class="edit-history-title">Lần chỉnh sửa #{{ (int) $edit->edit_number }}</div>
+                                <div class="edit-history-meta">
+                                    {{ $edit->created_at?->format('H:i d/m/Y') }}
+                                    · {{ $edit->user?->name ?? 'Hệ thống' }}
+                                    · {{ $changedRows }} sản phẩm thay đổi
+                                </div>
+                                @if($edit->notes)
+                                    <div class="small mt-1" style="color:#334155;">Lý do: {{ $edit->notes }}</div>
+                                @endif
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#edit-detail-{{ $edit->id }}"
+                                aria-expanded="false"
+                                aria-controls="edit-detail-{{ $edit->id }}">
+                                Chi tiết chỉnh sửa
+                            </button>
+                        </div>
+
+                        <div id="edit-detail-{{ $edit->id }}" class="collapse px-3 pb-3">
+                            @if($changes->isEmpty())
+                                <div class="alert alert-light border mb-0">Không có thay đổi dòng sản phẩm.</div>
+                            @else
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0 edit-history-table">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Sản phẩm</th>
+                                                <th>SKU</th>
+                                                <th class="text-center">SL cũ</th>
+                                                <th class="text-center">SL mới</th>
+                                                <th class="text-center">Delta SL</th>
+                                                <th class="text-end">Giá cũ</th>
+                                                <th class="text-end">Giá mới</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($changes as $row)
+                                                @php
+                                                    $variantId = (int) ($row['variant_id'] ?? 0);
+                                                    $variant = $editVariants->get($variantId);
+                                                    $oldQty = (int) ($row['old_qty'] ?? 0);
+                                                    $newQty = (int) ($row['new_qty'] ?? 0);
+                                                    $deltaQty = $newQty - $oldQty;
+                                                    $oldCost = (float) ($row['old_cost'] ?? 0);
+                                                    $newCost = (float) ($row['new_cost'] ?? 0);
+                                                @endphp
+                                                <tr>
+                                                    <td>
+                                                        <div class="fw-600">{{ $variant?->name ?? ('Biến thể #' . $variantId) }}</div>
+                                                        <div class="text-muted small">{{ $variant?->product?->name ?? '—' }}</div>
+                                                    </td>
+                                                    <td><code>{{ $variant?->sku ?? '—' }}</code></td>
+                                                    <td class="text-center">{{ number_format($oldQty) }}</td>
+                                                    <td class="text-center fw-700">{{ number_format($newQty) }}</td>
+                                                    <td class="text-center {{ $deltaQty >= 0 ? 'text-success' : 'text-danger' }}">
+                                                        {{ $deltaQty >= 0 ? '+' : '' }}{{ number_format($deltaQty) }}
+                                                    </td>
+                                                    <td class="text-end">{{ number_format($oldCost) }}đ</td>
+                                                    <td class="text-end fw-700">{{ number_format($newCost) }}đ</td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                @endforeach
+            @endif
+        </div>
+    </div>
+</div>
+@endif
+
+</div>
+
+@php
+    $companyName = \App\Models\Setting::get('company_legal_name', \App\Models\Setting::get('brand_name', 'CÔNG TY CỔ PHẦN THỰC PHẨM HOÀNG LONG TNT'));
+    $companyAddress = \App\Models\Setting::get('company_address', \App\Models\Setting::get('address', ''));
+    $companyPhone = \App\Models\Setting::get('company_phone', \App\Models\Setting::get('phone', ''));
+    $companyTax = \App\Models\Setting::get('company_tax_code', '');
+    $companyLogo = 'https://hoanglongtnt.com/storage/media/1XrclAQJcTDneyC1SUTth1Qk976G0W20LO0e51oO.png';
+@endphp
+<div class="stockout-print-sheet">
+    <div class="print-company">
+        <div>
+            @if($companyLogo)
+                <img class="print-logo" src="{{ $companyLogo }}" alt="Logo công ty">
+            @endif
+            <div class="print-company-name">{{ $companyName }}</div>
+            @if($companyTax)<div class="print-company-info">MST: {{ $companyTax }}</div>@endif
+            @if($companyAddress)<div class="print-company-info">Địa chỉ: {{ $companyAddress }}</div>@endif
+            @if($companyPhone)<div class="print-company-info">Điện thoại: {{ $companyPhone }}</div>@endif
+        </div>
+        <div class="print-company-info" style="text-align:right;">Kho xuất: <strong>{{ $document->warehouse?->name ?? '—' }}</strong><br>Ngày phiếu: <strong>{{ $document->document_date->format('d/m/Y') }}</strong></div>
+    </div>
+    <div class="print-title">{{ $isImport ? 'PHIẾU NHẬP KHO' : 'PHIẾU GIAO HÀNG' }}</div>
+    <div class="print-subtitle">Số chứng từ: <strong>{{ $document->document_number ?? '#'.$document->id }}</strong></div>
+
+    <div class="print-info">
+        <div><span class="print-label">Khách hàng:</span> {{ $customer?->name ?? '—' }}</div>
+        <div><span class="print-label">Mã đơn:</span> {{ $linkedOrder?->code ?? '—' }}</div>
+        <div><span class="print-label">Người lập:</span> {{ $document->user?->name ?? '—' }}</div>
+        <div><span class="print-label">Địa chỉ giao:</span> {{ $linkedOrder?->recipient_address ?: $customer?->address ?: '—' }}</div>
+        <div><span class="print-label">Điện thoại:</span> {{ $linkedOrder?->recipient_phone ?: $customer?->phone ?: '—' }}</div>
+        <div><span class="print-label">Tài xế:</span> {{ $linkedOrder?->shipper?->name ?? '—' }}</div>
+        <div><span class="print-label">SĐT tài xế:</span> {{ $linkedOrder?->shipper?->phone ?? '—' }}</div>
+        <div><span class="print-label">Ghi chú:</span> {{ $document->notes ?: '—' }}</div>
+    </div>
+
+    <table class="print-table">
+        <thead><tr>
+            <th style="width:5%">STT</th><th style="width:10%">Mã hàng</th><th style="width:25%">Tên sản phẩm</th>
+            <th style="width:8%">ĐVT</th><th style="width:8%">Số lượng</th><th style="width:12%">Khối lượng</th>
+            @if(!$isImport)<th style="width:12%">Thực giao</th>@endif
+            <th style="width:10%">Đơn giá</th><th style="width:10%">Thành tiền</th>
+        </tr></thead>
+        <tbody>
+        @forelse($document->items as $i => $item)
+            @php
+                $unitLabel = $item->productVariant?->product?->unit_label ?? 'Cái';
+                $lineWeight = $packedOrder ? $documentLines[$item->id]['weight'] : (float) (($item->productVariant?->size ?? 0) * ($item->quantity ?? 0));
+                        if ($unitLabel === 'Cái') { $lineWeight = null; }
+            @endphp
+            <tr>
+                <td class="center">{{ $i + 1 }}</td>
+                <td class="center">{{ $item->productVariant?->sku ?? '—' }}</td>
+                <td><strong>{{ $item->productVariant?->product?->name ?? '—' }}</strong><br>{{ $item->productVariant?->name }}</td>
+                <td class="center">{{ $unitLabel }}</td>
+                <td class="center">{{ number_format($item->quantity) }}</td>
+                <td class="center">{{ $lineWeight !== null && ($packedOrder || strtolower((string) $unitLabel) === 'kg') ? format_kg($lineWeight) : '—' }}</td>
+                @if(!$isImport)<td class="actual-cell"></td>@endif
+                <td class="right">{{ number_format($item->unit_cost, 0, ',', '.') }}đ</td>
+                <td class="right">{{ number_format($documentLines[$item->id]['total'], 0, ',', '.') }}đ</td>
+            </tr>
+        @empty
+            <tr><td colspan="{{ $isImport ? 8 : 9 }}" class="center">Không có hàng hóa.</td></tr>
+        @endforelse
+        </tbody>
+    </table>
+
+    <table class="print-total">
+        <tr><td>Tổng số lượng</td><td>{{ number_format($document->items->sum('quantity')) }}</td></tr>
+        @if($packedOrder)
+            <tr><td>Khối lượng thực tế</td><td>{{ $documentPackedWeight !== null ? format_kg($documentPackedWeight) : '—' }}</td></tr>
+            @if($orderAdjustment != 0)<tr><td>Điều chỉnh đơn</td><td>{{ number_format(-$orderAdjustment, 0, ',', '.') }}đ</td></tr>@endif
+            @if($vatAmount > 0)<tr><td>VAT</td><td>{{ number_format($vatAmount, 0, ',', '.') }}đ</td></tr>@endif
+            @if($foamBoxFee > 0)<tr><td>Phí thùng xốp</td><td>{{ number_format($foamBoxFee, 0, ',', '.') }}đ</td></tr>@endif
+        @endif
+        <tr><td>Phí vận chuyển</td><td>{{ number_format($shippingFee, 0, ',', '.') }}đ</td></tr>
+        <tr><td>Tổng cộng</td><td>{{ number_format($grandTotal, 0, ',', '.') }}đ</td></tr>
+    </table>
+
+    <div class="print-signatures">
+        <div class="print-signature">NGƯỜI LẬP PHIẾU<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div>{{ $document->user?->name }}</div>
+        <div class="print-signature">NGƯỜI GIAO HÀNG<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div></div>
+        <div class="print-signature">NGƯỜI NHẬN HÀNG<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div></div>
+        <div class="print-signature">THỦ KHO<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div></div>
+    </div>
+</div>
+
+@endsection

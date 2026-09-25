@@ -1,0 +1,603 @@
+@extends(accounting_layout())
+
+@section('title', 'Thong Ke Ban Hang')
+@section('subtitle', 'Thong ke chi tiet tung dong hang hoa da ban theo ngay')
+
+@push('styles')
+<style>
+/* ── filter bar ── */
+.ds-filter { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 10px; align-items: end; }
+@media (max-width:1200px){ .ds-filter { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+@media (max-width:768px) { .ds-filter { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+
+/* ── KPI strip ── */
+.ds-kpi { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+.ds-kpi.ds-kpi-journal { grid-template-columns:repeat(4,minmax(0,1fr)); }
+@media (max-width:992px){ .ds-kpi, .ds-kpi.ds-kpi-journal { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+.ds-kpi-item { min-width:0; border:1px solid var(--acc-line,#e2e8f0); border-radius:10px; background:#fff; padding:9px 12px; }
+.ds-kpi-item .lbl { overflow:hidden; color:#64748b; font-size:10px; line-height:1.2; text-transform:uppercase; letter-spacing:.035em; white-space:nowrap; text-overflow:ellipsis; }
+.ds-kpi-item .val { overflow:hidden; font-size:18px; line-height:1.2; font-weight:800; color:#1e293b; margin-top:2px; white-space:nowrap; text-overflow:ellipsis; }
+.ds-kpi-item .sub { overflow:hidden; font-size:10px; line-height:1.25; color:#94a3b8; margin-top:2px; white-space:nowrap; text-overflow:ellipsis; }
+@media (max-width:575.98px){ .ds-kpi, .ds-kpi.ds-kpi-journal { grid-template-columns:minmax(0,1fr); } }
+
+/* ── product stats ── */
+.ds-prod-grid { display:grid; gap:6px; margin-top:8px; }
+.ds-prod-row  { display:grid; grid-template-columns:32px 2fr 80px 80px 100px 60px; gap:6px; border-radius:8px; padding:5px 8px; font-size:.78rem; align-items:center; }
+.ds-prod-head { background:#eef2f7; font-weight:700; font-size:.7rem; text-transform:uppercase; color:#64748b; letter-spacing:.03em; }
+.ds-prod-body { background:#f8fafc; border:1px solid #e5edf7; }
+@media (max-width:768px){
+    .ds-prod-row { grid-template-columns:24px 2fr 60px 60px; }
+    .ds-prod-row .hide-sm { display:none; }
+}
+
+/* ── table ── */
+.ds-table { font-size:.8rem; }
+.ds-table thead th { font-size:.7rem; text-transform:uppercase; color:#64748b; letter-spacing:.03em; white-space:nowrap; }
+.ds-table td { vertical-align:middle; white-space:nowrap; }
+.ds-adj-badge { font-size:9px; padding:1px 4px; border-radius:4px; background:#fef3c7; color:#92400e; border:1px solid #fcd34d; vertical-align:middle; }
+.ds-customer { font-weight:600; color:#1e293b; }
+.ds-customer-code { font-size:10px; color:#94a3b8; }
+.sort-link { color:inherit; text-decoration:none; white-space:nowrap; }
+.sort-link:hover { color:#3b82f6; }
+.sort-link .bi { font-size:.65rem; opacity:.5; }
+.sort-link.active .bi { opacity:1; color:#3b82f6; }
+.ds-priority-badge {
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:32px; height:32px; padding:0 7px; border-radius:999px;
+    background:#64748b; color:#fff; font-weight:800; font-size:.8rem;
+}
+.ds-adjustments-card { border-color:#86efac; background:#f0fdf4; }
+.ds-price-increase { color:#166534 !important; font-weight:800; }
+.ds-adjustment-list { display:grid; gap:8px; }
+.ds-adjustment-item { border:1px solid #bbf7d0; border-left:4px solid #22c55e; border-radius:9px; background:#fff; padding:9px 11px; }
+.ds-adjustment-changes { display:flex; flex-wrap:wrap; gap:6px; }
+.ds-change-chip { border-radius:6px; background:#f1f5f9; color:#334155; padding:3px 7px; font-size:.72rem; }
+.ds-change-fee { background:#fef3c7; color:#92400e; }
+
+/* ── toolbar ── */
+.ds-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:space-between; margin-bottom:10px; }
+</style>
+@endpush
+
+@section('accounting_content')
+
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link {{ $tab === 'overview' ? 'active' : '' }}"
+           href="{{ request()->fullUrlWithQuery(['tab' => 'overview', 'page' => 1]) }}">
+            <i class="bi bi-bar-chart me-1"></i>Thống kê bán hàng
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {{ $tab === 'journal' ? 'active' : '' }}"
+           href="{{ request()->fullUrlWithQuery(['tab' => 'journal', 'page' => 1]) }}">
+            <i class="bi bi-journal-text me-1"></i>Nhật ký bán hàng
+        </a>
+    </li>
+</ul>
+
+{{-- ── Filter ─────────────────────────────────────────────────────── --}}
+<div class="acc-card mb-3">
+    <div class="card-body">
+        <form method="GET" id="filterForm">
+            <input type="hidden" name="tab" value="{{ $tab }}">
+            <div class="ds-filter">
+                <div>
+                    <label class="form-label small fw-semibold">Từ ngày</label>
+                    <input type="date" class="form-control form-control-sm" name="from_date"
+                           value="{{ $fromDate }}" max="{{ now()->toDateString() }}">
+                </div>
+                <div>
+                    <label class="form-label small fw-semibold">Đến ngày</label>
+                    <input type="date" class="form-control form-control-sm" name="to_date"
+                           value="{{ $toDate }}" max="{{ now()->toDateString() }}">
+                </div>
+                <div>
+                    <label class="form-label small fw-semibold">Sale</label>
+                    <select class="form-select form-select-sm" name="sale_id">
+                        <option value="0">Tất cả sale</option>
+                        @foreach($sales as $s)
+                            <option value="{{ $s->id }}" {{ $saleId === $s->id ? 'selected' : '' }}>{{ $s->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label small fw-semibold">Khách hàng</label>
+                    <select class="form-select form-select-sm" name="customer_id" id="customerSelect">
+                        <option value="0">Tất cả khách</option>
+                        @foreach($customers as $c)
+                            <option value="{{ $c->id }}" {{ $customerId === $c->id ? 'selected' : '' }}>
+                                {{ $c->customer_code ? '[' . $c->customer_code . '] ' : '' }}{{ $c->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label small fw-semibold">Sắp xếp</label>
+                    <select class="form-select form-select-sm" name="sort">
+                        @php
+                            $sortOptions = [
+                                'date_desc'    => 'Ngày mới nhất',
+                                'date_asc'     => 'Ngày cũ nhất',
+                                'product_asc'  => 'Hàng hóa A-Z',
+                                'product_desc' => 'Hàng hóa Z-A',
+                                'amount_desc'  => 'Thành tiền giảm dần',
+                                'amount_asc'   => 'Thành tiền tăng dần',
+                                'qty_desc'     => 'Số lượng giảm dần',
+                                'qty_asc'      => 'Số lượng tăng dần',
+                                'weight_desc'  => 'Khối lượng giảm dần',
+                                'weight_asc'   => 'Khối lượng tăng dần',
+                            ];
+                        @endphp
+                        @foreach($sortOptions as $val => $label)
+                            <option value="{{ $val }}" {{ $sort === $val ? 'selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label small fw-semibold">Số dòng / trang</label>
+                    <div class="d-flex gap-2">
+                        <select class="form-select form-select-sm" name="per_page">
+                            @foreach([10, 20, 50, 100, 200] as $pp)
+                                <option value="{{ $pp }}" {{ $perPage === $pp ? 'selected' : '' }}>{{ $pp }}</option>
+                            @endforeach
+                        </select>
+                        <button class="btn btn-primary btn-sm px-3" type="submit">Lọc</button>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Quick date shortcuts --}}
+            <div class="d-flex gap-2 mt-2 flex-wrap">
+                @php
+                    $shortcuts = [
+                        'Hôm nay'   => [now()->toDateString(), now()->toDateString()],
+                        'Hôm qua'   => [now()->subDay()->toDateString(), now()->subDay()->toDateString()],
+                        '7 ngày'    => [now()->subDays(6)->toDateString(), now()->toDateString()],
+                        'Tháng này' => [now()->startOfMonth()->toDateString(), now()->toDateString()],
+                        'Tháng trước' => [now()->subMonth()->startOfMonth()->toDateString(), now()->subMonth()->endOfMonth()->toDateString()],
+                    ];
+                @endphp
+                @foreach($shortcuts as $label => [$f, $t])
+                    <button type="button" class="btn btn-xs btn-outline-secondary"
+                            onclick="setDates('{{ $f }}','{{ $t }}')">{{ $label }}</button>
+                @endforeach
+            </div>
+        </form>
+    </div>
+</div>
+
+@php
+// Strips trailing decimal zeros: 100,00 → 100 | 320,20 → 320,2 | 321,21 → 321,21
+$fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',', '.'), '0'), ',');
+@endphp
+
+@include('accounting.partials._completed_adjustments')
+
+@if($tab === 'journal')
+<div class="ds-kpi ds-kpi-journal">
+    <div class="ds-kpi-item">
+        <div class="lbl">Tổng tiền có thể thu</div>
+        <div class="val text-success">{{ number_format((float) $journalSummary['amount'], 0, ',', '.') }}đ</div>
+        <div class="sub">Chỉ gồm đơn đã hoàn thành giao hàng</div>
+    </div>
+    <div class="ds-kpi-item">
+        <div class="lbl">Tổng SL/KL quy đổi</div>
+        <div class="val text-primary">{{ $fmtN((float) $journalSummary['quantity']) }}</div>
+        <div class="sub">Bao gồm dòng VAT và thùng xốp</div>
+    </div>
+    <div class="ds-kpi-item">
+        <div class="lbl">Số đơn</div>
+        <div class="val">{{ number_format((int) $journalSummary['orders']) }}</div>
+        <div class="sub">Đủ điều kiện ghi nhật ký</div>
+    </div>
+    <div class="ds-kpi-item">
+        <div class="lbl">Số dòng</div>
+        <div class="val">{{ number_format((int) $journalSummary['rows']) }}</div>
+        <div class="sub">Sản phẩm và phụ phí</div>
+    </div>
+</div>
+
+<div class="acc-card">
+    <div class="card-body">
+        <div class="ds-toolbar">
+            <div>
+                <div class="fw-bold">Nhật ký bán hàng</div>
+                <div class="small text-muted">Dữ liệu được lập theo ngày lên đơn và chỉ xuất hiện sau khi đơn đã giao hàng.</div>
+            </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                <div class="small text-muted">Tổng <strong>{{ number_format($journalRows->total()) }}</strong> dòng</div>
+                <form method="POST" action="{{ route('accounting.daily-sales.google-sheets') }}">
+                    @csrf
+                    <input type="hidden" name="from_date" value="{{ $fromDate }}">
+                    <input type="hidden" name="to_date" value="{{ $toDate }}">
+                    <input type="hidden" name="sale_id" value="{{ $saleId }}">
+                    <input type="hidden" name="customer_id" value="{{ $customerId }}">
+                    <input type="hidden" name="sort" value="{{ $sort }}">
+                    <button class="btn btn-sm btn-success" type="submit" @disabled(! $googleSheetsConfigured)
+                            title="{{ $googleSheetsConfigured ? 'Ghi thêm các dòng chưa có và giữ nguyên cấu trúc trang tính' : 'Chưa cài khóa JSON của service account trên máy chủ' }}"
+                            onclick="return confirm('Ghi thêm dữ liệu các ngày đang lọc xuống cuối Google Sheets?')">
+                        <i class="bi bi-file-earmark-spreadsheet me-1"></i>Ghi thêm vào Google Sheets
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        @if(! $googleSheetsConfigured)
+            <div class="alert alert-warning py-2 mb-3">
+                Chưa có khóa JSON của service account
+                <strong>hlsheet@hoanglongtnt.iam.gserviceaccount.com</strong>
+                trên máy chủ. Hãy đặt khóa tại
+                <code>storage/app/google/service-account.json</code> để bật chức năng ghi dữ liệu.
+            </div>
+        @endif
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle ds-table">
+                <thead class="table-light">
+                    <tr>
+                        <th>Ngày tháng</th>
+                        <th class="text-center">Tháng</th>
+                        <th>Mã KH</th>
+                        <th>Khách hàng</th>
+                        <th>NVKD</th>
+                        <th>Sản phẩm</th>
+                        <th class="text-end">SL</th>
+                        <th class="text-end">Kg/con</th>
+                        <th class="text-end">Tổng</th>
+                        <th class="text-end">Đơn giá</th>
+                        <th class="text-end">Tổng tiền</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($journalRows as $row)
+                        <tr>
+                            <td>
+                                <a href="{{ route('accounting.orders.detail', $row->order_id) }}" class="text-decoration-none" title="Đơn {{ $row->order_code }}">
+                                    {{ \Carbon\Carbon::parse($row->entry_date)->format('d/m/Y') }}
+                                </a>
+                            </td>
+                            <td class="text-center">{{ $row->entry_month }}</td>
+                            <td class="fw-semibold">{{ $row->customer_code !== '' ? $row->customer_code : '—' }}</td>
+                            <td>{{ $row->customer_name }}</td>
+                            <td>{{ $row->sale_name !== '' ? $row->sale_name : '—' }}</td>
+                            <td class="fw-semibold">
+                                {{ $row->unit }}
+                                @if(($row->entry_type ?? 'product') === 'fee')
+                                    <span class="badge {{ ($row->direction ?? 'charge') === 'discount' ? 'text-bg-danger' : 'text-bg-success' }} ms-1">
+                                        {{ ($row->direction ?? 'charge') === 'discount' ? 'Giảm trừ' : 'Cộng thêm' }}
+                                    </span>
+                                @endif
+                                @if($row->adjustment_id ?? null)
+                                    <a class="ds-adj-badge text-decoration-none ms-1"
+                                       href="{{ route('site.order-adjustments.show', $row->adjustment_id) }}"
+                                       target="_blank" title="Xem yêu cầu điều chỉnh đã áp dụng">
+                                        Đ/C #{{ $row->adjustment_id }}
+                                    </a>
+                                @endif
+                            </td>
+                            <td class="text-end">{{ $fmtN((float) $row->quantity, 1) }}</td>
+                            <td class="text-end">{{ $fmtN((float) $row->unit_weight, 2) }}</td>
+                            <td class="text-end">{{ $fmtN((float) $row->total_quantity, 1) }}</td>
+                            <td class="text-end">{{ $row->unit_price === null ? '—' : number_format((float) $row->unit_price, 0, ',', '.') }}</td>
+                            <td class="text-end fw-bold {{ (float) $row->total_amount < 0 ? 'text-danger' : 'text-success' }}">
+                                {{ (float) $row->total_amount == 0.0 ? '—' : number_format((float) $row->total_amount, 0, ',', '.') }}
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="11" class="text-center text-muted py-4">Không có đơn đã giao hoặc hoàn tất trong khoảng ngày này.</td></tr>
+                    @endforelse
+                </tbody>
+                @if($journalRows->isNotEmpty())
+                    <tfoot class="table-light fw-semibold">
+                        <tr>
+                            <td colspan="8" class="text-end">Tổng trang:</td>
+                            <td class="text-end">{{ $fmtN((float) $journalRows->sum('total_quantity'), 1) }}</td>
+                            <td></td>
+                            <td class="text-end text-success">{{ number_format((float) $journalRows->sum('total_amount'), 0, ',', '.') }}đ</td>
+                        </tr>
+                    </tfoot>
+                @endif
+            </table>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+            <div class="text-muted small">
+                Hiển thị {{ $journalRows->firstItem() ?? 0 }}–{{ $journalRows->lastItem() ?? 0 }} / {{ number_format($journalRows->total()) }} dòng
+            </div>
+            {{ $journalRows->links() }}
+        </div>
+    </div>
+</div>
+@else
+{{-- ── KPI ──────────────────────────────────────────────────────────── --}}
+<div class="ds-kpi">
+    <div class="ds-kpi-item">
+        <div class="lbl">Tổng thành tiền</div>
+        <div class="val text-success">{{ number_format((float)($summary->grand_total ?? 0), 0, ',', '.') }}đ</div>
+        <div class="sub">Đã áp dụng điều chỉnh được duyệt</div>
+    </div>
+    <div class="ds-kpi-item">
+        <div class="lbl">Tổng khối lượng</div>
+        <div class="val text-info">{{ $fmtN((float)($summary->grand_weight ?? 0)) }} kg</div>
+        <div class="sub">&nbsp;</div>
+    </div>
+    <div class="ds-kpi-item">
+        <div class="lbl">Số dòng / đơn</div>
+        <div class="val">{{ number_format((int)($summary->item_count ?? 0)) }}</div>
+        <div class="sub">{{ number_format((int)($summary->order_count ?? 0)) }} đơn hàng</div>
+    </div>
+    <div class="ds-kpi-item">
+        <div class="lbl">Tổng chi phí ship</div>
+        <div class="val text-primary">{{ number_format((float)($summary->total_shipping_fee ?? 0), 0, ',', '.') }}đ</div>
+        <div class="sub">Theo đơn trong khoảng ngày đã lọc</div>
+    </div>
+    <div class="ds-kpi-item">
+        @php $totalAdjustment = (float) ($summary->total_adjustment ?? 0); @endphp
+        <div class="lbl">Tổng điều chỉnh</div>
+        <div class="val {{ $totalAdjustment > 0 ? 'ds-price-increase' : ($totalAdjustment < 0 ? 'text-danger' : 'text-muted') }}">{{ $totalAdjustment > 0 ? '+' : '' }}{{ number_format($totalAdjustment, 0, ',', '.') }}đ</div>
+        <div class="sub">Giảm: {{ number_format((float) ($summary->total_discount ?? 0), 0, ',', '.') }}đ · Tăng: {{ number_format((float) ($summary->total_increase ?? 0), 0, ',', '.') }}đ</div>
+        <div class="sub">Gồm chênh lệch giá sản phẩm và điều chỉnh thêm của đơn</div>
+    </div>
+</div>
+
+{{-- ── Product stats ────────────────────────────────────────────────── --}}
+@if($productStats->isNotEmpty())
+<div class="acc-card mb-3">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="fw-semibold text-muted small text-uppercase" style="letter-spacing:.06em;">
+                Hàng - Số lượng
+                <span class="fw-normal">({{ $productStats->count() }} sản phẩm)</span>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleProdStats">
+                <i class="bi bi-chevron-expand"></i> Chi tiết
+            </button>
+        </div>
+
+        <div id="prodStatsWrap" class="d-none">
+            <div class="ds-prod-grid mt-2">
+                <div class="ds-prod-row ds-prod-head">
+                    <div>STT</div>
+                    <div>Sản phẩm</div>
+                    <div>Số lượng</div>
+                    <div class="hide-sm">Khối lượng</div>
+                    <div>Thành tiền</div>
+                    <div class="hide-sm">ĐVT</div>
+                </div>
+                @foreach($productStats as $i => $ps)
+                <div class="ds-prod-row ds-prod-body">
+                    <div class="text-muted">{{ $i + 1 }}</div>
+                    <div class="fw-semibold">{{ $ps->product_name }}</div>
+                    <div class="text-primary fw-bold">
+                        {{ $fmtN((float)$ps->total_qty) }}
+                    </div>
+                    <div class="text-muted hide-sm">
+                        {{ $fmtN((float)$ps->total_weight) }}
+                    </div>
+                    <div class="fw-semibold">{{ number_format((float)$ps->total_amount, 0, ',', '.') }}đ</div>
+                    <div class="text-muted hide-sm">{{ \App\Enums\ProductUnit::tryFrom($ps->product_unit ?? '')?->label() ?? 'Cái' }}</div>
+                </div>
+                @endforeach
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
+{{-- ── Data table ───────────────────────────────────────────────────── --}}
+<div class="acc-card">
+    <div class="card-body">
+        {{-- Toolbar --}}
+        <div class="ds-toolbar">
+            <div class="small text-muted">
+                Trang {{ $items->currentPage() }} / {{ $items->lastPage() }} —
+                tổng <strong>{{ number_format($items->total()) }}</strong> dòng
+                @if($fromDate !== $toDate)
+                    ({{ \Carbon\Carbon::parse($fromDate)->format('d/m/Y') }} – {{ \Carbon\Carbon::parse($toDate)->format('d/m/Y') }})
+                @else
+                    ({{ \Carbon\Carbon::parse($fromDate)->format('d/m/Y') }})
+                @endif
+            </div>
+            <div class="small text-muted">
+                <i class="bi bi-exclamation-circle text-warning"></i>
+                <span class="ds-adj-badge">Đ/C</span> = số liệu đã được điều chỉnh duyệt
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover align-middle ds-table">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th class="text-center">Ưu tiên</th>
+                        <th>
+                            <a href="{{ request()->fullUrlWithQuery(['sort' => $sort === 'date_asc' ? 'date_desc' : 'date_asc', 'page' => 1]) }}"
+                               class="sort-link {{ in_array($sort, ['date_asc','date_desc']) ? 'active' : '' }}">
+                                Ngày
+                                <i class="bi bi-{{ $sort === 'date_asc' ? 'sort-up' : ($sort === 'date_desc' ? 'sort-down' : 'sort') }}"></i>
+                            </a>
+                        </th>
+                       
+                        <th>Sale</th>
+                        <th>Khách hàng</th>
+                        <th>
+                            <a href="{{ request()->fullUrlWithQuery(['sort' => $sort === 'product_asc' ? 'product_desc' : 'product_asc', 'page' => 1]) }}"
+                               class="sort-link {{ in_array($sort, ['product_asc','product_desc']) ? 'active' : '' }}">
+                                Hàng hóa
+                                <i class="bi bi-{{ $sort === 'product_asc' ? 'sort-up' : ($sort === 'product_desc' ? 'sort-down' : 'sort') }}"></i>
+                            </a>
+                        </th>
+                        <th>Size</th>
+                        <th class="text-center">
+                            <a href="{{ request()->fullUrlWithQuery(['sort' => $sort === 'qty_asc' ? 'qty_desc' : 'qty_asc', 'page' => 1]) }}"
+                               class="sort-link {{ in_array($sort, ['qty_asc','qty_desc']) ? 'active' : '' }}">
+                                Số lượng
+                                <i class="bi bi-{{ $sort === 'qty_asc' ? 'sort-up' : ($sort === 'qty_desc' ? 'sort-down' : 'sort') }}"></i>
+                            </a>
+                        </th>
+                        <th>ĐVT</th>
+                        <th class="text-center">
+                            <a href="{{ request()->fullUrlWithQuery(['sort' => $sort === 'weight_asc' ? 'weight_desc' : 'weight_asc', 'page' => 1]) }}"
+                               class="sort-link {{ in_array($sort, ['weight_asc','weight_desc']) ? 'active' : '' }}">
+                                Khối lượng
+                                <i class="bi bi-{{ $sort === 'weight_asc' ? 'sort-up' : ($sort === 'weight_desc' ? 'sort-down' : 'sort') }}"></i>
+                            </a>
+                        </th>
+                        <th class="text-center" title="Giá công ty áp dụng cho đơn trước điều chỉnh">Giá HL</th>
+                        <th class="text-center">Đơn giá </th>
+                        <th class="text-end">
+                            <a href="{{ request()->fullUrlWithQuery(['sort' => $sort === 'amount_asc' ? 'amount_desc' : 'amount_asc', 'page' => 1]) }}"
+                               class="sort-link {{ in_array($sort, ['amount_asc','amount_desc']) ? 'active' : '' }}">
+                                Thành tiền
+                                <i class="bi bi-{{ $sort === 'amount_asc' ? 'sort-up' : ($sort === 'amount_desc' ? 'sort-down' : 'sort') }}"></i>
+                            </a>
+                        </th>
+                        <th class="text-end">Điều chỉnh</th>
+                    </tr>
+                </thead>
+                <tbody>
+                @php $rowNo = ($items->currentPage() - 1) * $items->perPage() + 1; @endphp
+                @forelse($items as $row)
+                    @php
+                        $adjFlag   = (bool) $row->has_adj;
+                        $effQty    = (float) $row->eff_qty;
+                        $effPrice  = (float) $row->eff_price;
+                        $effWeight = (float) $row->eff_weight;
+                        $effTotal  = (float) $row->eff_total;
+                        $priceAdjustment = (float) ($row->price_adjustment ?? 0);
+
+                        $unitLabel = \App\Enums\ProductUnit::tryFrom($row->product_unit ?? '')?->label() ?? 'Cái';
+
+                        // Display weight: show kg if priced by kg or weight > 0
+                        $showWeight = $effWeight > 0 ? $fmtN($effWeight) : '—';
+                        $showQty    = $fmtN($effQty);
+
+                        // Short customer name: use customer_code if exists, else first 2 words of name
+                        $custShort = trim($row->customer_code ?? '');
+                        if (!$custShort && $row->customer_name) {
+                            $parts = explode(' ', trim($row->customer_name));
+                            $custShort = implode(' ', array_slice($parts, -2)); // last 2 words
+                        }
+
+                        // Variant label: size + name
+                        $variantLabel = trim(($row->variant_size ?? '') . ' ' . ($row->variant_name ?? ''));
+                    @endphp
+                    <tr>
+                        <td class="text-muted">{{ $rowNo++ }}</td>
+                        <td class="text-center">
+                            <span class="ds-priority-badge" title="Số thứ tự ưu tiên của đơn">
+                                {{ $row->daily_sequence ?? '—' }}
+                            </span>
+                        </td>
+                        <td>
+                            <a href="{{ route('orders.show', $row->order_id_val) }}" class="text-decoration-none small" target="_blank">
+                                {{ \Carbon\Carbon::parse($row->order_date)->format('d/m') }}
+                            </a>
+                             
+                        </td>
+                        
+                        <td class="text-muted">{{ $row->sale_name ?? '—' }}</td>
+                        <td>
+                            <div class="ds-customer" title="{{ $row->customer_name }}">{{ $custShort }}</div>
+                            @if($row->customer_code && $row->customer_name !== $custShort)
+                                <div class="ds-customer-code">{{ $row->customer_name }}</div>
+                            @endif
+                        </td>
+                        <td>
+                            <div class="fw-semibold" style="max-width:160px">{{ $row->product_name }}</div>
+                            @if($row->adjustment_id ?? null)
+                                <a class="ds-adj-badge text-decoration-none"
+                                   href="{{ route('site.order-adjustments.show', $row->adjustment_id) }}"
+                                   target="_blank" title="Xem yêu cầu điều chỉnh đã áp dụng">
+                                    Đ/C #{{ $row->adjustment_id }}
+                                </a>
+                            @endif
+                        </td>
+                        <td class="text-muted small">
+                            {{ $row->variant_size ?: '—' }}
+                        </td>
+                        <td class="text-center text-primary fw-bold">
+                            <span class="fw-semibold">{{ $showQty }}</span>
+                        </td>
+                        <td class="text-muted small">{{ $unitLabel }}</td>
+                        <td class="text-center text-muted">{{ $showWeight }}</td>
+                        <td class="text-center">{{ number_format((float) $row->company_price, 0, ',', '.') }}</td>
+                        <td class="text-center">
+                            {{ number_format($effPrice, 0, ',', '.') }}
+                        </td>
+                        <td class="text-end fw-bold text-success">
+                            {{ number_format($effTotal, 0, ',', '.') }}
+                        </td>
+                        <td class="text-end fw-bold {{ $priceAdjustment > 0 ? 'ds-price-increase' : ($priceAdjustment < 0 ? 'text-danger' : 'text-muted') }}">
+                            {{ $priceAdjustment != 0 ? ($priceAdjustment > 0 ? '+' : '').number_format($priceAdjustment, 0, ',', '.').'đ' : '—' }}
+                        </td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="14" class="text-center text-muted py-4">
+                            <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                            Không có dữ liệu cho bộ lọc này.
+                        </td>
+                    </tr>
+                @endforelse
+                </tbody>
+                @if($items->isNotEmpty())
+                <tfoot class="table-light fw-semibold">
+                    <tr>
+                        <td colspan="7" class="text-end text-muted small">Tổng trang này:</td>
+                        <td class="text-end">
+                            {{ $fmtN((float)$items->sum('eff_qty')) }}
+                        </td>
+                        <td></td>
+                        <td class="text-end">
+                            {{ $fmtN((float)$items->sum('eff_weight')) }}
+                        </td>
+                        <td></td>
+                        <td></td>
+                        <td class="text-end text-success">
+                            {{ number_format($items->sum('eff_total'), 0, ',', '.') }}đ
+                        </td>
+                        @php $pageAdjustment = (float) $items->sum('price_adjustment'); @endphp
+                        <td class="text-end {{ $pageAdjustment > 0 ? 'ds-price-increase' : ($pageAdjustment < 0 ? 'text-danger' : 'text-muted') }}">
+                            {{ $pageAdjustment > 0 ? '+' : '' }}{{ number_format($pageAdjustment, 0, ',', '.') }}đ
+                        </td>
+                    </tr>
+                </tfoot>
+                @endif
+            </table>
+        </div>
+
+        {{-- Pagination --}}
+        <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+            <div class="text-muted small">
+                Hiển thị {{ $items->firstItem() }}–{{ $items->lastItem() }} / {{ number_format($items->total()) }} dòng
+            </div>
+            {{ $items->links() }}
+        </div>
+    </div>
+</div>
+
+@endif
+@endsection
+
+@push('scripts')
+<script>
+// Date shortcuts
+function setDates(from, to) {
+    document.querySelector('[name=from_date]').value = from;
+    document.querySelector('[name=to_date]').value   = to;
+    document.getElementById('filterForm').submit();
+}
+
+// Product stats toggle
+document.getElementById('toggleProdStats')?.addEventListener('click', function () {
+    const wrap = document.getElementById('prodStatsWrap');
+    const isHidden = wrap.classList.contains('d-none');
+    wrap.classList.toggle('d-none', !isHidden);
+    this.innerHTML = isHidden
+        ? '<i class="bi bi-chevron-contract"></i> Thu gọn'
+        : '<i class="bi bi-chevron-expand"></i> Chi tiết';
+});
+</script>
+@endpush

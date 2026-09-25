@@ -1,0 +1,1264 @@
+<?php
+
+namespace App\Http\Controllers\Api\Mobile;
+
+use App\Http\Controllers\WarehouseDashboardController;
+use App\Models\Inventory;
+use App\Models\InventoryDocument;
+use App\Models\InventoryDocumentItem;
+use App\Models\Order;
+use App\Models\OrderHistory;
+use App\Models\OrderReturn;
+use App\Models\ProductCuttingBatch;
+use App\Models\ProductVariant;
+use App\Models\TaskAssignment;
+use App\Models\Warehouse;
+use App\Models\WarehouseInventoryTransfer;
+use App\Models\WarehouseTransfer;
+use App\Services\ProductCuttingService;
+use App\Services\WarehouseInventorySummaryService;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+
+class WarehouseApiController extends BaseApiController
+{
+    public function dashboard(Request $request): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $user = $request->user();
+        $warehouseId = $user->warehouse_id ? (int) $user->warehouse_id : null;
+        $date = $request->filled('date')
+            ? Carbon::parse($request->query('date'))->toDateString()
+            : now()->toDateString();
+        $readyToPackStatuses = ['approved', Order::STATUS_READY_TO_PACK];
+        $packedStatuses = ['packed', Order::STATUS_READY_TO_SHIP];
+
+        $applyWarehouseScope = function ($query) use ($warehouseId, $user, $readyToPackStatuses) {
+            if ($warehouseId && $user?->hasRole('warehouse')) {
+                $query->where(function ($warehouseScope) use ($warehouseId, $readyToPackStatuses) {
+                    $warehouseScope->where('warehouse_id', $warehouseId)
+                        ->orWhere(function ($sharedScope) use ($readyToPackStatuses) {
+                            $sharedScope->whereNull('warehouse_id')
+                                ->whereIn('status', array_merge($readyToPackStatuses, [Order::STATUS_PACKING]));
+                        });
+                });
+            }
+
+            return $query;
+        };
+
+        $dailyOrdersQuery = Order::query()
+            ->with('customer:id,name,phone,address')
+            ->whereDate('created_at', $date);
+
+        $applyWarehouseScope($dailyOrdersQuery);
+
+        $stats = [
+            'ready_to_pack' => $applyWarehouseScope(Order::query())
+                ->whereIn('status', $readyToPackStatuses)
+                ->whereDate('created_at', $date)
+                ->count(),
+            'packed' => $applyWarehouseScope(Order::query())
+                ->whereIn('status', $packedStatuses)
+                ->whereDate('updated_at', $date)
+                ->count(),
+            'packing' => $applyWarehouseScope(Order::query())
+                ->where('status', Order::STATUS_PACKING)
+                ->whereDate('created_at', $date)
+                ->count(),
+            'returning' => $applyWarehouseScope(Order::query())
+                ->where('status', Order::STATUS_RETURNING)
+                ->whereDate('created_at', $date)
+                ->count(),
+            'returned' => 0,
+            'assigned_tasks' => 0,
+            'completed_tasks' => 0,
+            'transfers_incoming' => WarehouseTransfer::query()
+                ->where('target_warehouse_id', $warehouseId)
+                ->whereIn('status', [
+                    WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                    WarehouseTransfer::STATUS_IN_TRANSIT,
+                    WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                ])
+                ->count(),
+            'transfers_completed' => WarehouseTransfer::query()
+                ->where('target_warehouse_id', $warehouseId)
+                ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
+                ->whereDate('updated_at', $date)
+                ->count(),
+            'done_today' => $applyWarehouseScope(Order::query())
+                ->whereIn('status', $packedStatuses)
+                ->whereDate('updated_at', $date)
+                ->count(),
+            'orders_in_day' => (clone $dailyOrdersQuery)->count(),
+            'receiving' => WarehouseInventoryTransfer::query()
+                ->where('target_warehouse_id', $warehouseId)
+                ->where('status', WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)
+                ->count(),
+            'received' => WarehouseInventoryTransfer::query()
+                ->where('target_warehouse_id', $warehouseId)
+                ->where('status', WarehouseInventoryTransfer::STATUS_RECEIVED_COMPLETED)
+                ->whereDate('updated_at', $date)
+                ->count(),
+        ];
+
+        $tasks = collect([
+            [
+                'key' => 'orders',
+                'label' => 'Đơn cần đóng gói',
+                'total' => ($stats['ready_to_pack'] ?? 0) + ($stats['packing'] ?? 0) + ($stats['packed'] ?? 0),
+                'done' => $stats['packed'] ?? 0,
+                'route_key' => 'orders',
+            ],
+            [
+                'key' => 'incoming_transfers',
+                'label' => 'Tiếp nhận',
+                'total' => ($stats['transfers_incoming'] ?? 0) + ($stats['transfers_completed'] ?? 0)
+                    + ($stats['receiving'] ?? 0) + ($stats['received'] ?? 0),
+                'done' => ($stats['transfers_completed'] ?? 0) + ($stats['received'] ?? 0),
+                'route_key' => 'incoming_transfers',
+            ],
+            [
+                'key' => 'returns',
+                'label' => 'Tiếp nhận đơn hoàn trả',
+                'total' => ($stats['returning'] ?? 0) + ($stats['returned'] ?? 0),
+                'done' => $stats['returned'] ?? 0,
+                'route_key' => 'returns',
+            ],
+            [
+                'key' => 'tasks',
+                'label' => 'Nhiệm vụ được giao',
+                'total' => ($stats['assigned_tasks'] ?? 0) + ($stats['completed_tasks'] ?? 0),
+                'done' => $stats['completed_tasks'] ?? 0,
+                'route_key' => 'tasks',
+            ],
+        ])->map(function (array $task, int $index) {
+            $total = (int) $task['total'];
+            $done = (int) $task['done'];
+            $status = $this->dashboardTaskStatus($total, $done);
+            $percent = $total > 0 ? (int) round($done / $total * 100) : 0;
+
+            return array_merge($task, [
+                'sequence' => $index + 1,
+                'total' => $total,
+                'done' => $done,
+                'percent' => $percent,
+                'status' => $status,
+                'status_label' => match ($status) {
+                    'todo' => 'Cần làm',
+                    'inprogress' => 'Đang làm',
+                    'done' => 'Đã hoàn thành',
+                    default => 'Chưa có nhiệm vụ',
+                },
+                'color' => match ($status) {
+                    'todo' => '#dc3545',
+                    'inprogress' => '#f59e42',
+                    'done' => '#198754',
+                    default => '#b0b0b0',
+                },
+            ]);
+        })->values();
+
+        $inventorySummaryService = app(WarehouseInventorySummaryService::class);
+        $currentInventorySummary = $inventorySummaryService->build($warehouseId);
+        $summaryRows = $currentInventorySummary['rows']
+            ->filter(fn ($row) => (int) $row['closing'] > 0)
+            ->map(function ($row) {
+                $row['variants'] = $row['variants']->filter(fn ($variant) => (int) $variant['closing'] > 0)->values();
+
+                return $row;
+            })
+            ->values();
+        $cuttingShortages = app(ProductCuttingService::class)->missingCutProducts($warehouseId);
+
+        $recentPacked = $applyWarehouseScope(Order::with('customer:id,name'))
+            ->whereIn('status', $packedStatuses)
+            ->whereDate('updated_at', $date)
+            ->orderByDesc('updated_at')
+            ->take(5)
+            ->get()
+            ->map(fn (Order $order, int $index) => [
+                'sequence' => $index + 1,
+                'id' => (int) $order->id,
+                'code' => (string) ($order->code ?? ('#'.$order->id)),
+                'customer_name' => (string) ($order->customer?->name ?? '—'),
+                'total' => (float) ($order->total ?? 0),
+                'updated_time' => optional($order->updated_at)->format('H:i'),
+                'updated_at' => optional($order->updated_at)->toIso8601String(),
+            ])
+            ->values();
+
+        $reminders = $tasks
+            ->filter(fn ($task) => (int) $task['total'] > 0 && (int) $task['done'] < (int) $task['total'])
+            ->map(fn ($task) => [
+                'label' => $task['label'],
+                'percent' => $task['percent'],
+                'message' => ((int) $task['done'] === 0) ? 'Hãy bắt đầu ngay!' : 'Hãy tiếp tục...',
+            ])
+            ->values();
+
+        return $this->ok([
+            'selected_date' => $date,
+            'stats' => $stats,
+            'tasks' => $tasks,
+            'receiving_alert' => [
+                'show' => ($stats['receiving'] ?? 0) > 0,
+                'count' => $stats['receiving'] ?? 0,
+                'message' => 'Cần tiếp nhận hàng: Hiện có '.($stats['receiving'] ?? 0).' phiếu điều chuyển chờ tiếp nhận!',
+                'route_key' => 'incoming_inventory_transfers',
+            ],
+            'legend' => [
+                ['label' => 'Cần làm', 'color' => '#dc3545'],
+                ['label' => 'Đang làm', 'color' => '#f59e42'],
+                ['label' => 'Đã hoàn thành', 'color' => '#198754'],
+                ['label' => 'Chưa có nhiệm vụ', 'color' => '#b0b0b0'],
+            ],
+            'work_reminders' => $reminders,
+            'changes' => [
+                ['icon' => 'edit', 'label' => 'Yêu cầu thay đổi đơn hàng từ sale', 'badge' => 'Mới', 'color' => '#0d6efd', 'badge_color' => '#0dcaf0'],
+                ['icon' => 'chat', 'label' => 'Sale trả lời khách hàng', 'badge' => 'Đã trả lời', 'color' => '#198754', 'badge_color' => '#198754'],
+                ['icon' => 'truck', 'label' => 'Phiếu điều chuyển kho chờ ship nhận', 'badge' => 'Chờ ship', 'color' => '#ffc107', 'badge_color' => '#ffc107'],
+            ],
+            'inventory_summary' => [
+                'title' => 'Danh sách thống kê tồn kho (sản phẩm và biến thể cùng một cấu trúc cột)',
+                'totals' => [
+                    'opening' => (int) $summaryRows->sum('opening'),
+                    'import' => (int) $summaryRows->sum('import'),
+                    'reserved' => (int) $summaryRows->sum('reserved'),
+                    'export' => (int) $summaryRows->sum('export'),
+                    'closing' => (int) $summaryRows->sum('closing'),
+                ],
+                'rows' => $summaryRows,
+            ],
+            'other_warehouse_summaries' => [],
+            'cutting_shortages' => $cuttingShortages,
+            'recent_packed' => $recentPacked,
+        ]);
+    }
+
+    public function orders(Request $request): JsonResponse
+    {
+        $this->ensurePackingRole($request);
+        $status = (string) $request->query('status', '');
+        $date = (string) $request->query('date', now()->toDateString());
+        $user = $request->user();
+        $warehouseId = $user->warehouse_id ? (int) $user->warehouse_id : null;
+        $sharedQueueStatuses = ['approved', Order::STATUS_READY_TO_PACK, Order::STATUS_PACKING];
+
+        $query = Order::query()
+            ->with([
+                'customer:id,name,phone,address,delivery_time,delivery_time_note',
+                'warehouse:id,name',
+                'histories:id,order_id,action,user_id',
+                'items.product:id,name,unit,product_type,allow_adjacent_packing_sizes',
+                'items.variant' => fn ($q) => $q->withAvailableStock()->with('product:id,name,unit,product_type,allow_adjacent_packing_sizes'),
+            ])
+            ->where(function ($q) {
+                $q->whereNull('is_return_order')->orWhere('is_return_order', false);
+            })
+            ->whereDate('created_at', $date)
+            ->when($warehouseId && $user->hasRole('warehouse'), function ($q) use ($warehouseId, $sharedQueueStatuses) {
+                $q->where(function ($warehouseScope) use ($warehouseId, $sharedQueueStatuses) {
+                    $warehouseScope->where('warehouse_id', $warehouseId)
+                        ->orWhere(function ($sharedScope) use ($sharedQueueStatuses) {
+                            $sharedScope->whereNull('warehouse_id')
+                                ->whereIn('status', $sharedQueueStatuses);
+                        });
+                });
+            });
+
+        if ($status !== '') {
+            $query->where('status', $status);
+        } else {
+            $query->whereIn('status', ['approved', Order::STATUS_READY_TO_PACK, Order::STATUS_PACKING, 'packed', Order::STATUS_READY_TO_SHIP]);
+        }
+
+        $orders = $query
+            ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('daily_sequence')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->paginate(50);
+
+        $this->attachCustomerFeedbackContext($orders->getCollection());
+        $orders->getCollection()->transform(fn (Order $order) => $this->warehouseOrderPayload($order, $warehouseId));
+
+        return $this->paginated($orders);
+    }
+
+    public function startPacking(Request $request, Order $order): JsonResponse
+    {
+        $this->ensurePackingRole($request);
+
+        return $this->callWebWarehouseAction($request, fn () => app(WarehouseDashboardController::class)->startPacking($request, $order));
+    }
+
+    public function completePacking(Request $request, Order $order): JsonResponse
+    {
+        $this->ensurePackingRole($request);
+
+        return $this->callWebWarehouseAction($request, fn () => app(WarehouseDashboardController::class)->completePacking($request, $order));
+    }
+
+    public function undoStartPacking(Request $request, Order $order): JsonResponse
+    {
+        $this->ensurePackingRole($request);
+
+        return $this->callWebWarehouseAction($request, fn () => app(WarehouseDashboardController::class)->returnToReadyToPack($request, $order));
+    }
+
+    public function updateLogistics(Request $request, Order $order): JsonResponse
+    {
+        $this->ensurePackingRole($request);
+
+        return $this->callWebWarehouseAction($request, fn () => app(WarehouseDashboardController::class)->updateLogistics($request, $order));
+    }
+
+    public function updatePackingSizeAllocation(Request $request, Order $order): JsonResponse
+    {
+        $this->ensurePackingRole($request);
+        return $this->callWebWarehouseAction($request, fn () => app(WarehouseDashboardController::class)->updatePackingSizeAllocation($request, $order));
+    }
+
+    public function requestAdjustment(Request $request, Order $order): JsonResponse
+    {
+        $this->ensurePackingRole($request);
+
+        return $this->callWebWarehouseAction($request, fn () => app(WarehouseDashboardController::class)->requestAdjustment($request, $order));
+    }
+
+    public function inventory(Request $request): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $warehouseId = $request->user()->warehouse_id ? (int) $request->user()->warehouse_id : null;
+        $date = $request->filled('date')
+            ? Carbon::parse($request->query('date'))->toDateString()
+            : now()->toDateString();
+        $summary = app(WarehouseInventorySummaryService::class)->build($warehouseId);
+        $rows = $summary['rows'];
+        $search = mb_strtolower(trim((string) $request->query('search', '')));
+        if ($search !== '') {
+            $rows = $rows->filter(fn ($row) => str_contains(mb_strtolower((string) $row['name']), $search)
+                || $row['variants']->contains(fn ($variant) => str_contains(mb_strtolower((string) $variant['name']), $search)));
+        }
+
+        return $this->ok([
+            'selected_date' => $date,
+            'warehouses' => Warehouse::query()
+                ->when($warehouseId, fn ($query) => $query->whereKey($warehouseId))
+                ->get(['id', 'name'])
+                ->map(fn (Warehouse $warehouse) => ['id' => (int) $warehouse->id, 'name' => (string) $warehouse->name])
+                ->values(),
+            'rows' => $rows->values(),
+            'totals' => $summary['totals'],
+            'cutting_shortages' => app(ProductCuttingService::class)->missingCutProducts($warehouseId),
+        ]);
+    }
+
+    public function cuttingOptions(Request $request, ProductVariant $variant): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $warehouseId = $request->user()->warehouse_id ? (int) $request->user()->warehouse_id : null;
+        $variant->loadMissing('product');
+        if ($variant->product?->product_type !== \App\Models\Product::TYPE_CUT) {
+            return $this->fail('Sản phẩm không phải hàng pha lóc.', 422);
+        }
+
+        $service = app(ProductCuttingService::class);
+        $materials = $service->sourceMaterials($variant, $warehouseId);
+        $selectedMaterials = collect($request->query('materials', []))->map(fn ($row) => [
+            'variant_id' => (int) ($row['variant_id'] ?? 0),
+            'quantity' => max(0, (float) ($row['quantity'] ?? 0)),
+        ])->filter(fn ($row) => $row['variant_id'] > 0 && $row['quantity'] > 0)->values()->all();
+
+        return $this->ok([
+            'target_variant_id' => (int) $variant->id,
+            'materials' => $materials,
+            'preview' => $service->preview($variant, $selectedMaterials),
+        ]);
+    }
+
+    public function executeCutting(Request $request, ProductVariant $variant): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $user = $request->user();
+        $warehouseId = $user->warehouse_id ? (int) $user->warehouse_id : null;
+        if (! $warehouseId) {
+            return $this->fail('Tài khoản chưa được gán kho thực hiện.', 422);
+        }
+
+        $data = $request->validate([
+            'materials' => ['required', 'array', 'min:1'],
+            'materials.*.variant_id' => ['required', 'exists:product_variants,id'],
+            'materials.*.quantity' => ['required', 'numeric', 'min:0'],
+            'actual_finished_weight' => ['required', 'numeric', 'min:0.001'],
+            'components' => ['nullable', 'array'],
+            'components.*.variant_id' => ['required_with:components', 'exists:product_variants,id'],
+            'components.*.weight' => ['nullable', 'numeric', 'min:0'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $batch = app(ProductCuttingService::class)->execute(
+                $warehouseId,
+                $variant,
+                $data['materials'],
+                (float) $data['actual_finished_weight'],
+                $data['components'] ?? [],
+                (string) ($data['note'] ?? 'Xuất kho để thực hiện pha lóc.'),
+                (int) $user->id
+            );
+        } catch (\Throwable $e) {
+            return $this->fail($e->getMessage(), 422);
+        }
+
+        return $this->ok(['batch_id' => (int) $batch->id], 'Đã thực hiện pha lóc và cập nhật tồn kho.');
+    }
+
+    public function orderCuttingOptions(Request $request, Order $order, ProductVariant $variant): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $warehouseId = $request->user()->warehouse_id ? (int) $request->user()->warehouse_id : null;
+        if ($warehouseId && (int) ($order->warehouse_id ?? 0) > 0 && (int) $order->warehouse_id !== $warehouseId) {
+            return $this->fail('Đơn không thuộc kho bạn quản lý.', 403);
+        }
+
+        $order->loadMissing(['customer:id,name,phone,address', 'items.product:id,name,unit,product_type,allow_adjacent_packing_sizes', 'items.variant' => fn ($q) => $q->withAvailableStock()->with('product:id,name,unit,product_type,allow_adjacent_packing_sizes')]);
+        $variant->loadMissing('product');
+        if ($variant->product?->product_type !== \App\Models\Product::TYPE_CUT) {
+            return $this->fail('Sản phẩm không phải hàng pha lóc.', 422);
+        }
+
+        $item = $order->items->first(fn ($row) => (int) $row->product_variant_id === (int) $variant->id);
+        if (! $item) {
+            return $this->fail('Đơn không có sản phẩm pha lóc này.', 404);
+        }
+
+        $needed = (float) ($item->quantity ?? 0);
+        $available = (float) ($item->variant?->available_stock ?? 0);
+        $shortage = max(0, $needed - $available);
+        $demand = (float) $request->query('demand', $shortage);
+        if ($demand <= 0) {
+            $demand = $shortage;
+        }
+
+        $service = app(ProductCuttingService::class);
+        $plan = $service->planForDemand($variant, $warehouseId, $demand);
+
+        return $this->ok([
+            'order' => $this->warehouseOrderPayload($order, $warehouseId),
+            'target_item' => [
+                'variant_id' => (int) $variant->id,
+                'name' => trim(($variant->product?->name ?? '').' '.($variant->name ?? '')),
+                'needed' => $needed,
+                'available' => $available,
+                'shortage' => $shortage,
+            ],
+            'plan' => $this->cuttingPlanPayload($plan),
+        ]);
+    }
+
+    public function executeOrderCutting(Request $request, Order $order, ProductVariant $variant): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $user = $request->user();
+        $warehouseId = $user->warehouse_id ? (int) $user->warehouse_id : null;
+        if (! $warehouseId) {
+            return $this->fail('Tài khoản chưa được gán kho thực hiện.', 422);
+        }
+        if ($warehouseId && (int) ($order->warehouse_id ?? 0) > 0 && (int) $order->warehouse_id !== $warehouseId) {
+            return $this->fail('Đơn không thuộc kho bạn quản lý.', 403);
+        }
+
+        $variant->loadMissing('product');
+        if ($variant->product?->product_type !== \App\Models\Product::TYPE_CUT) {
+            return $this->fail('Sản phẩm không phải hàng pha lóc.', 422);
+        }
+
+        $data = $request->validate([
+            'materials' => ['required', 'array', 'min:1'],
+            'materials.*.variant_id' => ['required', 'exists:product_variants,id'],
+            'materials.*.quantity' => ['required', 'numeric', 'min:0'],
+            'note' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        try {
+            $batch = app(ProductCuttingService::class)->start(
+                $warehouseId,
+                $variant,
+                $data['materials'],
+                (string) ($data['note'] ?? 'Mobile xác nhận lấy hàng nguyên con để pha lóc.'),
+                (int) $user->id,
+                (int) $order->id
+            );
+        } catch (\Throwable $e) {
+            return $this->fail($e->getMessage(), 422);
+        }
+
+        return $this->ok(['batch_id' => (int) $batch->id], 'Đã xác nhận lấy hàng pha lóc. Đơn chuyển sang đóng hàng hoàn thiện.');
+    }
+
+    public function revertCuttingBatch(Request $request, ProductCuttingBatch $batch): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $user = $request->user();
+        $warehouseId = $user->warehouse_id ? (int) $user->warehouse_id : null;
+        if ($warehouseId && (int) $batch->warehouse_id !== $warehouseId) {
+            return $this->fail('Bạn không có quyền quay lại mẻ pha lóc của kho khác.', 403);
+        }
+
+        try {
+            app(ProductCuttingService::class)->revert($batch, (int) $user->id);
+        } catch (\Throwable $e) {
+            return $this->fail($e->getMessage(), 422);
+        }
+
+        return $this->ok(['batch_id' => (int) $batch->id], 'Đã quay lại xác nhận lấy hàng pha lóc.');
+    }
+
+    public function completeCuttingBatch(Request $request, ProductCuttingBatch $batch): JsonResponse
+    {
+        $this->ensurePackingRole($request);
+        $user = $request->user();
+        $warehouseId = $user->warehouse_id ? (int) $user->warehouse_id : null;
+        if ($warehouseId && (int) $batch->warehouse_id !== $warehouseId) {
+            return $this->fail('Bạn không có quyền hoàn thiện mẻ pha lóc của kho khác.', 403);
+        }
+
+        $batch->loadMissing('exportDocument.items');
+        $sourceVariantIds = $batch->exportDocument?->items
+            ?->pluck('product_variant_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values() ?? collect();
+        $verifiedVariantIds = collect($batch->picked_material_verifications ?? [])
+            ->pluck('variant_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique();
+        if ($sourceVariantIds->isNotEmpty() && $sourceVariantIds->diff($verifiedVariantIds)->isNotEmpty()) {
+            return $this->fail('Vui lòng bấm Đã lấy cho tất cả mặt hàng kho đã xuất trước khi hoàn thiện pha lóc.', 422);
+        }
+
+        $data = $request->validate([
+            'actual_finished_weight' => ['required', 'numeric', 'min:0.001'],
+            'components' => ['nullable', 'array'],
+            'components.*.variant_id' => ['required_with:components', 'exists:product_variants,id'],
+            'components.*.weight' => ['nullable', 'numeric', 'min:0'],
+            'defer_components' => ['nullable', 'boolean'],
+        ]);
+
+        try {
+            app(ProductCuttingService::class)->complete(
+                $batch,
+                (float) $data['actual_finished_weight'],
+                $data['components'] ?? [],
+                (int) $user->id,
+                $request->boolean('defer_components')
+            );
+        } catch (\Throwable $e) {
+            return $this->fail($e->getMessage(), 422);
+        }
+
+        return $this->ok(['batch_id' => (int) $batch->id], 'Đã hoàn thiện pha lóc, nhập kho thực tế và ghi nhận hao hụt.');
+    }
+
+    public function markCuttingMaterialPicked(Request $request, ProductCuttingBatch $batch, ProductVariant $variant): JsonResponse
+    {
+        return $this->setCuttingMaterialPicked($request, $batch, $variant, true);
+    }
+
+    public function unmarkCuttingMaterialPicked(Request $request, ProductCuttingBatch $batch, ProductVariant $variant): JsonResponse
+    {
+        return $this->setCuttingMaterialPicked($request, $batch, $variant, false);
+    }
+
+    public function returns(Request $request): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $warehouseId = $request->user()->warehouse_id ? (int) $request->user()->warehouse_id : null;
+
+        $query = OrderReturn::query()
+            ->with(['order:id,code,status', 'customer:id,name,phone', 'warehouse:id,name'])
+            ->latest('updated_at');
+
+        if ($warehouseId) {
+            $query->where('warehouse_id', $warehouseId);
+        }
+
+        return $this->paginated($query->paginate(20));
+    }
+
+    public function receiveReturn(Request $request, OrderReturn $orderReturn): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $user = $request->user();
+        $warehouseId = (int) ($orderReturn->warehouse_id ?? 0);
+        if ($user->warehouse_id && (int) $user->warehouse_id !== $warehouseId) {
+            return $this->fail('Phieu tra khong thuoc kho ban quan ly.', 403);
+        }
+        $orderReturn->loadMissing(['order.items', 'returnItems']);
+        if (! $orderReturn->order || $orderReturn->returnItems->isEmpty() || $warehouseId <= 0) {
+            return $this->fail('Phieu tra thieu thong tin don hang, san pham hoac kho nhan.', 422);
+        }
+
+        $document = DB::transaction(function () use ($orderReturn, $user, $warehouseId) {
+            $lockedReturn = OrderReturn::query()->lockForUpdate()->findOrFail($orderReturn->id);
+            if ($lockedReturn->status === 'warehouse_received') {
+                abort(422, 'Phieu tra da duoc nhap kho.');
+            }
+
+            $orderReturn->update([
+                'status' => 'warehouse_received',
+                'warehouse_confirmed_by' => $user->id,
+                'warehouse_confirmed_at' => now(),
+            ]);
+            $statusBefore = (string) $orderReturn->order->status;
+            $statusAfter = $orderReturn->completedOrderStatus();
+            $orderReturn->order->update(['status' => $statusAfter]);
+
+            $marker = '[return_receipt:'.$orderReturn->id.']';
+            $document = InventoryDocument::query()->firstOrCreate(
+                [
+                    'type' => 'import',
+                    'warehouse_id' => $warehouseId,
+                    'notes' => 'Đơn nhập hàng từ trả hàng #'.$orderReturn->id.' '.$marker,
+                ],
+                [
+                    'document_date' => now()->toDateString(),
+                    'shipping_fee' => 0,
+                    'user_id' => $user->id,
+                ]
+            );
+
+            foreach ($orderReturn->returnItems as $returnItem) {
+                $quantity = (int) $returnItem->quantity;
+                $orderItem = $orderReturn->order->items->firstWhere('product_variant_id', $returnItem->product_variant_id);
+                InventoryDocumentItem::query()->updateOrCreate(
+                    [
+                        'inventory_document_id' => $document->id,
+                        'product_variant_id' => $returnItem->product_variant_id,
+                    ],
+                    [
+                        'quantity' => $quantity,
+                        'unit_cost' => (float) ($orderItem?->price ?? 0),
+                    ]
+                );
+                $inventory = Inventory::query()->firstOrCreate(
+                    ['product_variant_id' => $returnItem->product_variant_id, 'warehouse_id' => $warehouseId],
+                    ['quantity' => 0, 'reserved_quantity' => 0]
+                );
+                $inventory->increment('quantity', $quantity);
+            }
+
+            OrderHistory::query()->create([
+                'order_id' => $orderReturn->order_id,
+                'action' => 'confirm_return',
+                'user_id' => $user->id,
+                'role' => 'warehouse',
+                'status_before' => $statusBefore,
+                'status_after' => $statusAfter,
+                'note' => 'Kho nhận hàng trả qua mobile, cập nhật tồn kho và tạo phiếu nhập #'.$document->id,
+            ]);
+
+            return $document;
+        });
+
+        return $this->ok([
+            'return_id' => (int) $orderReturn->id,
+            'inventory_document_id' => (int) $document->id,
+        ], 'Da nhan hang tra va tao phieu nhap kho');
+    }
+
+    public function tasks(Request $request): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $user = $request->user();
+
+        $tasks = TaskAssignment::query()
+            ->with(['creator:id,name', 'assignees.user:id,name'])
+            ->where(function ($query) use ($user) {
+                $query->where('created_by', $user->id)
+                    ->orWhereHas('assignees', fn ($q) => $q->where('user_id', $user->id));
+            })
+            ->latest('updated_at')
+            ->paginate(20);
+
+        return $this->paginated($tasks);
+    }
+
+    public function products(Request $request): JsonResponse
+    {
+        $this->ensurePackingRole($request);
+        $query = ProductVariant::query()->with('product:id,name')->latest('id');
+
+        if ($request->filled('keyword')) {
+            $keyword = (string) $request->query('keyword');
+            $query->where(function ($q) use ($keyword) {
+                $q->where('name', 'like', '%'.$keyword.'%')
+                    ->orWhere('sku', 'like', '%'.$keyword.'%');
+            });
+        }
+
+        return $this->paginated($query->paginate(30));
+    }
+
+    public function scanLookup(Request $request): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+
+        $validated = $request->validate([
+            'code' => ['required', 'string', 'max:120'],
+        ]);
+
+        $code = trim((string) $validated['code']);
+        $variant = ProductVariant::query()
+            ->with('product:id,name')
+            ->where('sku', $code)
+            ->orWhere('name', 'like', '%'.$code.'%')
+            ->first();
+
+        if (! $variant) {
+            return $this->fail('Khong tim thay san pham theo ma scan', 404);
+        }
+
+        return $this->ok([
+            'id' => (int) $variant->id,
+            'sku' => (string) ($variant->sku ?? ''),
+            'name' => (string) ($variant->name ?? ''),
+            'product_name' => (string) ($variant->product?->name ?? ''),
+            'is_priced_by_kg' => (bool) $variant->effective_priced_by_kg,
+            'kg' => (float) $variant->effective_kg,
+        ]);
+    }
+
+    public function notifications(Request $request): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $limit = min(50, max(1, (int) $request->query('limit', 20)));
+
+        $items = $request->user()
+            ->notifications()
+            ->latest()
+            ->limit($limit)
+            ->get()
+            ->map(fn ($n) => [
+                'id' => (string) $n->id,
+                'title' => (string) ($n->data['title'] ?? 'Thong bao'),
+                'message' => (string) ($n->data['message'] ?? ''),
+                'read_at' => optional($n->read_at)->toIso8601String(),
+                'created_at' => optional($n->created_at)->toIso8601String(),
+            ])
+            ->values();
+
+        return $this->ok($items);
+    }
+
+    public function confirmTransferReceipt(Request $request, WarehouseTransfer $transfer): JsonResponse
+    {
+        return $this->receiveWarehouseTransfer($request, $transfer, false);
+    }
+
+    public function receiveTransferDirectly(Request $request, WarehouseTransfer $transfer): JsonResponse
+    {
+        return $this->receiveWarehouseTransfer($request, $transfer, true);
+    }
+
+    public function confirmAllTransferReceipts(Request $request): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $warehouseId = (int) ($request->user()?->warehouse_id ?? 0);
+        abort_if($warehouseId <= 0 && ! $request->user()?->hasRole('admin'), 403, 'Tài khoản chưa được gán kho nhận.');
+
+        $transfers = WarehouseTransfer::query()
+            ->where('target_warehouse_id', $warehouseId)
+            ->where('status', WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE)
+            ->get();
+        $completed = 0;
+        $errors = [];
+        foreach ($transfers as $transfer) {
+            $response = $this->receiveWarehouseTransfer($request, $transfer, false);
+            if ($response->getStatusCode() < 300) {
+                $completed++;
+            } else {
+                $errors[] = '#'.$transfer->id;
+            }
+        }
+
+        return $this->ok([
+            'completed' => $completed,
+            'total' => $transfers->count(),
+            'failed' => $errors,
+        ], "Đã xác nhận và nhập kho {$completed}/{$transfers->count()} phiếu điều chuyển.");
+    }
+
+    private function receiveWarehouseTransfer(Request $request, WarehouseTransfer $transfer, bool $direct): JsonResponse
+    {
+        $this->ensureWarehouseRole($request);
+        $user = $request->user();
+        if (! $user->hasRole('admin') && (int) $user->warehouse_id !== (int) $transfer->target_warehouse_id) {
+            return $this->fail('Bạn chỉ có thể xác nhận hàng về kho mình quản lý.', 403);
+        }
+        if ($transfer->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED) {
+            return $this->ok(null, 'Phiếu điều chuyển đã nhập kho trước đó.');
+        }
+
+        Auth::setUser($user);
+        Auth::guard('web')->setUser($user);
+        $request->setUserResolver(fn () => $user);
+        $request->headers->set('Accept', 'application/json');
+        $request->attributes->set('warehouse_direct_receipt', true);
+        $shipperController = app(\App\Http\Controllers\ShipperDashboardController::class);
+
+        if ($transfer->status === WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP) {
+            if (! $direct) {
+                return $this->fail('Shipper chưa nhận hàng từ kho gửi.', 422);
+            }
+            $shipperController->pickupWarehouseTransfer($request, $transfer);
+            $transfer->refresh();
+        }
+        if ($transfer->status === WarehouseTransfer::STATUS_IN_TRANSIT) {
+            if (! $direct) {
+                return $this->fail('Shipper chưa bàn giao hàng tới kho nhận.', 422);
+            }
+            $shipperController->deliverWarehouseTransfer($request, $transfer);
+            $transfer->refresh();
+        }
+        if ($transfer->status !== WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE) {
+            return $this->fail('Phiếu điều chuyển chưa sẵn sàng để nhập kho.', 422);
+        }
+
+        $transfer->loadMissing('order.items');
+        if (! $transfer->order) {
+            return $this->fail('Không tìm thấy đơn hàng của phiếu điều chuyển.', 422);
+        }
+        $request->merge([
+            'item_weights' => $transfer->order->items->map(fn ($item) => [
+                'order_item_id' => (int) $item->id,
+                'received_weight' => (float) ($item->packed_weight ?? $item->total_weight ?? $item->actual_weight ?? 0),
+            ])->values()->all(),
+            'receive_note' => $direct
+                ? 'Kho nhận xác nhận đã nhận bằng phương tiện khác.'
+                : 'Kho nhận xác nhận shipper đã giao hàng.',
+        ]);
+        app(WarehouseDashboardController::class)->confirmTransferReceipt($request, $transfer);
+        $transfer->refresh();
+        if ($transfer->status !== WarehouseTransfer::STATUS_RECEIVED_COMPLETED) {
+            return $this->fail('Không thể nhập kho phiếu điều chuyển.', 422);
+        }
+
+        return $this->ok([
+            'transfer_id' => (int) $transfer->id,
+            'status' => $transfer->status,
+        ], $direct ? 'Đã nhận và nhập kho.' : 'Đã xác nhận shipper giao hàng và nhập kho.');
+    }
+
+    private function ensureWarehouseRole(Request $request): void
+    {
+        $user = $request->user();
+        if (! $user || ! ($user->hasRole('warehouse') || $user->hasRole('admin'))) {
+            abort(403, 'Role khong duoc phep truy cap API warehouse');
+        }
+    }
+
+    private function ensurePackingRole(Request $request): void
+    {
+        $user = $request->user();
+        if (! $user || ! ($user->hasRole('warehouse') || $user->hasRole('package') || $user->hasRole('admin'))) {
+            abort(403, 'Role khong duoc phep truy cap API dong hang');
+        }
+    }
+
+    private function dashboardTaskStatus(int $total, int $done): string
+    {
+        if ($total === 0) {
+            return 'none';
+        }
+
+        if ($done === 0) {
+            return 'todo';
+        }
+
+        if ($done < $total) {
+            return 'inprogress';
+        }
+
+        return 'done';
+    }
+
+    private function warehouseOrderPayload(Order $order, ?int $warehouseId = null): array
+    {
+        $statusMeta = $this->warehouseStatusMeta((string) $order->status);
+        $context = app(WarehouseDashboardController::class)->mobilePackingContext(
+            $order, $warehouseId ?: $order->warehouse_id
+        );
+        $items = $order->items->map(fn ($item) => array_merge($this->warehouseOrderItemPayload($item), [
+            'packing_size_options' => $context['size_options'][$item->id] ?? [],
+            'can_edit_packing_sizes' => $context['can_edit'],
+        ]))->values();
+        $activePackingHistory = $order->histories
+            ->where('action', 'start_packing')
+            ->sortByDesc('id')
+            ->first();
+        $activePacker = $activePackingHistory?->user;
+
+        return [
+            'id' => (int) $order->id,
+            'code' => (string) ($order->code ?: '#'.$order->id),
+            'daily_sequence' => $order->daily_sequence ? (int) $order->daily_sequence : null,
+            'status' => (string) $order->status,
+            'status_label' => $statusMeta['label'],
+            'status_color' => $statusMeta['color'],
+            'packer_name' => (string) ($activePacker?->short_name ?: $activePacker?->name ?: ''),
+            'priority_state' => $this->priorityState((string) $order->status),
+            'customer' => [
+                'name' => (string) ($order->customer?->name ?? '—'),
+                'phone' => (string) ($order->customer?->phone ?? ''),
+                'address' => (string) ($order->customer?->address ?? ''),
+            ],
+            'shipping_address' => (string) ($order->recipient_address ?: $order->customer?->address ?: ''),
+            'delivery_time' => (string) ($order->delivery_time ?: $order->customer?->delivery_time ?: ''),
+            'delivery_time_note' => (string) ($order->delivery_time_note ?: $order->customer?->delivery_time_note ?: ''),
+            'delivery_date' => optional($order->delivery_date)->toDateString(),
+            'created_at' => optional($order->created_at)->toIso8601String(),
+            'updated_at' => optional($order->updated_at)->toIso8601String(),
+            'total' => (float) ($order->total ?? 0),
+            'actual_weight' => $order->actual_weight === null ? null : (float) $order->actual_weight,
+            'shipping_fee' => $order->shipping_fee === null ? null : (float) $order->shipping_fee,
+            'foam_box_price' => $order->foam_box_price === null ? null : (float) $order->foam_box_price,
+            'charge_shipping_fee' => (bool) ($order->charge_shipping_fee ?? true),
+            'charge_foam_box_fee' => (bool) ($order->charge_foam_box_fee ?? false),
+            'warehouse_adjustment_status' => (string) ($order->warehouse_adjustment_status ?? Order::WAREHOUSE_ADJUSTMENT_STATUS_NONE),
+            'note' => (string) ($order->note ?? ''),
+            'stock_guard' => $context['stock_guard'],
+            'warehouse_adjustment_note' => (string) ($order->warehouse_adjustment_note ?? ''),
+            'warehouse_adjustment_rejected_reason' => (string) ($order->warehouse_adjustment_rejected_reason ?? ''),
+            'warehouse_adjustment_changes' => $order->warehouse_adjustment_changes ?? [],
+            'warehouse_can_adjust' => (bool) ($order->warehouse_can_adjust ?? false),
+            'customer_feedback_context' => $order->getAttribute('customer_feedback_context') ?? [
+                'has_feedback' => false,
+                'highest_status' => null,
+                'highest_meta' => Order::customerFeedbackMeta(null),
+                'recent' => [],
+            ],
+            'can_start_packing' => in_array((string) $order->status, ['approved', Order::STATUS_READY_TO_PACK], true)
+                && $order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION
+                && $order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED,
+            'can_complete_packing' => (string) $order->status === Order::STATUS_PACKING
+                && $order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION
+                && $order->warehouse_adjustment_status !== Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED,
+            'can_undo_start_packing' => (string) $order->status === Order::STATUS_PACKING
+                && (int) ($activePackingHistory?->user_id ?? 0) === (int) Auth::id(),
+            'can_request_adjustment' => in_array((string) $order->status, ['approved', Order::STATUS_READY_TO_PACK], true)
+                && $order->created_at?->isToday(),
+            'items' => $items,
+            'cutting_plans' => $this->orderCuttingPlans($order),
+            'active_cutting_batches' => $this->activeCuttingBatchesPayload($order),
+        ];
+    }
+
+    private function activeCuttingBatchesPayload(Order $order): array
+    {
+        return ProductCuttingBatch::query()
+            ->with(['targetVariant.product', 'performer:id,name', 'exportDocument.items.productVariant.product'])
+            ->where('order_id', (int) $order->id)
+            ->where('status', ProductCuttingBatch::STATUS_IN_PROGRESS)
+            ->orderBy('id')
+            ->get()
+            ->map(function (ProductCuttingBatch $batch) {
+                $verifications = collect($batch->picked_material_verifications ?? [])->keyBy(fn ($row) => (int) ($row['variant_id'] ?? 0));
+                $sourceItems = collect($batch->exportDocument?->items ?? []);
+                $sourceVariantIds = $sourceItems->pluck('product_variant_id')->map(fn ($id) => (int) $id)->filter()->unique()->values();
+
+                return [
+                    'id' => (int) $batch->id,
+                    'target_name' => trim(($batch->targetVariant?->product?->name ?? 'Sản phẩm').' '.($batch->targetVariant?->name ?: '')),
+                    'input_weight' => (float) ($batch->input_weight ?? 0),
+                    'planned_finished_weight' => (float) ($batch->planned_finished_weight ?? 0),
+                    'planned_components' => collect($batch->planned_components ?? [])->map(fn ($component) => [
+                        'variant_id' => (int) ($component['variant_id'] ?? 0),
+                        'name' => (string) ($component['name'] ?? 'Thành phần'),
+                        'weight' => (float) ($component['weight'] ?? 0),
+                    ])->values()->all(),
+                    'source_materials' => $sourceItems->map(function ($item) use ($verifications) {
+                        $variant = $item->productVariant;
+                        $variantId = (int) ($item->product_variant_id ?? 0);
+                        $verification = $verifications->get($variantId);
+
+                        return [
+                            'variant_id' => $variantId,
+                            'name' => trim(($variant?->product?->name ?? 'Sản phẩm').' '.($variant?->name ?: '')),
+                            'sku' => (string) ($variant?->sku ?? ''),
+                            'quantity' => (float) ($item->quantity ?? 0),
+                            'picked' => ! empty($verification),
+                            'verified_by_name' => (string) ($verification['verified_by_name'] ?? ''),
+                        ];
+                    })->values()->all(),
+                    'all_materials_picked' => $sourceVariantIds->isEmpty() || $sourceVariantIds->diff($verifications->keys()->map(fn ($id) => (int) $id))->isEmpty(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    private function orderCuttingPlans(Order $order): array
+    {
+        return $order->items
+            ->filter(function ($item) {
+                $variant = $item->variant;
+                $product = $item->product ?: $variant?->product;
+
+                return $variant && $product?->product_type === \App\Models\Product::TYPE_CUT;
+            })
+            ->map(function ($item) {
+                $needed = (float) ($item->quantity ?? 0);
+                $available = (float) ($item->variant?->available_stock ?? 0);
+                $shortage = max(0, $needed - $available);
+                if ($shortage <= 0) {
+                    return null;
+                }
+
+                return [
+                    'target_variant_id' => (int) $item->product_variant_id,
+                    'order_item_id' => (int) $item->id,
+                    'target_name' => (string) ($item->variant?->name ?? $item->product?->name ?? 'Hàng pha lóc'),
+                    'needed' => $needed,
+                    'available' => $available,
+                    'shortage' => $shortage,
+                    'unit' => (string) ($item->product?->weight_unit_label ?? $item->product?->unit_label ?? 'kg'),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function cuttingPlanPayload(array $plan): array
+    {
+        return [
+            'target_variant_id' => (int) ($plan['target_variant_id'] ?? 0),
+            'target_name' => (string) ($plan['target_name'] ?? ''),
+            'demand' => (float) ($plan['demand'] ?? 0),
+            'materials' => collect($plan['materials'] ?? [])->map(fn ($material) => [
+                'variant_id' => (int) ($material['variant_id'] ?? 0),
+                'label' => (string) ($material['label'] ?? ''),
+                'size' => (float) ($material['size'] ?? 0),
+                'available' => (float) ($material['available'] ?? 0),
+                'unit_weight' => (float) ($material['unit_weight'] ?? 0),
+                'output_per_unit' => (float) ($material['output_per_unit'] ?? 0),
+                'suggested_quantity' => (float) ($material['suggested_quantity'] ?? 0),
+                'components' => collect($material['components'] ?? [])->map(fn ($component) => [
+                    'variant_id' => (int) ($component['variant_id'] ?? 0),
+                    'name' => (string) ($component['name'] ?? ''),
+                    'standard_weight' => (float) ($component['standard_weight'] ?? 0),
+                ])->values()->all(),
+            ])->values()->all(),
+            'selected_materials' => collect($plan['selected_materials'] ?? [])->values()->all(),
+            'preview' => [
+                'input_weight' => (float) data_get($plan, 'preview.input_weight', 0),
+                'finished_weight' => (float) data_get($plan, 'preview.finished_weight', 0),
+                'components' => collect(data_get($plan, 'preview.components', []))->map(fn ($component) => [
+                    'variant_id' => (int) ($component['variant_id'] ?? 0),
+                    'name' => (string) ($component['name'] ?? ''),
+                    'weight' => (float) ($component['weight'] ?? 0),
+                ])->values()->all(),
+            ],
+            'can_execute' => (bool) ($plan['can_execute'] ?? false),
+        ];
+    }
+
+    private function attachCustomerFeedbackContext($orders): void
+    {
+        if ($orders->isEmpty() || ! Schema::hasColumn('orders', 'customer_feedback_status')) {
+            $orders->each(fn (Order $order) => $order->setAttribute('customer_feedback_context', [
+                'has_feedback' => false,
+                'highest_status' => null,
+                'highest_meta' => Order::customerFeedbackMeta(null),
+                'recent' => [],
+            ]));
+
+            return;
+        }
+
+        $customerIds = $orders->pluck('customer_id')->filter()->unique()->values();
+        $feedbackByCustomer = Order::query()
+            ->with(['customerFeedbackUser:id,name'])
+            ->whereIn('customer_id', $customerIds)
+            ->whereNotNull('customer_feedback_status')
+            ->whereNotNull('customer_feedback_note')
+            ->latest('customer_feedback_at')
+            ->latest('updated_at')
+            ->get()
+            ->groupBy('customer_id');
+
+        $orders->each(function (Order $order) use ($feedbackByCustomer): void {
+            $rows = $feedbackByCustomer->get($order->customer_id, collect())->take(5);
+            $highestStatus = $rows
+                ->map(fn (Order $feedbackOrder) => (string) $feedbackOrder->customer_feedback_status)
+                ->sortByDesc(fn (string $status) => Order::customerFeedbackMeta($status)['level'] ?? 0)
+                ->first();
+
+            $order->setAttribute('customer_feedback_context', [
+                'has_feedback' => $rows->isNotEmpty(),
+                'highest_status' => $highestStatus,
+                'highest_meta' => Order::customerFeedbackMeta($highestStatus),
+                'recent' => $rows->map(fn (Order $feedbackOrder) => [
+                    'order_id' => (int) $feedbackOrder->id,
+                    'code' => (string) ($feedbackOrder->code ?: '#'.$feedbackOrder->id),
+                    'status' => (string) $feedbackOrder->customer_feedback_status,
+                    'meta' => Order::customerFeedbackMeta((string) $feedbackOrder->customer_feedback_status),
+                    'note' => (string) $feedbackOrder->customer_feedback_note,
+                    'sale_review' => (string) ($feedbackOrder->customer_feedback_sale_review ?? ''),
+                    'images' => collect($feedbackOrder->customer_feedback_images ?? [])->map(fn ($path) => [
+                        'path' => (string) $path,
+                        'url' => asset('storage/'.ltrim((string) $path, '/')),
+                    ])->values()->all(),
+                    'user' => (string) ($feedbackOrder->customerFeedbackUser?->name ?? ''),
+                    'at' => optional($feedbackOrder->customer_feedback_at ?? $feedbackOrder->updated_at)->toIso8601String(),
+                ])->values()->all(),
+            ]);
+        });
+    }
+
+    private function warehouseOrderItemPayload($item): array
+    {
+        $variant = $item->variant;
+        $product = $item->product ?: $variant?->product;
+        $quantity = (float) ($item->quantity ?? 0);
+        $unitPrice = (float) ($item->price ?? 0);
+        $pricedByKg = (bool) $item->effective_priced_by_kg;
+        $actualWeight = $item->actual_weight === null ? null : (float) $item->actual_weight;
+        $weight = $actualWeight ?? round((float) $item->effective_unit_weight * $quantity, 3);
+        $lineTotal = $pricedByKg
+            ? ($actualWeight === null ? null : $actualWeight * $unitPrice)
+            : $quantity * $unitPrice;
+
+        return [
+            'id' => (int) $item->id,
+            'product_variant_id' => (int) ($item->product_variant_id ?? 0),
+            'product_name' => (string) ($variant?->name ?? $product?->name ?? 'Sản phẩm'),
+            'sku' => (string) ($variant?->sku ?? ''),
+            'size' => (string) ($variant?->size ?? ''),
+            'quantity' => $quantity,
+            'display_total' => (string) $item->display_total_label,
+            'weight' => $weight,
+            'actual_weight' => $actualWeight,
+            'weight_label' => $this->formatWeight($weight, $pricedByKg ? 'kg' : ($product?->unit_label ?? 'Cái')),
+            'unit_price' => $unitPrice,
+            'line_total' => $lineTotal,
+            'is_priced_by_kg' => $pricedByKg,
+            'available_stock' => (int) ($variant?->available_stock ?? 0),
+        ];
+    }
+
+    private function warehouseStatusMeta(string $status): array
+    {
+        return match ($status) {
+            'approved', Order::STATUS_READY_TO_PACK => ['label' => 'Chờ đóng gói', 'color' => 'gray'],
+            Order::STATUS_PACKING => ['label' => 'Đang đóng', 'color' => 'amber'],
+            'packed' => ['label' => 'Đã hoàn thành đóng hàng', 'color' => 'green'],
+            Order::STATUS_READY_TO_SHIP => ['label' => 'Chờ lấy hàng', 'color' => 'green'],
+            Order::STATUS_DELIVERING => ['label' => 'Đang giao', 'color' => 'green'],
+            Order::STATUS_DELIVERED => ['label' => 'Đã giao', 'color' => 'green'],
+            Order::STATUS_COMPLETED => ['label' => 'Hoàn thành', 'color' => 'green'],
+            'pending' => ['label' => 'Chờ duyệt', 'color' => 'gray'],
+            'pending_leader_approval' => ['label' => 'Chờ trưởng nhóm duyệt', 'color' => 'gray'],
+            'pending_manager_approval' => ['label' => 'Chờ quản lý duyệt', 'color' => 'gray'],
+            'pending_warehouse_approval' => ['label' => 'Chờ kho duyệt', 'color' => 'gray'],
+            'rejected' => ['label' => 'Từ chối', 'color' => 'red'],
+            default => ['label' => $status, 'color' => 'gray'],
+        };
+    }
+
+    private function priorityState(string $status): string
+    {
+        if ($status === Order::STATUS_PACKING) {
+            return 'packing';
+        }
+
+        if (in_array($status, ['packed', Order::STATUS_READY_TO_SHIP, Order::STATUS_DELIVERING, Order::STATUS_DELIVERED, Order::STATUS_COMPLETED], true)) {
+            return 'packed';
+        }
+
+        return 'unpacked';
+    }
+
+    private function formatWeight(float $value, string $unit): string
+    {
+        $formatted = rtrim(rtrim(number_format($value, 3, ',', '.'), '0'), ',');
+
+        return $formatted.' '.$unit;
+    }
+
+    private function callWebWarehouseAction(Request $request, callable $callback): JsonResponse
+    {
+        Auth::setUser($request->user());
+        $request->headers->set('Accept', 'application/json');
+
+        $response = $callback();
+        if ($response instanceof JsonResponse) {
+            $payload = $response->getData(true);
+            if (($payload['ok'] ?? true) === false) {
+                return $this->fail((string) ($payload['message'] ?? 'Thao tac that bai'), $response->getStatusCode(), $payload);
+            }
+
+            return $this->ok($payload, (string) ($payload['message'] ?? 'OK'));
+        }
+
+        return $this->ok(null, 'Thao tac thanh cong');
+    }
+
+    private function setCuttingMaterialPicked(Request $request, ProductCuttingBatch $batch, ProductVariant $variant, bool $picked): JsonResponse
+    {
+        $this->ensurePackingRole($request);
+        $user = $request->user();
+        $warehouseId = $user->warehouse_id ? (int) $user->warehouse_id : null;
+        if ($warehouseId && (int) $batch->warehouse_id !== $warehouseId) {
+            return $this->fail('Bạn không có quyền xác nhận mặt hàng của kho khác.', 403);
+        }
+        if ($batch->status !== ProductCuttingBatch::STATUS_IN_PROGRESS) {
+            return $this->fail('Mẻ pha lóc này không còn ở trạng thái đang thực hiện.', 422);
+        }
+
+        $batch->loadMissing('exportDocument.items');
+        $sourceItem = $batch->exportDocument?->items
+            ?->first(fn ($item) => (int) $item->product_variant_id === (int) $variant->id);
+        if (! $sourceItem) {
+            return $this->fail('Mặt hàng này không nằm trong danh sách kho đã lấy cho mẻ pha lóc.', 422);
+        }
+
+        $verifications = collect($batch->picked_material_verifications ?? [])->keyBy(fn ($row) => (int) ($row['variant_id'] ?? 0));
+        if ($picked) {
+            $verifications->put((int) $variant->id, [
+                'variant_id' => (int) $variant->id,
+                'quantity' => (float) $sourceItem->quantity,
+                'verified_by' => (int) $user->id,
+                'verified_by_name' => (string) ($user->name ?? 'Package'),
+                'verified_at' => now()->toDateTimeString(),
+            ]);
+        } else {
+            $verifications->forget((int) $variant->id);
+        }
+
+        $batch->update(['picked_material_verifications' => $verifications->values()->all()]);
+        $sourceVariantIds = $batch->exportDocument?->items
+            ?->pluck('product_variant_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values() ?? collect();
+
+        return $this->ok([
+            'batch_id' => (int) $batch->id,
+            'variant_id' => (int) $variant->id,
+            'picked' => $picked,
+            'verified_by_name' => (string) ($user->name ?? 'Package'),
+            'all_materials_picked' => $sourceVariantIds->isEmpty() || $sourceVariantIds->diff($verifications->keys()->map(fn ($id) => (int) $id))->isEmpty(),
+        ], $picked ? 'Đã xác nhận đã lấy mặt hàng pha lóc.' : 'Đã quay lại trạng thái chưa lấy.');
+    }
+}

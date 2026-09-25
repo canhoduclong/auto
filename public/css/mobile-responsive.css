@@ -1,0 +1,105 @@
+/* Global mobile responsiveness for all desktop layouts */
+
+:root {
+    --mobile-font-size: 15px;
+    --mobile-touch-target: 44px;
+}
+
+@media (max-width: 991.98px) {
+    html {
+        font-size: var(--mobile-font-size);
+    }
+
+    body {
+        overflow-x: hidden;
+    }
+
+    .container,
+    .container-fluid,
+    .content,
+    .content-inner,
+    .wh-content,
+    .sp-content,
+    .acc-content,
+    .ceo-content {
+        padding-left: 0.85rem !important;
+        padding-right: 0.85rem !important;
+    }
+
+    .btn,
+    button,
+    .form-control,
+    .form-select,
+    .input-group-text {
+        min-height: var(--mobile-touch-target);
+        font-size: 0.98rem;
+    }
+
+    input,
+    select,
+    textarea {
+        font-size: 16px !important;
+    }
+
+    .card,
+    .alert,
+    .modal-content {
+        border-radius: 0.8rem;
+    }
+
+    .table-responsive,
+    .table-wrap,
+    .dataTables_wrapper,
+    .table-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .table {
+        min-width: 640px;
+    }
+
+    .table th,
+    .table td {
+        white-space: nowrap;
+        vertical-align: middle;
+    }
+
+    .row {
+        --bs-gutter-x: 0.9rem;
+    }
+
+    .dropdown-menu {
+        max-width: calc(100vw - 1rem);
+    }
+
+    .mobile-drawer-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(2, 6, 23, 0.52);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease;
+        z-index: 190;
+    }
+
+    body.mobile-menu-open .mobile-drawer-overlay {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    body.mobile-menu-open {
+        overflow: hidden;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .btn,
+    button {
+        min-height: 46px;
+    }
+
+    .pagination {
+        flex-wrap: wrap;
+    }
+}

@@ -1,0 +1,145 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Order;
+use App\Models\OrderHistory;
+use App\Models\Setting;
+use App\Services\ApprovalService;
+use App\Services\OrderAutoApprovalService;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+
+class OrderApprovalController extends Controller
+{
+    protected $settings;
+
+    public function __construct()
+    {
+        $this->settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
+    }
+
+    private function isApproverRole(string $role): bool
+    {
+        return in_array(strtolower($role), ['leader_sale', 'leader', 'sale_manager', 'manager_sale', 'manager', 'director', 'admin'], true);
+    }
+
+    private function userCanApprove(?\App\Models\User $user): bool
+    {
+        if (!$user) {
+            return false;
+        }
+
+        return $user->roles->pluck('name')
+            ->map(fn ($role) => strtolower((string) $role))
+            ->contains(fn ($role) => $this->isApproverRole($role));
+    }
+
+    private function userCanApproveOrder(?\App\Models\User $user, Order $order): bool
+    {
+        if (!$this->userCanApprove($user)) {
+            return false;
+        }
+
+        if ($user->hasRole(['admin', 'manager', 'manager_sale', 'director'])) {
+            return true;
+        }
+
+        if (!$user->hasRole(['leader', 'leader_sale', 'sale_manager'])) {
+            return false;
+        }
+
+        $teamId = (int) ($user->team_id ?? 0);
+        if ($teamId <= 0) {
+            return false;
+        }
+
+        $order->loadMissing('user.roles');
+
+        return (int) ($order->user?->team_id ?? 0) === $teamId
+            && $order->user?->roles?->contains(fn ($role) => strtolower((string) $role->name) === 'sale');
+    }
+
+    private function logOrderHistory(Order $order, string $action, ?string $before, ?string $after, ?string $note = null): void
+    {
+        $user = auth()->user();
+
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'action' => $action,
+            'user_id' => $user?->id,
+            'role' => $user?->roles->pluck('name')->first(),
+            'status_before' => $before,
+            'status_after' => $after,
+            'note' => $note,
+        ]);
+    }
+
+    public function approve(Request $request, Order $order, ApprovalService $approvalService): \Illuminate\Http\Response|\Illuminate\Http\JsonResponse|RedirectResponse
+    {
+        $request->validate([
+            'note' => 'nullable|string|max:1000',
+        ]);
+
+        $isAjax = $request->ajax() || $request->wantsJson();
+
+        $user = $request->user();
+        if (!$this->userCanApproveOrder($user, $order)) {
+            $msg = __('orders.approval.no_permission');
+            return $isAjax
+                ? response()->json(['success' => false, 'message' => $msg], 403)
+                : back()->with('error', $msg);
+        }
+
+        try {
+            $statusBefore = (string) $order->status;
+            $approvalService->approve($order, $request->user(), $request->input('note'));
+            app(OrderAutoApprovalService::class)->processOrder($order);
+            $order->refresh();
+            $this->logOrderHistory($order, 'approve_order', $statusBefore, (string) $order->status, $request->input('note'));
+            $msg = __('orders.messages.confirmed');
+            return $isAjax
+                ? response()->json(['success' => true, 'message' => $msg])
+                : back()->with('success', $msg);
+        } catch (\Throwable $e) {
+            return $isAjax
+                ? response()->json(['success' => false, 'message' => $e->getMessage()], 422)
+                : back()->with('error', $e->getMessage());
+        }
+    }
+
+    public function reject(Request $request, Order $order, ApprovalService $approvalService): \Illuminate\Http\Response|\Illuminate\Http\JsonResponse|RedirectResponse
+    {
+        $request->validate([
+            'note' => 'nullable|string|max:1000',
+        ]);
+
+        $isAjax = $request->ajax() || $request->wantsJson();
+
+        $user = $request->user();
+        if (!$this->userCanApproveOrder($user, $order)) {
+            $msg = __('orders.approval.no_permission');
+            return $isAjax
+                ? response()->json(['success' => false, 'message' => $msg], 403)
+                : back()->with('error', $msg);
+        }
+
+        try {
+            $statusBefore = (string) $order->status;
+            $approvalService->reject($order, $request->user(), $request->input('note'));
+            $order->refresh();
+            $this->logOrderHistory($order, 'reject_order', $statusBefore, (string) $order->status, $request->input('note'));
+            $msg = __('orders.statuses.rejected');
+            return $isAjax
+                ? response()->json(['success' => true, 'message' => $msg])
+                : back()->with('success', $msg);
+        } catch (\Throwable $e) {
+            return $isAjax
+                ? response()->json(['success' => false, 'message' => $e->getMessage()], 422)
+                : back()->with('error', $e->getMessage());
+        }
+    }
+}

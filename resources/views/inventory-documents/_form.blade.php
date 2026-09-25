@@ -1,0 +1,166 @@
+<div class="row">
+    <div class="col-md-6">
+        <div class="form-group mb-3">
+            <label for="document_date" class="form-label">{{ __('inventory.labels.date') }}</label>
+            <input type="date" name="document_date" id="document_date" class="form-control @error('document_date') is-invalid @enderror" value="{{ old('document_date', $inventoryDocument->document_date ?? date('Y-m-d')) }}" required>
+            @error('document_date')
+                <div class="invalid-feedback">{{ $message }}</div>
+            @enderror
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="form-group mb-3">
+            <label for="type" class="form-label">{{ __('inventory.labels.type') }}</label>
+            <select name="type" id="type" class="form-control @error('type') is-invalid @enderror" required>
+                <option value="import" {{ (old('type', $inventoryDocument->type ?? '') == 'import') ? 'selected' : '' }}>{{ __('inventory.types.import') }}</option>
+                <option value="export" {{ (old('type', $inventoryDocument->type ?? '') == 'export') ? 'selected' : '' }}>{{ __('inventory.types.export') }}</option>
+                <option value="adjustment" {{ (old('type', $inventoryDocument->type ?? '') == 'adjustment') ? 'selected' : '' }}>{{ __('inventory.types.adjustment') }}</option>
+            </select>
+            @error('type')
+                <div class="invalid-feedback">{{ $message }}</div>
+            @enderror
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="form-group mb-3">
+            <label for="warehouse_id" class="form-label">{{ __('inventory.labels.warehouse') }}</label>
+            @php
+                $currentUser = auth()->user();
+                $isWarehouseUser = $currentUser && $currentUser->hasRole('warehouse');
+                $selectedWarehouseId = old('warehouse_id', $inventoryDocument->warehouse_id ?? ($currentUser->warehouse_id ?? ''));
+            @endphp
+
+            @if($isWarehouseUser)
+                <input type="hidden" name="warehouse_id" value="{{ $selectedWarehouseId }}">
+                <input type="text" class="form-control" value="{{ optional($warehouses->first())->name ?? __('inventory.default.warehouse_not_assigned') }}" readonly>
+            @else
+                <select name="warehouse_id" id="warehouse_id" class="form-control @error('warehouse_id') is-invalid @enderror" required>
+                    @foreach($warehouses as $warehouse)
+                        <option value="{{ $warehouse->id }}" {{ ((string) $selectedWarehouseId === (string) $warehouse->id) ? 'selected' : '' }}>{{ $warehouse->name }}</option>
+                    @endforeach
+                </select>
+            @endif
+            @error('warehouse_id')
+                <div class="invalid-feedback">{{ $message }}</div>
+            @enderror
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="form-group mb-3">
+            <label for="shipping_fee" class="form-label">{{ __('inventory.labels.shipping_fee') }}</label>
+            <input type="number" step="0.01" name="shipping_fee" id="shipping_fee" class="form-control @error('shipping_fee') is-invalid @enderror" value="{{ old('shipping_fee', $inventoryDocument->shipping_fee ?? 0) }}">
+            @error('shipping_fee')
+                <div class="invalid-feedback">{{ $message }}</div>
+            @enderror
+        </div>
+    </div>
+</div>
+
+<div class="form-group mb-3">
+    <label for="notes" class="form-label">{{ __('inventory.labels.notes') }}</label>
+    <textarea name="notes" id="notes" class="form-control @error('notes') is-invalid @enderror">{{ old('notes', $inventoryDocument->notes ?? '') }}</textarea>
+    @error('notes')
+        <div class="invalid-feedback">{{ $message }}</div>
+    @enderror
+</div>
+
+<hr>
+
+<h4>{{ __('inventory.labels.items') }}</h4>
+
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>{{ __('inventory.labels.product_variant') }}</th>
+            <th>{{ __('inventory.labels.quantity') }}</th>
+            <th>ĐVT</th>
+            <th>Khối lượng</th>
+            <th>{{ __('inventory.labels.unit_cost') }}</th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody id="items-tbody">
+        @if(old('items'))
+            @foreach(old('items') as $key => $item)
+                @include('inventory-documents.item-row', ['key' => $key, 'item' => $item])
+            @endforeach
+        @elseif(isset($inventoryDocument))
+            @foreach($inventoryDocument->items as $key => $item)
+                @include('inventory-documents.item-row', ['key' => $key, 'item' => $item])
+            @endforeach
+        @endif
+    </tbody>
+</table>
+
+<button type="button" id="add-item-btn" class="btn btn-success btn-sm">{{ __('inventory.buttons.add_item') }}</button>
+
+<hr>
+
+<button type="submit" class="btn btn-primary">{{ __('inventory.buttons.save_document') }}</button>
+<a href="{{ route('inventory-documents.index') }}" class="btn btn-secondary">{{ __('inventory.buttons.cancel') }}</a>
+
+@push('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        let tbody = document.getElementById('items-tbody');
+        let addItemBtn = document.getElementById('add-item-btn');
+
+        const syncRowUnitLabel = (row) => {
+            if (!row) {
+                return;
+            }
+
+            const select = row.querySelector('select[name*="[product_variant_id]"]');
+            const labelEl = row.querySelector('.unit-label-display');
+            const weightEl = row.querySelector('.weight-display');
+            const weightUnitEl = row.querySelector('.weight-unit-display');
+            if (!select || !labelEl) {
+                return;
+            }
+
+            const selectedOption = select.options[select.selectedIndex];
+            const unitLabel = selectedOption?.getAttribute('data-unit-label') || 'Cái';
+            labelEl.textContent = unitLabel;
+
+            if (weightEl) {
+                const weight = parseFloat(selectedOption?.getAttribute('data-default-weight') || '0');
+                weightEl.value = Number.isFinite(weight) ? weight.toFixed(3) : '0.000';
+            }
+            if (weightUnitEl) {
+                weightUnitEl.textContent = selectedOption?.getAttribute('data-weight-unit-label') || 'Kg';
+            }
+        };
+
+        addItemBtn.addEventListener('click', function () {
+            let key = new Date().getTime();
+            let newRow = document.createElement('tr');
+            newRow.innerHTML = `@include('inventory-documents.item-row', ['key' => '${key}'])`;
+            tbody.appendChild(newRow);
+            syncRowUnitLabel(newRow);
+        });
+
+        tbody.addEventListener('click', function (e) {
+            if (e.target.classList.contains('remove-item-btn')) {
+                e.target.closest('tr').remove();
+            }
+        });
+
+        tbody.addEventListener('change', function (e) {
+            const target = e.target;
+            if (!(target instanceof HTMLSelectElement)) {
+                return;
+            }
+            if (target.name.indexOf('[product_variant_id]') === -1) {
+                return;
+            }
+
+            syncRowUnitLabel(target.closest('tr'));
+        });
+
+        tbody.querySelectorAll('tr').forEach(syncRowUnitLabel);
+    });
+</script>
+@endpush

@@ -1,0 +1,2329 @@
+@extends($ordersLayout ?? 'layouts.warehouse')
+
+@section('title', $ordersPageTitle ?? 'Đơn hàng cần xử lý')
+@section('subtitle', $ordersPageSubtitle ?? 'Xem và xử lý đơn theo ngày')
+
+@push('styles')
+<style>
+    .actual_weight {
+        width: 96px;
+    }
+    .wh-summary-pill {
+        border-radius: 999px;
+        padding: 7px 12px;
+        font-size: .82rem;
+        font-weight: 700;
+    }
+    .wh-order-card {
+        position: relative;
+        border: 0;
+        border-radius: 12px;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.07);
+        height: 100%;
+        scroll-margin-top: 140px;
+    }
+    .wh-order-card.sale-change-pending, .wh-order-card.sale-change-pending > .card-header { background: #fff3cd !important; border-color: #f59e0b !important; }
+    .wh-order-card.sale-change-confirmed, .wh-order-card.sale-change-confirmed > .card-header { background: #d1e7dd !important; border-color: #198754 !important; }
+    .wh-order-card.has-cutting-in-progress {
+        border: 2px solid #7c3aed;
+        background: #f5f3ff;
+        box-shadow: 0 0 0 3px rgba(124, 58, 237, .14), 0 10px 24px rgba(15, 23, 42, 0.07);
+    }
+    .wh-order-card.has-cutting-in-progress > .card-header {
+        background: #ede9fe !important;
+    }
+    .wh-cutting-progress-alert {
+        border-color: #c4b5fd;
+        background: #f5f3ff;
+        color: #4c1d95;
+    }
+    .wh-picked-material-list {
+        display: grid;
+        gap: 8px;
+    }
+    .wh-picked-material-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid #ddd6fe;
+        border-radius: 8px;
+        background: #fff;
+    }
+    .wh-picked-material-row.is-verified {
+        border-color: #86efac;
+        background: #f0fdf4;
+        color: #14532d;
+    }
+    .wh-picked-material-meta {
+        font-size: .78rem;
+        color: #64748b;
+    }
+    .wh-picked-material-row.is-verified .wh-picked-material-meta {
+        color: #166534;
+    }
+    .wh-picked-material-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+    .wh-picked-material-actions .btn,
+    .wh-picked-material-badge {
+        font-size: .9rem;
+        font-weight: 800;
+        padding: 7px 12px;
+    }
+    .wh-picked-material-badge {
+        background: #16a34a;
+        color: #fff;
+        border-radius: 8px;
+    }
+    .wh-orders-scroll-modal .modal-content {
+        max-height: calc(100vh - 32px);
+    }
+    .wh-orders-scroll-modal .modal-content > form {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        max-height: calc(100vh - 32px);
+    }
+    .wh-orders-scroll-modal .modal-header,
+    .wh-orders-scroll-modal .modal-footer {
+        flex-shrink: 0;
+    }
+    .wh-orders-scroll-modal .modal-body {
+        overflow-y: auto;
+        min-height: 0;
+        max-height: calc(100vh - 170px);
+    }
+    @media (max-width: 575.98px) {
+        .wh-orders-scroll-modal .modal-content,
+        .wh-orders-scroll-modal .modal-content > form {
+            max-height: calc(100vh - 12px);
+        }
+        .wh-orders-scroll-modal .modal-body {
+            max-height: calc(100vh - 150px);
+        }
+    }
+    .wh-order-index {
+        border-radius: 50px;
+        width: 40px;
+        z-index: 2; 
+        font-weight: 700; 
+        padding: 6px 8px;
+        background: #0f172a;
+        color: #fff;
+        margin-right: 12px;
+    }
+    .wh-order-index.is-packed {
+        background: #198754;
+        color: #fff;
+    }
+    .wh-order-index.is-packing {
+        --bs-bg-opacity: 1;
+        background: rgba(var(--bs-warning-rgb), var(--bs-bg-opacity)) !important;
+        color: #212529;
+    }
+    .wh-order-index.is-unpacked {
+        background: #64748b;
+        color: #fff;
+    }
+    .wh-orders-print-sheet {
+        display: none;
+    }
+    @media print {
+        @page {
+            size: A4 portrait;
+            margin: 12mm;
+        }
+        body * {
+            visibility: hidden !important;
+        }
+        .wh-orders-print-sheet,
+        .wh-orders-print-sheet * {
+            visibility: visible !important;
+        }
+        .wh-orders-print-sheet {
+            display: block !important;
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            color: #000;
+            background: #fff;
+        }
+        .wh-orders-print-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12pt;
+        }
+        .wh-orders-print-table th,
+        .wh-orders-print-table td {
+            border: 1px solid #000;
+            padding: 7px 9px;
+        }
+        .wh-orders-print-table th {
+            text-align: center;
+            font-weight: 700;
+        }
+    }
+    .card-desript{
+        font-size: .75rem;
+        color: #64748b;
+    }
+    .wh-meta-label {
+        font-size: .72rem;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+    .wh-meta-value {
+        font-size: .9rem;
+        font-weight: 700;
+        color: #0f172a;
+    }
+    .wh-section {
+        padding: 0; 
+    }
+    .wh-order-card-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+        gap: 16px;
+        align-items: start;
+    }
+    .wh-order-card-grid.no-feedback {
+        grid-template-columns: 1fr;
+    }
+    .wh-order-main {
+        min-width: 0;
+        order: 1;
+    }
+    .wh-customer-feedback-panel {
+        order: 2;
+        width: 100%;
+        margin: 0;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        background: #f8fafc;
+        padding: 10px;
+    }
+    .wh-customer-feedback-panel.is-alert {
+        border-color: #f59e0b;
+        background: #fffbeb;
+    }
+    .wh-customer-feedback-title {
+        font-size: .78rem;
+        font-weight: 800;
+        color: #0f172a;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+    .wh-customer-feedback-note {
+        font-size: .78rem;
+        color: #334155;
+        line-height: 1.35;
+    }
+    @media (max-width: 991.98px) {
+        .wh-order-card-grid {
+            grid-template-columns: 1fr;
+        }
+        .wh-customer-feedback-panel {
+            order: 1;
+        }
+        .wh-order-main {
+            order: 2;
+        }
+    }
+    .wh-logistics-title {
+        font-size: .78rem;
+        font-weight: 700;
+        color: #334155;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+    .wh-item-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 6px;
+    }
+    .wh-item-table-wrap {
+        overflow-x: auto;
+    }
+    .wh-item-table-head,
+    .wh-item-table-row {
+        display: grid;
+        grid-template-columns: 48px minmax(170px, 1fr) 52px 52px 132px 80px 140px 76px 100px;
+        gap: 8px;
+        align-items: center; 
+        min-width: 930px;
+    }
+    .wh-item-table-head {
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        color: #64748b;
+        font-weight: 700;
+        padding: 0 0 6px;
+        border-bottom: 1px solid #e2e8f0;
+        margin-bottom: 6px;
+    }
+    .wh-item-row {
+        border-bottom: 1px solid #f1f5f9;
+        padding-bottom: 6px;
+    }
+    .wh-item-row:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+    }
+    .wh-item-thumb {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        object-fit: cover;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .wh-item-thumb-placeholder {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        border: 1px dashed #cbd5e1;
+        color: #94a3b8;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    .wh-item-name {
+        font-size: .86rem;
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.25;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .wh-item-cell {
+        font-size: .8rem;
+        color: #475569;
+        text-align: center;
+    }
+    .wh-item-cell strong {
+        color: #0f172a;
+    }
+    .wh-item-action {
+        text-align: right;
+    }
+    .wh-warning-action-btn {
+        --bs-bg-opacity: 1;
+        background-color: rgba(var(--bs-warning-rgb), var(--bs-bg-opacity)) !important;
+        border-color: rgba(var(--bs-warning-rgb), var(--bs-bg-opacity)) !important;
+        color: #212529 !important;
+    }
+    .wh-warning-action-btn:hover,
+    .wh-warning-action-btn:focus,
+    .wh-warning-action-btn:active {
+        --bs-bg-opacity: .9;
+        background-color: rgba(var(--bs-warning-rgb), var(--bs-bg-opacity)) !important;
+        border-color: rgba(var(--bs-warning-rgb), var(--bs-bg-opacity)) !important;
+        color: #212529 !important;
+    }
+    .wh-order-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    .wh-order-actions > form,
+    .wh-order-actions > button,
+    .wh-order-actions > span,
+    .wh-order-actions > a,
+    .wh-order-actions > details {
+        width: auto;
+        margin: 0 !important;
+    }
+    .wh-order-actions .btn {
+        white-space: nowrap;
+    }
+    .wh-footer-adjustment > summary {
+        display: inline-flex;
+        align-items: center;
+        min-height: 31px;
+        padding: 5px 12px;
+        border: 1px solid #d6dce5;
+        border-radius: 6px;
+        background: #f8fafc;
+        color: #0f172a;
+        font-weight: 700;
+        cursor: pointer;
+        list-style: none;
+    }
+    .wh-footer-adjustment > summary::-webkit-details-marker {
+        display: none;
+    }
+    .wh-footer-adjustment[open] {
+        flex-basis: 100%;
+        order: 10;
+        border: 1px solid #d6dce5;
+        border-radius: 8px;
+        background: #f8fafc;
+        padding: 8px;
+    }
+    .wh-footer-adjustment[open] > summary {
+        margin-bottom: 8px;
+    }
+    .wh-footer-transfer > summary {
+        border-color: #0f766e;
+        background: #ecfdf5;
+        color: #0f766e;
+    }
+    .wh-footer-transfer[open] {
+        border-color: #99f6e4;
+        background: #f0fdfa;
+    }
+    .wh-footer-transfer-form {
+        display: grid;
+        grid-template-columns: minmax(220px, 360px) auto;
+        gap: 8px;
+        align-items: end;
+    }
+    @media (max-width: 575.98px) {
+        .wh-footer-transfer-form {
+            grid-template-columns: 1fr;
+        }
+    }
+    .wh-inventory-action-btn {
+        min-width: 166px;
+        font-weight: 700;
+    }
+    .wh-compact-form {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        flex-wrap: nowrap;
+    }
+    .wh-readonly-item {
+        font-size: .78rem;
+        color: #475569;
+        font-weight: 600;
+        text-align: center
+    }
+    .wh-quick-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .wh-quick-pill {
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: .78rem;
+        font-weight: 700;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid #cbd5e1;
+        background: #fff;
+        color: #334155;
+    }
+    .wh-quick-pill.active {
+        border-color: #2563eb;
+        background: #eff6ff;
+        color: #1d4ed8;
+    }
+    .wh-quick-pill.disabled {
+        opacity: .55;
+        background: #f8fafc;
+        color: #64748b;
+        border-style: dashed;
+        pointer-events: none;
+    }
+    .wh-quick-count {
+        min-width: 20px;
+        height: 20px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .7rem;
+        background: #e2e8f0;
+        color: #334155;
+        padding: 0 6px;
+    }
+    .wh-quick-pill.active .wh-quick-count {
+        background: #2563eb;
+        color: #fff;
+    }
+    .wh-stock-alert {
+        border: 1px solid #fca5a5;
+        background: #fef2f2;
+        color: #991b1b;
+        border-radius: 10px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+    }
+    .wh-stock-alert summary {
+        cursor: pointer;
+        font-weight: 700;
+    }
+    .wh-stock-alert ul {
+        margin: 8px 0 0;
+        padding-left: 16px;
+    }
+    .wh-stock-alert a {
+        color: #9a3412;
+        font-weight: 700;
+    }
+    .wh-stock-panel {
+        border: 1px solid #dbe4ef;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+    }
+    .wh-stock-panel .card-header {
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+        border-top-left-radius: 12px;
+        border-top-right-radius: 12px;
+    }
+    .wh-stock-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 10px;
+    }
+    .wh-stock-item {
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 10px;
+        background: #fff;
+    }
+    .wh-stock-name {
+        font-size: .86rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 8px;
+    }
+    .stock-bar-wrap {
+        margin-bottom: 8px;
+    }
+    .stock-bar-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: .74rem;
+        color: #64748b;
+        margin-bottom: 4px;
+    }
+    .stock-bar-track {
+        width: 100%;
+        height: 8px;
+        background: #e2e8f0;
+        border-radius: 999px;
+        overflow: hidden;
+    }
+    .stock-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+    }
+    .stock-bar-fill.stock-available { background: linear-gradient(90deg, #2563eb, #0ea5e9); }
+    .stock-bar-fill.stock-ordered { background: linear-gradient(90deg, #f59e0b, #f97316); }
+    .stock-bar-fill.stock-packed { background: linear-gradient(90deg, #16a34a, #22c55e); }
+    @media (max-width: 575px) {
+        .wh-item-table-head,
+        .wh-item-table-row {
+            grid-template-columns: 44px minmax(140px, 1.15fr) 40px 52px 54px 84px 96px 124px;
+            min-width: 700px;
+            gap: 6px;
+        }
+    }
+
+    /* ── Stock Drawer (offcanvas) ───────────────────────── */
+    :root { --stock-drawer-width: min(92vw, 460px); }
+    #stockDrawer {
+        width: var(--stock-drawer-width);
+    }
+    body.stock-drawer-pinned .wh-orders-shell {
+        padding-right: calc(var(--stock-drawer-width) + 16px);
+        transition: padding-right .25s ease;
+    }
+    body.stock-drawer-pinned #stockDrawer {
+        visibility: visible !important;
+        transform: none !important;
+        box-shadow: -4px 0 24px rgba(15,23,42,0.10);
+    }
+    #stockDrawer .offcanvas-header {
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+    }
+    #stockDrawer .offcanvas-body { 
+        overflow-y: auto;
+    }
+    #stockDrawerPinBtn.pinned {
+        background: #dbeafe;
+        border-color: #2563eb;
+        color: #1d4ed8;
+    }
+    .wh-stock-trigger-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .wh-stock-item.is-short {
+        border-color: #fca5a5;
+        background: #fff8f8;
+    }
+    .wh-stock-item.is-short .wh-stock-name {
+        color: #991b1b;
+    }
+    .wh-stock-shortage-badge {
+        display: inline-block;
+        font-size: .7rem;
+        font-weight: 700;
+        padding: 1px 6px;
+        border-radius: 999px;
+        background: #fef2f2;
+        color: #dc2626;
+        border: 1px solid #fca5a5;
+        margin-left: 4px;
+    }
+    .wh-stock-summary {
+        border: 1px solid #e2e8f0; 
+        background: #f8fafc;
+        padding: 10px 12px;
+        margin-bottom: 14px;
+        font-size: .82rem;
+    }
+    .wh-stock-summary-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 3px 0;
+        border-bottom: 1px solid #f1f5f9;
+    }
+    .wh-stock-summary-row:last-child { border-bottom: 0; }
+    .wh-stock-summary-row .label { color: #64748b; }
+    .wh-stock-summary-row .value { font-weight: 700; color: #0f172a; }
+    .wh-stock-summary-row .value.danger { color: #dc2626; }
+    .wh-stock-list {
+        border: 1px solid #e2e8f0; 
+        overflow: hidden;
+        background: #fff;
+    }
+    .wh-stock-row {
+        display: grid;
+        grid-template-columns: minmax(110px, 2.1fr) minmax(52px, .8fr) minmax(50px, .95fr) minmax(50px, .95fr) minmax(55px, .9fr) minmax(60px, 1fr);
+        column-gap: 8px;
+        align-items: center;
+        padding: 6px 9px;
+        border-bottom: 1px solid #eef2f7;
+    }
+    .wh-stock-row:last-child {
+        border-bottom: 0;
+    }
+    .wh-stock-row.is-short {
+        background: #fff8f8;
+    }
+    .wh-stock-row.head {
+        background: #f8fafc;
+        font-size: .74rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        color: #334155;
+    }
+    .wh-stock-col {
+        min-width: 0;
+    }
+    .wh-stock-col.num {
+        text-align: right;
+        font-weight: 700;
+        color: #0f172a;
+        white-space: nowrap;
+    }
+    .wh-stock-col.col-size {
+        text-align: center;
+        font-weight: 700;
+        color: #334155;
+        white-space: nowrap;
+    }
+    .wh-stock-col.col-available {
+        color: var(--theme-primary);
+    }
+    .wh-stock-col.col-ordered {
+        color: #984107;
+    }
+    .wh-stock-col.col-packed {
+        color: #600240;
+    }
+    .wh-stock-col.num.is-low {
+        color: #dc2626;
+    }
+    .wh-stock-product-name {
+        font-size: .86rem;
+        font-weight: 700;
+        color: #0f172a;
+        line-height: 1.3;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .wh-stock-product-sku {
+        font-size: .74rem;
+        color: #64748b;
+        margin-top: 2px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    @media (max-width: 560px) {
+        .wh-stock-row {
+            grid-template-columns: minmax(136px, 1.8fr) repeat(5, minmax(50px, .72fr));
+            column-gap: 6px;
+            padding: 9px 10px;
+        }
+        .wh-stock-row.head {
+            font-size: .67rem;
+        }
+        .wh-stock-col.num {
+            font-size: .8rem;
+        }
+    }
+    .wh-drawer-date-badge {
+        display: inline-block;
+        font-size: .75rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #eff6ff;
+        color: #1d4ed8;
+        border: 1px solid #bfdbfe;
+        margin-top: 2px;
+    }
+    .wh-adjustment-pending-item {
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: #fff;
+    }
+    .wh-adjustment-picker-results .list-group-item {
+        gap: 10px;
+        align-items: center;
+    }
+    .wh-adjustment-picker-results .monitor-product-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    .wh-adjustment-picker-results .monitor-product-list {
+        display: grid;
+        gap: 9px;
+    }
+    .wh-adjustment-picker-results .monitor-product-card {
+        overflow: hidden;
+        border: 1px solid #dbe4ee;
+        border-radius: 9px;
+        background: #fff;
+    }
+    .wh-adjustment-picker-results .monitor-product-card.is-open {
+        border-color: #0f766e;
+        box-shadow: 0 0 0 2px rgba(15, 118, 110, .08);
+    }
+    .wh-adjustment-picker-results .monitor-product-choice {
+        display: flex;
+        width: 100%;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 10px 12px;
+        border: 0;
+        background: #fff;
+        color: #0f172a;
+        text-align: left;
+    }
+    .wh-adjustment-picker-results .monitor-product-choice:hover {
+        background: #f8fafc;
+    }
+    .wh-adjustment-picker-results .monitor-product-main {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+    }
+    .wh-adjustment-picker-results .monitor-product-thumb {
+        width: 48px;
+        height: 48px;
+        flex: 0 0 48px;
+        object-fit: cover;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+    }
+    .wh-adjustment-picker-results .monitor-product-name,
+    .wh-adjustment-picker-results .monitor-product-meta {
+        display: block;
+    }
+    .wh-adjustment-picker-results .monitor-product-name {
+        color: #0f172a;
+    }
+    .wh-adjustment-picker-results .monitor-product-meta {
+        color: #64748b;
+        font-size: .76rem;
+    }
+    .wh-adjustment-picker-results .monitor-product-choice-label {
+        flex-shrink: 0;
+        color: #0f766e;
+        font-size: .8rem;
+        font-weight: 700;
+    }
+    .wh-adjustment-picker-results .monitor-product-card.is-open .monitor-product-choice-label i {
+        transform: rotate(180deg);
+    }
+    .wh-adjustment-picker-results .monitor-product-variants {
+        padding: 10px 12px 12px;
+        border-top: 1px solid #e2e8f0;
+        background: #f8fafc;
+    }
+    .wh-adjustment-picker-results .monitor-variant-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+        gap: 8px;
+    }
+    .wh-adjustment-picker-results .monitor-variant-option {
+        display: grid;
+        gap: 3px;
+        padding: 9px 10px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: #fff;
+        color: #334155;
+        text-align: left;
+    }
+    .wh-adjustment-picker-results .monitor-variant-option:hover {
+        border-color: #0f766e;
+        background: #ecfdf5;
+    }
+    .wh-adjustment-picker-results .monitor-variant-size {
+        color: #0f172a;
+        font-weight: 800;
+    }
+    .wh-adjustment-picker-results .monitor-variant-option small {
+        display: block;
+        color: #64748b;
+        font-size: .7rem;
+    }
+    .wh-adjustment-picker-results .monitor-variant-availability.is-available {
+        color: #15803d;
+    }
+
+    [id^="order-card-"] {
+        scroll-margin-top: 150px;
+    }
+    
+    /* ── Order Sequence Navigation ───────────────────────── */
+    .wh-order-nav-area {
+        position: sticky;
+        top: 75px;
+        z-index: 95;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 12px 16px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    }
+    .wh-order-nav-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 36px;
+        height: 36px;
+        padding: 0 8px;
+        border-radius: 50px;
+        font-weight: 700;
+        font-size: 0.9rem;
+        text-decoration: none;
+        color: #fff !important;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .wh-order-nav-pill:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    .wh-order-nav-pill.is-packed {
+        background-color: #198754;
+    }
+    .wh-order-nav-pill.is-packing {
+        --bs-bg-opacity: 1;
+        background-color: rgba(var(--bs-warning-rgb), var(--bs-bg-opacity)) !important;
+        color: #212529 !important;
+    }
+    .wh-order-nav-pill.is-unpacked {
+        background-color: #64748b;
+    }
+    .wh-orders-workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 280px;
+        gap: 10px;
+        align-items: start;
+    }
+    .wh-order-priority-panel {
+        position: sticky;
+        top: 75px;
+        max-height: calc(100vh - 92px);
+        overflow-y: auto;
+        padding: 7px;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 4px 15px rgba(15, 23, 42, .06);
+    }
+    .wh-order-priority-title {
+        padding: 3px 4px 6px;
+        color: #475569;
+        font-size: .7rem;
+        font-weight: 800;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+    .wh-order-priority-item {
+        --order-state-color: #64748b;
+        --order-state-contrast: #fff;
+        display: grid;
+        grid-template-columns: 32px minmax(0, 1fr);
+        gap: 4px;
+        align-items: center;
+        padding: 2px;
+        border-bottom: 1px solid #e2e8f0;
+        text-decoration: none;
+    }
+    .wh-order-priority-item:last-child {
+        border-bottom: 0;
+    }
+    .wh-order-priority-item.is-packed {
+        --order-state-color: #198754;
+    }
+    .wh-order-priority-item.is-packing {
+        --order-state-color: #ffc107;
+        --order-state-contrast: #212529;
+    }
+    .wh-order-priority-number,
+    .wh-order-priority-name {
+        background: var(--order-state-color);
+        color: var(--order-state-contrast) !important;
+        transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .wh-order-priority-number {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        justify-self: center;
+        min-width: 26px;
+        height: 26px;
+        padding: 0 6px;
+        border-radius: 999px;
+        font-size: .76rem;
+        font-weight: 800;
+    }
+    .wh-order-priority-name {
+        display: block;
+        min-width: 0;
+        padding: 5px 8px;
+        border-radius: 6px;
+        overflow: hidden;
+        font-size: .8rem;
+        font-weight: 800;
+        line-height: 1.1;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .wh-order-priority-item:hover .wh-order-priority-number,
+    .wh-order-priority-item:hover .wh-order-priority-name,
+    .wh-order-priority-item.active .wh-order-priority-number,
+    .wh-order-priority-item.active .wh-order-priority-name {
+        transform: translateY(-1px);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--order-state-color) 24%, transparent);
+    }
+    @media (max-width: 1199.98px) {
+        .wh-orders-workspace {
+            display: block;
+        }
+        .wh-order-priority-panel {
+            display: none;
+        }
+    }
+    @media (max-width: 575.98px) {
+        .wh-orders-shell { min-width: 0; }
+        .wh-orders-shell > .card { border-radius: 10px; }
+        .wh-orders-shell > .card .card-body { padding: .75rem; }
+        .wh-orders-filter-actions { flex-wrap: wrap; width: 100%; }
+        .wh-orders-filter-actions > .btn,
+        .wh-orders-filter-actions > a.btn {
+            flex: 1 1 calc(50% - .25rem);
+            min-height: 42px;
+        }
+        .wh-orders-quick-dates { width: 100%; margin: .25rem 0 0 !important; }
+        .wh-quick-wrap {
+            flex-wrap: nowrap;
+            width: 100%;
+            padding-bottom: 4px;
+            overflow-x: auto;
+            scrollbar-width: thin;
+        }
+        .wh-quick-pill { flex: 0 0 auto; }
+        .wh-summary-pill { padding: 6px 9px; font-size: .72rem; }
+        .wh-order-nav-area {
+            top: 59px;
+            margin-bottom: .75rem !important;
+            padding: 8px;
+            border-radius: 9px;
+            overflow-x: auto;
+        }
+        .wh-order-nav-area > .d-flex {
+            flex-wrap: nowrap !important;
+            width: max-content;
+            min-width: 100%;
+        }
+        .wh-order-nav-pill { flex: 0 0 auto; min-width: 34px; height: 34px; }
+        [id^="order-card-"] { scroll-margin-top: 108px; }
+        .wh-order-card { border-radius: 10px; }
+        .wh-order-card .card-header { align-items: flex-start !important; padding: .75rem; }
+        .wh-order-card-header-content {
+            align-items: flex-start !important;
+            flex-direction: column;
+            gap: .5rem;
+        }
+        .wh-order-card-header-actions {
+            width: 100%;
+            flex-wrap: wrap;
+            justify-content: flex-start;
+        }
+        .wh-order-index { flex: 0 0 36px; width: 36px; margin-right: 8px; }
+        .wh-order-customer-name {
+            font-size: 1rem !important;
+            line-height: 1.2;
+            overflow-wrap: anywhere;
+        }
+        .card-desript {
+            margin-top: 3px;
+            font-size: .7rem;
+            line-height: 1.4;
+            overflow-wrap: anywhere;
+        }
+        .wh-order-card .card-body { padding: .75rem; }
+        .wh-order-card-grid { gap: 8px; }
+        .wh-item-table-wrap { overflow: visible; }
+        .wh-item-table-head { display: none; }
+        .wh-item-list { gap: 10px; }
+        .wh-item-row {
+            padding: 0;
+            border: 1px solid #dbe4ee;
+            border-radius: 10px;
+            background: #fff;
+            overflow: hidden;
+        }
+        .wh-item-table-row {
+            min-width: 0;
+            padding: 10px;
+            grid-template-columns: 52px minmax(0, 1fr);
+            gap: 7px 10px;
+            align-items: center;
+        }
+        .wh-item-table-row > :nth-child(1) { grid-column: 1; grid-row: 1; }
+        .wh-item-table-row > :nth-child(2) { grid-column: 2; grid-row: 1; }
+        .wh-item-table-row > :nth-child(n+3) {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            min-width: 0;
+            padding-top: 7px;
+            border-top: 1px dashed #e2e8f0;
+            text-align: right;
+        }
+        .wh-item-table-row > :nth-child(3)::before { content: "Size"; }
+        .wh-item-table-row > :nth-child(4)::before { content: "Số lượng"; }
+        .wh-item-table-row > :nth-child(5)::before { content: "SL đóng"; }
+        .wh-item-table-row > :nth-child(6)::before { content: "Tổng"; }
+        .wh-item-table-row > :nth-child(7)::before { content: "Khối lượng"; }
+        .wh-item-table-row > :nth-child(8)::before { content: "Đơn giá"; }
+        .wh-item-table-row > :nth-child(9)::before { content: "Thành tiền"; }
+        .wh-item-table-row > :nth-child(n+3)::before {
+            flex: 0 0 auto;
+            color: #64748b;
+            font-size: .72rem;
+            font-weight: 700;
+            text-align: left;
+            text-transform: uppercase;
+        }
+        .wh-item-name {
+            overflow: visible;
+            font-size: .9rem;
+            text-overflow: clip;
+            white-space: normal;
+        }
+        .wh-item-thumb,
+        .wh-item-thumb-placeholder { width: 48px; height: 48px; }
+        .wh-item-action,
+        .wh-item-cell { font-size: .84rem; }
+        .wh-compact-form {
+            flex: 1 1 auto;
+            justify-content: flex-end !important;
+            flex-wrap: wrap;
+        }
+        .wh-compact-form .form-control { max-width: 112px; min-height: 38px; }
+        .wh-compact-form .btn { min-height: 38px; }
+        .actual_weight { width: 112px; }
+        .wh-picked-material-row { align-items: stretch; flex-direction: column; }
+        .wh-picked-material-actions { justify-content: stretch; }
+        .wh-picked-material-actions .btn { width: 100%; }
+        .wh-order-actions { align-items: stretch; }
+        .wh-order-actions > form,
+        .wh-order-actions > button,
+        .wh-order-actions > span,
+        .wh-order-actions > a,
+        .wh-order-actions > details { width: 100%; }
+        .wh-order-actions .btn,
+        .wh-order-actions form .btn,
+        .wh-footer-adjustment > summary {
+            justify-content: center;
+            width: 100%;
+            min-height: 42px;
+        }
+        .wh-order-card .card-footer { padding: .75rem !important; }
+        .wh-customer-feedback-panel { padding: 8px; }
+        .alert { overflow-wrap: anywhere; }
+        .modal-dialog { margin: .35rem; }
+    }
+</style>
+@endpush
+
+@section('content')
+@if($orderChangesMode ?? false)
+    @include('package.order_changes')
+@else
+@php
+    $formatCompactDecimal = static function (float|int|string $value, int $decimals = 2): string {
+        $num = (float) $value;
+        $str = number_format($num, $decimals, ',', '.');
+        return rtrim(rtrim($str, '0'), ',');
+    };
+    $formatKg = static function (float|int|string $value) use ($formatCompactDecimal): string {
+        return $formatCompactDecimal($value) . ' kg';
+    };
+    $fifoRemainingStock = $fifoRemainingStock ?? [];
+    $statusMeta = [
+        'approved' => ['label' => 'Chờ đóng gói', 'class' => 'bg-primary'],
+        'ready_to_pack' => ['label' => 'Chờ đóng gói', 'class' => 'bg-primary'],
+        'packing' => ['label' => 'Đang đóng', 'class' => 'bg-warning text-dark'],
+        'packed' => ['label' => 'Đã hoàn thành đóng hàng', 'class' => 'bg-success'],
+        'packed_waiting_pickup' => ['label' => 'Đã hoàn thành đóng hàng', 'class' => 'bg-success'],
+        'delivering' => ['label' => 'Đang giao', 'class' => 'bg-secondary'],
+        'delivered' => ['label' => 'Đã giao', 'class' => 'bg-success'],
+        'completed' => ['label' => 'Hoàn thành', 'class' => 'bg-success'],
+        'pending' => ['label' => 'Chờ duyệt', 'class' => 'bg-light text-dark'],
+        'pending_leader_approval' => ['label' => 'Chờ trưởng nhóm duyệt', 'class' => 'bg-light text-dark'],
+        'pending_manager_approval' => ['label' => 'Chờ quản lý duyệt', 'class' => 'bg-light text-dark'],
+        'pending_warehouse_approval' => ['label' => 'Chờ kho duyệt', 'class' => 'bg-light text-dark'],
+        'rejected' => ['label' => 'Từ chối', 'class' => 'bg-danger'],
+    ];
+
+    $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'delivered', 'completed'];
+
+    $variantStock = $variantStock ?? [];
+    $stockPanelVariants = $stockPanelVariants ?? collect();
+    $orderStatsByVariant = $orders
+        ->flatMap(function ($order) use ($packedLikeStatuses, $variantStock) {
+            return $order->items->map(function ($item) use ($order, $packedLikeStatuses, $variantStock) {
+                $variant = $item->variant;
+                $productName = $variant?->name ?? $item->product?->name ?? 'Sản phẩm';
+                $orderedQty = (float) ($item->quantity ?? 0);
+                $packedQty = in_array((string) $order->status, $packedLikeStatuses, true) ? $orderedQty : 0;
+                $vid = (int) ($item->product_variant_id ?? 0);
+                // Warehouse-specific stock (not cross-warehouse available_stock)
+                $warehouseStock = isset($variantStock[$vid]) ? (float) $variantStock[$vid] : (float) ($variant?->available_stock ?? 0);
+
+                return [
+                    'variant_id'  => $vid,
+                    'name'        => $productName,
+                    'raw_stock'   => max(0, $warehouseStock),
+                    'ordered_qty' => $orderedQty,
+                    'packed_qty'  => $packedQty,
+                ];
+            });
+        })
+        ->filter(fn($row) => (int) ($row['variant_id'] ?? 0) > 0)
+        ->groupBy('variant_id')
+        ->map(function ($rows) use ($fifoRemainingStock) {
+            $first     = $rows->first();
+            $variantId = (int) ($first['variant_id'] ?? 0);
+            $rawStock  = (float) ($first['raw_stock'] ?? 0);
+            // fifo_remaining = stock left after ALL globally-queued prior orders consume their share
+            // This matches exactly what the FIFO packing guard uses to allow/block packing
+            $fifoRemaining = isset($fifoRemainingStock[$variantId])
+                ? max(0, (float) $fifoRemainingStock[$variantId])
+                : $rawStock;
+            return [
+                'variant_id'    => $variantId,
+                'name'          => $first['name'] ?? 'Sản phẩm',
+                'raw_stock'     => $rawStock,
+                'fifo_remaining'=> $fifoRemaining,
+                'ordered_qty'   => (float) $rows->sum('ordered_qty'),
+                'packed_qty'    => (float) $rows->sum('packed_qty'),
+            ];
+        })
+        ->map(function ($item) {
+            $fifoRemaining = (float) $item['fifo_remaining'];
+            $ordered       = (float) $item['ordered_qty'];
+            // Shortage = gap between what this date needs vs what FIFO left for it
+            // (consistent with packing guard logic)
+            $shortage = max(0, $ordered - $fifoRemaining);
+            return array_merge($item, [
+                'shortage' => $shortage,
+                'is_short' => $shortage > 0,
+            ]);
+        })
+        ->keyBy('variant_id');
+
+    $inventoryStats = collect($stockPanelVariants)
+        ->map(function ($variant) use ($orderStatsByVariant, $fifoRemainingStock, $variantStock) {
+            $variantId = (int) $variant->id;
+            $rawStock = max(0, (float) ($variantStock[$variantId] ?? $variant->available_stock ?? 0));
+            $orderStat = $orderStatsByVariant->get($variantId, []);
+            $orderedQty = (float) ($orderStat['ordered_qty'] ?? 0);
+            $packedQty = (float) ($orderStat['packed_qty'] ?? 0);
+            $fifoRemaining = isset($fifoRemainingStock[$variantId])
+                ? max(0, (float) $fifoRemainingStock[$variantId])
+                : $rawStock;
+            $name = $variant->name ?: $variant->product?->name ?: 'Sản phẩm';
+            $shortage = max(0, $orderedQty - $fifoRemaining);
+
+            return [
+                'variant_id' => $variantId,
+                'name' => $name,
+                'sku' => $variant->sku,
+                'size' => $variant->size,
+                'raw_stock' => $rawStock,
+                'fifo_remaining' => $fifoRemaining,
+                'ordered_qty' => $orderedQty,
+                'packed_qty' => $packedQty,
+                'shortage' => $shortage,
+                'is_short' => $shortage > 0,
+            ];
+        })
+        ->filter(fn ($item) => (float) $item['raw_stock'] > 0 || (float) $item['ordered_qty'] > 0 || (float) $item['packed_qty'] > 0)
+        ->sortByDesc(fn($i) => [(int)$i['is_short'], $i['ordered_qty'], $i['raw_stock']])
+        ->values();
+
+    // Summary totals
+    $stockSummary = [
+        'total_products' => $inventoryStats->count(),
+        'short_products' => $inventoryStats->where('is_short', true)->count(),
+        'total_ordered'  => $inventoryStats->sum('ordered_qty'),
+        'total_packed'   => $inventoryStats->sum('packed_qty'),
+        'total_shortage' => $inventoryStats->sum('shortage'),
+    ];
+@endphp
+<div class="wh-orders-shell">
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+            <form method="GET" action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders') }}" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small text-muted mb-1">Ngày</label>
+                    <input type="date" name="date" class="form-control" value="{{ $selectedDate ?? now()->toDateString() }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small text-muted mb-1">Trạng thái</label>
+                    <select name="status" class="form-select">
+                        <option value="">Tất cả trạng thái</option>
+                        <option value="approved" {{ ($status ?? '') === 'approved' ? 'selected' : '' }}>Đã duyệt</option>
+                        <option value="ready_to_pack" {{ ($status ?? '') === 'ready_to_pack' ? 'selected' : '' }}>Chờ đóng gói</option>
+                        <option value="packing" {{ ($status ?? '') === 'packing' ? 'selected' : '' }}>Đang đóng gói</option>
+                        <option value="packed" {{ ($status ?? '') === 'packed' ? 'selected' : '' }}>Đã đóng gói</option>
+                        <option value="packed_waiting_pickup" {{ ($status ?? '') === 'packed_waiting_pickup' ? 'selected' : '' }}>Chờ shipper nhận</option>
+                    </select>
+                </div>
+                <div class="col-md-8 d-flex gap-2 wh-orders-filter-actions">
+                    <button class="btn btn-primary" type="submit">
+                        <i class="bi bi-funnel me-1"></i>Lọc
+                    </button>
+                    <a href="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-clockwise me-1"></i>Hôm nay
+                    </a>
+                    <div class="mx-3 wh-orders-quick-dates">
+                         
+                        <div class="wh-quick-wrap">
+                            @foreach($quickDates as $quickDate)
+                                @if($quickDate['available'])
+                                    <a href="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders', array_filter(['date' => $quickDate['date'], 'status' => $status ?: null])) }}"
+                                    class="wh-quick-pill {{ $quickDate['active'] ? 'active' : '' }}">
+                                        {{ $quickDate['label'] }}
+                                        <span class="wh-quick-count">{{ $quickDate['count'] }}</span>
+                                    </a>
+                                @else
+                                    <span class="wh-quick-pill disabled">
+                                        {{ $quickDate['label'] }}
+                                        <span class="wh-quick-count">0</span>
+                                    </span>
+                                @endif
+                            @endforeach
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center gap-2 mb-3 flex-wrap">
+        <div class="d-flex gap-2 flex-wrap">
+            <span class="badge bg-dark wh-summary-pill">Tổng đơn: {{ $orders->count() }}</span>
+            <span class="badge bg-primary wh-summary-pill">Chờ đóng gói: {{ $orders->whereIn('status', ['approved', 'ready_to_pack'])->count() }}</span>
+            <span class="badge bg-warning text-dark wh-summary-pill">Đang đóng: {{ $orders->where('status', 'packing')->count() }}</span>
+            <span class="badge bg-danger wh-summary-pill">Sale từ chối điều chỉnh: {{ $orders->where('warehouse_adjustment_status', \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED)->count() }}</span>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            @if($deferredComponentImportRequests->isNotEmpty())
+                <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal"
+                    data-bs-target="#cuttingImportModal" aria-controls="cuttingImportModal">
+                    <i class="bi bi-box-arrow-in-down me-1"></i>Nhập kho Pha Lóc
+                    <span class="badge bg-dark ms-1">{{ $deferredComponentImportRequests->count() }}</span>
+                </button>
+            @endif
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="window.print()">
+                <i class="bi bi-printer me-1"></i>In toàn bộ
+            </button>
+            <button type="button"
+                class="btn btn-outline-info btn-sm wh-stock-trigger-btn"
+                id="stockDrawerToggleBtn"
+                data-bs-toggle="offcanvas"
+                data-bs-target="#stockDrawer"
+                aria-controls="stockDrawer">
+                <i class="bi bi-bar-chart-steps"></i>Tồn kho
+                @if($inventoryStats->isNotEmpty())
+                    <span class="badge bg-info text-dark ms-1">{{ $inventoryStats->count() }}</span>
+                @endif
+            </button>
+            <a href="{{ route($packingDashboardRoute ?? 'warehouse.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left me-1"></i>Dashboard
+            </a>
+        </div>
+    </div>
+
+
+
+    @if($deferredComponentImportRequests->isNotEmpty())
+        <div class="modal fade" id="cuttingImportModal" tabindex="-1" aria-labelledby="cuttingImportModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="cuttingImportModalLabel">Nhập kho Pha Lóc</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                    </div>
+                    <div class="modal-body">
+                        @include('warehouse.cutting._deferred_import_requests')
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
+
+    @if($orders->isEmpty())
+        <div class="card border-0 shadow-sm text-center py-5">
+            <i class="bi bi-check2-all fs-1 text-success"></i>
+            <p class="mt-2 text-muted">Không có đơn nào cần xử lý lúc này.</p>
+        </div>
+    @else
+    @php
+        $packedOrders = $orders->filter(fn($o) => in_array((string)$o->status, $packedLikeStatuses, true));
+        $unpackedOrders = $orders->reject(fn($o) => in_array((string)$o->status, $packedLikeStatuses, true))->sortBy('daily_sequence');
+    @endphp
+
+    <div class="wh-orders-workspace">
+    <div class="wh-orders-main">
+    <div class="wh-order-nav-area mb-4">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            @foreach($orders->sortBy('daily_sequence') as $navOrder)
+                @php
+                    $isPackedNav = in_array((string)$navOrder->status, $packedLikeStatuses, true);
+                    $isPackingNav = (string) $navOrder->status === 'packing';
+                    $navStateClass = $isPackingNav ? 'is-packing' : ($isPackedNav ? 'is-packed' : 'is-unpacked');
+                    $sequenceNumber = $navOrder->daily_sequence ?? $loop->iteration;
+                @endphp
+                <a href="javascript:void(0);"
+                   onclick="document.getElementById('order-card-{{ $navOrder->id }}')?.scrollIntoView({ behavior: 'smooth', block: 'start' });"
+                   class="wh-order-nav-pill {{ $navStateClass }}"
+                   data-order-id="{{ $navOrder->id }}"
+                   title="{{ $navOrder->customer?->name ?? 'Đơn hàng' }}">
+                    {{ $sequenceNumber }}
+                </a>
+            @endforeach
+        </div>
+    </div>
+
+    @php $saleChangedOrders = $orders->filter(fn ($entry) => collect($entry->sale_changes_pending)->isNotEmpty())->sortBy('daily_sequence'); @endphp
+    @if($saleChangedOrders->isNotEmpty())
+        <div class="card border-warning mb-3">
+            <div class="card-header bg-warning-subtle fw-bold">Thay đổi từ sale — chờ xác nhận</div>
+            <div class="table-responsive">
+                <table class="table mb-0 align-middle">
+                    <thead><tr><th>STT ưu tiên</th><th>Khách</th><th>Nội dung thay đổi</th></tr></thead>
+                    <tbody>
+                    @foreach($saleChangedOrders as $changedOrder)
+                        <tr>
+                            <td>{{ $changedOrder->daily_sequence ?? '—' }}</td>
+                            <td>{{ $changedOrder->customer?->name ?? '—' }}</td>
+                            <td><a href="#order-card-{{ $changedOrder->id }}" onclick="event.preventDefault(); document.getElementById('order-card-{{ $changedOrder->id }}')?.scrollIntoView({behavior: 'smooth', block: 'start'});">
+                                @foreach($changedOrder->sale_changes_pending as $change)
+                                    <span class="d-block">{{ $change->user?->name ?? 'Sale' }} · {{ $change->created_at->format('d/m H:i') }}: {{ $change->note }}</span>
+                                @endforeach
+                            </a></td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    @endif
+
+    @php
+        $orderedPackingList = $unpackedOrders->values()
+            ->concat($packedOrders->sortBy('daily_sequence')->values());
+    @endphp
+
+    <div class="row g-3">
+        @foreach($orderedPackingList as $order)
+            @include('warehouse.orders._order_card', ['order' => $order, 'statusMeta' => $statusMeta, 'activeTransfersByOrder' => $activeTransfersByOrder ?? [], 'selectedDate' => $selectedDate ?? now()->toDateString()])
+        @endforeach
+    </div>
+    </div>
+    <aside class="wh-order-priority-panel" aria-label="Thứ tự ưu tiên và khách hàng">
+        <div class="wh-order-priority-title"><i class="bi bi-list-ol me-1"></i>Thứ tự ưu tiên</div>
+        @foreach($orders->sortBy('daily_sequence') as $priorityOrder)
+            @php
+                $isPackedPriority = in_array((string)$priorityOrder->status, $packedLikeStatuses, true);
+                $isPackingPriority = (string)$priorityOrder->status === 'packing';
+                $priorityStateClass = $isPackingPriority ? 'is-packing' : ($isPackedPriority ? 'is-packed' : 'is-unpacked');
+                $priorityNumber = $priorityOrder->daily_sequence ?? $loop->iteration;
+            @endphp
+            <a href="#order-card-{{ $priorityOrder->id }}"
+               class="wh-order-priority-item {{ $priorityStateClass }}"
+               data-priority-order-id="{{ $priorityOrder->id }}"
+               onclick="event.preventDefault(); document.getElementById('order-card-{{ $priorityOrder->id }}')?.scrollIntoView({ behavior: 'smooth', block: 'start' });"
+               title="{{ $priorityOrder->customer?->name ?? 'Khách hàng' }} · {{ $statusMeta[$priorityOrder->status]['label'] ?? $priorityOrder->status }}">
+                <span class="wh-order-priority-number">{{ $priorityNumber }}</span>
+                <span class="wh-order-priority-name">{{ $priorityOrder->customer?->name ?? 'Khách hàng' }}</span>
+            </a>
+        @endforeach
+    </aside>
+    </div>
+    @endif
+</div>
+
+@php
+    $printOrders = $orders
+        ->sortBy(fn ($order) => $order->daily_sequence ?? PHP_INT_MAX)
+        ->values();
+@endphp
+<div class="wh-orders-print-sheet">
+    <div class="text-center mb-3">
+        <h2 class="mb-1">DANH SÁCH ĐƠN HÀNG</h2>
+        <div>Ngày: {{ \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m/Y') }}</div>
+    </div>
+    <table class="wh-orders-print-table">
+        <thead>
+            <tr>
+                <th style="width: 110px;">Số thứ tự</th>
+                <th>Tên khách hàng</th>
+                <th style="width: 180px;">Ngày</th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($printOrders as $order)
+                <tr>
+                    <td class="text-center">{{ $order->daily_sequence ?? $loop->iteration }}</td>
+                    <td>{{ $order->customer?->name ?? 'Khách hàng' }}</td>
+                    <td class="text-center">{{ optional($order->created_at)->format('d/m/Y') ?: '—' }}</td>
+                </tr>
+            @empty
+                <tr>
+                    <td colspan="3" class="text-center">Không có đơn hàng.</td>
+                </tr>
+            @endforelse
+        </tbody>
+    </table>
+</div>
+
+{{-- Stock Offcanvas Drawer --}}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="stockDrawer" aria-labelledby="stockDrawerLabel" data-bs-scroll="true" data-bs-backdrop="false">
+    <div class="offcanvas-header">
+        <div id="stockDrawerLabel">
+            
+            <div class="text-uppercase fw-bold" style="font-size:1rem;">
+                <i class="bi bi-calendar3 me-1"></i>
+                @php
+                    $displayDate = \Illuminate\Support\Carbon::parse($selectedDate);
+                    $isToday = $displayDate->isToday();
+                @endphp
+                {{ $isToday ? 'Hôm nay – ' : '' }}{{ $displayDate->format('d/m/Y') }}
+                @if($status)
+                    &middot; {{ $statusMeta[$status]['label'] ?? $status }}
+                @endif
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button type="button" id="stockDrawerPinBtn" class="btn btn-sm btn-outline-secondary" title="Neo cố định bên phải">
+                <i class="bi bi-pin-angle me-1"></i>Neo
+            </button>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Đóng"></button>
+        </div>
+    </div>
+    <div class="warehouse-body">
+        @if($inventoryStats->isEmpty())
+            <div class="text-center text-muted py-5">
+                <i class="bi bi-inbox fs-1"></i>
+                <p class="mt-2">Không có dữ liệu tồn cuối cho ngày này.</p>
+            </div>
+        @else
+           
+            <div class="wh-stock-list">
+                <div class="wh-stock-row head">
+                    <div class="wh-stock-col">Tên sản phẩm</div>
+                    <div class="wh-stock-col col-size">Size</div>
+                    <div class="wh-stock-col num">Tồn cuối đã chốt</div>
+                    <div class="wh-stock-col num col-available">Khả dụng</div>
+                    <div class="wh-stock-col num col-ordered">SL đặt</div>
+                    <div class="wh-stock-col num col-packed">Đã đóng</div>
+                </div>
+                @foreach($inventoryStats as $stockItem)
+                    @php
+                        $isShort = (bool) ($stockItem['is_short'] ?? false);
+                    @endphp
+                    <div class="wh-stock-row {{ $isShort ? 'is-short' : '' }}">
+                        <div class="wh-stock-col">
+                            <div class="wh-stock-product-name" title="{{ $stockItem['name'] }}">{{ $stockItem['name'] }}</div>
+                            @if(!empty($stockItem['sku']))
+                                <div class="wh-stock-product-sku" title="SKU: {{ $stockItem['sku'] }}">SKU: {{ $stockItem['sku'] }}</div>
+                            @endif
+                        </div>
+                        <div class="wh-stock-col col-size">{{ (is_numeric($stockItem['size']) && (float) $stockItem['size'] > 0) ? rtrim(rtrim(number_format((float) $stockItem['size'], 2, '.', ''), '0'), '.') : '-' }}</div>
+                        <div class="wh-stock-col num">{{ number_format((float) ($stockItem['raw_stock'] ?? 0), 0, ',', '.') }}</div>
+                        <div class="wh-stock-col num col-available">{{ number_format((float) ($stockItem['fifo_remaining'] ?? 0), 0, ',', '.') }}</div>
+                        <div class="wh-stock-col num col-ordered">{{ number_format((float) ($stockItem['ordered_qty'] ?? 0), 0, ',', '.') }}</div>
+                        <div class="wh-stock-col num col-packed">{{ number_format((float) ($stockItem['packed_qty'] ?? 0), 0, ',', '.') }}</div>
+                    </div>
+                @endforeach
+            </div>
+        @endif
+    </div>
+</div>
+
+<div class="modal fade" id="warehouseAdjustmentProductModal" tabindex="-1" aria-labelledby="warehouseAdjustmentProductModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable wh-orders-scroll-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="warehouseAdjustmentProductModalLabel">Chọn sản phẩm và biến thể</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-5">
+                        <input type="text" id="warehouse-adjustment-product-search" class="form-control form-control-sm" placeholder="Tìm theo tên sản phẩm hoặc SKU">
+                    </div>
+                    <div class="col-md-4">
+                        <select id="warehouse-adjustment-product-sort" class="form-select form-select-sm">
+                            <option value="id|desc">Mới nhất</option>
+                            <option value="id|asc">Cũ nhất</option>
+                            <option value="name|asc">Tên sản phẩm A → Z</option>
+                            <option value="name|desc">Tên sản phẩm Z → A</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select id="warehouse-adjustment-product-per-page" class="form-select form-select-sm">
+                            <option value="5">5 / trang</option>
+                            <option value="10" selected>10 / trang</option>
+                            <option value="25">25 / trang</option>
+                            <option value="50">50 / trang</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="warehouse-adjustment-product-results" class="wh-adjustment-picker-results">
+                    <div class="text-center text-muted py-4">Đang tải danh sách sản phẩm...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+@endsection
+
+@push('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        function setPriorityState(orderId, stateClass) {
+            const priorityItem = document.querySelector(`[data-priority-order-id="${orderId}"]`);
+            if (!priorityItem) return;
+            priorityItem.classList.remove('is-packed', 'is-packing', 'is-unpacked');
+            priorityItem.classList.add(stateClass);
+        }
+
+        const priorityObserver = 'IntersectionObserver' in window
+            ? new IntersectionObserver(function (entries) {
+                entries.forEach(function (entry) {
+                    if (!entry.isIntersecting) return;
+                    document.querySelectorAll('.wh-order-priority-item.active').forEach(item => item.classList.remove('active'));
+                    document.querySelector(`[data-priority-order-id="${entry.target.dataset.orderId || ''}"]`)?.classList.add('active');
+                });
+            }, { rootMargin: '-20% 0px -65% 0px', threshold: 0 })
+            : null;
+        if (priorityObserver) {
+            document.querySelectorAll('.js-order-card[data-order-id]').forEach(card => priorityObserver.observe(card));
+        }
+
+        function formatCompactDecimal(value, decimals = 2) {
+            const num = Number(value);
+            if (Number.isNaN(num)) return '';
+            return num.toLocaleString('vi-VN', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: decimals,
+            });
+        }
+
+        // ── Stock Drawer Pin/Unpin ────────────────────────────────
+        const stockDrawerEl  = document.getElementById('stockDrawer');
+        const stockPinBtn    = document.getElementById('stockDrawerPinBtn');
+        const PINNED_KEY     = 'wh_stock_drawer_pinned';
+        let isPinned         = localStorage.getItem(PINNED_KEY) === '1';
+
+        if (stockDrawerEl && typeof bootstrap !== 'undefined') {
+            const bsOffcanvas = bootstrap.Offcanvas.getOrCreateInstance(stockDrawerEl, {
+                backdrop: false,
+                scroll: true,
+            });
+
+            function applyPinnedState(open) {
+                if (isPinned) {
+                    document.body.classList.add('stock-drawer-pinned');
+                    if (open !== false) bsOffcanvas.show();
+                    if (stockPinBtn) {
+                        stockPinBtn.innerHTML = '<i class="bi bi-pin-fill me-1"></i>Bỏ neo';
+                        stockPinBtn.classList.add('pinned');
+                    }
+                } else {
+                    document.body.classList.remove('stock-drawer-pinned');
+                    if (stockPinBtn) {
+                        stockPinBtn.innerHTML = '<i class="bi bi-pin-angle me-1"></i>Neo';
+                        stockPinBtn.classList.remove('pinned');
+                    }
+                }
+            }
+
+            // Prevent closing via Esc when pinned
+            stockDrawerEl.addEventListener('hide.bs.offcanvas', function (e) {
+                if (isPinned) e.preventDefault();
+            });
+
+            stockPinBtn?.addEventListener('click', function () {
+                isPinned = !isPinned;
+                localStorage.setItem(PINNED_KEY, isPinned ? '1' : '0');
+                if (!isPinned) {
+                    applyPinnedState();
+                    bsOffcanvas.hide();
+                } else {
+                    applyPinnedState();
+                }
+            });
+
+            // Auto-open if was pinned
+            if (isPinned) applyPinnedState(true);
+        }
+        // ─────────────────────────────────────────────────────────
+
+        const warehouseProductModal = document.getElementById('warehouseAdjustmentProductModal');
+        const warehouseProductResults = document.getElementById('warehouse-adjustment-product-results');
+        const warehouseProductSearch = document.getElementById('warehouse-adjustment-product-search');
+        const warehouseProductSort = document.getElementById('warehouse-adjustment-product-sort');
+        const warehouseProductPerPage = document.getElementById('warehouse-adjustment-product-per-page');
+        const warehouseProductSearchUrl = '{{ route('orders.ajax_variant_search') }}';
+        let currentAdjustmentOrderId = null;
+        let warehouseProductSearchTimer = null;
+
+        function getAdjustmentContainer(orderId) {
+            return document.getElementById(`new-adjustment-items-${orderId}`);
+        }
+
+        function getExcludedVariantIds(orderId) {
+            const pendingContainer = getAdjustmentContainer(orderId);
+            const pendingVariantIds = pendingContainer
+                ? Array.from(pendingContainer.querySelectorAll('input[name$="[product_variant_id]"]')).map((input) => input.value)
+                : [];
+
+            return Array.from(new Set(pendingVariantIds)).filter(Boolean);
+        }
+
+        function loadWarehouseProducts(page = 1) {
+            if (!warehouseProductResults) {
+                return;
+            }
+
+            const [sortBy, sortDir] = (warehouseProductSort?.value || 'id|desc').split('|');
+            const params = new URLSearchParams({
+                search: warehouseProductSearch?.value?.trim() || '',
+                page: String(page),
+                per_page: warehouseProductPerPage?.value || '10',
+                sort_by: sortBy || 'id',
+                sort_dir: sortDir || 'desc',
+                view: 'products',
+                in_stock_only: '1',
+            });
+
+            getExcludedVariantIds(currentAdjustmentOrderId).forEach((id) => {
+                params.append('exclude_ids[]', id);
+            });
+
+            warehouseProductResults.innerHTML = '<div class="text-center text-muted py-4">Đang tải danh sách sản phẩm...</div>';
+
+            fetch(`${warehouseProductSearchUrl}?${params.toString()}`, {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                }
+            })
+                .then((response) => response.json())
+                .then((data) => {
+                    warehouseProductResults.innerHTML = data.html || '<div class="text-center text-muted py-4">Không có dữ liệu.</div>';
+                    const embeddedPerPage = warehouseProductResults.querySelector('#per-page-select');
+                    if (embeddedPerPage && warehouseProductPerPage) {
+                        embeddedPerPage.value = warehouseProductPerPage.value;
+                    }
+                })
+                .catch(() => {
+                    warehouseProductResults.innerHTML = '<div class="text-center text-danger py-4">Không tải được danh sách sản phẩm.</div>';
+                });
+        }
+
+        function appendAdjustmentProduct(orderId, variantData) {
+            const container = getAdjustmentContainer(orderId);
+            if (!container) {
+                return;
+            }
+
+            const existingRow = container.querySelector(`[data-variant-id="${variantData.id}"]`);
+            if (existingRow) {
+                const quantityInput = existingRow.querySelector('.js-adjustment-new-item-qty');
+                quantityInput.value = String((parseInt(quantityInput.value || '0', 10) || 0) + 1);
+                return;
+            }
+
+            const nextIndex = parseInt(container.getAttribute('data-next-index') || '0', 10) || 0;
+            container.setAttribute('data-next-index', String(nextIndex + 1));
+            const item = document.createElement('div');
+            item.className = 'wh-adjustment-pending-item';
+            item.setAttribute('data-variant-id', String(variantData.id));
+            item.innerHTML = `
+                <div class="d-flex justify-content-between align-items-end gap-2 flex-wrap">
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold">${variantData.name}</div>
+                        <div class="small text-muted">SKU: ${variantData.sku || '---'} | Giá: ${variantData.price}</div>
+                    </div>
+                    <div class="d-flex align-items-end gap-2">
+                        <div style="min-width: 140px;">
+                        <label class="form-label small mb-1">Số lượng thêm</label>
+                        <input type="hidden" name="new_items[${nextIndex}][product_variant_id]" value="${variantData.id}">
+                        <input type="number" min="1" step="1" name="new_items[${nextIndex}][quantity]" class="form-control form-control-sm js-adjustment-new-item-qty" value="1">
+                        </div>
+                        <button type="button" class="btn btn-outline-danger btn-sm js-remove-adjustment-item mb-1">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            container.appendChild(item);
+        }
+
+        document.querySelectorAll('.js-open-adjustment-product-picker').forEach((button) => {
+            button.addEventListener('click', function () {
+                currentAdjustmentOrderId = this.getAttribute('data-order-id');
+                loadWarehouseProducts(1);
+            });
+        });
+
+        warehouseProductSearch?.addEventListener('input', function () {
+            clearTimeout(warehouseProductSearchTimer);
+            warehouseProductSearchTimer = setTimeout(() => loadWarehouseProducts(1), 300);
+        });
+
+        warehouseProductSort?.addEventListener('change', function () {
+            loadWarehouseProducts(1);
+        });
+
+        warehouseProductPerPage?.addEventListener('change', function () {
+            loadWarehouseProducts(1);
+        });
+
+        warehouseProductResults?.addEventListener('click', function (event) {
+            const productChoice = event.target.closest('.monitor-product-choice');
+            if (productChoice) {
+                event.preventDefault();
+                const card = productChoice.closest('.monitor-product-card');
+                const variants = card?.querySelector('.monitor-product-variants');
+                if (!card || !variants) {
+                    return;
+                }
+
+                warehouseProductResults.querySelectorAll('.monitor-product-card.is-open').forEach((openCard) => {
+                    if (openCard === card) {
+                        return;
+                    }
+                    openCard.classList.remove('is-open');
+                    const openVariants = openCard.querySelector('.monitor-product-variants');
+                    if (openVariants) openVariants.hidden = true;
+                    openCard.querySelector('.monitor-product-choice')?.setAttribute('aria-expanded', 'false');
+                });
+
+                variants.hidden = !variants.hidden;
+                card.classList.toggle('is-open', !variants.hidden);
+                productChoice.setAttribute('aria-expanded', variants.hidden ? 'false' : 'true');
+                return;
+            }
+
+            const addButton = event.target.closest('.monitor-variant-option, .add-variant-to-cart');
+            if (addButton && currentAdjustmentOrderId) {
+                event.preventDefault();
+                appendAdjustmentProduct(currentAdjustmentOrderId, {
+                    id: addButton.getAttribute('data-variant-id'),
+                    name: addButton.getAttribute('data-variant-name') || 'Sản phẩm',
+                    sku: addButton.getAttribute('data-variant-sku') || '',
+                    price: addButton.getAttribute('data-variant-price') || '0',
+                });
+                loadWarehouseProducts(1);
+                return;
+            }
+
+            const pageLink = event.target.closest('.pagination a');
+            if (pageLink) {
+                event.preventDefault();
+                const url = new URL(pageLink.getAttribute('href'), window.location.origin);
+                loadWarehouseProducts(parseInt(url.searchParams.get('page') || '1', 10));
+            }
+        });
+
+        warehouseProductResults?.addEventListener('change', function (event) {
+            if (event.target.id === 'per-page-select' && warehouseProductPerPage) {
+                warehouseProductPerPage.value = event.target.value;
+                loadWarehouseProducts(1);
+            }
+        });
+
+        document.addEventListener('click', function (event) {
+            const markRemoveButton = event.target.closest('.js-mark-adjustment-item-remove');
+            if (markRemoveButton) {
+                const targetName = markRemoveButton.getAttribute('data-target-name');
+                if (targetName) {
+                    const quantityInput = document.querySelector(`input[name="${CSS.escape(targetName)}"]`);
+                    if (quantityInput) {
+                        quantityInput.value = '0';
+                        quantityInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                }
+                return;
+            }
+
+            const removeButton = event.target.closest('.js-remove-adjustment-item');
+            if (!removeButton) {
+                return;
+            }
+
+            const item = removeButton.closest('.wh-adjustment-pending-item');
+            item?.remove();
+        });
+
+        async function submitLogisticsForm(form, options = {}) {
+            const submitBtn = form.querySelector('.js-logistics-submit-btn, .js-packed-quantity-submit');
+            const clearBtn = form.querySelector('.js-clear-item-weight, .js-clear-packed-quantity');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+            }
+            if (clearBtn) clearBtn.disabled = true;
+
+            try {
+                const formData = new FormData(form);
+                if (options.clearItemWeight) {
+                    formData.set('clear_item_weight', '1');
+                    formData.delete('item_actual_weight');
+                }
+                if (options.clearPackedQuantity) {
+                    formData.set('clear_packed_quantity', '1');
+                    formData.delete('item_packed_quantity');
+                }
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: formData,
+                });
+
+                let payload = {};
+                try {
+                    payload = await response.json();
+                } catch (e) {
+                    payload = {};
+                }
+
+                if (!response.ok || payload.ok === false) {
+                    throw new Error(payload.message || 'Lưu thông tin kho thất bại.');
+                }
+
+                if (typeof showToast === 'function') {
+                    showToast(payload.message || 'Đã lưu thông tin kho.', 'success');
+                }
+
+                if (form.classList.contains('js-logistics-item-form')) {
+                    const row = form.closest('.wh-item-table-row');
+                    if (row) {
+                        const unitPrice = parseFloat(row.dataset.unitPrice || '0');
+                        const weightUnit = row.dataset.weightUnit || 'kg';
+                        const weightInput = form.querySelector('input[name="item_actual_weight"]');
+                        const actualWeight = parseFloat(weightInput?.value || '0');
+                        const amountCell = row.querySelector('.js-item-total-amount strong');
+
+                        if (payload.cleared) {
+                            if (weightInput) weightInput.disabled = false;
+                            if (amountCell) amountCell.textContent = '---';
+                            if (submitBtn) {
+                                submitBtn.textContent = 'Lưu';
+                                submitBtn.classList.remove('btn-secondary', 'wh-warning-action-btn');
+                                submitBtn.classList.add('btn-success');
+                                submitBtn.classList.remove('d-none');
+                            }
+                            clearBtn?.classList.add('d-none');
+                            weightInput?.focus();
+                            weightInput?.select();
+                        } else if (amountCell) {
+                            if (!Number.isNaN(actualWeight)) {
+                                const lineTotal = payload.item_total !== undefined ? Number(payload.item_total) : Math.round(unitPrice * actualWeight);
+                                amountCell.textContent = new Intl.NumberFormat('vi-VN').format(lineTotal) + 'đ';
+                            } else {
+                                amountCell.textContent = '---';
+                            }
+                        }
+
+                        const readonlyKg = row.querySelector('.js-item-readonly-kg');
+                        if (readonlyKg) {
+                            readonlyKg.textContent = payload.cleared
+                                ? '---'
+                                : (!Number.isNaN(actualWeight) && actualWeight > 0 ? (formatCompactDecimal(actualWeight) + ' kg') : '---');
+                        }
+
+                        if (!payload.cleared && submitBtn && amountCell && amountCell.textContent.trim() !== '---') {
+                            if (weightInput) weightInput.disabled = true;
+                            submitBtn.classList.add('d-none');
+                            clearBtn?.classList.remove('d-none');
+                        }
+                    }
+                }
+
+                if (form.classList.contains('js-packed-quantity-form')) {
+                    const quantityInput = form.querySelector('input[name="item_packed_quantity"]');
+                    if (payload.cleared_packed_quantity) {
+                        if (quantityInput) quantityInput.disabled = false;
+                        submitBtn?.classList.remove('d-none');
+                        clearBtn?.classList.add('d-none');
+                        quantityInput?.focus();
+                        quantityInput?.select();
+                    } else {
+                        if (quantityInput) quantityInput.disabled = true;
+                        submitBtn?.classList.add('d-none');
+                        clearBtn?.classList.remove('d-none');
+                    }
+                }
+
+                if (form.classList.contains('js-logistics-fee-form') && submitBtn) {
+                    submitBtn.classList.remove('wh-warning-action-btn');
+                    submitBtn.classList.add('btn-secondary');
+                }
+            } catch (error) {
+                if (typeof showToast === 'function') {
+                    showToast(error.message || 'Có lỗi xảy ra khi lưu.', 'error');
+                }
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                }
+                if (clearBtn) clearBtn.disabled = false;
+            }
+        }
+
+        function validateWeightInput(input) {
+            const qty = parseFloat(input.dataset.qty || '0');
+            const size = parseFloat(input.dataset.size || '0');
+            const val = parseFloat(input.value);
+            const errEl = input.closest('li')?.querySelector('.js-weight-error');
+            const submitBtn = input.closest('form')?.querySelector('.js-logistics-submit-btn');
+            function setInvalid(msg) {
+                if (errEl) { errEl.textContent = msg; errEl.style.display = ''; }
+                if (submitBtn) { submitBtn.disabled = true; submitBtn.classList.add('btn-secondary'); submitBtn.classList.remove('wh-warning-action-btn', 'btn-success'); }
+                return false;
+            }
+            function setValid() {
+                if (errEl) errEl.style.display = 'none';
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Lưu'; submitBtn.classList.remove('btn-secondary', 'wh-warning-action-btn'); submitBtn.classList.add('btn-success'); }
+                return true;
+            }
+            if (!errEl) return true;
+            if (size <= 0 || isNaN(qty) || qty <= 0) return setValid();
+            if (isNaN(val)) return setInvalid('Nhập số kg hợp lệ.');
+            const averageMin = parseFloat(input.dataset.averageMin || '0');
+            const averageMax = parseFloat(input.dataset.averageMax || '0');
+            if (averageMin > 0 && averageMax > 0) {
+                const average = val / qty;
+                if (average < averageMin || average > averageMax) {
+                    return setInvalid(`Bình quân phải trong khoảng ${formatCompactDecimal(averageMin)} – ${formatCompactDecimal(averageMax)} kg/sản phẩm (hiện tại ${formatCompactDecimal(average)} kg)`);
+                }
+            }
+            const min = qty * (size - 0.25);
+            const max = qty * (size + 0.25);
+            if (val < min || val > max) {
+                return setInvalid(`Kg phải trong khoảng ${formatCompactDecimal(min)} – ${formatCompactDecimal(max)} (SL ${formatCompactDecimal(qty)} × size ${formatCompactDecimal(size)} ± 0,25)`);
+            }
+            return setValid();
+        }
+
+        document.querySelectorAll('input[name="item_packed_quantity"]').forEach(input => {
+            input.addEventListener('input', () => {
+                input.closest('form')?.querySelector('.js-weight-input')?.dispatchEvent(new Event('input', {bubbles: true}));
+            });
+        });
+        document.querySelectorAll('.js-weight-input').forEach(function (input) {
+            input.addEventListener('input', function () {
+                const submitBtn = input.closest('form')?.querySelector('.js-logistics-submit-btn');
+                if (submitBtn) {
+                    submitBtn.textContent = 'Lưu';
+                    submitBtn.classList.remove('btn-secondary', 'wh-warning-action-btn');
+                    submitBtn.classList.add('btn-success');
+                }
+                validateWeightInput(input);
+            });
+        });
+
+        document.querySelectorAll('.js-packing-size-form').forEach(function (form) {
+            const inputs = Array.from(form.querySelectorAll('.js-packing-size-qty'));
+            const summary = form.querySelector('.js-packing-size-summary');
+            const submit = form.querySelector('.js-packing-size-submit');
+            const totalRequired = parseInt(form.dataset.total || '0', 10);
+            const mainSize = parseFloat(form.dataset.mainSize || '0');
+            function refreshSizeMix() {
+                let total = 0;
+                let main = 0;
+                let weighted = 0;
+                inputs.forEach(function (input) {
+                    const qty = Math.max(0, parseInt(input.value || '0', 10) || 0);
+                    const size = parseFloat(input.dataset.size || '0');
+                    total += qty;
+                    weighted += qty * size;
+                    if (Math.abs(size - mainSize) < 0.001) main += qty;
+                });
+                inputs.forEach(function (input) {
+                    const ratioLabel = input.parentElement.querySelector('.js-packing-size-ratio');
+                    if (ratioLabel) ratioLabel.textContent = `Tỷ lệ: ${formatCompactDecimal(total > 0 ? Number(input.value || 0) * 100 / total : 0)}%`;
+                });
+                const ratio = total > 0 ? main * 100 / total : 0;
+                const average = total > 0 ? weighted / total : 0;
+                const valid = total === totalRequired && inputs.every(input => input.checkValidity());
+                if (summary) {
+                    summary.className = 'small js-packing-size-summary mb-1 ' + (valid ? 'text-success' : 'text-danger');
+                    summary.textContent = `Tổng ${total}/${totalRequired} · Size ${formatCompactDecimal(mainSize)}: ${formatCompactDecimal(ratio)}% · Bình quân: ${formatCompactDecimal(average)} kg`;
+                }
+                if (submit) submit.disabled = !valid;
+            }
+            inputs.forEach(input => input.addEventListener('input', refreshSizeMix));
+            form.querySelector('.js-packing-size-reset')?.addEventListener('click', function () {
+                inputs.forEach(function (input) {
+                    input.value = input.defaultValue;
+                });
+                refreshSizeMix();
+                inputs.find(input => parseInt(input.max || '0', 10) > 0)?.focus();
+            });
+            refreshSizeMix();
+        });
+
+        document.querySelectorAll('.js-logistics-fee-form input, .js-logistics-fee-form textarea').forEach(function (input) {
+            input.addEventListener('input', function () {
+                const submitBtn = input.closest('form')?.querySelector('.js-logistics-submit-btn');
+                if (submitBtn) {
+                    submitBtn.classList.remove('btn-secondary');
+                    submitBtn.classList.add('wh-warning-action-btn');
+                }
+            });
+            input.addEventListener('change', function () {
+                const submitBtn = input.closest('form')?.querySelector('.js-logistics-submit-btn');
+                if (submitBtn) {
+                    submitBtn.classList.remove('btn-secondary');
+                    submitBtn.classList.add('wh-warning-action-btn');
+                }
+            });
+        });
+
+        document.querySelectorAll('.js-logistics-item-form, .js-logistics-fee-form, .js-packed-quantity-form').forEach(function (form) {
+            form.addEventListener('submit', function (event) {
+                event.preventDefault();
+                const clearRequested = event.submitter?.classList.contains('js-clear-item-weight');
+                const clearPackedQuantity = event.submitter?.classList.contains('js-clear-packed-quantity');
+                if (clearRequested && !window.confirm('Gỡ số kg đã lưu cho mặt hàng này để nhập lại?')) return;
+                const weightInput = form.querySelector('.js-weight-input');
+                if (!clearRequested && weightInput && !validateWeightInput(weightInput)) return;
+                submitLogisticsForm(form, { clearItemWeight: clearRequested, clearPackedQuantity });
+            });
+        });
+
+        document.querySelectorAll('.js-start-packing-form').forEach(function (form) {
+            form.addEventListener('submit', async function (event) {
+                event.preventDefault();
+
+                const submitBtn = form.querySelector('.js-start-packing-btn');
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                }
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: new FormData(form),
+                    });
+
+                    let payload = {};
+                    try {
+                        payload = await response.json();
+                    } catch (e) {
+                        payload = {};
+                    }
+
+                    if (!response.ok || payload.ok === false) {
+                        throw new Error(payload.message || 'Không thể chuyển đơn sang trạng thái đóng gói.');
+                    }
+
+                    const card = form.closest('.js-order-card');
+                    if (card) {
+                        const statusEl = card.querySelector('.js-order-status');
+                        if (statusEl && payload.order) {
+                            statusEl.className = 'badge js-order-status ' + (payload.order.status_class || 'bg-warning text-dark');
+                            statusEl.textContent = payload.order.status_label || 'Đang đóng';
+                        }
+
+                        const orderIndexEl = card.querySelector('.wh-order-index');
+                        if (orderIndexEl) {
+                            orderIndexEl.classList.remove('is-packed', 'is-unpacked');
+                            orderIndexEl.classList.add('is-packing');
+                        }
+
+                        const navPill = document.querySelector(`.wh-order-nav-pill[data-order-id="${card.dataset.orderId || ''}"]`);
+                        if (navPill) {
+                            navPill.classList.remove('is-packed', 'is-unpacked');
+                            navPill.classList.add('is-packing');
+                        }
+                        setPriorityState(card.dataset.orderId || '', 'is-packing');
+
+                        card.querySelectorAll('.js-ready-only').forEach(function (el) {
+                            el.classList.add('d-none');
+                        });
+                        card.querySelectorAll('.js-packing-only').forEach(function (el) {
+                            el.classList.remove('d-none');
+                        });
+                        card.querySelector('.js-start-packing-form')?.classList.add('d-none');
+                        card.querySelector('.js-undo-packing-form')?.classList.remove('d-none');
+                        card.querySelector('.js-complete-packing-form')?.classList.remove('d-none');
+                    }
+
+                    if (typeof showToast === 'function') {
+                        showToast(payload.message || 'Đã bắt đầu đóng gói đơn hàng.', 'success');
+                    }
+                } catch (error) {
+                    if (typeof showToast === 'function') {
+                        showToast(error.message || 'Có lỗi xảy ra khi đóng hàng.', 'error');
+                    }
+                } finally {
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                    }
+                }
+            });
+        });
+
+        document.querySelectorAll('.js-undo-packing-form').forEach(function (form) {
+            form.addEventListener('submit', async function (event) {
+                event.preventDefault();
+
+                const submitBtn = form.querySelector('.js-undo-packing-btn');
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                }
+
+                try {
+                    const response = await fetch(form.action, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                        body: new FormData(form),
+                    });
+
+                    const payload = await response.json();
+                    if (!response.ok || payload.ok === false) {
+                        throw new Error(payload.message || 'Không thể hoàn tác nhận đơn.');
+                    }
+
+                    const card = form.closest('.js-order-card');
+                    if (card) {
+                        const statusEl = card.querySelector('.js-order-status');
+                        if (statusEl && payload.order) {
+                            statusEl.className = 'badge js-order-status ' + (payload.order.status_class || 'bg-secondary');
+                            statusEl.textContent = payload.order.status_label || 'Chờ đóng gói';
+                        }
+
+                        const orderIndexEl = card.querySelector('.wh-order-index');
+                        if (orderIndexEl) {
+                            orderIndexEl.classList.remove('is-packed', 'is-packing');
+                            orderIndexEl.classList.add('is-unpacked');
+                        }
+
+                        const navPill = document.querySelector(`.wh-order-nav-pill[data-order-id="${card.dataset.orderId || ''}"]`);
+                        if (navPill) {
+                            navPill.classList.remove('is-packed', 'is-packing');
+                            navPill.classList.add('is-unpacked');
+                        }
+                        setPriorityState(card.dataset.orderId || '', 'is-unpacked');
+
+                        card.querySelectorAll('.js-ready-only').forEach(function (el) {
+                            el.classList.remove('d-none');
+                        });
+                        card.querySelectorAll('.js-packing-only').forEach(function (el) {
+                            el.classList.add('d-none');
+                        });
+                        card.querySelector('.js-start-packing-form')?.classList.remove('d-none');
+                        card.querySelector('.js-undo-packing-form')?.classList.add('d-none');
+                        card.querySelector('.js-complete-packing-form')?.classList.add('d-none');
+                    }
+
+                    if (typeof showToast === 'function') {
+                        showToast(payload.message || 'Đã hoàn tác nhận đơn.', 'success');
+                    }
+                } catch (error) {
+                    if (typeof showToast === 'function') {
+                        showToast(error.message || 'Có lỗi xảy ra khi hoàn tác nhận đơn.', 'error');
+                    }
+                } finally {
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                    }
+                }
+            });
+        });
+
+        document.querySelectorAll('.js-picked-material-action').forEach(function (button) {
+            button.addEventListener('click', async function () {
+                const row = button.closest('[data-picked-material-row]');
+                if (!row) return;
+
+                const action = button.dataset.pickedAction === 'unpick' ? 'unpick' : 'pick';
+                const url = action === 'unpick' ? row.dataset.unpickedUrl : row.dataset.pickedUrl;
+                if (!url) return;
+
+                const batchId = row.dataset.batchId || '';
+                const variantId = row.dataset.variantId || '';
+                const relatedRows = document.querySelectorAll(`[data-picked-material-row][data-batch-id="${batchId}"][data-variant-id="${variantId}"]`);
+                relatedRows.forEach(function (relatedRow) {
+                    relatedRow.querySelectorAll('.js-picked-material-action').forEach(function (btn) {
+                        btn.disabled = true;
+                    });
+                });
+
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                        },
+                    });
+
+                    let payload = {};
+                    try {
+                        payload = await response.json();
+                    } catch (e) {
+                        payload = {};
+                    }
+
+                    if (!response.ok || payload.ok === false) {
+                        throw new Error(payload.message || 'Không thể cập nhật trạng thái đã lấy.');
+                    }
+
+                    const picked = !!payload.picked;
+                    const verifiedBy = payload.verified_by_name || 'Package';
+
+                    relatedRows.forEach(function (relatedRow) {
+                        relatedRow.classList.toggle('is-verified', picked);
+                        relatedRow.querySelector('[data-picked-material-badge]')?.classList.toggle('d-none', !picked);
+                        relatedRow.querySelectorAll('[data-picked-action="pick"]').forEach(function (btn) {
+                            btn.classList.toggle('d-none', picked);
+                        });
+                        relatedRow.querySelectorAll('[data-picked-action="unpick"]').forEach(function (btn) {
+                            btn.classList.toggle('d-none', !picked);
+                        });
+
+                        const verifyText = relatedRow.querySelector('[data-picked-material-verify-text]');
+                        if (verifyText) {
+                            verifyText.textContent = picked ? ` · Verify bởi ${verifiedBy}` : '';
+                        }
+                    });
+
+                    document.querySelectorAll(`.js-complete-cutting-batch-btn[data-batch-id="${batchId}"]`).forEach(function (btn) {
+                        btn.disabled = !payload.all_materials_picked;
+                    });
+                    document.querySelectorAll(`.js-cutting-picked-warning[data-batch-id="${batchId}"]`).forEach(function (warning) {
+                        warning.classList.toggle('d-none', !!payload.all_materials_picked);
+                    });
+
+                    if (typeof showToast === 'function') {
+                        showToast(payload.message || 'Đã cập nhật trạng thái đã lấy.', 'success');
+                    }
+                } catch (error) {
+                    if (typeof showToast === 'function') {
+                        showToast(error.message || 'Không thể cập nhật trạng thái đã lấy.', 'error');
+                    }
+                } finally {
+                    relatedRows.forEach(function (relatedRow) {
+                        relatedRow.querySelectorAll('.js-picked-material-action').forEach(function (btn) {
+                            btn.disabled = false;
+                        });
+                    });
+                }
+            });
+        });
+    });
+</script>
+@endpush

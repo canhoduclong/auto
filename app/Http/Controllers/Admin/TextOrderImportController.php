@@ -1,0 +1,1141 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Enums\DeliveryStatus;
+use App\Enums\OrderStatus;
+use App\Enums\PaymentStatus;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\OrderController;
+use App\Models\Customer;
+use App\Models\Order;
+use App\Models\OrderSchedule;
+use App\Models\ProductVariant;
+use App\Models\TextOrderDraft;
+use App\Models\TruckBrand;
+use App\Models\TruckStation;
+use App\Models\User;
+use App\Services\ApprovalService;
+use App\Services\CustomerPriorityService;
+use App\Services\ZaloOrderTextParser;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use App\Models\Setting;
+use Illuminate\Support\Facades\Cache;
+
+class TextOrderImportController extends Controller
+{
+    protected $settings;
+    public function __construct()
+    {
+        $this->settings = Cache::remember('settings', 60, function () {
+            return Setting::all()->keyBy('key');
+        });
+    } 
+    public function index(Request $request)
+    {
+        return $this->draftIndex(null, $request);
+    }
+
+    public function exportDailyOrders(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $validated = $request->validate([
+            'date' => ['required', 'date'],
+        ]);
+        $date = Carbon::parse($validated['date'])->toDateString();
+        $orders = Order::query()
+            ->with([
+                'user:id,name,zalo_name',
+                'customer:id,name,phone,address',
+                'items.product:id,name',
+                'items.variant:id,product_id,name,sku,size',
+            ])
+            ->forWorkflowDate($date)
+            ->orderBy('user_id')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+
+        $lines = [];
+        $messageDate = Carbon::parse($date)->subDay()->format('d/m/Y');
+        foreach ($orders as $order) {
+            $sender = trim((string) ($order->user?->zalo_name ?: $order->user?->name)) ?: 'Admin';
+            $lines[] = '['.$messageDate.' 00:00:00] '.$sender.': Tên KH: '.($order->customer?->name ?: $order->recipient_name ?: 'Khách hàng');
+            if ($order->customer?->phone || $order->recipient_phone) {
+                $lines[] = 'SĐT: '.($order->recipient_phone ?: $order->customer?->phone);
+            }
+            if ($order->recipient_address || $order->customer?->address) {
+                $lines[] = 'ĐC: '.($order->recipient_address ?: $order->customer?->address);
+            }
+            foreach ($order->items as $item) {
+                $product = $item->product?->name ?: $item->variant?->name ?: $item->variant?->sku ?: 'Sản phẩm';
+                $size = (float) ($item->unit_weight ?? $item->variant?->kg ?? 0);
+                $price = (float) ($item->price ?? 0);
+                $description = $product;
+                if ($item->variant?->size) {
+                    $description .= ' '.$item->variant->size;
+                }
+                $lines[] = (int) $item->quantity.' con '.$description
+                    .($size > 0 ? ' size: '.rtrim(rtrim(number_format($size, 3, '.', ''), '0'), '.') : '')
+                    .($price > 0 ? ' giá: '.rtrim(rtrim(number_format($price, 2, '.', ''), '0'), '.') : '');
+            }
+            if ($order->delivery_time) {
+                $lines[] = 'Giao hàng: '.$order->delivery_time;
+            }
+            if ($order->note) {
+                $lines[] = 'Ghi chú: '.$order->note;
+            }
+            $lines[] = '';
+        }
+
+        $content = implode("\n", $lines);
+        $filename = 'don-hang-'.$date.'.txt';
+
+        return response()->streamDownload(function () use ($content): void {
+            echo "\xEF\xBB\xBF".$content;
+        }, $filename, ['Content-Type' => 'text/plain; charset=UTF-8']);
+    }
+
+    public function saleIndex(Request $request)
+    {
+        return $this->draftIndex((int) $request->user()->id, $request);
+    }
+
+    public function saleStore(Request $request)
+    {
+        $saleId = (int) $request->user()->id;
+        $draft = TextOrderDraft::query()->create([
+            'created_by' => $saleId,
+            'draft_scope' => TextOrderDraft::SCOPE_SALE_PRIVATE,
+            'sale_id' => $saleId,
+            'delivery_date' => $this->today(),
+            'raw_text' => '',
+            'status' => 'draft',
+        ]);
+
+        return redirect()->route('pages.my_orders.monitoring', [
+            'tab' => 'drafts',
+            'edit' => $draft->id,
+        ])->with('success', 'Đã tạo đơn hàng mẫu mới.');
+    }
+
+    public function saleAddFromOrder(Request $request, Order $order): JsonResponse
+    {
+        $saleId = (int) $request->user()->id;
+        abort_unless((int) $order->user_id === $saleId, 403, 'Bạn chỉ có thể tạo đơn mẫu từ đơn hàng của mình.');
+        abort_if(! $order->customer_id, 422, 'Đơn hàng chưa có khách hàng nên không thể tạo đơn mẫu.');
+
+        $order->loadMissing([
+            'customer:id,name,phone,address',
+            'items.product:id,name',
+            'items.variant:id,product_id,name,sku,size,kg',
+            'truckStation.brand:id,name',
+        ]);
+
+        $result = DB::transaction(function () use ($order, $saleId): array {
+            $existing = TextOrderDraft::query()
+                ->where('draft_scope', TextOrderDraft::SCOPE_SALE_PRIVATE)
+                ->where('sale_id', $saleId)
+                ->where('customer_id', $order->customer_id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing) {
+                return ['draft' => $existing, 'created' => false];
+            }
+
+            $items = $order->items
+                ->filter(fn ($item) => $item->product_variant_id && (int) $item->quantity > 0)
+                ->map(fn ($item): array => [
+                    'product_variant_id' => (int) $item->product_variant_id,
+                    'quantity' => (int) $item->quantity,
+                    'size_kg' => (float) ($item->effective_unit_weight ?? $item->variant?->effective_kg ?? 0),
+                    'unit_price' => (float) ($item->price ?? 0),
+                    'product_text' => $item->product?->name ?? $item->variant?->product?->name ?? $item->variant?->name,
+                ])
+                ->values();
+
+            if ($items->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'items' => 'Đơn hàng chưa có sản phẩm hợp lệ để tạo đơn mẫu.',
+                ]);
+            }
+
+            $firstItem = $items->first();
+            $customer = $order->customer;
+            $draft = TextOrderDraft::query()->create([
+                'created_by' => $saleId,
+                'draft_scope' => TextOrderDraft::SCOPE_SALE_PRIVATE,
+                'sale_id' => $saleId,
+                'customer_id' => $order->customer_id,
+                'product_variant_id' => $firstItem['product_variant_id'],
+                'zalo_name' => null,
+                'customer_name' => $order->recipient_name ?: $customer?->name,
+                'phone' => $order->recipient_phone ?: $customer?->phone,
+                'address' => $order->recipient_address ?: $customer?->address,
+                'use_truck_station' => (bool) $order->use_truck_station,
+                'truck_brand_id' => $order->truckStation?->brand_id,
+                'truck_station_id' => $order->truck_station_id,
+                'truck_brand_name' => $order->truckStation?->brand?->name,
+                'truck_station_name' => $order->truck_station_name ?: $order->truckStation?->name,
+                'truck_station_address' => $order->truck_station_address ?: $order->truckStation?->address,
+                'truck_station_phone' => $order->truck_station_phone ?: $order->truckStation?->phone,
+                'truck_receive_time' => $order->truck_receive_time,
+                'product_text' => $firstItem['product_text'],
+                'parsed_items' => $items->all(),
+                'quantity' => $firstItem['quantity'],
+                'size_kg' => $firstItem['size_kg'],
+                'unit_price' => $firstItem['unit_price'],
+                'delivery_date' => $this->today(),
+                'delivery_time' => $order->delivery_time,
+                'note' => $order->note,
+                'charge_vat' => $order->charge_vat ?? false,
+                'vat_percent' => $order->vat_percent ?? 0,
+                'collect_customer_shipping_fee' => $order->collect_customer_shipping_fee ?? false,
+                'customer_shipping_fee' => $order->customer_shipping_fee ?? 0,
+
+                'raw_text' => 'Tạo từ đơn '.$order->code,
+                'status' => 'draft',
+            ]);
+
+            return ['draft' => $draft, 'created' => true];
+        });
+
+        $draftUrl = route('pages.my_orders.monitoring', [
+            'tab' => 'drafts',
+            'edit' => $result['draft']->id,
+        ]);
+
+        if (! $result['created']) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Đã có đơn mẫu của khách hàng này rồi.',
+                'draft_url' => $draftUrl,
+            ], 409);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đã cho đơn hàng vào đơn mẫu.',
+            'draft_id' => $result['draft']->id,
+            'draft_url' => $draftUrl,
+        ], 201);
+    }
+
+    private function draftIndex(?int $saleId = null, ?Request $request = null)
+    {
+        $settings = $this->settings;
+        try {
+            $selectedDraftDate = Carbon::parse(
+                $request?->input('draft_date', $this->today()),
+                'Asia/Bangkok'
+            )->toDateString();
+        } catch (\Throwable) {
+            $selectedDraftDate = $this->today();
+        }
+        $sortBy = in_array($request?->input('sort_by'), ['created_at', 'unit_price', 'customer_name', 'status'], true)
+            ? (string) $request->input('sort_by')
+            : 'created_at';
+        $sortDir = strtolower((string) ($request?->input('sort_dir', 'desc')));
+        $sortDir = in_array($sortDir, ['asc', 'desc'], true) ? $sortDir : 'desc';
+        $customerSearch = trim((string) $request?->input('customer_search', ''));
+        $customerSearchPhone = preg_match('/^\+?[0-9][0-9 .-]{7,19}$/', $customerSearch)
+            ? preg_replace('/\D+/', '', $customerSearch)
+            : '';
+        $perPage = (int) $request?->input('per_page', 10);
+        $perPage = in_array($perPage, [10, 20, 50], true) ? $perPage : 10;
+        $selectedDraftCustomerId = max(0, (int) $request?->input('draft_customer_id', 0));
+        $draftCustomerIds = TextOrderDraft::query()
+            ->where('draft_scope', $saleId ? TextOrderDraft::SCOPE_SALE_PRIVATE : TextOrderDraft::SCOPE_ADMIN_IMPORT)
+            ->when($saleId, fn ($query) => $query->where('sale_id', $saleId))
+            ->whereNotNull('customer_id')
+            ->select('customer_id');
+        $draftCustomers = Customer::query()
+            ->whereIn('id', $draftCustomerIds)
+            ->select(['customers.id', 'customers.name', 'customers.phone', 'customers.is_pinned', 'customers.sort_order'])
+            ->addSelect([
+                'drafts_count' => TextOrderDraft::query()
+                    ->selectRaw('COUNT(*)')
+                    ->whereColumn('customer_id', 'customers.id')
+                    ->where('draft_scope', $saleId ? TextOrderDraft::SCOPE_SALE_PRIVATE : TextOrderDraft::SCOPE_ADMIN_IMPORT)
+                    ->when($saleId, fn ($query) => $query->where('sale_id', $saleId)),
+            ])
+            ->orderByDesc('is_pinned')
+            ->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+        if ($selectedDraftCustomerId > 0 && ! $draftCustomers->contains('id', $selectedDraftCustomerId)) {
+            $selectedDraftCustomerId = 0;
+        }
+        $draftQuery = TextOrderDraft::query()
+            ->with([
+                'sale:id,name,zalo_name',
+                'customer:id,name,phone',
+                'truckBrand:id,name',
+                'truckStation:id,name,address,phone,brand_id',
+                'truckStation.brand:id,name',
+                'variant.product.avatar.media',
+                'order:id,code,created_at',
+                'automatedSchedules' => fn ($query) => $query
+                    ->whereDate('schedule_date', $selectedDraftDate)
+                    ->with('generatedOrder:id,code'),
+            ])
+            ->where('draft_scope', $saleId ? TextOrderDraft::SCOPE_SALE_PRIVATE : TextOrderDraft::SCOPE_ADMIN_IMPORT)
+            ->when($saleId, fn ($query) => $query->where('sale_id', $saleId))
+            ->when($selectedDraftCustomerId, fn ($query) => $query->where('customer_id', $selectedDraftCustomerId))
+            ->when($customerSearch !== '', function ($query) use ($customerSearch, $customerSearchPhone) {
+                $query->where(function ($searchQuery) use ($customerSearch, $customerSearchPhone) {
+                    $searchQuery->where('customer_name', 'like', "%{$customerSearch}%")
+                        ->orWhere('phone', 'like', "%{$customerSearch}%")
+                        ->orWhereHas('customer', function ($customerQuery) use ($customerSearch, $customerSearchPhone) {
+                            $customerQuery->where(function ($customerFields) use ($customerSearch, $customerSearchPhone) {
+                                $customerFields->where('name', 'like', "%{$customerSearch}%")
+                                    ->orWhere('phone', 'like', "%{$customerSearch}%");
+                                if ($customerSearchPhone !== '') {
+                                    $customerFields->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '.', ''), '-', ''), '+', '') LIKE ?", ['%'.$customerSearchPhone.'%']);
+                                }
+                            });
+                        });
+
+                    if ($customerSearchPhone !== '') {
+                        $searchQuery->orWhereRaw("REPLACE(REPLACE(REPLACE(REPLACE(phone, ' ', ''), '.', ''), '-', ''), '+', '') LIKE ?", ['%'.$customerSearchPhone.'%']);
+                    }
+                });
+            })
+            ->orderBy($sortBy, $sortDir)
+            ->orderBy('id', $sortDir);
+        $drafts = $saleId
+            ? $draftQuery->paginate($perPage)->appends($request?->query() ?? [])
+            : $draftQuery->limit(100)->get();
+        $sales = User::query()->whereHas('roles', fn ($query) => $query->where('name', 'sale'))->orderBy('name')->get(['id', 'name', 'zalo_name']);
+        $variants = ProductVariant::query()
+            ->with(['product.avatar.media', 'latestPriceRule'])
+            ->orderBy('name')
+            ->get(['id', 'product_id', 'name', 'sku', 'size', 'kg', 'price']);
+        $truckStations = TruckStation::query()
+            ->with('brand:id,name')
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get(['id', 'brand_id', 'name', 'address', 'phone']);
+
+        $saleMode = $saleId !== null;
+        $pageTitle = $saleMode ? 'Đơn nháp' : 'Nhập đơn text';
+        $actionBaseUrl = $saleMode ? url('my-order-drafts') : url('admin/text-order-import');
+        $parseRoute = $saleMode ? null : route('admin.text-order-import.parse');
+        $viewName = $saleMode ? 'site.my-draft-orders' : 'admin.text-order-import.index';
+
+        return view($viewName, compact(
+            'drafts', 'sales', 'variants', 'truckStations', 'saleMode', 'pageTitle', 'actionBaseUrl', 'parseRoute', 'settings', 'sortBy', 'sortDir', 'customerSearch', 'perPage', 'selectedDraftDate', 'draftCustomers', 'selectedDraftCustomerId'
+        ));
+    }
+
+    public function updateCustomerPin(Request $request, Customer $customer): JsonResponse
+    {
+        $saleId = (int) $request->user()->id;
+        abort_unless(TextOrderDraft::query()
+            ->where('draft_scope', TextOrderDraft::SCOPE_SALE_PRIVATE)
+            ->where('sale_id', $saleId)
+            ->where('customer_id', $customer->id)
+            ->exists(), 403);
+
+        $validated = $request->validate(['is_pinned' => ['required', 'boolean']]);
+        $customer->forceFill(['is_pinned' => (bool) $validated['is_pinned']])->save();
+
+        return response()->json([
+            'message' => $customer->is_pinned ? 'Đã ghim khách hàng lên đầu danh sách.' : 'Đã bỏ ghim khách hàng.',
+            'is_pinned' => (bool) $customer->is_pinned,
+        ]);
+    }
+
+    public function parse(Request $request, ZaloOrderTextParser $parser)
+    {
+        $validated = $request->validate(['text' => ['required', 'string', 'max:200000']]);
+        $parsed = $parser->parse($validated['text']);
+
+        foreach ($parsed as $data) {
+            TextOrderDraft::query()->create(array_merge($data, [
+                'created_by' => $data['sale_id'] ?? $request->user()->id,
+                'draft_scope' => TextOrderDraft::SCOPE_ADMIN_IMPORT,
+            ]));
+        }
+
+        return back()->with('success', 'Đã nhận diện ' . $parsed->count() . ' đơn nháp từ nội dung Zalo.');
+    }
+
+    /**
+     * Admin import for one explicitly selected sale and business date.
+     * The text may be a normal Zalo export or a plain single-order message.
+     */
+    public function parseForSale(Request $request, ZaloOrderTextParser $parser)
+    {
+        $validated = $request->validate([
+            'sale_id' => ['required', 'integer', 'exists:users,id'],
+            'delivery_date' => ['required', 'date'],
+            'text' => ['required', 'string', 'max:200000'],
+        ]);
+        $sale = User::query()->with('roles')->findOrFail((int) $validated['sale_id']);
+        if (! $sale->hasRole('sale')) {
+            throw ValidationException::withMessages([
+                'sale_id' => 'Tài khoản được chọn không có vai trò Sale.',
+            ]);
+        }
+
+        $deliveryDate = Carbon::parse($validated['delivery_date'])->toDateString();
+        $parsed = $parser->parse($validated['text']);
+
+        // Allow Admin to paste one plain order without the Zalo export header.
+        if ($parsed->isEmpty()) {
+            $messageDate = Carbon::parse($deliveryDate)->subDay()->format('d/m/Y');
+            $sender = trim((string) ($sale->zalo_name ?: $sale->name)) ?: 'Sale';
+            $parsed = $parser->parse(
+                '['.$messageDate.' 00:00:00] '.$sender.': '.trim($validated['text'])
+            );
+        }
+
+        if ($parsed->isEmpty()) {
+            throw ValidationException::withMessages([
+                'text' => 'Không nhận diện được đơn hàng trong nội dung. Hãy kiểm tra tên khách, số điện thoại, sản phẩm và số lượng.',
+            ]);
+        }
+
+        DB::transaction(function () use ($parsed, $sale, $deliveryDate, $request): void {
+            foreach ($parsed as $data) {
+                TextOrderDraft::query()->create(array_merge($data, [
+                    'created_by' => (int) $request->user()->id,
+                    'draft_scope' => TextOrderDraft::SCOPE_ADMIN_IMPORT,
+                    'sale_id' => (int) $sale->id,
+                    'delivery_date' => $deliveryDate,
+                ]));
+            }
+        });
+
+        return redirect()->route('admin.text-order-import.index')
+            ->with('success', 'Đã tạo '.$parsed->count().' đơn import cho '.$sale->name
+                .' ngày '.Carbon::parse($deliveryDate)->format('d/m/Y').'.');
+    }
+
+    public function saleConfirm(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
+    {
+        $this->ensureSaleDraft($request, $draft);
+        $this->forceSale($request);
+
+        return $this->confirmAction($request, $draft, $approvalService);
+    }
+
+    public function saleCopy(Request $request, TextOrderDraft $draft): JsonResponse
+    {
+        $this->ensureSaleDraft($request, $draft);
+        $this->forceSale($request);
+
+        return $this->copyAction($request, $draft);
+    }
+
+    public function saleCopyConfirm(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
+    {
+        $this->ensureSaleDraft($request, $draft);
+        $this->forceSale($request);
+
+        return $this->copyConfirmAction($request, $draft, $approvalService);
+    }
+
+    public function saleDestroy(Request $request, TextOrderDraft $draft): JsonResponse
+    {
+        $this->ensureSaleDraft($request, $draft);
+        $draft->delete();
+
+        return response()->json(['message' => 'Đã xóa đơn mẫu.']);
+    }
+
+    public function saleUpdate(Request $request, TextOrderDraft $draft): JsonResponse
+    {
+        $this->ensureSaleDraft($request, $draft);
+        abort_if($draft->status === 'confirmed', 422, 'Đơn mẫu đã lên đơn, không thể sửa.');
+        $this->forceSale($request);
+        $draft->fill($this->validatedDraftData($request));
+        $draft->error_message = null;
+        $draft->status = 'draft';
+        $draft->save();
+
+        return response()->json(['message' => 'Đã lưu thay đổi đơn mẫu.']);
+    }
+
+    public function saleUpdateAutomation(Request $request, TextOrderDraft $draft): JsonResponse
+    {
+        $this->ensureSaleDraft($request, $draft);
+
+        $validated = $request->validate([
+            'automation_mode' => ['required', Rule::in([
+                TextOrderDraft::AUTOMATION_DAILY,
+                TextOrderDraft::AUTOMATION_SCHEDULED,
+            ])],
+            'automation_enabled' => ['required', 'boolean'],
+            'automation_dates' => ['nullable', 'array'],
+            'automation_dates.*' => ['required', 'date_format:Y-m-d'],
+        ]);
+
+        $mode = (string) $validated['automation_mode'];
+        $enabled = (bool) $validated['automation_enabled'];
+        $dates = $mode === TextOrderDraft::AUTOMATION_SCHEDULED
+            ? collect($validated['automation_dates'] ?? [])->unique()->sort()->values()->all()
+            : [];
+
+        if ($mode === TextOrderDraft::AUTOMATION_SCHEDULED && $dates === []) {
+            throw ValidationException::withMessages([
+                'automation_dates' => 'Hãy chọn ít nhất một ngày lên đơn.',
+            ]);
+        }
+
+        if ($enabled) {
+            $items = collect($draft->parsed_items ?: [[
+                'product_variant_id' => $draft->product_variant_id,
+                'quantity' => $draft->quantity,
+            ]]);
+
+            if (!$draft->customer_id) {
+                throw ValidationException::withMessages([
+                    'customer_id' => 'Hãy chọn khách hàng trước khi bật lịch lên đơn.',
+                ]);
+            }
+
+            if ($items->isEmpty() || $items->contains(
+                fn ($item) => empty($item['product_variant_id']) || (int) ($item['quantity'] ?? 0) < 1
+            )) {
+                throw ValidationException::withMessages([
+                    'items' => 'Hãy chọn đầy đủ sản phẩm và số lượng trước khi bật lịch lên đơn.',
+                ]);
+            }
+        }
+
+        $draft->update([
+            'automation_mode' => $mode,
+            'automation_enabled' => $enabled,
+            'automation_dates' => $dates ?: null,
+            'automation_last_error' => null,
+        ]);
+
+        return response()->json([
+            'message' => $enabled
+                ? ($mode === TextOrderDraft::AUTOMATION_DAILY
+                    ? 'Đã bật tự động lên đơn hằng ngày.'
+                    : 'Đã bật lên đơn theo các ngày đã chọn.')
+                : 'Đã lưu cấu hình và tắt tự động lên đơn.',
+            'automation' => [
+                'mode' => $draft->automation_mode,
+                'enabled' => $draft->automation_enabled,
+                'dates' => $draft->automation_dates ?: [],
+            ],
+        ]);
+    }
+
+    public function saleBulkConfirm(Request $request, ApprovalService $approvalService): JsonResponse
+    {
+        $saleId = (int) $request->user()->id;
+        $validated = $request->validate([
+            'draft_ids' => ['required', 'array', 'min:1'],
+            'draft_ids.*' => [
+                'integer',
+                Rule::exists('text_order_drafts', 'id')
+                    ->where('draft_scope', TextOrderDraft::SCOPE_SALE_PRIVATE)
+                    ->where('sale_id', $saleId),
+            ],
+        ]);
+
+        $confirmed = 0;
+        $failed = [];
+        foreach (TextOrderDraft::query()
+            ->where('draft_scope', TextOrderDraft::SCOPE_SALE_PRIVATE)
+            ->where('sale_id', $saleId)
+            ->whereIn('id', $validated['draft_ids'])
+            ->get() as $draft) {
+            try {
+                $this->confirmDraft($request, $draft, $approvalService);
+                $confirmed++;
+            } catch (\Throwable $exception) {
+                $draft->update(['status' => 'error', 'error_message' => $exception->getMessage()]);
+                $failed[] = '#' . $draft->id . ': ' . $exception->getMessage();
+            }
+        }
+
+        return response()->json([
+            'message' => 'Đã xác nhận ' . $confirmed . ' đơn.' . ($failed ? ' Lỗi: ' . implode(' | ', $failed) : ''),
+        ]);
+    }
+
+    public function confirm(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
+    {
+        $this->ensureAdminDraft($draft);
+
+        return $this->confirmAction($request, $draft, $approvalService);
+    }
+
+    private function confirmAction(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
+    {
+        try {
+            $order = $this->confirmDraft($request, $draft, $approvalService);
+            return response()->json([
+                'message' => 'Đã xác nhận đơn ' . ($order->code ?: '#' . $order->id),
+                'order_id' => $order->id,
+                'order_code' => $order->code,
+                'delivery_date' => optional($order->delivery_date)->toDateString() ?: $this->today(),
+            ]);
+        } catch (\Throwable $exception) {
+            $draft->update(['status' => 'error', 'error_message' => $exception->getMessage()]);
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+    }
+
+    public function copy(Request $request, TextOrderDraft $draft): JsonResponse
+    {
+        $this->ensureAdminDraft($draft);
+
+        return $this->copyAction($request, $draft);
+    }
+
+    private function copyAction(Request $request, TextOrderDraft $draft): JsonResponse
+    {
+        try {
+            $copy = $this->copyDraft($request, $draft);
+
+            return response()->json([
+                'message' => 'Đã sao chép thành bản nháp #' . $copy->id . ' cho sale.',
+                'draft_id' => $copy->id,
+                'delivery_date' => optional($copy->delivery_date)->toDateString() ?: $this->today(),
+            ]);
+        } catch (\Throwable $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+    }
+
+    public function copyConfirm(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
+    {
+        $this->ensureAdminDraft($draft);
+
+        return $this->copyConfirmAction($request, $draft, $approvalService);
+    }
+
+    private function copyConfirmAction(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
+    {
+        try {
+            [$copy, $order] = DB::transaction(function () use ($request, $draft, $approvalService) {
+                $copy = $this->copyDraft($request, $draft);
+                $order = $this->confirmDraft($request, $copy, $approvalService);
+
+                return [$copy, $order];
+            });
+            return response()->json([
+                'message' => 'Đã sao chép và xác nhận đơn ' . ($order->code ?: '#' . $order->id),
+                'draft_id' => $copy->id,
+                'order_id' => $order->id,
+                'order_code' => $order->code,
+                'delivery_date' => optional($order->delivery_date)->toDateString() ?: $this->today(),
+            ]);
+        } catch (\Throwable $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+    }
+
+    public function destroy(TextOrderDraft $draft): JsonResponse
+    {
+        $this->ensureAdminDraft($draft);
+
+        return $this->destroyAction($draft);
+    }
+
+    private function destroyAction(TextOrderDraft $draft): JsonResponse
+    {
+        $draft->delete();
+
+        return response()->json(['message' => 'Đã xóa dòng import. Đơn sale đã tạo (nếu có) không bị ảnh hưởng.']);
+    }
+
+    public function bulkDestroy(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'draft_ids' => ['required', 'array', 'min:1'],
+            'draft_ids.*' => [
+                'integer',
+                Rule::exists('text_order_drafts', 'id')
+                    ->where('draft_scope', TextOrderDraft::SCOPE_ADMIN_IMPORT),
+            ],
+        ]);
+
+        $deleted = TextOrderDraft::query()
+            ->where('draft_scope', TextOrderDraft::SCOPE_ADMIN_IMPORT)
+            ->whereIn('id', $validated['draft_ids'])
+            ->delete();
+
+        return response()->json([
+            'message' => 'Đã xóa ' . $deleted . ' dòng import. Đơn sale đã tạo (nếu có) không bị ảnh hưởng.',
+        ]);
+    }
+
+    public function bulkConfirm(Request $request, ApprovalService $approvalService): JsonResponse
+    {
+        $validated = $request->validate([
+            'draft_ids' => ['required', 'array', 'min:1'],
+            'draft_ids.*' => [
+                'integer',
+                Rule::exists('text_order_drafts', 'id')
+                    ->where('draft_scope', TextOrderDraft::SCOPE_ADMIN_IMPORT),
+            ],
+        ]);
+
+        $confirmed = 0;
+        $failed = [];
+        foreach (TextOrderDraft::query()
+            ->where('draft_scope', TextOrderDraft::SCOPE_ADMIN_IMPORT)
+            ->whereIn('id', $validated['draft_ids'])
+            ->get() as $draft) {
+            try {
+                $this->confirmDraft($request, $draft, $approvalService);
+                $confirmed++;
+            } catch (\Throwable $exception) {
+                $draft->update(['status' => 'error', 'error_message' => $exception->getMessage()]);
+                $failed[] = '#' . $draft->id . ': ' . $exception->getMessage();
+            }
+        }
+
+        return response()->json([
+            'message' => 'Đã xác nhận ' . $confirmed . ' đơn.' . ($failed ? ' Lỗi: ' . implode(' | ', $failed) : ''),
+        ]);
+    }
+
+    private function confirmDraft(Request $request, TextOrderDraft $draft, ApprovalService $approvalService)
+    {
+        abort_if(
+            $draft->status === 'confirmed' && $draft->draft_scope !== TextOrderDraft::SCOPE_SALE_PRIVATE,
+            422,
+            'Đơn nháp này đã được xác nhận.'
+        );
+
+        $draftData = $this->validatedDraftData($request);
+        $deliveryDate = Carbon::parse(
+            $draftData['delivery_date'] ?? $draft->delivery_date?->toDateString() ?? $this->today()
+        )->toDateString();
+        $draftData['delivery_date'] = $deliveryDate;
+        $draft->fill($draftData);
+        if ($draft->sale_id) {
+            $draft->created_by = $draft->sale_id;
+        }
+        $draft->save();
+        $draft->refresh();
+
+        if (!$draft->sale_id) {
+            throw new \RuntimeException('Bắt buộc phải chọn Sale trước khi lên đơn.');
+        }
+        
+        $sale = User::query()->find($draft->sale_id);
+        if (!$sale) {
+            throw new \RuntimeException('Không tìm thấy Sale ID ' . $draft->sale_id . '.');
+        }
+        $draftItems = collect($draft->parsed_items ?: [[
+            'product_variant_id' => $draft->product_variant_id,
+            'quantity' => $draft->quantity,
+            'size_kg' => $draft->size_kg,
+            'unit_price' => $draft->unit_price,
+        ]]);
+        if ($draftItems->contains(fn ($item) => empty($item['product_variant_id']) || empty($item['quantity']))) {
+            throw new \RuntimeException('Có sản phẩm chưa nhận diện biến thể hoặc số lượng.');
+        }
+
+        $truckStation = $draft->use_truck_station ? $this->resolveTruckStation($draft) : null;
+        $customer = $draft->customer;
+        if (!$customer) {
+            if (!$draft->customer_name && !$draft->phone) {
+                throw new \RuntimeException('Thiếu tên và số điện thoại khách hàng.');
+            }
+            $customer = $this->resolveOrCreateCustomer($draft, $truckStation);
+        } elseif ($truckStation) {
+            $customer->update([
+                'use_truck_station' => true,
+                'truck_station_id' => $truckStation->id,
+                'truck_station_address' => $draft->truck_station_address ?: $truckStation->address,
+            ]);
+        }
+
+        return DB::transaction(function () use ($draft, $customer, $draftItems, $truckStation, $approvalService, $deliveryDate) {
+            $schedule = null;
+            if ($draft->draft_scope === TextOrderDraft::SCOPE_SALE_PRIVATE) {
+                $schedule = OrderSchedule::query()
+                    ->where('text_order_draft_id', $draft->id)
+                    ->whereDate('schedule_date', $deliveryDate)
+                    ->lockForUpdate()
+                    ->first();
+
+                if ($schedule?->generated_order_id) {
+                    throw ValidationException::withMessages([
+                        'delivery_date' => 'Đơn mẫu này đã được lên đơn trong ngày '.Carbon::parse($deliveryDate)->format('d/m/Y').'.',
+                    ]);
+                }
+
+                $schedule ??= OrderSchedule::query()->create([
+                    'customer_id' => $customer->id,
+                    'text_order_draft_id' => $draft->id,
+                    'schedule_date' => $deliveryDate,
+                    'status' => 'pending',
+                    'price_status' => 'ok',
+                    'stock_status' => 'ok',
+                    'created_by' => $draft->sale_id,
+                    'is_active' => true,
+                    'review_meta' => [
+                        'source' => 'manual_draft_confirmation',
+                        'selected_date' => $deliveryDate,
+                    ],
+                ]);
+            }
+
+            $businessCreatedAt = Carbon::parse($deliveryDate, 'Asia/Bangkok')
+                ->setTimeFrom(now('Asia/Bangkok'));
+            $order = app(OrderController::class)->createOrderFromSchedule(
+                $draftItems->map(fn ($item) => [
+                    'variant_id' => (int) $item['product_variant_id'],
+                    'quantity' => (int) $item['quantity'],
+                    'base_price' => isset($item['unit_price']) ? (float) $item['unit_price'] : null,
+                    'unit_discount' => 0,
+                    'unit_discount_type' => 'decrease',
+                    'unit_weight' => isset($item['size_kg']) ? (float) $item['size_kg'] : null,
+                ])->all(),
+                [
+                    'customer_id' => $customer->id,
+                    'user_id' => $draft->sale_id,
+                    'actor_user_id' => $draft->sale_id,
+                    'recipient_name' => $draft->customer_name ?: $customer->name,
+                    'recipient_phone' => $draft->phone ?: $customer->phone,
+                    'recipient_address' => $draft->address ?: $customer->address,
+                    'note' => $draft->note,
+                    'warehouse_product_permissions' => $draft->warehouse_product_permissions,
+                    'charge_vat' => $draft->charge_vat,
+                    'vat_percent' => $draft->vat_percent,
+                    'collect_customer_shipping_fee' => $draft->collect_customer_shipping_fee,
+                    'customer_shipping_fee' => $draft->customer_shipping_fee,
+
+                    'delivery_date' => $deliveryDate,
+                    // Ngày Sale/Admin chọn là ngày nghiệp vụ của đơn trên các
+                    // màn hình kho vốn phân nhóm đơn thường theo created_at.
+                    'created_at' => $businessCreatedAt,
+                    'skip_auto_cancel' => Order::isNonCurrentBusinessDate($businessCreatedAt),
+                    'delivery_time' => $draft->delivery_time,
+                    'use_truck_station' => (bool) $draft->use_truck_station,
+                    'truck_station_id' => $truckStation?->id,
+                    'truck_station_name' => $draft->truck_station_name ?: $truckStation?->name,
+                    'truck_station_address' => $draft->truck_station_address ?: $truckStation?->address,
+                    'truck_station_phone' => $draft->truck_station_phone ?: $truckStation?->phone,
+                    'truck_receive_time' => $draft->truck_receive_time,
+                    'status' => OrderStatus::Pending->value,
+                    'payment_status' => PaymentStatus::Unpaid->value,
+                    'delivery_status' => DeliveryStatus::NotShipped->value,
+                    'allow_backorder' => true,
+                ],
+                $approvalService
+            );
+
+            if ($schedule) {
+                $schedule->update([
+                    'customer_id' => $customer->id,
+                    'status' => 'generated',
+                    'generated_order_id' => $order->id,
+                    'review_meta' => array_merge((array) $schedule->review_meta, [
+                        'generated_at' => now('Asia/Bangkok')->toDateTimeString(),
+                    ]),
+                ]);
+            }
+
+            $draft->update([
+                'status' => $draft->draft_scope === TextOrderDraft::SCOPE_SALE_PRIVATE ? 'draft' : 'confirmed',
+                'order_id' => $order->id,
+                'error_message' => null,
+            ]);
+            return $order;
+        });
+    }
+
+    private function resolveOrCreateCustomer(TextOrderDraft $draft, ?TruckStation $truckStation): Customer
+    {
+        $customerName = trim((string) ($draft->customer_name ?: ('Khách ' . $draft->phone)));
+        $normalizedName = Customer::normalizeName($customerName);
+        $customer = Customer::withTrashed()
+            ->where('name_normalized', $normalizedName)
+            ->first();
+
+        if ($customer?->trashed()) {
+            throw new \RuntimeException(
+                'Khách hàng “'.$customer->name.'” đang nằm trong thùng rác. Hãy khôi phục khách trước khi lên đơn.'
+            );
+        }
+
+        if (!$customer) {
+            $customer = Customer::query()->create([
+                'user_id' => $draft->sale_id,
+                'assigned_to' => $draft->sale_id,
+                'current_owner_sale_id' => $draft->sale_id,
+                'name' => $customerName,
+                'phone' => $draft->phone,
+                'address' => $draft->address,
+                'delivery_time' => $draft->delivery_time,
+                'use_truck_station' => (bool) $truckStation,
+                'truck_station_id' => $truckStation?->id,
+                'truck_station_address' => $draft->truck_station_address ?: $truckStation?->address,
+                'status' => 'active',
+            ]);
+            $draft->update(['customer_id' => $customer->id]);
+            app(CustomerPriorityService::class)->attachSale($customer, (int) $draft->sale_id, 1, 'text_order_import');
+
+            return $customer->fresh();
+        }
+
+        // Gắn bản nháp với khách đã có trước, để admin nhìn thấy và có thể xử lý lại
+        // ngay cả khi sale đang chọn không phải người hiện quản lý khách.
+        $draft->update(['customer_id' => $customer->id]);
+
+        $updates = [];
+        foreach (['phone', 'address', 'delivery_time'] as $field) {
+            if (blank($customer->{$field}) && filled($draft->{$field})) {
+                $updates[$field] = $draft->{$field};
+            }
+        }
+        if ($truckStation && !$customer->use_truck_station) {
+            $updates = array_merge($updates, [
+                'use_truck_station' => true,
+                'truck_station_id' => $truckStation->id,
+                'truck_station_address' => $draft->truck_station_address ?: $truckStation->address,
+            ]);
+        }
+        if ($updates !== []) {
+            $customer->update($updates);
+        }
+
+        if ($customer->assigned_to && (int) $customer->assigned_to !== (int) $draft->sale_id) {
+            $ownerName = User::query()->whereKey($customer->assigned_to)->value('name') ?: ('ID '.$customer->assigned_to);
+            throw new \RuntimeException(
+                'Đã tìm thấy khách hàng “'.$customer->name.'”, nhưng khách đang thuộc NVKD '.$ownerName.'. '
+                .'Hãy chọn đúng Sale hoặc chuyển quyền khách trước khi lên đơn.'
+            );
+        }
+
+        app(CustomerPriorityService::class)->attachSale(
+            $customer,
+            (int) $draft->sale_id,
+            1,
+            'text_order_import_existing_customer'
+        );
+
+        return $customer->fresh();
+    }
+
+    private function copyDraft(Request $request, TextOrderDraft $draft): TextOrderDraft
+    {
+        $data = $this->validatedDraftData($request);
+        if (empty($data['sale_id'])) {
+            throw new \RuntimeException('Hãy chọn sale nhận đơn trước khi sao chép.');
+        }
+
+        $copy = $draft->replicate([
+            'order_id',
+            'status',
+            'error_message',
+            'automation_mode',
+            'automation_enabled',
+            'automation_dates',
+            'automation_last_run_at',
+            'automation_last_error',
+        ]);
+        $copy->fill($data);
+        $copy->created_by = $data['sale_id'];
+        $copy->delivery_date = Carbon::parse(
+            $data['delivery_date'] ?? $draft->delivery_date?->toDateString() ?? $this->today()
+        )->toDateString();
+        $copy->order_id = null;
+        $copy->status = 'draft';
+        $copy->error_message = null;
+        $copy->automation_mode = null;
+        $copy->automation_enabled = false;
+        $copy->automation_dates = null;
+        $copy->save();
+
+        return $copy;
+    }
+
+    private function validatedDraftData(Request $request): array
+    {
+        $validated = $request->validate([
+            'charge_vat' => ['sometimes', 'boolean'],
+            'vat_percent' => [Rule::requiredIf($request->boolean('charge_vat')), 'nullable', 'numeric', 'gt:0', 'max:100'],
+            'collect_customer_shipping_fee' => ['sometimes', 'boolean'],
+            'customer_shipping_fee' => [Rule::requiredIf($request->boolean('collect_customer_shipping_fee')), 'nullable', 'numeric', 'gt:0', 'max:999999999999.99'],
+            'sale_id' => ['required', 'exists:users,id'],
+            'customer_id' => ['nullable', 'exists:customers,id'],
+            'truck_brand_id' => ['nullable', 'exists:truck_brands,id'],
+            'truck_station_id' => ['nullable', 'exists:truck_stations,id'],
+            'product_variant_id' => ['nullable', 'exists:product_variants,id'],
+            'customer_name' => ['nullable', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'address' => ['nullable', 'string', 'max:1000'],
+            'truck_brand_name' => ['nullable', 'string', 'max:255'],
+            'truck_station_address' => ['nullable', 'string', 'max:255'],
+            'quantity' => ['nullable', 'integer', 'min:1'],
+            'size_kg' => ['nullable', 'numeric', 'min:0.01'],
+            'unit_price' => ['nullable', 'numeric', 'min:0'],
+            'delivery_date' => ['nullable', 'date'],
+            'delivery_time' => ['nullable', 'string', 'max:255'],
+            'use_truck_station' => ['nullable', 'boolean'],
+            'truck_station_name' => ['nullable', 'string', 'max:255'],
+            'truck_station_phone' => ['nullable', 'string', 'max:30'],
+            'truck_receive_time' => ['nullable', 'string', 'max:255'],
+            'note' => ['nullable', 'string', 'max:10000'],
+            'warehouse_product_permissions' => ['nullable', 'array'],
+            'warehouse_product_permissions.*.quantity' => ['required', 'boolean'],
+            'warehouse_product_permissions.*.sizes' => ['nullable', 'array'],
+            'warehouse_product_permissions.*.sizes.*' => ['numeric', 'gt:0'],
+            'items' => ['nullable', 'array', 'min:1'],
+            'items.*.product_variant_id' => ['nullable', 'exists:product_variants,id'],
+            'items.*.quantity' => ['nullable', 'integer', 'min:1'],
+            'items.*.size_kg' => ['nullable', 'numeric', 'min:0.01'],
+            'items.*.unit_price' => ['nullable', 'numeric', 'min:0'],
+            'items.*.product_text' => ['nullable', 'string', 'max:500'],
+        ]);
+        if (isset($validated['items'])) {
+            $validated['parsed_items'] = $validated['items'];
+            unset($validated['items']);
+        }
+
+        if ($request->has('warehouse_product_permissions')) {
+            $validated['warehouse_product_permissions'] = $request->input('warehouse_product_permissions') ?: null;
+        }
+
+        foreach (['charge_vat' => 'vat_percent', 'collect_customer_shipping_fee' => 'customer_shipping_fee'] as $flag => $amount) {
+            if ($request->has($flag)) {
+                $validated[$flag] = $request->boolean($flag);
+                $validated[$amount] = $validated[$flag] ? round((float) $validated[$amount], 2) : 0;
+            }
+        }
+
+        $useTruckStation = $request->has('use_truck_station')
+            ? $request->boolean('use_truck_station')
+            : collect([
+                $validated['truck_station_id'] ?? null,
+                $validated['truck_brand_name'] ?? null,
+                $validated['truck_station_name'] ?? null,
+                $validated['truck_station_address'] ?? null,
+            ])->contains(fn ($value) => filled($value));
+
+        $validated['use_truck_station'] = $useTruckStation;
+        if (!$useTruckStation) {
+            foreach ([
+                'truck_brand_id', 'truck_station_id', 'truck_brand_name', 'truck_station_name',
+                'truck_station_address', 'truck_station_phone', 'truck_receive_time',
+            ] as $field) {
+                $validated[$field] = null;
+            }
+        } elseif (empty($validated['truck_station_id'])
+            && blank($validated['truck_brand_name'] ?? null)
+            && blank($validated['truck_station_name'] ?? null)) {
+            throw ValidationException::withMessages([
+                'truck_station_name' => 'Hãy chọn trạm xe hoặc nhập tên nhà xe/trạm xe cần gửi.',
+            ]);
+        }
+
+        return $validated;
+    }
+
+    private function resolveTruckStation(TextOrderDraft $draft): ?TruckStation
+    {
+        if ($draft->truck_station_id) {
+            $station = TruckStation::query()->with('brand:id,name')->find($draft->truck_station_id);
+            if ($station) {
+                $draft->update([
+                    'truck_brand_id' => $station->brand_id,
+                    'truck_brand_name' => $station->brand?->name ?: $draft->truck_brand_name,
+                    'truck_station_name' => $station->name,
+                    'truck_station_address' => $draft->truck_station_address ?: $station->address,
+                    'truck_station_phone' => $draft->truck_station_phone ?: $station->phone,
+                ]);
+            }
+
+            return $station;
+        }
+
+        $brandName = trim((string) $draft->truck_brand_name);
+        $stationName = trim((string) $draft->truck_station_name);
+        $stationAddress = trim((string) $draft->truck_station_address);
+        if ($brandName === '' && $stationName === '' && $stationAddress === '') {
+            return null;
+        }
+        if ($brandName === '') {
+            $brandName = $stationName;
+        }
+
+        $normalizedBrand = Str::of($brandName)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString();
+        $brand = $draft->truck_brand_id
+            ? TruckBrand::query()->find($draft->truck_brand_id)
+            : TruckBrand::query()->get()->first(fn (TruckBrand $item) =>
+                Str::of($item->name)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString() === $normalizedBrand
+            );
+        $brand ??= TruckBrand::query()->create([
+            'name' => $brandName,
+            'is_active' => true,
+            'created_by' => $draft->sale_id,
+        ]);
+
+        $normalizedStation = Str::of($stationName)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString();
+        $normalizedAddress = Str::of($stationAddress)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString();
+        $station = TruckStation::query()
+            ->where('brand_id', $brand->id)
+            ->get()
+            ->first(fn (TruckStation $item) => (
+                $normalizedStation !== ''
+                && Str::of($item->name)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString() === $normalizedStation
+            ) || (
+                $normalizedAddress !== ''
+                && Str::of((string) $item->address)->ascii()->lower()->replaceMatches('/[^a-z0-9]+/', ' ')->squish()->toString() === $normalizedAddress
+            ));
+        $station ??= TruckStation::query()->create([
+            'name' => $stationName ?: $brand->name . ($stationAddress !== '' ? ' - ' . $stationAddress : ''),
+            'brand_id' => $brand->id,
+            'address' => $stationAddress ?: null,
+            'phone' => $draft->truck_station_phone ?: null,
+            'is_active' => true,
+            'created_by' => $draft->sale_id,
+        ]);
+
+        $draft->update([
+            'truck_brand_id' => $brand->id,
+            'truck_station_id' => $station->id,
+            'truck_brand_name' => $brand->name,
+            'truck_station_name' => $station->name,
+            'truck_station_address' => $stationAddress ?: $station->address,
+            'truck_station_phone' => $draft->truck_station_phone ?: $station->phone,
+        ]);
+
+        return $station;
+    }
+
+    private function today(): string
+    {
+        return Carbon::now('Asia/Bangkok')->toDateString();
+    }
+
+    private function ensureSaleDraft(Request $request, TextOrderDraft $draft): void
+    {
+        abort_unless(
+            $draft->draft_scope === TextOrderDraft::SCOPE_SALE_PRIVATE
+            && (int) $draft->sale_id === (int) $request->user()->id,
+            403
+        );
+    }
+
+    private function ensureAdminDraft(TextOrderDraft $draft): void
+    {
+        abort_unless($draft->draft_scope === TextOrderDraft::SCOPE_ADMIN_IMPORT, 403);
+    }
+
+    private function forceSale(Request $request): void
+    {
+        $request->merge(['sale_id' => (int) $request->user()->id]);
+    }
+}

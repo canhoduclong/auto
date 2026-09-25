@@ -1,0 +1,1266 @@
+            @php
+                $orderCardReadonly = (bool) ($orderCardReadonly ?? false);
+                $isTodaySelected = \Illuminate\Support\Carbon::parse($selectedDate ?? now()->toDateString())->isToday();
+                $canProcessThisOrder = !$orderCardReadonly && (
+                    $order->accounting_sales_import_batch_id !== null
+                    || $order->status === \App\Models\Order::STATUS_PACKING
+                    || (bool) $order->skip_auto_cancel
+                    || $order->hasCompletedAdjustment()
+                    || ($isTodaySelected && $order->created_at->isToday())
+                );
+                $meta = $statusMeta[$order->status] ?? ['label' => $order->status, 'class' => 'bg-secondary'];
+                $isReadyToPack = in_array($order->status, ['approved', 'ready_to_pack'], true);
+                $isPacking = $order->status === 'packing';
+                $isPackedReadonly = in_array($order->status, ['packed', 'packed_waiting_pickup', 'delivering', 'delivered', 'completed'], true);
+                $canAdminReopenPacking = !$orderCardReadonly && auth()->user()?->hasRole('admin') && in_array($order->status, ['packed', 'packed_waiting_pickup'], true);
+                $activePackingHistory = $order->histories
+                    ?->where('action', 'start_packing')
+                    ->sortByDesc('id')
+                    ->first();
+                $activePackerName = $activePackingHistory?->user?->short_name
+                    ?: $activePackingHistory?->user?->name;
+                $canUndoStartPacking = $isPacking
+                    && (int) ($activePackingHistory?->user_id ?? 0) === (int) auth()->id();
+                $packingHistory = $order->histories
+                    ?->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
+                    ->sortByDesc('id')
+                    ->first();
+                $sourceWarehouseName = $order->warehouse?->name ?: $packingHistory?->user?->warehouse?->name;
+                $packedByName = $packingHistory?->user?->name;
+                $packedAt = $packingHistory?->created_at?->format('d/m/Y H:i');
+                $stockGuard = $order->stock_guard ?? [];
+                $hasStockShortage = (bool) ($stockGuard['has_shortage'] ?? false);
+                $canStartPacking = (bool) ($stockGuard['can_start_packing'] ?? true);
+                $stockShortages = collect($stockGuard['shortages'] ?? []);
+                $orderCuttingPlans = collect($cuttingPlansByOrder[$order->id] ?? []);
+                $activeCuttingBatches = collect($activeCuttingBatchesByOrder[$order->id] ?? []);
+                $hasActiveCuttingBatch = $activeCuttingBatches->isNotEmpty();
+                $isPackageOrderLayout = ($orderRoutePrefix ?? 'warehouse') === 'package';
+                $isPendingSaleConfirmation = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION;
+                $isConfirmedBySale = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED;
+                $isRejectedBySale = $order->warehouse_adjustment_status === \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED;
+                $warehouseCanAdjust = $order->items->contains(
+                    fn ($item) => $order->allowsWarehouseQuantityChange((int) $item->product_id)
+                );
+                $adjustmentChanges = collect($order->warehouse_adjustment_changes ?? []);
+                $activeTransfer = $activeTransfersByOrder[$order->id] ?? null;
+                $activePackingGoodsTransfer = $activePackingGoodsTransfersByOrder[$order->id] ?? null;
+                $packingReservedQuantity = (float) ($packingReservedQuantitiesByOrder[$order->id] ?? 0);
+                $shipPickupWarehouseName = $sourceWarehouseName;
+                $shipPickupWarehouseHint = null;
+                $customerFeedbackContext = $order->getAttribute('customer_feedback_context') ?? [];
+                $customerFeedbackMeta = $customerFeedbackContext['highest_meta'] ?? \App\Models\Order::customerFeedbackMeta(null);
+                $customerFeedbackRows = collect($customerFeedbackContext['recent'] ?? []);
+                $hasCustomerFeedback = (bool) ($customerFeedbackContext['has_feedback'] ?? false);
+                $currentWorkingWarehouseId = (int) (auth()->user()?->warehouse_id ?? 0);
+                $packingWarehouseOptions = collect($warehouses ?? [])->filter(
+                    fn ($warehouse) => (int) $warehouse->id !== $currentWorkingWarehouseId
+                );
+                $canTransferPackingWarehouse = !$isPackageOrderLayout
+                    && $canProcessThisOrder
+                    && ($isPacking || ($isReadyToPack && $stockShortages->isNotEmpty()))
+                    && !$isPendingSaleConfirmation
+                    && !$hasActiveCuttingBatch
+                    && !$activeTransfer
+                    && !$activePackingGoodsTransfer
+                    && !$order->order_transfer_id
+                    && $currentWorkingWarehouseId > 0
+                    && (int) ($order->warehouse_id ?? 0) === $currentWorkingWarehouseId
+                    && $packingWarehouseOptions->isNotEmpty();
+
+                if ($activeTransfer?->targetWarehouse?->name) {
+                    $shipPickupWarehouseName = $activeTransfer->targetWarehouse->name;
+                    $shipPickupWarehouseHint = match ($activeTransfer->status) {
+                        'pending_shipper_pickup' => 'Đang điều chuyển sang kho nhận',
+                        'in_transit' => 'Đang vận chuyển sang kho nhận',
+                        'delivered_waiting_receive' => 'Chờ kho nhận tiếp nhận trước khi ship lấy',
+                        default => null,
+                    };
+                }
+            @endphp
+            <div class="col-12" id="order-card-{{ $order->id }}">
+                <div class="wh-order-card-grid {{ $hasCustomerFeedback ? 'has-feedback' : 'no-feedback' }}">
+                <div class="wh-order-main">
+                <div class="card wh-order-card js-order-card {{ collect($order->sale_changes_pending)->isNotEmpty() ? 'sale-change-pending' : ($order->sale_changes_confirmed ? 'sale-change-confirmed' : '') }} {{ $hasActiveCuttingBatch ? 'has-cutting-in-progress' : '' }}" data-order-id="{{ $order->id }}">
+                    @if(collect($order->sale_changes_pending)->isNotEmpty())
+                        <div class="p-3 border-bottom">
+                            <strong class="text-warning-emphasis">Đơn điều chỉnh từ sale — chờ xác nhận</strong>
+                            @foreach($order->sale_changes_pending as $saleChange)
+                                <div class="small mt-1">{{ $saleChange->note }}</div>
+                            @endforeach
+                            @if(!$orderCardReadonly)
+                                <form method="POST" action="{{ route(request()->routeIs('package.*') ? 'package.orders.confirm-sale-changes' : 'warehouse.orders.confirm-sale-changes', $order) }}" class="mt-2">
+                                    @csrf
+                                    <input type="hidden" name="through_id" value="{{ $order->sale_changes_latest_id }}">
+                                    <button type="submit" class="btn btn-warning fw-bold">Xác Nhận</button>
+                                </form>
+                            @endif
+                        </div>
+                    @elseif($order->sale_changes_confirmed)
+                        <div class="p-2 text-success fw-semibold">Đã xác nhận thay đổi từ sale</div>
+                    @endif
+                    <div class="d-flex align-items-center card-header bg-white">
+                        @php
+                            $isPacked = in_array($order->status, ['packed', 'packed_waiting_pickup', 'delivering', 'delivered', 'completed'], true);
+                            $orderIndexClass = $isPacking ? 'is-packing' : ($isPacked ? 'is-packed' : 'is-unpacked');
+                        @endphp
+                        <div class="wh-order-index {{ $orderIndexClass }} text-center">{{ $order->daily_sequence ?? '—' }}</div>
+                        <div class="border-0 w-100 d-flex justify-content-between align-items-center wh-order-card-header-content">
+                            <div>
+                                <div class="fw-semibold fs-5 mb-0 pb-0 wh-order-customer-name">{{ $order->customer?->name ?? '—' }} </div>
+                                <div class="text-muted card-desript">
+                                    #{{ $order->daily_sequence ?? '—' }} · Ngày lên đơn {{ $order->created_at->format('d/m/Y H:i') }} ·
+                                    Ngày giao {{ optional($order->delivery_date)->format('d/m/Y') ?: 'chưa cập nhật' }} · {{ $order->code }} ·
+                                    Sale: {{ $order->user?->name ?? 'Chưa xác định' }}
+                                </div>
+                            </div> 
+                            <div class="d-flex align-items-center gap-2 wh-order-card-header-actions">
+                                @if($warehouseCanAdjust)
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle" title="Kho được phép trực tiếp điều chỉnh đơn">
+                                        <i class="bi bi-pencil-square me-1"></i>Kho được sửa
+                                    </span>
+                                @endif
+                                <span class="badge {{ $meta['class'] }} js-order-status">{{ $meta['label'] }}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        @if($hasActiveCuttingBatch)
+                            <div class="alert wh-cutting-progress-alert py-2 px-3 mb-2">
+                                <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                                    <div>
+                                        <div class="fw-semibold">
+                                            <i class="bi bi-scissors me-1"></i>Đã xác nhận lấy hàng pha lóc
+                                        </div>
+                                        <div class="small text-muted">Đơn đang chờ bộ phận đóng hàng hoàn thiện kg thực tế và nhập kho.</div>
+                                    </div>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        @foreach($activeCuttingBatches as $batch)
+                                            @php
+                                                $batchModalId = 'complete-cutting-batch-' . (int) $batch->id;
+                                            @endphp
+                                            @if($isPackageOrderLayout)
+                                                <button type="button"
+                                                        class="btn btn-sm btn-warning"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#{{ $batchModalId }}">
+                                                    <i class="bi bi-play-fill me-1"></i>Thực hiện
+                                                </button>
+                                            @else
+                                                <form method="POST"
+                                                      action="{{ route('warehouse.cutting-batches.revert', $batch) }}"
+                                                      onsubmit="return confirm('Quay lại xác nhận lấy hàng pha lóc và hoàn nguyên tồn nguyên liệu?')">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                        <i class="bi bi-arrow-counterclockwise me-1"></i>Quay lại
+                                                    </button>
+                                                </form>
+                                            @endif
+                                        @endforeach
+                                    </div>
+                                </div>
+                                @if($isPackageOrderLayout)
+                                    <div class="mt-3">
+                                        @foreach($activeCuttingBatches as $batch)
+                                            @php
+                                                $sourceItems = collect($batch->exportDocument?->items ?? []);
+                                                $verifications = collect($batch->picked_material_verifications ?? [])->keyBy(fn ($row) => (int) ($row['variant_id'] ?? 0));
+                                                $targetName = trim(($batch->targetVariant?->product?->name ?? 'Sản phẩm') . ' ' . ($batch->targetVariant?->name ?: ''));
+                                            @endphp
+                                            <div class="small fw-semibold mb-2">Kho đã lấy cho: {{ $targetName }}</div>
+                                            <div class="wh-picked-material-list">
+                                                @forelse($sourceItems as $sourceItem)
+                                                    @php
+                                                        $sourceVariant = $sourceItem->productVariant;
+                                                        $sourceVariantId = (int) ($sourceItem->product_variant_id ?? 0);
+                                                        $sourceName = trim(($sourceVariant?->product?->name ?? 'Sản phẩm') . ' ' . ($sourceVariant?->name ?: ''));
+                                                        $pickedVerification = $verifications->get($sourceVariantId);
+                                                        $isPickedVerified = !empty($pickedVerification);
+                                                    @endphp
+                                                    <div class="wh-picked-material-row {{ $isPickedVerified ? 'is-verified' : '' }}"
+                                                         data-picked-material-row
+                                                         data-batch-id="{{ (int) $batch->id }}"
+                                                         data-variant-id="{{ $sourceVariantId }}"
+                                                         data-picked-url="{{ route('package.cutting-batches.materials.picked', ['batch' => $batch, 'variant' => $sourceVariantId]) }}"
+                                                         data-unpicked-url="{{ route('package.cutting-batches.materials.unpicked', ['batch' => $batch, 'variant' => $sourceVariantId]) }}">
+                                                        <div>
+                                                            <div class="fw-semibold">{{ $sourceName }}</div>
+                                                            <div class="wh-picked-material-meta" data-picked-material-meta-base="Kho xuất {{ rtrim(rtrim(number_format((float) $sourceItem->quantity, 3, '.', ''), '0'), '.') }} con{{ $sourceVariant?->sku ? ' · ' . $sourceVariant->sku : '' }}">
+                                                                Kho xuất {{ rtrim(rtrim(number_format((float) $sourceItem->quantity, 3, '.', ''), '0'), '.') }} con{{ $sourceVariant?->sku ? ' · ' . $sourceVariant->sku : '' }}
+                                                                <span data-picked-material-verify-text>{{ $isPickedVerified ? ' · Verify bởi ' . ($pickedVerification['verified_by_name'] ?? 'Package') : '' }}</span>
+                                                            </div>
+                                                        </div>
+                                                        <div class="wh-picked-material-actions">
+                                                            <span class="badge wh-picked-material-badge {{ $isPickedVerified ? '' : 'd-none' }}" data-picked-material-badge>
+                                                                <i class="bi bi-check2-circle me-1"></i>Đã lấy
+                                                            </span>
+                                                            <button type="button" class="btn btn-sm btn-success js-picked-material-action {{ $isPickedVerified ? 'd-none' : '' }}" data-picked-action="pick">
+                                                                <i class="bi bi-check2-circle me-1"></i>Đã lấy
+                                                            </button>
+                                                            <button type="button" class="btn btn-sm btn-outline-danger js-picked-material-action {{ $isPickedVerified ? '' : 'd-none' }}" data-picked-action="unpick">
+                                                                <i class="bi bi-arrow-counterclockwise me-1"></i>Quay lại
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                @empty
+                                                    <div class="small text-muted">Chưa có dữ liệu nguyên liệu kho đã xuất.</div>
+                                                @endforelse
+                                            </div>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
+                        <div class="wh-section">
+                            @if($isConfirmedBySale)
+                                <div class="alert alert-success py-2 px-3 mb-2">
+                                    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                                        <div>
+                                            <div class="fw-semibold">Sale đã xác nhận và áp dụng thay đổi</div>
+                                            <div class="small">Phản hồi bởi: {{ $order->warehouseAdjustmentConfirmer?->name ?? $order->user?->name ?? 'Sale' }}</div>
+                                        </div>
+                                        @if($order->warehouse_adjustment_confirmed_at)
+                                            <span class="small text-muted">{{ $order->warehouse_adjustment_confirmed_at->format('d/m/Y H:i') }}</span>
+                                        @endif
+                                    </div>
+                                    <div class="small mt-2"><strong>Yêu cầu từ Package:</strong> {{ $order->warehouse_adjustment_note ?: 'Chưa cập nhật nội dung' }}</div>
+                                    <div class="small text-muted mt-1">
+                                        Gửi bởi {{ $order->warehouseAdjustmentRequester?->name ?? 'Nhân viên Package' }}
+                                        @if($order->warehouse_adjustment_requested_at)
+                                            lúc {{ $order->warehouse_adjustment_requested_at->format('d/m/Y H:i') }}
+                                        @endif
+                                    </div>
+                                    @if($adjustmentChanges->isNotEmpty())
+                                        <div class="d-flex flex-wrap gap-2 mt-2">
+                                            @foreach($adjustmentChanges as $change)
+                                                <span class="badge bg-white text-success border border-success-subtle">
+                                                    {{ $change['product_name'] ?? 'Sản phẩm' }}:
+                                                    {{ (int) ($change['old_quantity'] ?? 0) }} → {{ (int) ($change['new_quantity'] ?? 0) }}
+                                                </span>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </div>
+                            @endif
+
+                            @if($isRejectedBySale)
+                                <div class="alert alert-danger py-2 px-3 mb-2">
+                                    <div class="fw-semibold mb-1">Sale đã từ chối yêu cầu điều chỉnh - cần xử lý lại</div>
+                                    <div class="small mb-1">Yêu cầu từ Package: {{ $order->warehouse_adjustment_note ?: 'Chưa cập nhật nội dung' }}</div>
+                                    <div class="small text-muted mb-1">
+                                        Gửi bởi {{ $order->warehouseAdjustmentRequester?->name ?? 'Nhân viên Package' }}
+                                        @if($order->warehouse_adjustment_requested_at)
+                                            lúc {{ $order->warehouse_adjustment_requested_at->format('d/m/Y H:i') }}
+                                        @endif
+                                    </div>
+                                    <div class="small mb-1">Phản hồi bởi: {{ $order->warehouseAdjustmentRejecter?->name ?? $order->user?->name ?? 'Sale' }}</div>
+                                    <div class="small mb-1">Lý do: {{ $order->warehouse_adjustment_rejected_reason ?: 'Chưa cập nhật' }}</div>
+                                    @if($order->warehouse_adjustment_rejected_at)
+                                        <div class="small text-muted">Từ chối lúc: {{ $order->warehouse_adjustment_rejected_at->format('d/m/Y H:i') }}</div>
+                                    @endif
+
+                                    @if($adjustmentChanges->isNotEmpty())
+                                        @php
+                                            $changeByVariantId = $adjustmentChanges
+                                                ->keyBy(fn ($change) => (int) ($change['product_variant_id'] ?? 0));
+
+                                            $currentItemsByVariantId = $order->items
+                                                ->mapWithKeys(function ($item) {
+                                                    $variantId = (int) ($item->product_variant_id ?? 0);
+                                                    if ($variantId <= 0) {
+                                                        return [];
+                                                    }
+
+                                                    return [
+                                                        $variantId => [
+                                                            'product_name' => $item->variant?->name ?? $item->product?->name ?? 'Sản phẩm',
+                                                            'sku' => $item->variant?->sku,
+                                                            'size' => $item->variant?->size,
+                                                            'quantity' => (int) ($item->quantity ?? 0),
+                                                        ],
+                                                    ];
+                                                });
+
+                                            $oldSaleState = $currentItemsByVariantId
+                                                ->filter(fn ($item) => (int) ($item['quantity'] ?? 0) > 0);
+
+                                            $newAdjustedState = $oldSaleState->map(function ($item) {
+                                                return [
+                                                    'product_name' => $item['product_name'] ?? 'Sản phẩm',
+                                                    'sku' => $item['sku'] ?? null,
+                                                    'size' => $item['size'] ?? null,
+                                                    'quantity' => (int) ($item['quantity'] ?? 0),
+                                                ];
+                                            });
+
+                                            foreach ($adjustmentChanges as $change) {
+                                                $variantId = (int) ($change['product_variant_id'] ?? 0);
+                                                if ($variantId <= 0) {
+                                                    continue;
+                                                }
+
+                                                $newQty = (int) ($change['new_quantity'] ?? 0);
+                                                if ($newQty <= 0) {
+                                                    $newAdjustedState->forget($variantId);
+                                                    continue;
+                                                }
+
+                                                $current = $newAdjustedState->get($variantId, []);
+                                                $newAdjustedState->put($variantId, [
+                                                    'product_name' => $change['product_name'] ?? ($current['product_name'] ?? 'Sản phẩm'),
+                                                    'sku' => $change['sku'] ?? ($current['sku'] ?? null),
+                                                    'size' => $change['size'] ?? ($current['size'] ?? null),
+                                                    'quantity' => $newQty,
+                                                ]);
+                                            }
+                                        @endphp
+
+                                        <div class="row g-2 mt-1">
+                                            <div class="col-12 col-md-6">
+                                                <div class="small fw-semibold text-dark mb-1">Hiện trạng cũ của sale</div>
+                                                <div class="border rounded p-2 bg-white">
+                                                    @forelse($oldSaleState as $stateItem)
+                                                        @php
+                                                            $oldSize = $stateItem['size'] ?? null;
+                                                            $oldSizeLabel = (is_numeric($oldSize) && (float) $oldSize > 0)
+                                                                ? rtrim(rtrim(number_format((float) $oldSize, 2, '.', ''), '0'), '.')
+                                                                : null;
+                                                        @endphp
+                                                        <div class="small {{ $loop->last ? '' : 'mb-1 pb-1 border-bottom' }}">
+                                                            <div class="fw-semibold">{{ $stateItem['product_name'] ?? 'Sản phẩm' }}</div>
+                                                            <div class="text-muted">
+                                                                SKU: {{ $stateItem['sku'] ?: '---' }}
+                                                                @if($oldSizeLabel)
+                                                                    | Size: {{ $oldSizeLabel }}
+                                                                @endif
+                                                                | SL: {{ (int) ($stateItem['quantity'] ?? 0) }}
+                                                            </div>
+                                                        </div>
+                                                    @empty
+                                                        <div class="small text-muted">Không có dữ liệu hiện trạng cũ.</div>
+                                                    @endforelse
+                                                </div>
+                                            </div>
+
+                                            <div class="col-12 col-md-6">
+                                                <div class="small fw-semibold text-dark mb-1">Hiện trạng sau chỉnh (đã bị từ chối)</div>
+                                                <div class="border rounded p-2 bg-white">
+                                                    @forelse($newAdjustedState as $stateItem)
+                                                        @php
+                                                            $newSize = $stateItem['size'] ?? null;
+                                                            $newSizeLabel = (is_numeric($newSize) && (float) $newSize > 0)
+                                                                ? rtrim(rtrim(number_format((float) $newSize, 2, '.', ''), '0'), '.')
+                                                                : null;
+                                                        @endphp
+                                                        <div class="small {{ $loop->last ? '' : 'mb-1 pb-1 border-bottom' }}">
+                                                            <div class="fw-semibold">{{ $stateItem['product_name'] ?? 'Sản phẩm' }}</div>
+                                                            <div class="text-muted">
+                                                                SKU: {{ $stateItem['sku'] ?: '---' }}
+                                                                @if($newSizeLabel)
+                                                                    | Size: {{ $newSizeLabel }}
+                                                                @endif
+                                                                | SL: {{ (int) ($stateItem['quantity'] ?? 0) }}
+                                                            </div>
+                                                        </div>
+                                                    @empty
+                                                        <div class="small text-muted">Không có dữ liệu hiện trạng mới.</div>
+                                                    @endforelse
+                                                </div>
+                                            </div>
+                                        </div>
+                                    @endif
+                                </div>
+                            @endif
+
+                            @if($isPendingSaleConfirmation)
+                                <div class="alert alert-warning py-2 px-3 mb-2">
+                                    <div class="fw-semibold mb-1">Đang chờ sale xác nhận thay đổi đơn</div>
+                                    <div class="small mb-1">Lý do: {{ $order->warehouse_adjustment_note ?: 'Chưa cập nhật' }}</div>
+                                    @if($order->warehouse_adjustment_requested_at)
+                                        <div class="small text-muted">Gửi lúc: {{ $order->warehouse_adjustment_requested_at->format('d/m/Y H:i') }}</div>
+                                    @endif
+                                    @if($adjustmentChanges->isNotEmpty())
+                                        <div class="d-grid gap-2 mt-2">
+                                            @foreach($adjustmentChanges as $change)
+                                                @php
+                                                    $sizeValue = $change['size'] ?? null;
+                                                    $formattedSize = (is_numeric($sizeValue) && (float) $sizeValue > 0)
+                                                        ? rtrim(rtrim(number_format((float) $sizeValue, 2, '.', ''), '0'), '.')
+                                                        : null;
+                                                @endphp
+                                                <div class="wh-adjustment-pending-item">
+                                                    <div class="d-flex justify-content-between align-items-end gap-2 flex-wrap">
+                                                        <div class="flex-grow-1">
+                                                            <div class="fw-semibold">{{ $change['product_name'] ?? 'Sản phẩm' }}</div>
+                                                            <div class="small text-muted">
+                                                                SKU: {{ $change['sku'] ?: '---' }}
+                                                                @if($formattedSize)
+                                                                    | Size: {{ $formattedSize }}
+                                                                @endif
+                                                            </div>
+                                                        </div>
+                                                        <div style="min-width: 170px;" class="text-md-end">
+                                                            <label class="form-label small mb-1">Số lượng thay đổi</label>
+                                                            <div class="form-control form-control-sm bg-light text-center fw-semibold">
+                                                                {{ (int) ($change['old_quantity'] ?? 0) }} -> {{ (int) ($change['new_quantity'] ?? 0) }}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </div>
+                            @endif
+                             
+                            <div class="small text-muted mb-1">
+                                <i class="bi bi-geo-alt me-1"></i>
+                                {{ $order->customer?->address ?: 'Chưa có địa chỉ' }}
+                            </div>
+                            <div class="small text-muted">
+                                <i class="bi bi-clock me-1"></i>
+                                Giờ giao: {{ $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật') }}
+                            </div>
+                            @if($order->delivery_time_note ?: $order->customer?->delivery_time_note)
+                                <div class="small text-muted mt-1"><i class="bi bi-chat-left-text me-1"></i>Ghi chú giờ giao: {{ $order->delivery_time_note ?: $order->customer?->delivery_time_note }}</div>
+                            @endif
+                            @if(trim((string) $order->note) !== '')
+                                <div class="alert alert-warning mt-2 mb-0" role="note">
+                                    <div class="fw-semibold"><i class="bi bi-sticky me-1"></i>Ghi chú đơn hàng</div>
+                                    <div class="mt-1" style="white-space: pre-wrap; overflow-wrap: anywhere;">{{ $order->note }}</div>
+                                </div>
+                            @endif
+                            @php($shippingLabel = $order->shippingLabelData())
+                            @if($shippingLabel['enabled'])
+                                <div class="border rounded p-2 mt-2">
+                                    <div class="fw-semibold">Gửi nhà xe: {{ $shippingLabel['station_name'] }}</div>
+                                    <div class="small">SĐT khách hàng: {{ $shippingLabel['customer_phone'] }}</div>
+                                    <div class="small">Địa chỉ nhà xe: {{ $shippingLabel['station_address'] }}</div>
+                                    <div class="small">SĐT nhà xe: {{ $shippingLabel['station_phone'] }}</div>
+                                    @if(!$isPackageOrderLayout)
+                                        <div class="d-flex align-items-center gap-2 mt-2">
+                                            <a class="btn btn-sm btn-outline-primary" href="{{ route('warehouse.orders.shipping-label', $order) }}" target="_blank">In phiếu gửi nhà xe</a>
+                                            <span data-shipping-label-order="{{ $order->id }}" class="badge {{ $order->shipping_label_printed_at ? 'bg-success' : 'bg-secondary' }}">{{ $order->shipping_label_printed_at ? 'Đã in' : 'Chưa in' }}</span>
+                                        </div>
+                                    @endif
+                                </div>
+                            @endif
+                            @if($isPackedReadonly)
+                                <div class="small text-muted mt-1">
+                                    <i class="bi bi-box-seam me-1"></i>
+                                    Từ kho: {{ $sourceWarehouseName ?: 'Chưa xác định' }}
+                                </div>
+                                <div class="small text-muted mt-1">
+                                    <i class="bi bi-truck me-1"></i>
+                                    Kho ship sẽ lấy: {{ $shipPickupWarehouseName ?: 'Chưa xác định' }}
+                                </div>
+                            @endif
+                        </div>
+
+                        <div class="wh-section pb-0"> 
+                            <div class="wh-item-table-wrap mt-2">
+                                <div class="wh-item-table-head">
+                                    <div>Ảnh</div>
+                                    <div>Sản phẩm</div>
+                                    <div class="text-center">Size</div>
+                                    <div class="text-center">SL</div>                                    
+                                    <div class="text-center">SL đóng</div>
+                                    <div class="text-center">Tổng</div>
+                                    <div class="text-center">Khối lượng</div>
+                                    <div class="text-center">Đơn giá</div>
+                                    <div class="text-end">Thành tiền</div>
+                                    
+                                </div>
+                                <ul class="wh-item-list">
+                                    @foreach($order->items as $item)
+                                        @php
+
+                                            $variant = $item->variant;
+                                            $orderedQty = (int) $item->quantity;
+                                            $isCutPackingItem = $item->variant?->product?->product_type === \App\Models\Product::TYPE_CUT;
+                                            $canSetPackedQuantity = $isCutPackingItem || $order->allowsWarehouseQuantityChange((int) $item->product_id);
+                                            $unitPrice = (float) ($item->price ?? 0);
+                                            $unitLabel = $variant?->product?->unit_label ?? '--'; 
+                                            $pricedByKg = (bool) $item->effective_priced_by_kg;
+                                            $weightUnitLabel = $pricedByKg ? 'Kg' : $unitLabel;
+                                            $itemActualWeight = $item->warehouse_packed_weight;
+                                            $lineTotal = $pricedByKg
+                                                ? (!is_null($itemActualWeight) ? ($itemActualWeight * $unitPrice) : null)
+                                                : ($orderedQty * $unitPrice);
+                                            $variantSize = $variant?->size;
+                                            $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '')
+                                                ? $formatCompactDecimal((float) $variantSize)
+                                                : '-';
+                                            if ($pricedByKg) {
+                                                $displayActualWeight = (!is_null($itemActualWeight) && (float) $itemActualWeight > 0)
+                                                    ? $formatKg((float) $itemActualWeight)
+                                                    : '---';
+                                            } else {
+                                                $displayActualWeight = $itemActualWeight !== null
+                                                    ? $formatKg($itemActualWeight)
+                                                    : '—';
+                                            }
+                                            $imagePath = $variant?->avatar?->media?->file_path
+                                                ?? $item->product?->avatar?->media?->file_path
+                                                ?? null;
+                                        @endphp
+                                        <li class="wh-item-row">
+                                            <div class="wh-item-table-row" data-unit-price="{{ number_format($unitPrice, 2, '.', '') }}" data-weight-unit="{{ $weightUnitLabel }}">
+                                                <div>
+                                                    @if($imagePath)
+                                                        <img class="wh-item-thumb" src="{{ asset('storage/' . $imagePath) }}" alt="{{ $variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}">
+                                                    @else
+                                                        <span class="wh-item-thumb-placeholder">
+                                                            <i class="bi bi-image"></i>
+                                                        </span>
+                                                    @endif
+                                                </div>
+                                                <div class="wh-item-name">
+                                                    {{ $variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}
+                                                    @if($variant?->sku)
+                                                        <span class="text-muted small">({{ $variant->sku }})</span>
+                                                    @endif
+                                                </div>
+                                                <div class="wh-item-cell"><strong>{{ $formattedVariantSize }}</strong></div>
+                                                <div class="wh-item-cell">
+                                                    <strong>{{ number_format($orderedQty) }}</strong>
+                                                </div>
+                                                <div class="wh-item-cell">
+                                                    @if($canProcessThisOrder && !$isPackedReadonly && !$isPendingSaleConfirmation && $canSetPackedQuantity)
+                                                        <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.logistics', $order) }}" method="POST" class="js-packed-quantity-form wh-compact-form justify-content-center">
+                                                            @csrf
+                                                            <input type="hidden" name="item_id" value="{{ $item->id }}">
+                                                            <input type="hidden" name="packed_quantity_only" value="1">
+                                                            <input type="number" name="item_packed_quantity" class="form-control form-control-sm" min="1" max="100000" step="1" required value="{{ $item->packed_quantity ?? $orderedQty }}" aria-label="Số lượng đóng thực tế" style="width:72px" {{ $item->packed_quantity !== null ? 'disabled' : '' }}>
+                                                            <button class="btn btn-sm btn-success js-packed-quantity-submit {{ $item->packed_quantity !== null ? 'd-none' : '' }}" type="submit">Lưu</button>
+                                                            <button class="btn btn-sm btn-outline-success js-clear-packed-quantity {{ $item->packed_quantity === null ? 'd-none' : '' }}" type="submit" formnovalidate title="Làm lại số lượng đóng thực tế">
+                                                                <i class="bi bi-arrow-counterclockwise"></i>
+                                                            </button>
+                                                        </form>
+                                                    @else
+                                                        <strong>{{ number_format((int) ($item->packed_quantity ?? $orderedQty)) }}</strong>
+                                                    @endif
+                                                </div>
+                                                <div class="wh-item-cell"><strong>{{ $item->display_total_label }}</strong></div>
+                                                
+                                               
+                                                @if(!$isPackedReadonly && $canProcessThisOrder)
+                                                    @php
+                                                        $defaultComputedWeight = round((float) $item->effective_unit_weight * $orderedQty, 3);
+                                                        $itemWeightDefault = is_null($item->warehouse_packed_weight)
+                                                            ? ($defaultComputedWeight > 0 ? number_format($defaultComputedWeight, 3, '.', '') : '')
+                                                            : number_format((float) $item->warehouse_packed_weight, 3, '.', '');
+                                                    @endphp
+                                                    @if($pricedByKg)
+                                                        @php
+                                                            $isItemLogisticsSaved = !is_null($lineTotal);
+                                                        @endphp
+                                                        <div class="wh-item-action js-packing-only {{ $isPacking ? '' : 'd-none' }}">
+                                                            <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.logistics', $order) }}" method="POST" class="js-logistics-item-form wh-compact-form justify-content-end">
+                                                                @csrf
+                                                                <input type="hidden" name="item_id" value="{{ $item->id }}">
+                                                                <input type="number" name="item_actual_weight" class="form-control form-control-sm actual_weight js-weight-input"
+                                                                    value="{{ $itemWeightDefault }}"
+                                                                    placeholder="{{ $weightUnitLabel }}"
+                                                                    min="0" step="0.001" required
+                                                                    inputmode="decimal"
+                                                                    data-qty="{{ $orderedQty }}"
+                                                                    data-size="{{ !$isCutPackingItem ? $item->packingAverageSize() : 0 }}"
+                                                                    {{ $isItemLogisticsSaved ? 'disabled' : '' }}>
+                                                                <button class="btn btn-sm btn-success js-logistics-submit-btn {{ $isItemLogisticsSaved ? 'd-none' : '' }}" type="submit">Lưu</button>
+                                                                <button class="btn btn-sm btn-outline-success js-clear-item-weight {{ $isItemLogisticsSaved ? '' : 'd-none' }}"
+                                                                        type="submit" formnovalidate title="Làm lại kg thực tế">
+                                                                    <i class="bi bi-arrow-counterclockwise"></i>
+                                                                </button>
+                                                            </form>
+                                                        </div>
+                                                        <div class="wh-readonly-item js-ready-only {{ $isPacking ? 'd-none' : '' }}">{{ $displayActualWeight }}</div>
+                                                    @else
+                                                        <div class="wh-readonly-item">{{ $displayActualWeight }}</div>
+                                                    @endif
+                                                @else
+                                                    <div class="wh-readonly-item js-item-readonly-kg">
+                                                        {{ $displayActualWeight }}
+                                                    </div>
+                                                @endif
+                                           
+                                                <div class="wh-item-cell">{{ number_format($unitPrice) }}đ</div>
+                                                <div class="wh-item-cell js-item-total-amount">
+                                                    <strong>{{ !is_null($lineTotal) ? number_format($lineTotal) . 'đ' : ($pricedByKg ? '---' : number_format($orderedQty * $unitPrice) . 'đ') }}</strong>
+                                                </div>
+                                            </div>
+                                             <div class="js-weight-error text-danger text-center px-1" style="font-size:.72rem;display:none;"></div>
+                                             @php $packingSizeOptions = collect($packingSizeOptionsByItem[$item->id] ?? []); @endphp
+                                             @if($packingSizeOptions->isNotEmpty() && !$isPackedReadonly && $canProcessThisOrder)
+                                                <div class="mx-2 mb-2 mt-1 rounded border border-warning-subtle bg-warning-subtle p-2">
+                                                    <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
+                                                        <div>
+                                                            <strong><i class="bi bi-boxes me-1"></i>{{ $order->packingSizesForProduct((int) $item->product_id) !== null ? 'Cơ cấu đóng hàng theo size Sale cho phép' : 'Không đủ tồn size '.$formattedVariantSize.' — chọn size khác' }}</strong>
+                                                            <div class="small text-muted">Tổng phải đủ {{ number_format($orderedQty) }} con; không bắt buộc dùng size chính {{ $formattedVariantSize }} (cho phép 0%). Chỉ chọn các size được phép bên dưới theo tồn khả dụng.</div>
+                                                        </div>
+                                                    </div>
+                                                    <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.packing-size-allocation', $order) }}"
+                                                          method="POST" class="js-packing-size-form" data-total="{{ $orderedQty }}" data-main-size="{{ (float) $variantSize }}">
+                                                        @csrf
+                                                        <input type="hidden" name="order_item_id" value="{{ $item->id }}">
+                                                        <div class="row g-2 align-items-end">
+                                                            @foreach($packingSizeOptions as $sizeOption)
+                                                                <div class="col-6 col-md-2">
+                                                                    <label class="form-label small mb-1 fw-semibold">
+                                                                        Size {{ $formatCompactDecimal((float)$sizeOption['size']) }}
+                                                                        @if($sizeOption['is_boundary_extension'] ?? false)
+                                                                            <span class="badge bg-primary" title="Size chặn 2 đầu do cấu hình kho mở thêm">Chặn đầu</span>
+                                                                        @endif
+                                                                        <span class="d-block text-primary fw-normal js-packing-size-ratio">Tỷ lệ: 0%</span>
+                                                                        <span class="d-block text-muted fw-normal">Khả dụng: {{ number_format((int)$sizeOption['available']) }}</span>
+                                                                    </label>
+                                                                    <input type="number" min="0" step="1"
+                                                                           max="{{ (int)$sizeOption['available'] }}"
+                                                                           class="form-control form-control-sm js-packing-size-qty"
+                                                                           data-size="{{ (float)$sizeOption['size'] }}"
+                                                                           name="allocations[{{ (int)$sizeOption['variant_id'] }}]"
+                                                                           value="{{ (int)$sizeOption['quantity'] }}">
+                                                                </div>
+                                                            @endforeach
+                                                            <div class="col-md-4">
+                                                                <div class="small js-packing-size-summary mb-1"></div>
+                                                                <button class="btn btn-warning btn-sm js-packing-size-submit" type="submit">
+                                                                    <i class="bi bi-save2 me-1"></i>Lưu cơ cấu thực đóng
+                                                                </button>
+                                                                <button class="btn btn-outline-secondary btn-sm js-packing-size-reset" type="button"
+                                                                        title="Khôi phục cơ cấu khi mở trang để nhập lại">
+                                                                    <i class="bi bi-arrow-clockwise me-1"></i>Làm lại
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                             @endif
+                                        </li>
+                                    @endforeach
+                                </ul>
+                            </div> 
+
+                            @if($canProcessThisOrder && $isPacking)
+                                <div class="wh-section mt-2 pt-2 border-top">
+                                    <div class="wh-logistics-title">Số bọc và quy cách bọc</div>
+                                    <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.logistics', $order) }}" method="POST" class="js-logistics-fee-form">
+                                        @csrf
+                                        <input type="hidden" name="packing_details" value="1">
+                                        <div class="row g-2 align-items-end">
+                                            <div class="col-md-3">
+                                                <label class="form-label small mb-1">Số bọc</label>
+                                                <input type="number" name="package_count" class="form-control form-control-sm"
+                                                       min="1" max="10000" step="1" inputmode="numeric"
+                                                       value="{{ $order->package_count }}" placeholder="VD: 3">
+                                            </div>
+                                            <div class="col-md-7">
+                                                <label class="form-label small mb-1">Quy cách bọc</label>
+                                                <textarea name="packing_specification" class="form-control form-control-sm" rows="2" maxlength="500"
+                                                          placeholder="Nếu chưa có số bọc, nhập quy cách: 2 bọc × 5 kg, 1 bọc × 3 kg...">{{ $order->packing_specification }}</textarea>
+                                            </div>
+                                            <div class="col-md-2 d-grid">
+                                                <button class="btn btn-sm {{ $order->package_count || $order->packing_specification ? 'btn-secondary' : 'wh-warning-action-btn' }} js-logistics-submit-btn" type="submit">Lưu</button>
+                                            </div>
+                                        </div>
+                                        <div class="small text-muted mt-1">Nhập số bọc; nếu chưa xác định số bọc thì bắt buộc ghi quy cách bọc để thể hiện đúng trên phiếu xuất kho.</div>
+                                    </form>
+                                </div>
+                            @elseif($isPackedReadonly)
+                                <div class="wh-section mt-2 pt-2 border-top">
+                                    <div class="wh-logistics-title">Đóng gói</div>
+                                    <div class="small">
+                                        <strong>Số bọc:</strong> {{ $order->package_count ? number_format($order->package_count).' bọc' : 'Chưa cập nhật' }}
+                                        @if($order->packing_specification)
+                                            <span class="d-block mt-1"><strong>Quy cách:</strong> {{ $order->packing_specification }}</span>
+                                        @endif
+                                    </div>
+                                </div>
+                            @endif
+
+                        </div>
+                    </div>
+
+                    <div class="card-footer bg-white border-top py-2">
+                        @if($isPackedReadonly)
+                            <div class="wh-section border-top-0 pt-0 mb-2">
+                                <div class="wh-logistics-title">Thông tin đơn hàng hoàn chỉnh</div>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        @php $packedSummary = app(\App\Services\WarehousePackedOrderService::class)->summary($order); @endphp
+                                        <div class="wh-meta-label">Kg thực đóng</div>
+                                        <div class="wh-meta-value text-primary">{{ $packedSummary['packed_weight'] !== null ? $formatKg($packedSummary['packed_weight']) : '—' }}</div>
+                                        <div class="wh-meta-label mt-1">Giá trị đơn theo thực đóng</div>
+                                        <div class="wh-meta-value">{{ number_format($packedSummary['total']) }}đ</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="wh-meta-label">Trạng thái</div>
+                                        <div class="wh-meta-value">Đã khóa chỉnh sửa</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="wh-meta-label">Từ kho</div>
+                                        <div class="wh-meta-value">{{ $sourceWarehouseName ?: 'Chưa xác định' }}</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="wh-meta-label">Kho ship sẽ lấy</div>
+                                        <div class="wh-meta-value">{{ $shipPickupWarehouseName ?: 'Chưa xác định' }}</div>
+                                        @if($shipPickupWarehouseHint)
+                                            <div class="small text-muted">{{ $shipPickupWarehouseHint }}</div>
+                                        @endif
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="wh-meta-label">Nhân viên kho</div>
+                                        <div class="wh-meta-value">{{ $packedByName ?: 'Chưa xác định' }}</div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="wh-meta-label">Thời điểm đóng gói</div>
+                                        <div class="wh-meta-value">{{ $packedAt ?: 'Chưa có dữ liệu' }}</div>
+                                    </div>
+
+                                    <div class="col-12">
+                                        <div class="wh-meta-label">Điều chuyển kho</div>
+                                        @if($activeTransfer)
+                                            @php
+                                                $transferBadgeClass = match($activeTransfer->status) {
+                                                    'pending_shipper_pickup' => 'bg-secondary',
+                                                    'in_transit' => 'bg-warning text-dark',
+                                                    'delivered_waiting_receive' => 'bg-info text-dark',
+                                                    default => 'bg-success',
+                                                };
+                                                $transferStatusLabel = match($activeTransfer->status) {
+                                                    'pending_shipper_pickup' => 'Chờ shipper nhận hàng',
+                                                    'in_transit' => 'Đang vận chuyển',
+                                                    'delivered_waiting_receive' => 'Đã giao kho nhận, chờ tiếp nhận',
+                                                    default => 'Đã hoàn tất',
+                                                };
+                                            @endphp
+                                            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                                                <span class="badge {{ $transferBadgeClass }}">{{ $transferStatusLabel }}</span>
+                                                <span class="small text-muted">Kho nhận: {{ $activeTransfer->targetWarehouse?->name ?? '—' }}</span>
+                                                <span class="small text-muted">Shipper: {{ $activeTransfer->shipper?->name ?? '—' }}</span>
+                                            </div>
+                                        @elseif(!$orderCardReadonly)
+                                            @php
+                                                $sourceWarehouseId = (int) ($order->warehouse_id ?? 0);
+                                                $targetWarehouses = collect($warehouses ?? [])->filter(function ($warehouse) use ($sourceWarehouseId) {
+                                                    return (int) $warehouse->id !== $sourceWarehouseId;
+                                                });
+                                            @endphp
+                                            <details class="border rounded p-2 bg-light-subtle">
+                                                <summary class="fw-semibold">Tạo điều chuyển kho cho shipper</summary>
+                                                <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.transfer-request', $order) }}" method="POST" class="mt-2">
+                                                    @csrf
+                                                    <div class="row g-2">
+                                                        <div class="col-12 col-md-6">
+                                                            <label class="form-label small mb-1">Kho nhận</label>
+                                                            <select name="target_warehouse_id" class="form-select form-select-sm" required>
+                                                                <option value="">Chọn kho nhận</option>
+                                                                @foreach($targetWarehouses as $warehouse)
+                                                                    <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
+                                                                @endforeach
+                                                            </select>
+                                                        </div>
+                                                        <div class="col-12 col-md-6">
+                                                            <label class="form-label small mb-1">Shipper vận chuyển</label>
+                                                            <select name="shipper_id" class="form-select form-select-sm" required>
+                                                                <option value="">Chọn shipper</option>
+                                                                @foreach($shippers ?? [] as $shipper)
+                                                                    <option value="{{ $shipper->id }}">{{ $shipper->name }}</option>
+                                                                @endforeach
+                                                            </select>
+                                                        </div>
+                                                        <div class="col-12">
+                                                            <label class="form-label small mb-1">Ghi chú</label>
+                                                            <textarea name="note" rows="2" class="form-control form-control-sm" placeholder="Ghi chú điều chuyển (nếu có)"></textarea>
+                                                        </div>
+                                                        <div class="col-12 d-grid">
+                                                            <button type="submit" class="btn btn-outline-primary btn-sm">
+                                                                <i class="bi bi-arrow-left-right me-1"></i>Tạo phiếu điều chuyển
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </form>
+                                            </details>
+                                        @else
+                                            <div class="small text-muted">Không có điều chuyển kho đang hoạt động.</div>
+                                        @endif
+                                    </div>
+                                    @if($canAdminReopenPacking)
+                                        <div class="col-12">
+                                            <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.reopen-packing', $order) }}" method="POST" class="d-grid">
+                                                @csrf
+                                                <button class="btn btn-outline-warning btn-sm" type="submit">
+                                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Admin bỏ khóa chỉnh sửa
+                                                </button>
+                                            </form>
+                                            <div class="small text-muted mt-1">
+                                                Đưa đơn quay lại bước đang đóng gói để warehouse chỉnh sửa lại dữ liệu.
+                                            </div>
+                                        </div>
+                                    @endif
+                                    
+                                </div>
+                            </div>
+                        @endif
+
+                        @if($canProcessThisOrder && ($isReadyToPack || $isPacking))
+                            @if(($isReadyToPack || $isPacking) && !$isPendingSaleConfirmation && $stockShortages->isNotEmpty())
+                                <div class="wh-stock-alert mt-2">
+                                    <details open>
+                                        <summary>Chi tiết thiếu hàng ({{ $stockShortages->count() }} sản phẩm)</summary>
+                                        <div class="small mt-2 text-muted">
+                                            Phạm vi FIFO: đơn chờ/đang đóng ngày {{ \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m/Y') }}
+                                            tại {{ auth()->user()?->warehouse?->name ?? 'kho đang quản lý' }}, gồm cả đơn trong hàng chờ chung chưa gán kho.
+                                        </div>
+                                        <ul>
+                                            @foreach($stockShortages as $shortage)
+                                                @php
+                                                    $cuttingPlan = $orderCuttingPlans->get((int) ($shortage['variant_id'] ?? 0));
+                                                    $cuttingModalId = $cuttingPlan ? 'cutting-order-modal-' . $order->id . '-' . (int) ($shortage['variant_id'] ?? 0) : null;
+                                                @endphp
+                                                <li>
+                                                    <strong>{{ $shortage['variant_name'] ?? 'Sản phẩm' }}</strong>:
+                                                    cần {{ number_format((float)($shortage['required_qty'] ?? 0), 0) }},
+                                                    còn {{ number_format((float)($shortage['available_qty'] ?? 0), 0) }}
+                                                    @php $shortQty = (float)($shortage['short_qty'] ?? 0); @endphp
+                                                    @if($shortQty > 0)
+                                                        <span class="text-danger">(thiếu {{ number_format($shortQty, 0) }})</span>
+                                                    @endif
+                                                    @if(($shortage['reason'] ?? '') === 'blocked_by_prior_order')
+                                                        @php $blockingOrders = collect($shortage['blocking_orders'] ?? []); @endphp
+                                                        <div class="mt-1 text-warning-emphasis">
+                                                            <span class="fw-semibold">Đơn ưu tiên trước đã giữ hàng:</span>
+                                                            @if($blockingOrders->isEmpty())
+                                                                chưa xác định được đơn cụ thể
+                                                            @else
+                                                                @foreach($blockingOrders as $blockingOrder)
+                                                                    <a href="#order-card-{{ $blockingOrder['order_id'] }}"
+                                                                       onclick="event.preventDefault(); document.getElementById('order-card-{{ $blockingOrder['order_id'] }}')?.scrollIntoView({ behavior: 'smooth', block: 'start' });">
+                                                                        #{{ $blockingOrder['order_code'] }}@if(!empty($blockingOrder['daily_sequence'])) (thứ tự {{ $blockingOrder['daily_sequence'] }})@endif
+                                                                    </a>@if(!empty($blockingOrder['customer_name'])) – {{ $blockingOrder['customer_name'] }}@endif:
+                                                                    giữ {{ number_format((float) ($blockingOrder['consumed_qty'] ?? 0), 0) }}
+                                                                    @if(!$loop->last); @endif
+                                                                @endforeach
+                                                            @endif
+                                                        </div>
+                                                    @endif
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    </details>
+                                </div>
+                            @endif
+
+                            @if($activePackingGoodsTransfer)
+                                <div class="alert alert-info py-2 px-3 mt-2 mb-0">
+                                    <div class="fw-semibold"><i class="bi bi-truck me-1"></i>Đang chờ nhận hàng gửi kèm đơn</div>
+                                    <div class="small">
+                                        Phiếu <strong>{{ $activePackingGoodsTransfer->transfer_code }}</strong>
+                                        từ {{ $activePackingGoodsTransfer->sourceWarehouse?->name ?? 'kho nguồn' }}
+                                        đến {{ $activePackingGoodsTransfer->targetWarehouse?->name ?? 'kho hiện tại' }} ·
+                                        {{ number_format((float) $activePackingGoodsTransfer->items->sum('quantity'), 0, ',', '.') }} sản phẩm.
+                                    </div>
+                                    @if($currentWorkingWarehouseId === (int) $activePackingGoodsTransfer->target_warehouse_id)
+                                        <a href="{{ route('warehouse.inventory-transfers.incoming') }}" class="btn btn-sm btn-info mt-2"><i class="bi bi-box-arrow-in-down me-1"></i>Đến tiếp nhận hàng</a>
+                                    @endif
+                                </div>
+                            @endif
+
+                            <div class="wh-order-actions mt-3">
+                                @if(!$isPackedReadonly && $canProcessThisOrder && !$isPacking)
+                                    <details class="wh-footer-adjustment">
+                                        <summary>
+                                            <i class="bi bi-pencil-square me-1"></i>
+                                            {{ $warehouseCanAdjust ? 'Sửa số lượng sản phẩm' : 'Yêu cầu điều chỉnh' }}
+                                        </summary>
+                                        <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.request-adjustment', $order) }}" method="POST" class="mt-2">
+                                            @csrf
+                                            <div class="small text-muted mb-2">
+                                                @if($warehouseCanAdjust)
+                                                    Kho được phép sửa trực tiếp số lượng sản phẩm trên đơn, không cần sale xác nhận.
+                                                @else
+                                                    Thay đổi chỉ được áp dụng vào đơn sau khi sale xác nhận.
+                                                @endif
+                                                Đặt số lượng = 0 để xóa sản phẩm khỏi đơn.
+                                            </div>
+                                            <div class="d-grid gap-2 mb-2">
+                                                @foreach($order->items as $item)
+                                                    @php
+                                                        $adjustmentSize = $item->variant?->size;
+                                                        $formattedAdjustmentSize = (is_numeric($adjustmentSize) && (float) $adjustmentSize > 0)
+                                                            ? rtrim(rtrim(number_format((float) $adjustmentSize, 2, '.', ''), '0'), '.')
+                                                            : null;
+                                                    @endphp
+                                                    <div class="wh-adjustment-pending-item">
+                                                        <div class="d-flex justify-content-between align-items-end gap-2 flex-wrap">
+                                                            <div class="flex-grow-1">
+                                                                <div class="fw-semibold">{{ $item->variant?->name ?? $item->product?->name ?? 'Sản phẩm' }}</div>
+                                                                <div class="small text-muted">
+                                                                    SKU: {{ $item->variant?->sku ?: '---' }}
+                                                                    @if($formattedAdjustmentSize)
+                                                                        | Size: {{ $formattedAdjustmentSize }}
+                                                                    @endif
+                                                                </div>
+                                                            </div>
+                                                            <div class="d-flex align-items-end gap-2">
+                                                                <div style="min-width: 140px;">
+                                                                    <label class="form-label small mb-1">Số lượng mới</label>
+                                                                    <input type="hidden" name="items[{{ $item->id }}][order_item_id]" value="{{ $item->id }}">
+                                                                    <input type="number" min="0" step="1"
+                                                                           name="items[{{ $item->id }}][quantity]"
+                                                                           class="form-control form-control-sm js-existing-adjustment-qty"
+                                                                           value="{{ (int) ($item->quantity ?? 0) }}">
+                                                                </div>
+                                                                <button type="button"
+                                                                        class="btn btn-outline-danger btn-sm mb-1 js-mark-adjustment-item-remove"
+                                                                        data-target-name="items[{{ $item->id }}][quantity]"
+                                                                        title="Đặt số lượng về 0 để xóa sản phẩm">
+                                                                    <i class="bi bi-trash"></i>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                            <div class="border rounded p-2 mb-2 bg-white">
+                                                <div class="d-grid gap-2 js-new-adjustment-items mb-2" id="new-adjustment-items-{{ $order->id }}" data-next-index="0"></div>
+                                                <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                                                    <div class="small fw-semibold mb-0">Thêm sản phẩm mới vào đơn</div>
+                                                    <button type="button"
+                                                            class="btn btn-outline-primary btn-sm js-open-adjustment-product-picker"
+                                                            data-order-id="{{ $order->id }}"
+                                                            data-bs-toggle="modal"
+                                                            data-bs-target="#warehouseAdjustmentProductModal">
+                                                        <i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm
+                                                    </button>
+                                                </div>
+                                                <div class="small text-muted mb-0">Chọn sản phẩm từ popup. Popup hỗ trợ tìm kiếm, sắp xếp và phân trang.</div>
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label small fw-semibold">Lý do thay đổi</label>
+                                                <textarea class="form-control form-control-sm" name="reason" rows="2" required>{{ old('reason') }}</textarea>
+                                            </div>
+                                            <button class="btn btn-outline-warning btn-sm" type="submit">
+                                                <i class="bi {{ $warehouseCanAdjust ? 'bi-save2' : 'bi-send' }} me-1"></i>
+                                                {{ $warehouseCanAdjust ? 'Lưu số lượng vào đơn' : 'Lưu thay đổi và gửi sale xác nhận' }}
+                                            </button>
+                                        </form>
+                                    </details>
+                                @endif
+
+                                @if(($isReadyToPack || $isPacking) && !$isPendingSaleConfirmation && $stockShortages->isNotEmpty() && !$hasActiveCuttingBatch)
+                                    @foreach($stockShortages as $shortage)
+                                        @php
+                                            $cuttingPlan = $orderCuttingPlans->get((int) ($shortage['variant_id'] ?? 0));
+                                            $cuttingModalId = $cuttingPlan ? 'cutting-order-modal-' . $order->id . '-' . (int) ($shortage['variant_id'] ?? 0) : null;
+                                        @endphp
+                                        @if($cuttingPlan)
+                                            <button type="button"
+                                                    class="btn btn-sm btn-primary"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#{{ $cuttingModalId }}">
+                                                <i class="bi bi-scissors me-1"></i>Thêm hàng pha lóc
+                                            </button>
+                                        @endif
+                                    @endforeach
+                                @endif
+
+                                @if(($isReadyToPack || $isPacking) && !$isPendingSaleConfirmation && $stockShortages->isNotEmpty())
+                                    <a class="btn btn-outline-danger btn-sm wh-inventory-action-btn" href="{{ route($packingInventoryRoute ?? 'warehouse.stock-in') }}">
+                                        <i class="bi bi-box-arrow-in-down me-1"></i>Nhập kho
+                                    </a>
+                                @endif
+
+                                @if($canTransferPackingWarehouse)
+                                    <details class="wh-footer-adjustment wh-footer-transfer">
+                                        <summary>
+                                            <i class="bi bi-arrow-left-right me-1"></i>{{ $isPacking ? 'Chuyển tiếp đơn đang đóng dở' : 'Gửi hàng & chuyển đơn' }}
+                                        </summary>
+                                        <form action="{{ route('warehouse.orders.transfer-packing-warehouse', $order) }}"
+                                              method="POST"
+                                              class="wh-footer-transfer-form"
+                                              onsubmit="return confirm('{{ $isPacking ? 'Chuyển tiếp đơn đang đóng dở' : 'Gửi phần hàng đã gom và chuyển đơn' }} #{{ addslashes($order->code ?: $order->id) }} khỏi {{ addslashes($order->warehouse?->name ?: 'kho hiện tại') }} sang kho đã chọn để tiếp tục đóng hàng?');">
+                                            @csrf
+                                            <input type="hidden" name="packing_date" value="{{ $selectedDate ?? now()->toDateString() }}">
+                                            <div>
+                                                <label class="form-label small fw-semibold mb-1">Kho tiếp tục đóng hàng</label>
+                                                <select name="warehouse_id" class="form-select form-select-sm" required>
+                                                    <option value="">-- Chọn kho khác --</option>
+                                                    @foreach($packingWarehouseOptions as $warehouse)
+                                                        <option value="{{ $warehouse->id }}">{{ $warehouse->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                                <div class="form-text">
+                                                    Đơn sẽ biến mất khỏi {{ $order->warehouse?->name ?: 'kho hiện tại' }} và chỉ xuất hiện tại kho được chọn.
+                                                    @if($isPacking)
+                                                        Kg thực tế, số bọc và quy cách đã nhập được giữ nguyên.
+                                                    @endif
+                                                    Hệ thống gửi kèm {{ number_format($packingReservedQuantity, 0, ',', '.') }} sản phẩm đang được giữ riêng cho đơn; nếu bằng 0 thì chỉ chuyển đơn.
+                                                </div>
+                                            </div>
+                                            <button type="submit" class="btn btn-success btn-sm">
+                                                <i class="bi bi-check2-circle me-1"></i>{{ $isPacking ? 'Chuyển kho đóng tiếp' : 'Gửi hàng và chuyển đơn' }}
+                                            </button>
+                                        </form>
+                                    </details>
+                                @endif
+
+                                @if($isReadyToPack)
+                                    @if($canStartPacking && !$isPendingSaleConfirmation)
+                                        <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.start-packing', $order) }}" method="POST" class="js-start-packing-form">
+                                            @csrf
+                                            <input type="hidden" name="packing_date" value="{{ $selectedDate ?? now()->toDateString() }}">
+                                            <button class="btn btn-primary btn-sm js-start-packing-btn" type="submit">
+                                                <i class="bi bi-box2 me-1"></i>
+                                                {{ $isTodaySelected ? 'Đóng hàng' : 'Đóng hàng ngày ' . \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m') }}
+                                            </button>
+                                        </form>
+                                    @elseif($isPendingSaleConfirmation)
+                                        <button class="btn btn-warning btn-sm" type="button" disabled>
+                                            <i class="bi bi-hourglass-split me-1"></i>Đang chờ sale xác nhận thay đổi đơn
+                                        </button>
+                                    @else
+                                        <button class="btn btn-danger btn-sm" type="button" disabled>
+                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>Không đủ hàng - Chờ nhập kho
+                                        </button>
+                                    @endif
+                                @endif
+
+                                <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.return-to-ready', $order) }}" method="POST" class="js-undo-packing-form {{ $canUndoStartPacking ? '' : 'd-none' }}">
+                                    @csrf
+                                    <button class="btn btn-outline-warning btn-sm js-undo-packing-btn" type="submit">
+                                        <i class="bi bi-arrow-counterclockwise me-1"></i>Undo nhận đơn
+                                    </button>
+                                </form>
+
+                                <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.complete-packing', $order) }}" method="POST" class="js-complete-packing-form {{ $isPacking ? '' : 'd-none' }}">
+                                    @csrf
+                                    <input type="hidden" name="packing_date" value="{{ $selectedDate ?? now()->toDateString() }}">
+                                    <button class="btn btn-sm wh-warning-action-btn" {{ $isPendingSaleConfirmation ? 'disabled' : '' }}>
+                                        <i class="bi bi-check2-all me-1"></i>
+                                        {{ $isTodaySelected ? 'Hoàn thành đóng gói' : 'Hoàn thành đóng gói ngày ' . \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m') }}
+                                    </button>
+                                </form>
+                            </div>
+
+                            @if($isPacking)
+                                <div class="small text-muted mt-2">
+                                    <i class="bi bi-person-badge me-1"></i>Người đóng: <strong>{{ $activePackerName ?: 'Chưa xác định' }}</strong>
+                                    @if($canUndoStartPacking)
+                                        · Bạn có thể Undo để trả đơn về hàng chờ.
+                                    @endif
+                                </div>
+                            @endif
+                        @else
+                            @php
+                                $isNotReceived = in_array($order->status, [
+                                    'approved',
+                                    'ready_to_pack',
+                                    'pending',
+                                    'pending_leader_approval',
+                                    'pending_manager_approval',
+                                    'pending_warehouse_approval',
+                                ], true);
+                            @endphp
+                            <span class="badge {{ $isNotReceived ? 'bg-secondary' : 'bg-success' }}">
+                                {{ $isNotReceived ? 'Chưa tiếp nhận' : 'Đã xử lý' }}
+                            </span>
+                        @endif
+                    </div>
+                </div>
+                </div>
+                @foreach($orderCuttingPlans as $cuttingPlan)
+                    @include('warehouse.cutting._order_modal', ['cuttingOrder' => $order, 'cuttingPlan' => $cuttingPlan, 'selectedDate' => $selectedDate ?? now()->toDateString()])
+                @endforeach
+                @if($isPackageOrderLayout)
+                    @foreach($activeCuttingBatches as $batch)
+                        @php
+                            $batchModalId = 'complete-cutting-batch-' . (int) $batch->id;
+                            $plannedComponents = collect($batch->planned_components ?? []);
+                            $sourceItems = collect($batch->exportDocument?->items ?? []);
+                            $verifications = collect($batch->picked_material_verifications ?? [])->keyBy(fn ($row) => (int) ($row['variant_id'] ?? 0));
+                            $sourceVariantIds = $sourceItems->pluck('product_variant_id')->map(fn ($id) => (int) $id)->filter()->unique()->values();
+                            $allMaterialsPicked = $sourceVariantIds->isEmpty() || $sourceVariantIds->every(fn ($id) => $verifications->has((int) $id));
+                            $targetName = trim(($batch->targetVariant?->product?->name ?? 'Sản phẩm') . ' ' . ($batch->targetVariant?->name ?: ''));
+                        @endphp
+                        <div class="modal fade" id="{{ $batchModalId }}" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-lg modal-dialog-scrollable wh-orders-scroll-modal">
+                                <div class="modal-content border-warning">
+                                    <form method="POST" action="{{ route('package.cutting-batches.complete', $batch) }}">
+                                        @csrf
+                                        <div class="modal-header bg-warning-subtle">
+                                            <div>
+                                                <h5 class="modal-title">Hoàn thiện pha lóc</h5>
+                                                <div class="small text-muted">{{ $order->code }} · {{ $targetName }}</div>
+                                            </div>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <div class="mb-3">
+                                                <label for="cutting-document-date-{{ $batch->id }}" class="form-label fw-semibold">Ngày nhập kho</label>
+                                                <input type="date" id="cutting-document-date-{{ $batch->id }}" name="document_date" class="form-control"
+                                                       value="{{ old('document_date', \Carbon\Carbon::parse($selectedDate ?? request('date', now()->toDateString()))->toDateString()) }}" required>
+                                                <div class="form-text">Ngày ghi nhận pha lóc và nhập kho, mặc định theo ngày đang làm việc.</div>
+                                            </div>
+                                            <div class="alert alert-warning py-2">
+                                                Nguyên liệu đã lấy: <strong>{{ format_kg((float) $batch->input_weight) }}</strong>.
+                                                Nhập kg thực tế để ghi nhận nhập kho và tính hao hụt.
+                                            </div>
+                                            <div class="mb-3">
+                                                <div class="fw-semibold mb-2">Kho đã xác nhận lấy các mặt hàng</div>
+                                                <div class="wh-picked-material-list">
+                                                    @forelse($sourceItems as $sourceItem)
+                                                        @php
+                                                            $sourceVariant = $sourceItem->productVariant;
+                                                            $sourceVariantId = (int) ($sourceItem->product_variant_id ?? 0);
+                                                            $sourceName = trim(($sourceVariant?->product?->name ?? 'Sản phẩm') . ' ' . ($sourceVariant?->name ?: ''));
+                                                            $pickedVerification = $verifications->get($sourceVariantId);
+                                                            $isPickedVerified = !empty($pickedVerification);
+                                                        @endphp
+                                                        <div class="wh-picked-material-row {{ $isPickedVerified ? 'is-verified' : '' }}"
+                                                             data-picked-material-row
+                                                             data-batch-id="{{ (int) $batch->id }}"
+                                                             data-variant-id="{{ $sourceVariantId }}"
+                                                             data-picked-url="{{ route('package.cutting-batches.materials.picked', ['batch' => $batch, 'variant' => $sourceVariantId]) }}"
+                                                             data-unpicked-url="{{ route('package.cutting-batches.materials.unpicked', ['batch' => $batch, 'variant' => $sourceVariantId]) }}">
+                                                            <div>
+                                                                <div class="fw-semibold">{{ $sourceName }}</div>
+                                                                <div class="wh-picked-material-meta" data-picked-material-meta-base="Kho xuất {{ rtrim(rtrim(number_format((float) $sourceItem->quantity, 3, '.', ''), '0'), '.') }} con{{ $sourceVariant?->sku ? ' · ' . $sourceVariant->sku : '' }}">
+                                                                    Kho xuất {{ rtrim(rtrim(number_format((float) $sourceItem->quantity, 3, '.', ''), '0'), '.') }} con{{ $sourceVariant?->sku ? ' · ' . $sourceVariant->sku : '' }}
+                                                                    <span data-picked-material-verify-text>{{ $isPickedVerified ? ' · Verify bởi ' . ($pickedVerification['verified_by_name'] ?? 'Package') : '' }}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div class="wh-picked-material-actions">
+                                                                <span class="badge wh-picked-material-badge {{ $isPickedVerified ? '' : 'd-none' }}" data-picked-material-badge>
+                                                                    <i class="bi bi-check2-circle me-1"></i>Đã lấy
+                                                                </span>
+                                                                <button type="button" class="btn btn-sm btn-success js-picked-material-action {{ $isPickedVerified ? 'd-none' : '' }}" data-picked-action="pick">
+                                                                    <i class="bi bi-check2-circle me-1"></i>Đã lấy
+                                                                </button>
+                                                                <button type="button" class="btn btn-sm btn-outline-danger js-picked-material-action {{ $isPickedVerified ? '' : 'd-none' }}" data-picked-action="unpick">
+                                                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Quay lại
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    @empty
+                                                        <div class="small text-muted">Chưa có dữ liệu nguyên liệu kho đã xuất.</div>
+                                                    @endforelse
+                                                </div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label fw-semibold">Thành phẩm thực tế</label>
+                                                <div class="input-group">
+                                                    <input type="number" name="actual_finished_weight" class="form-control" min="0.001" step="0.001" value="{{ number_format((float) $batch->planned_finished_weight, 3, '.', '') }}" required>
+                                                    <span class="input-group-text">kg</span>
+                                                </div>
+                                            </div>
+                                            <div class="fw-semibold mb-2">Thành phần còn lại thực tế</div>
+                                            <div class="table-responsive">
+                                                <table class="table table-sm align-middle mb-0">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th>Thành phần</th>
+                                                            <th class="text-end" style="width:180px;">Kg thực tế</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @forelse($plannedComponents as $index => $component)
+                                                            <tr>
+                                                                <td>
+                                                                    <div class="fw-semibold">{{ $component['name'] ?? 'Thành phần' }}</div>
+                                                                    <input type="hidden" name="components[{{ $index }}][variant_id]" value="{{ (int) ($component['variant_id'] ?? 0) }}">
+                                                                </td>
+                                                                <td>
+                                                                    <div class="input-group input-group-sm">
+                                                                        <input type="number" name="components[{{ $index }}][weight]" class="form-control text-end" min="0" step="0.001" value="{{ number_format((float) ($component['weight'] ?? 0), 3, '.', '') }}">
+                                                                        <span class="input-group-text">kg</span>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        @empty
+                                                            <tr><td colspan="2" class="text-center text-muted py-3">Không có thành phần còn lại.</td></tr>
+                                                        @endforelse
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <div class="form-check mt-3">
+                                                <input class="form-check-input" type="checkbox" value="1" name="defer_components" id="{{ $batchModalId }}-defer">
+                                                <label class="form-check-label" for="{{ $batchModalId }}-defer">Nhập sau các thành phần còn lại</label>
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <div class="me-auto small text-danger fw-semibold js-cutting-picked-warning {{ $allMaterialsPicked ? 'd-none' : '' }}" data-batch-id="{{ (int) $batch->id }}">
+                                                Cần bấm Đã lấy cho tất cả mặt hàng kho đã xuất.
+                                            </div>
+                                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Đóng</button>
+                                            <button type="submit" class="btn btn-success js-complete-cutting-batch-btn" data-batch-id="{{ (int) $batch->id }}" {{ $allMaterialsPicked ? '' : 'disabled' }}>
+                                                <i class="bi bi-check2-circle me-1"></i>Hoàn thiện nhập kho
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
+                @endif
+                @if($hasCustomerFeedback)
+                <div class="wh-customer-feedback-panel is-alert">
+                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                        <div class="wh-customer-feedback-title">Tình trạng khách hàng</div>
+                        <span class="badge border {{ $customerFeedbackMeta['class'] ?? 'bg-secondary-subtle text-secondary border-secondary-subtle' }}">
+                            {{ $customerFeedbackMeta['label'] ?? 'Chưa có phản hồi' }}
+                        </span>
+                    </div>
+                    @if($customerFeedbackRows->isNotEmpty())
+                        <div class="d-grid gap-2">
+                            @foreach($customerFeedbackRows->take(3) as $feedback)
+                                <div class="border-top pt-2">
+                                    <div class="d-flex justify-content-between gap-2">
+                                        <span class="badge border {{ $feedback['meta']['class'] ?? 'bg-secondary-subtle text-secondary border-secondary-subtle' }}">
+                                            {{ $feedback['meta']['label'] ?? 'Phản hồi' }}
+                                        </span>
+                                        <span class="small text-muted">{{ $feedback['at'] ?? '' }}</span>
+                                    </div>
+                                    <div class="wh-customer-feedback-note mt-1">{{ $feedback['note'] ?? '' }}</div>
+                                    @if(!empty($feedback['sale_review']))
+                                        <div class="wh-customer-feedback-note mt-1">
+                                            <strong>Đánh giá sale:</strong> {{ $feedback['sale_review'] }}
+                                        </div>
+                                    @endif
+                                    @if(!empty($feedback['images']))
+                                        <div class="d-flex flex-wrap gap-2 mt-2">
+                                            @foreach($feedback['images'] as $image)
+                                                <a href="{{ $image['url'] ?? '#' }}" target="_blank" rel="noopener">
+                                                    <img src="{{ $image['url'] ?? '' }}" alt="Feedback" style="width:54px;height:54px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0;">
+                                                </a>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                    <div class="small text-muted mt-1">
+                                        {{ $feedback['code'] ?? '' }}{{ !empty($feedback['user']) ? ' • ' . $feedback['user'] : '' }}
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+                @endif
+                </div>
+            </div>
+
+@once
+@push('scripts')
+<script>
+window.addEventListener('message', function (event) {
+    if (event.origin !== window.location.origin || event.data?.type !== 'shipping-label-updated') return;
+    document.querySelectorAll('[data-shipping-label-order]').forEach(function (badge) {
+        if (badge.dataset.shippingLabelOrder !== String(event.data.orderId)) return;
+        badge.textContent = event.data.printed ? 'Đã in' : 'Chưa in';
+        badge.classList.toggle('bg-success', Boolean(event.data.printed));
+        badge.classList.toggle('bg-secondary', !event.data.printed);
+    });
+});
+</script>
+@endpush
+@endonce

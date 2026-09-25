@@ -1,0 +1,767 @@
+<?php
+
+namespace App\Models;
+
+use App\Enums\DeliveryStatus;
+use App\Enums\OrderStatus;
+use App\Enums\PaymentStatus;
+use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Schema;
+
+class Order extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'customer_id', 'user_id', 'shipper_id', 'supplier_id', 'code', 'total', 'status',
+        'commission_percent_snapshot', 'commission_amount_snapshot', 'commission_created_at',
+        'copied_from_order_id', 'order_type', 'workflow_code', 'is_return_order', 'parent_order_id',
+        'warehouse_id', 'warehouse_product_permissions', 'warehouse_can_adjust', 'warehouse_allowed_sizes', 'return_warehouse_id',
+        'recipient_name', 'recipient_phone', 'recipient_email', 'recipient_address', 'note',
+        'subtotal_amount', 'item_discount_total', 'extra_discount_total',
+        'total_discount', 'order_discount', 'order_discount_type', 'total_weight', 'actual_weight', 'charge_shipping_fee', 'shipping_fee', 'shipping_fee_transaction_id',
+        'charge_vat', 'vat_percent', 'vat_amount', 'collect_customer_shipping_fee', 'customer_shipping_fee',
+        'charge_foam_box_fee', 'foam_box_price',
+        'amount_paid', 'amount_due', 'payment_method', 'payment_status',
+        'qr_code', 'packed_image_path', 'package_count', 'packing_specification', 'delivered_image_path', 'has_return_order',
+        'collected_amount', 'delivered_at', 'return_reason', 'proof_images', 'shipper_note', 'delivery_time', 'delivery_time_note', 'delivery_date',
+        'use_truck_station', 'truck_station_id', 'truck_station_name', 'truck_station_address',
+        'truck_station_phone', 'truck_receive_time',
+        'customer_feedback_status', 'customer_feedback_note', 'customer_feedback_sale_review',
+        'customer_feedback_images', 'customer_feedback_by', 'customer_feedback_at',
+        'daily_sequence', 'stock_sufficient', 'stock_shortage_detail',
+        'stock_alert_status',
+        'warehouse_adjustment_status', 'warehouse_adjustment_note', 'warehouse_adjustment_changes',
+        'warehouse_adjustment_requested_by', 'warehouse_adjustment_requested_at',
+        'warehouse_adjustment_confirmed_by', 'warehouse_adjustment_confirmed_at',
+        'warehouse_adjustment_rejected_by', 'warehouse_adjustment_rejected_at', 'warehouse_adjustment_rejected_reason',
+        'cancelled_by', 'cancelled_at', 'cancel_reason', 'cancel_images', 'trash_at', 'skip_auto_cancel',
+        'accounting_sales_import_batch_id', 'imported_sales_group_key', 'needs_operational_completion',
+        'operational_completion_note', 'operational_completed_by', 'operational_completed_at',
+    ];
+
+    public function getMeasurementLabelAttribute(): string
+    {
+        return in_array((string) $this->status, [
+            self::STATUS_PACKED, self::STATUS_READY_TO_SHIP,
+            self::STATUS_DELIVERING, self::STATUS_IN_DELIVERY,
+            self::STATUS_DELIVERED, self::STATUS_COMPLETED,
+            self::STATUS_RETURNING, self::STATUS_RETURNED, self::STATUS_RETURNED_COMPLETED,
+            'shipping', 'picked_up',
+        ], true) ? 'Thực tế' : 'Khối lượng';
+    }
+
+    protected $casts = [
+        'proof_images' => 'array',
+        'cancel_images' => 'array',
+        'customer_feedback_images' => 'array',
+        'delivered_at' => 'datetime',
+        'customer_feedback_at' => 'datetime',
+        'delivery_date' => 'date',
+        'use_truck_station' => 'boolean',
+        'shipping_label_printed_at' => 'datetime',
+        'cancelled_at' => 'datetime',
+        'trash_at' => 'datetime',
+        'skip_auto_cancel' => 'boolean',
+        'total_weight' => 'decimal:3',
+        'actual_weight' => 'decimal:3',
+        'charge_shipping_fee' => 'boolean',
+        'warehouse_can_adjust' => 'boolean',
+        'warehouse_allowed_sizes' => 'array',
+        'warehouse_product_permissions' => 'array',
+        'shipping_fee' => 'decimal:2',
+        'charge_vat' => 'boolean',
+        'vat_percent' => 'decimal:2',
+        'vat_amount' => 'decimal:2',
+        'collect_customer_shipping_fee' => 'boolean',
+        'customer_shipping_fee' => 'decimal:2',
+        'charge_foam_box_fee' => 'boolean',
+        'is_return_order' => 'boolean',
+        'foam_box_price' => 'decimal:2',
+        'package_count' => 'integer',
+        'stock_shortage_detail' => 'array',
+        'stock_sufficient' => 'boolean',
+        'stock_alert_status' => 'string',
+        'warehouse_adjustment_changes' => 'array',
+        'warehouse_adjustment_requested_at' => 'datetime',
+        'warehouse_adjustment_confirmed_at' => 'datetime',
+        'warehouse_adjustment_rejected_at' => 'datetime',
+        'commission_percent_snapshot' => 'decimal:2',
+        'commission_amount_snapshot' => 'decimal:2',
+        'commission_created_at' => 'datetime',
+        'needs_operational_completion' => 'boolean',
+        'operational_completed_at' => 'datetime',
+    ];
+
+    public function allowsWarehouseQuantityChange(int $productId): bool
+    {
+        return $this->warehouse_product_permissions !== null
+            ? (bool) ($this->warehouse_product_permissions[$productId]['quantity'] ?? false)
+            : (bool) $this->warehouse_can_adjust;
+    }
+
+    public function packingSizesForProduct(int $productId): ?array
+    {
+        return $this->warehouse_product_permissions !== null
+            ? ($this->warehouse_product_permissions[$productId]['sizes'] ?? [])
+            : $this->warehouse_allowed_sizes;
+    }
+
+    public function allowsPackingSize(float $size, ?int $productId = null): bool
+    {
+        // Existing orders retain their original packing policy until Sale edits it.
+        $sizes = $productId !== null ? $this->packingSizesForProduct($productId) : $this->warehouse_allowed_sizes;
+        if ($sizes === null) {
+            return true;
+        }
+
+        return collect($sizes)->contains(
+            fn ($allowed) => abs((float) $allowed - $size) < 0.0001
+        );
+    }
+
+    public function shippingLabelData(): array
+    {
+        $legacy = $this->use_truck_station === null;
+        $station = $this->truckStation ?: ($legacy ? $this->customer?->truckStation : null);
+
+        return [
+            'enabled' => $legacy ? (bool) $this->customer?->use_truck_station : (bool) $this->use_truck_station,
+            'customer_name' => $this->recipient_name ?: ($this->customer?->name ?: 'Chưa có tên khách hàng'),
+            'customer_phone' => $this->recipient_phone ?: ($this->customer?->phone ?: 'Chưa cập nhật'),
+            'customer_address' => $this->recipient_address ?: ($this->customer?->address ?: 'Chưa cập nhật'),
+            'station_name' => $this->truck_station_name ?: ($station?->name ?: 'Chưa chọn nhà xe'),
+            'station_address' => $this->truck_station_address ?: ($legacy ? $this->customer?->truck_station_address : null) ?: ($station?->address ?: 'Chưa cập nhật'),
+            'station_phone' => $this->truck_station_phone ?: ($legacy ? $this->customer?->truck_station_phone : null) ?: ($station?->phone ?: 'Chưa cập nhật'),
+        ];
+    }
+
+    public function truckStation()
+    {
+        return $this->belongsTo(TruckStation::class);
+    }
+
+    public function supplier()
+    {
+        return $this->belongsTo(Supplier::class);
+    }
+
+    protected static function booted(): void
+    {
+        // A copied order must be explicitly selected for a new transfer.
+        static::replicating(function (Order $order): void {
+            $order->order_transfer_id = null;
+            $order->unsetRelation('orderTransfer');
+            $order->unsetRelation('warehouseTransfers');
+        });
+
+        static::creating(function (Order $order): void {
+            $order->delivery_date ??= now()->addDay()->toDateString();
+            $order->shipper_id ??= $order->resolveDefaultShipperId();
+        });
+
+        // Công nợ đơn hàng chỉ được ghi nhận sau khi kế toán xác nhận đối soát.
+        // Chặn mọi luồng cập nhật tổng tiền/thanh toán vô tình làm phát sinh nợ sớm.
+        static::saving(function (Order $order): void {
+            // Mọi đơn được tạo/gán ngày nghiệp vụ khác hôm nay đều là đơn
+            // ngoại lệ. Không cho phép các luồng tạo đơn riêng lẻ quên bật
+            // cờ này rồi để tác vụ tự hủy xử lý nhầm đơn lên bù ngày cũ.
+            if ($order->created_at
+                && (! $order->exists || $order->isDirty('created_at'))
+                && self::isNonCurrentBusinessDate($order->created_at)) {
+                $order->skip_auto_cancel = true;
+            }
+
+            if (! $order->isDirty('amount_due')) {
+                return;
+            }
+
+            $recognizedRevenue = Schema::hasTable('accounting_reconciliations') && $order->exists
+                ? AccountingReconciliation::query()
+                    ->where('order_id', $order->getKey())
+                    ->where('status', AccountingReconciliation::STATUS_CONFIRMED)
+                    ->value('recognized_revenue')
+                : null;
+
+            if ($recognizedRevenue === null) {
+                $order->amount_due = 0;
+
+                return;
+            }
+
+            $effectivePaid = max(
+                (float) ($order->amount_paid ?? 0),
+                (float) ($order->collected_amount ?? 0)
+            );
+            $order->amount_due = max(0, (float) $recognizedRevenue - $effectivePaid);
+        });
+    }
+
+    public static function isNonCurrentBusinessDate(mixed $date): bool
+    {
+        if (blank($date)) {
+            return false;
+        }
+
+        return Carbon::parse($date)->toDateString() !== Carbon::today()->toDateString();
+    }
+
+    private function resolveDefaultShipperId(): ?int
+    {
+        if (! $this->customer_id || $this->is_return_order || (string) $this->order_type === 'order_return') {
+            return null;
+        }
+
+        $defaultShipperId = Customer::query()
+            ->whereKey($this->customer_id)
+            ->value('default_shipper_id');
+
+        return $defaultShipperId ? (int) $defaultShipperId : null;
+    }
+
+    public function scopeForDeliveryDate($query, string $date)
+    {
+        return $query->whereDate('delivery_date', $date);
+    }
+
+    /**
+     * Date used by the warehouse packing workflow.
+     *
+     * Regular orders belong to their creation date. Orders created by the
+     * accounting import belong to their operational delivery date, matching
+     * the date under which they are displayed on the warehouse order screen.
+     */
+    public function scopeForPackingDate($query, string $date)
+    {
+        $createdAt = $this->qualifyColumn('created_at');
+        $deliveryDate = $this->qualifyColumn('delivery_date');
+        $importBatchId = $this->qualifyColumn('accounting_sales_import_batch_id');
+
+        return $query->where(function ($dateQuery) use ($date, $createdAt, $deliveryDate, $importBatchId): void {
+            $dateQuery->where(function ($regularOrder) use ($date, $createdAt, $importBatchId): void {
+                $regularOrder->whereNull($importBatchId)
+                    ->whereDate($createdAt, $date);
+            })->orWhere(function ($importedOrder) use ($date, $deliveryDate, $importBatchId): void {
+                $importedOrder->whereNotNull($importBatchId)
+                    ->whereDate($deliveryDate, $date);
+            });
+        });
+    }
+
+    /**
+     * Keep explicitly restored orders in today's operational queue even when
+     * their original creation date is older.
+     */
+    public function scopeForWorkflowDate($query, string $date)
+    {
+        $createdAt = $this->qualifyColumn('created_at');
+        $deliveryDate = $this->qualifyColumn('delivery_date');
+        $skipAutoCancel = $this->qualifyColumn('skip_auto_cancel');
+        $orderId = $this->qualifyColumn($this->getKeyName());
+
+        return $query->where(function ($dateQuery) use ($date, $createdAt, $deliveryDate, $skipAutoCancel, $orderId): void {
+            $dateQuery->whereDate($createdAt, $date);
+
+            if (Carbon::parse($date)->isToday()) {
+                $dateQuery->orWhere($skipAutoCancel, true);
+
+                return;
+            }
+
+            // An explicitly restored order can originate from an older date.
+            // Keep it attached to its operational date so warehouse/dispatch
+            // screens can still publish and display its historical route.
+            $dateQuery->orWhere(function ($exceptionQuery) use ($date, $deliveryDate, $skipAutoCancel, $orderId): void {
+                $exceptionQuery->where($skipAutoCancel, true)
+                    ->where(function ($operationalDateQuery) use ($date, $deliveryDate, $orderId): void {
+                        $operationalDateQuery->whereDate($deliveryDate, $date)
+                            ->orWhereExists(function ($historyQuery) use ($date, $orderId): void {
+                                $historyQuery->selectRaw('1')
+                                    ->from('order_histories as restored_history')
+                                    ->whereColumn('restored_history.order_id', $orderId)
+                                    ->where('restored_history.action', 'restore_cancelled_order')
+                                    ->whereDate('restored_history.created_at', $date);
+                            })
+                            ->orWhereExists(function ($batchQuery) use ($date, $orderId): void {
+                                $batchQuery->selectRaw('1')
+                                    ->from('accounting_sales_import_batches as workflow_batch')
+                                    ->join('orders as imported_order', 'imported_order.accounting_sales_import_batch_id', '=', 'workflow_batch.id')
+                                    ->whereColumn('imported_order.id', $orderId)
+                                    ->whereDate('workflow_batch.business_date', $date);
+                            });
+                    });
+            });
+        });
+    }
+
+    public function approvals()
+    {
+        return $this->hasMany(ApprovalOrder::class);
+    }
+
+    /**
+     * Đơn cũ có hồ sơ điều chỉnh đã hoàn tất vẫn phải tiếp tục được Kho xử lý.
+     * Việc Sale gửi và các cấp duyệt thay đổi sau ngày nghiệp vụ thể hiện đơn
+     * vẫn còn hiệu lực, không phải một đơn quá hạn bị bỏ quên.
+     */
+    public function hasCompletedAdjustment(): bool
+    {
+        if ($this->relationLoaded('adjustments')) {
+            return $this->adjustments->contains(
+                fn (OrderAdjustment $adjustment): bool => $adjustment->status === OrderAdjustment::STATUS_COMPLETED
+            );
+        }
+
+        return $this->adjustments()
+            ->where('status', OrderAdjustment::STATUS_COMPLETED)
+            ->exists();
+    }
+
+    /**
+     * VAT phần trăm dùng cho đơn cũ; vat_percent = 0 biểu thị VAT tiền cố định
+     * được bổ sung qua yêu cầu điều chỉnh.
+     */
+    public function resolvedVatAmount(float $taxableAmount): float
+    {
+        if (! (bool) ($this->charge_vat ?? false)) {
+            return 0.0;
+        }
+
+        $percent = min(max((float) ($this->vat_percent ?? 0), 0), 100);
+        if ($percent > 0) {
+            return round(max(0, $taxableAmount) * $percent / 100, 2);
+        }
+
+        return round(max(0, (float) ($this->vat_amount ?? 0)), 2);
+    }
+
+    public function orderTransfer()
+    {
+        return $this->belongsTo(OrderTransfer::class, 'order_transfer_id');
+    }
+
+    public function transactions()
+    {
+        return $this->hasMany(Transaction::class);
+    }
+
+    public function histories()
+    {
+        return $this->hasMany(OrderHistory::class);
+    }
+
+    public function additionalFees()
+    {
+        return $this->hasMany(OrderFee::class);
+    }
+
+    const STATUS_PENDING_LEADER_APPROVAL = 'pending_leader_approval';
+
+    const STATUS_PENDING_MANAGER_APPROVAL = 'pending_manager_approval';
+
+    const STATUS_APPROVED = 'approved';
+
+    const STATUS_SHIPPING = 'shipping';
+
+    const STATUS_REJECTED = 'rejected';
+
+    // Trạng thái đơn hàng chuẩn
+    const STATUS_ORDER_PLACED = 'order_placed';
+
+    const STATUS_ORDER_CONFIRMED = 'order_confirmed';
+
+    const STATUS_PACKED = 'packed';
+
+    const STATUS_IN_DELIVERY = 'in_delivery';
+
+    const STATUS_DELIVERED = 'delivered';
+
+    const STATUS_COMPLETED = 'completed';
+
+    const STATUS_RETURNED = 'returned';
+
+    const STATUS_CANCELLED = 'cancelled';
+
+    const STATUS_OVERDUE_DELIVERY = 'overdue_delivery';
+
+    public static function statusOptions()
+    {
+        return [
+            'draft' => 'Đơn nháp',
+            'pending' => 'Chờ duyệt',
+            self::STATUS_PENDING_LEADER_APPROVAL => 'Chờ Leader duyệt',
+            self::STATUS_PENDING_MANAGER_APPROVAL => 'Chờ Manager duyệt',
+            'pending_warehouse_approval' => 'Chờ kho duyệt',
+            self::STATUS_ORDER_PLACED => 'Đơn hàng đã đặt',
+            self::STATUS_ORDER_CONFIRMED => 'Đơn hàng đã xác nhận',
+            self::STATUS_APPROVED => 'Đã duyệt',
+            self::STATUS_READY_TO_PACK => 'Chờ đóng hàng',
+            self::STATUS_PACKING => 'Đang đóng hàng',
+            self::STATUS_PACKED => 'Đã đóng gói',
+            self::STATUS_READY_TO_SHIP => 'Chờ lấy hàng',
+            self::STATUS_DELIVERING => 'Đang giao hàng',
+            self::STATUS_IN_DELIVERY => 'Đang giao hàng',
+            self::STATUS_DELIVERED => 'Đã giao hàng',
+            self::STATUS_COMPLETED => 'Hoàn thành',
+            self::STATUS_RETURNING => 'Đang trả hàng',
+            self::STATUS_RETURNED_COMPLETED => 'Đã nhập kho trả hàng',
+            self::STATUS_RETURNED => 'Hoàn trả',
+            self::STATUS_CANCELLED => 'Đã hủy',
+            self::STATUS_OVERDUE_DELIVERY => 'Giao trễ',
+            'shipping' => 'Đang vận chuyển',
+            'picked_up' => 'Đã lấy hàng',
+        ];
+    }
+
+    // Warehouse & Shipper statuses
+    const STATUS_READY_TO_PACK = 'ready_to_pack';
+
+    const STATUS_PACKING = 'packing';
+
+    const STATUS_READY_TO_SHIP = 'packed_waiting_pickup';
+
+    const STATUS_DELIVERING = 'delivering';
+
+    const STATUS_RETURNING = 'returning';
+
+    const STATUS_RETURNED_COMPLETED = 'returned_completed';
+
+    public const CANCELLABLE_STATUSES = [
+        self::STATUS_OVERDUE_DELIVERY,
+        'draft',
+        'pending',
+        self::STATUS_PENDING_LEADER_APPROVAL,
+        self::STATUS_PENDING_MANAGER_APPROVAL,
+        'pending_warehouse_approval',
+        self::STATUS_APPROVED,
+        self::STATUS_READY_TO_PACK,
+        self::STATUS_PACKING,
+        self::STATUS_PACKED,
+        self::STATUS_READY_TO_SHIP,
+        'confirmed',
+        'picking',
+        self::STATUS_ORDER_PLACED,
+    ];
+
+    public const RESTORABLE_AFTER_CANCEL_STATUSES = [
+        'pending',
+        self::STATUS_PENDING_LEADER_APPROVAL,
+        self::STATUS_PENDING_MANAGER_APPROVAL,
+        'pending_warehouse_approval',
+        self::STATUS_APPROVED,
+        self::STATUS_READY_TO_PACK,
+        self::STATUS_PACKING,
+        self::STATUS_PACKED,
+        self::STATUS_READY_TO_SHIP,
+        'confirmed',
+        'picking',
+        self::STATUS_ORDER_PLACED,
+    ];
+
+    /**
+     * Kho đóng hàng chỉ được đổi trước khi nhân viên kho bắt đầu xử lý đơn.
+     */
+    public const WAREHOUSE_ASSIGNABLE_STATUSES = [
+        'draft',
+        'pending',
+        self::STATUS_PENDING_LEADER_APPROVAL,
+        self::STATUS_PENDING_MANAGER_APPROVAL,
+        'pending_warehouse_approval',
+        self::STATUS_ORDER_PLACED,
+        self::STATUS_ORDER_CONFIRMED,
+        'confirmed',
+        self::STATUS_APPROVED,
+        self::STATUS_READY_TO_PACK,
+    ];
+
+    public function canBeCancelled(): bool
+    {
+        return in_array((string) $this->status, self::CANCELLABLE_STATUSES, true);
+    }
+
+    public function canBeDirectlyEditedByOwner(): bool
+    {
+        if (! empty($this->copied_from_order_id)) {
+            return true;
+        }
+
+        if ($this->delivered_at !== null) {
+            return false;
+        }
+
+        return ! in_array((string) $this->status, [
+            self::STATUS_DELIVERED,
+            self::STATUS_COMPLETED,
+            self::STATUS_RETURNED,
+            self::STATUS_RETURNING,
+            self::STATUS_RETURNED_COMPLETED,
+            self::STATUS_CANCELLED,
+            self::STATUS_REJECTED,
+        ], true);
+    }
+
+    const WAREHOUSE_ADJUSTMENT_STATUS_NONE = 'none';
+
+    const WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION = 'pending_sale_confirmation';
+
+    const WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED = 'sale_confirmed';
+
+    const WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED = 'sale_rejected';
+
+    public const CUSTOMER_FEEDBACK_GOOD = 'good';
+
+    public const CUSTOMER_FEEDBACK_CAREFUL = 'careful';
+
+    public const CUSTOMER_FEEDBACK_RISK = 'risk';
+
+    public static function customerFeedbackOptions(): array
+    {
+        return [
+            self::CUSTOMER_FEEDBACK_GOOD => 'Khách ổn định',
+            self::CUSTOMER_FEEDBACK_CAREFUL => 'Cần đóng kỹ',
+            self::CUSTOMER_FEEDBACK_RISK => 'Rủi ro/khó tính',
+        ];
+    }
+
+    public static function customerFeedbackMeta(?string $status): array
+    {
+        return match ($status) {
+            self::CUSTOMER_FEEDBACK_GOOD => ['label' => 'Khách ổn định', 'class' => 'bg-success-subtle text-success border-success-subtle', 'level' => 1],
+            self::CUSTOMER_FEEDBACK_RISK => ['label' => 'Rủi ro/khó tính', 'class' => 'bg-danger-subtle text-danger border-danger-subtle', 'level' => 3],
+            self::CUSTOMER_FEEDBACK_CAREFUL => ['label' => 'Cần đóng kỹ', 'class' => 'bg-warning-subtle text-warning-emphasis border-warning-subtle', 'level' => 2],
+            default => ['label' => 'Chưa có phản hồi', 'class' => 'bg-secondary-subtle text-secondary border-secondary-subtle', 'level' => 0],
+        };
+    }
+
+    public function canReceiveCustomerFeedback(): bool
+    {
+        return in_array((string) $this->status, [
+            self::STATUS_DELIVERED,
+            self::STATUS_COMPLETED,
+            self::STATUS_RETURNING,
+            self::STATUS_RETURNED,
+            self::STATUS_RETURNED_COMPLETED,
+        ], true) || (bool) ($this->has_return_order ?? false);
+    }
+
+    public function hasCustomerFeedback(): bool
+    {
+        return filled($this->customer_feedback_status) || filled($this->customer_feedback_note);
+    }
+
+    public function clearWarehouseAdjustmentState(): self
+    {
+        $this->forceFill([
+            'warehouse_adjustment_status' => self::WAREHOUSE_ADJUSTMENT_STATUS_NONE,
+            'warehouse_adjustment_note' => null,
+            'warehouse_adjustment_changes' => null,
+            'warehouse_adjustment_requested_by' => null,
+            'warehouse_adjustment_requested_at' => null,
+            'warehouse_adjustment_confirmed_by' => null,
+            'warehouse_adjustment_confirmed_at' => null,
+            'warehouse_adjustment_rejected_by' => null,
+            'warehouse_adjustment_rejected_at' => null,
+            'warehouse_adjustment_rejected_reason' => null,
+        ]);
+
+        return $this;
+    }
+
+    public function resetForCopiedOrder(?int $sourceOrderId = null): self
+    {
+        $this->forceFill([
+            'status' => OrderStatus::Pending->value,
+            'payment_status' => PaymentStatus::Unpaid->value,
+            'delivery_status' => DeliveryStatus::NotShipped->value,
+            'delivered_at' => null,
+            'packed_image_path' => null,
+            'delivered_image_path' => null,
+            'amount_paid' => 0,
+            'amount_due' => 0,
+            'payment_method' => null,
+            'collected_amount' => null,
+            'proof_images' => null,
+            'return_reason' => null,
+            'shipping_fee_transaction_id' => null,
+            'copied_from_order_id' => $sourceOrderId,
+            'warehouse_id' => null,
+            'daily_sequence' => null,
+            'stock_sufficient' => null,
+            'stock_shortage_detail' => null,
+            'stock_alert_status' => null,
+            'cancelled_by' => null,
+            'cancelled_at' => null,
+            'cancel_reason' => null,
+            'cancel_images' => null,
+            'trash_at' => null,
+            'skip_auto_cancel' => false,
+        ]);
+
+        return $this->clearWarehouseAdjustmentState();
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function customerFeedbackUser()
+    {
+        return $this->belongsTo(User::class, 'customer_feedback_by');
+    }
+
+    public function warehouseAdjustmentRequester()
+    {
+        return $this->belongsTo(User::class, 'warehouse_adjustment_requested_by');
+    }
+
+    public function warehouseAdjustmentConfirmer()
+    {
+        return $this->belongsTo(User::class, 'warehouse_adjustment_confirmed_by');
+    }
+
+    public function warehouseAdjustmentRejecter()
+    {
+        return $this->belongsTo(User::class, 'warehouse_adjustment_rejected_by');
+    }
+
+    public function parentOrder()
+    {
+        return $this->belongsTo(Order::class, 'parent_order_id');
+    }
+
+    public function returnOrders()
+    {
+        return $this->hasMany(Order::class, 'parent_order_id');
+    }
+
+    public function returnRecords()
+    {
+        return $this->hasMany(OrderReturn::class);
+    }
+
+    public function shipper()
+    {
+        return $this->belongsTo(User::class, 'shipper_id');
+    }
+
+    public function warehouse()
+    {
+        return $this->belongsTo(Warehouse::class);
+    }
+
+    public function returnWarehouse()
+    {
+        return $this->belongsTo(Warehouse::class, 'return_warehouse_id');
+    }
+
+    public function items()
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
+    /**
+     * Snapshot weight used as the loss baseline for a warehouse transfer.
+     */
+    public function transferBaselineWeight(): float
+    {
+        $this->loadMissing(['items.variant.product', 'items.product']);
+
+        return round((float) $this->items->sum(function (OrderItem $item): float {
+            if ($item->packed_weight !== null) {
+                return max(0, (float) $item->packed_weight);
+            }
+            if ($item->actual_weight !== null) {
+                return max(0, (float) $item->actual_weight);
+            }
+            if ((float) ($item->total_weight ?? 0) > 0) {
+                return (float) $item->total_weight;
+            }
+
+            return max(0, (float) ($item->quantity ?? 0))
+                * max(0, (float) $item->effective_unit_weight);
+        }), 3);
+    }
+
+    public function schedule()
+    {
+        return $this->hasOne(OrderSchedule::class, 'generated_order_id');
+    }
+
+    public function adjustments()
+    {
+        return $this->hasMany(OrderAdjustment::class);
+    }
+
+    public function warehouseTransfers()
+    {
+        return $this->hasMany(WarehouseTransfer::class);
+    }
+
+    public function accountingReconciliation()
+    {
+        return $this->hasOne(AccountingReconciliation::class);
+    }
+
+    public function accountingSalesEntries()
+    {
+        return $this->hasMany(AccountingSalesEntry::class);
+    }
+
+    public function shippingFeeRequest()
+    {
+        return $this->belongsTo(Transaction::class, 'shipping_fee_transaction_id');
+    }
+
+    public function canRequestAdjustment(): bool
+    {
+        $hasCompletedDelivery = $this->delivered_at !== null
+            || in_array($this->status, [self::STATUS_DELIVERED, self::STATUS_COMPLETED], true);
+
+        return $hasCompletedDelivery
+            && $this->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED;
+    }
+
+    public function getPaymentStatusTextAttribute()
+    {
+        if ($this->status === self::STATUS_COMPLETED) {
+            return 'Đã hoàn thành';
+        }
+        $paid = $this->transactions()->where('type', 'payment')->sum('amount') - $this->transactions()->where('type', 'refund')->sum('amount');
+        if ($paid >= $this->total) {
+            return 'Đã thanh toán đủ';
+        } elseif ($paid > 0) {
+            return 'Thanh toán một phần';
+        } else {
+            return 'Chưa thanh toán';
+        }
+    }
+
+    public function isPaid()
+    {
+        $paid = $this->transactions()->where('type', 'payment')->sum('amount') - $this->transactions()->where('type', 'refund')->sum('amount');
+
+        return $paid >= $this->total;
+    }
+
+    public function isPartialPaid()
+    {
+        $paid = $this->transactions()->where('type', 'payment')->sum('amount') - $this->transactions()->where('type', 'refund')->sum('amount');
+
+        return $paid > 0 && $paid < $this->total;
+    }
+
+    public function isUnpaid()
+    {
+        $paid = $this->transactions()->where('type', 'payment')->sum('amount') - $this->transactions()->where('type', 'refund')->sum('amount');
+
+        return $paid <= 0;
+    }
+}

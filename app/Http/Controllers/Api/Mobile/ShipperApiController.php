@@ -1,0 +1,1229 @@
+<?php
+
+namespace App\Http\Controllers\Api\Mobile;
+
+use App\Http\Controllers\ShipperDashboardController;
+use App\Models\Customer;
+use App\Models\MobileLocationPing;
+use App\Models\Order;
+use App\Models\OrderHistory;
+use App\Models\OrderReturn;
+use App\Models\ReturnItem;
+use App\Models\ShipperDispatchHistory;
+use App\Models\User;
+use App\Models\Warehouse;
+use App\Models\WarehouseDispatchSlip;
+use App\Models\WarehouseTransfer;
+use App\Services\ShipperAssignmentService;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+
+class ShipperApiController extends BaseApiController
+{
+    public function dashboard(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $userId = (int) $request->user()->id;
+        $today = now()->toDateString();
+
+        $stats = [
+            'today_total' => Order::query()->where('shipper_id', $userId)->whereDate('updated_at', $today)->count(),
+            'available' => Order::query()->where(function ($query) {
+                $query->where('status', Order::STATUS_READY_TO_SHIP)
+                    ->orWhere(function ($returnQuery) {
+                        $returnQuery->where('status', Order::STATUS_APPROVED)->where('is_return_order', true);
+                    });
+            })
+                ->where('shipper_id', $userId)
+                ->whereNotIn('status', ['cancelled', 'canceled'])
+                ->where(function ($query) {
+                    $this->constrainConfirmedDeliverySchedule($query);
+                })
+                ->count(),
+            'delivering' => Order::query()->where('shipper_id', $userId)->where('status', Order::STATUS_DELIVERING)->count(),
+            'delivered_today' => Order::query()->where('shipper_id', $userId)->where('status', 'delivered')->whereDate('delivered_at', $today)->count(),
+            'returning' => Order::query()->where('shipper_id', $userId)->where('status', Order::STATUS_RETURNING)->count(),
+        ];
+
+        return $this->ok($stats);
+    }
+
+    public function availableOrders(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $userId = (int) $request->user()->id;
+        $selectedDate = $this->scheduleDate($request);
+
+        $orders = Order::query()
+            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
+            ->where(function ($query) {
+                $query->where('status', Order::STATUS_READY_TO_SHIP)
+                    ->orWhere(function ($returnQuery) {
+                        $returnQuery->where('status', Order::STATUS_APPROVED)->where('is_return_order', true);
+                    });
+            })
+            ->where('shipper_id', $userId)
+            ->whereNotIn('status', ['cancelled', 'canceled'])
+            ->where(function ($query) {
+                $this->constrainConfirmedDeliverySchedule($query);
+            })
+            ->forWorkflowDate($selectedDate)
+            ->tap(function ($query) {
+                $this->constrainNoActiveWarehouseTransfer($query);
+            })
+            ->latest('updated_at')
+            ->paginate(20);
+
+        $this->attachDeliveryScheduleMetadata($orders->getCollection());
+
+        return $this->paginated($orders);
+    }
+
+    public function acceptedOrders(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $userId = (int) $request->user()->id;
+        $selectedDate = $this->scheduleDate($request);
+
+        $orders = Order::query()
+            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
+            ->where('shipper_id', $userId)
+            ->where('status', Order::STATUS_DELIVERING)
+            ->forDeliveryDate($selectedDate)
+            ->tap(function ($query) {
+                $this->constrainNoActiveWarehouseTransfer($query);
+            })
+            ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('daily_sequence', 'asc')
+            ->orderBy('delivery_time', 'asc')
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc')
+            ->paginate(20);
+
+        $this->attachDeliveryScheduleMetadata($orders->getCollection());
+
+        return $this->paginated($orders);
+    }
+
+    public function deliverySchedules(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $userId = (int) $request->user()->id;
+        // The mobile client may open the schedule detail without a date. In
+        // that case, use the shipper's latest published route instead of
+        // blindly looking at today (which returned an empty route after
+        // midnight even though the web schedule was still visible).
+        $selectedDate = $this->scheduleDate($request, $userId, true);
+
+        $orders = $this->deliveryScheduleOrdersForShipper($userId, $selectedDate)->get();
+        $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
+        $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
+        $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
+        $plannedOrderIds = $this->plannedOrderIdsForShipperOnDate($userId, $selectedDate);
+        $completedOrderIds = Order::query()->whereIn('id', $plannedOrderIds)->get()
+            ->filter(fn (Order $order) => $this->orderWasDelivered($order))
+            ->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $status = $this->areAllOrdersCompleted($plannedOrderIds)
+            ? 'completed'
+            : $this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot, $completedOrderIds);
+        if ($status === 'changed') {
+            $status = 'changing';
+        }
+        $syncReason = null;
+        if ($status !== 'completed' && $orders->isEmpty() && $plannedOrderIds !== []) {
+            $status = 'invalid';
+            $syncReason = 'Lộ trình không còn đơn hợp lệ để xác nhận. Vui lòng liên hệ Điều phối để đánh dấu hoàn tất hoặc xóa lộ trình.';
+        }
+        $pendingOrders = $status === 'waiting' ? $orders : collect();
+
+        return $this->ok([
+            'date' => $selectedDate,
+            'id' => $latestHistory?->id,
+            'code' => $this->deliveryScheduleCode($userId, $selectedDate, $latestHistory),
+            'status' => $status,
+            'notes' => $latestHistory?->note,
+            'confirmed_at' => $status === 'confirmed' ? optional($latestHistory?->created_at)->toIso8601String() : null,
+            'orders_count' => $pendingOrders->count(),
+            'total_cod' => (float) $pendingOrders->sum('total'),
+            'orders' => $pendingOrders->values(),
+            'sync_reason' => $syncReason,
+        ]);
+    }
+
+    public function deliveryScheduleList(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $shipperId = (int) $request->user()->id;
+        $fromDate = Carbon::today()->subDays(90)->toDateString();
+        $toDate = Carbon::today()->addDays(30)->toDateString();
+
+        $dispatchesByDate = ShipperDispatchHistory::query()
+            ->whereBetween('schedule_date', [$fromDate, $toDate])
+            ->whereNull('revoked_at')
+            ->orderByDesc('version')
+            ->orderByDesc('id')
+            ->get()
+            ->unique(fn ($dispatch) => $dispatch->schedule_date->toDateString())
+            ->filter(fn ($dispatch) => collect($dispatch->route_plan ?? [])
+                ->contains(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId))
+            ->keyBy(fn ($dispatch) => $dispatch->schedule_date->toDateString());
+        $orderDates = Order::query()
+            ->where('shipper_id', $shipperId)
+            ->whereBetween(DB::raw('DATE(created_at)'), [$fromDate, $toDate])
+            ->selectRaw('DATE(created_at) as route_date')
+            ->distinct()
+            ->pluck('route_date');
+        $dates = $orderDates->merge($dispatchesByDate->keys())->filter()->unique()->sortDesc()->values();
+
+        $routes = $dates->map(function (string $date) use ($shipperId, $dispatchesByDate): array {
+            $dispatch = $dispatchesByDate->get($date);
+            $plannedIds = collect($dispatch?->route_plan ?? [])
+                ->first(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId)['routes'] ?? [];
+            $plannedIds = collect($plannedIds)->flatMap(fn ($route) => $route['orders'] ?? [])
+                ->pluck('order_id')->map(fn ($id) => (int) $id)->filter()->unique()->values();
+            $dateOrders = Order::query()
+                ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
+                ->where('shipper_id', $shipperId)
+                ->whereNotIn('status', ['cancelled', 'canceled'])
+                ->where(fn ($query) => $query->whereDate('created_at', $date)
+                    ->when($plannedIds->isNotEmpty(), fn ($q) => $q->orWhereIn('id', $plannedIds)))
+                ->orderBy('daily_sequence')->orderBy('id')->get();
+            $history = $this->latestDeliveryScheduleHistoryForShipperOnDate($shipperId, $date);
+            // Compare the published plan only with orders which can still
+            // belong to a route. Completed orders outside this dispatch
+            // must not make the mobile app report a phantom change.
+            $currentRouteOrderIds = $dateOrders
+                ->filter(fn (Order $order) => $plannedIds->contains((int) $order->id)
+                    || in_array($order->status, $this->assignmentStatuses(), true))
+                ->pluck('id')->map(fn ($id) => (int) $id)->unique()->values();
+            $removedOrderIds = $plannedIds->diff($currentRouteOrderIds)->values();
+            $addedOrderIds = $currentRouteOrderIds->diff($plannedIds)->values();
+            $membershipChanged = $dispatch !== null
+                && ($removedOrderIds->isNotEmpty() || $addedOrderIds->isNotEmpty());
+            $confirmableOrders = $dateOrders
+                ->whereIn('status', $this->assignmentStatuses())
+                ->reject(fn (Order $order) => $this->orderWasDelivered($order))
+                ->values();
+            $orderIds = $confirmableOrders->pluck('id')->map(fn ($id) => (int) $id)->values();
+            $isCompleted = $plannedIds->isNotEmpty()
+                ? $this->areAllOrdersCompleted($plannedIds->all())
+                : ($dateOrders->isNotEmpty() && $dateOrders->every(
+                    fn (Order $order) => $this->orderWasDelivered($order)
+                ));
+            $snapshot = $this->buildDeliveryScheduleSnapshot($confirmableOrders);
+            $completedOrderIds = $dateOrders
+                ->filter(fn (Order $order) => $this->orderWasDelivered($order))
+                ->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $status = $isCompleted
+                ? 'completed'
+                : ($membershipChanged
+                ? 'changing'
+                : ($confirmableOrders->isEmpty()
+                ? match ($history?->action) {
+                    'schedule_confirmed' => 'confirmed',
+                    'schedule_rejected' => 'rejected',
+                    'schedule_created' => 'waiting',
+                    default => 'none',
+                }
+                    : $this->deliveryScheduleStatus(
+                        $history,
+                        $this->hashDeliveryScheduleSnapshot($snapshot),
+                        $snapshot,
+                        $completedOrderIds
+                    )));
+            if ($status === 'changed') {
+                $status = 'changing';
+            }
+            $overdueOrders = $dateOrders
+                ->where('status', Order::STATUS_OVERDUE_DELIVERY)
+                ->values();
+            // A delivery becoming overdue changes the schedule snapshot, but it
+            // is not a warehouse route change. Keep it as a separate state so
+            // the shipper is directed to Dispatch instead of Warehouse.
+            if (! $isCompleted && ! $membershipChanged && $overdueOrders->isNotEmpty()) {
+                $status = 'overdue';
+            }
+            $syncReason = null;
+            if (! $isCompleted && $confirmableOrders->isEmpty()) {
+                $status = 'invalid';
+                $syncReason = $plannedIds->isEmpty()
+                    ? 'Không tìm thấy dữ liệu lộ trình đã phát hành để đồng bộ.'
+                    : 'Các đơn trong lộ trình không còn hợp lệ để xác nhận nhưng chưa được ghi nhận hoàn tất. Vui lòng liên hệ Điều phối.';
+            }
+            $removedOrders = $removedOrderIds->isEmpty()
+                ? collect()
+                : Order::with('customer:id,name')->whereIn('id', $removedOrderIds)->get();
+
+            $dateOrders->each(function (Order $order): void {
+                $order->setAttribute('is_delivered_in_route', $this->orderWasDelivered($order));
+            });
+
+            return [
+                'date' => $date,
+                'id' => $history?->id,
+                'code' => $this->deliveryScheduleCode($shipperId, $date, $history),
+                'status' => $status,
+                'orders_count' => $dateOrders->count(),
+                'order_ids' => $orderIds,
+                'orders' => $dateOrders->values(),
+                'removed_orders' => $removedOrders->map(fn (Order $order) => [
+                    'id' => (int) $order->id,
+                    'code' => (string) ($order->code ?: '#'.$order->id),
+                    'customer_name' => (string) ($order->customer?->name ?? 'Khách hàng'),
+                ])->values(),
+                'added_orders' => $dateOrders->whereIn('id', $addedOrderIds)->map(fn (Order $order) => [
+                    'id' => (int) $order->id,
+                    'code' => (string) ($order->code ?: '#'.$order->id),
+                    'customer_name' => (string) ($order->customer?->name ?? 'Khách hàng'),
+                ])->values(),
+                'overdue_order_ids' => $overdueOrders->pluck('id')->map(fn ($id) => (int) $id)->values(),
+                'change_message' => ! $isCompleted && $membershipChanged
+                    ? 'Lộ trình đang bị thay đổi. Đang chờ Kho Gửi xác nhận và gửi lại cho bạn.'
+                    : null,
+                'sync_reason' => $syncReason,
+                'is_completed' => $isCompleted,
+                'amount_earned' => (float) $dateOrders
+                    ->filter(fn (Order $order) => (bool) ($order->charge_shipping_fee ?? true))
+                    ->sum('shipping_fee'),
+            ];
+        })->reject(fn (array $route) => in_array($route['status'], ['revoked', 'invalid'], true)
+            || (int) $route['orders_count'] === 0)->values();
+
+        return $this->ok($routes);
+    }
+
+    public function confirmDeliverySchedule(Request $request): JsonResponse
+    {
+        return $this->recordDeliveryScheduleDecision($request, 'schedule_confirmed', 'Da xac nhan lo trinh giao hang');
+    }
+
+    public function rejectDeliverySchedule(Request $request): JsonResponse
+    {
+        return $this->recordDeliveryScheduleDecision($request, 'schedule_rejected', 'Da tu choi lo trinh giao hang');
+    }
+
+    public function acceptOrder(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        Auth::setUser($request->user());
+        $request->headers->set('Accept', 'application/json');
+        $response = app(ShipperDashboardController::class)->accept($order);
+        $payload = $response instanceof JsonResponse ? $response->getData(true) : [];
+
+        if ($response instanceof JsonResponse && $response->getStatusCode() >= 400) {
+            return $this->fail((string) ($payload['message'] ?? 'Khong the nhan don.'), $response->getStatusCode());
+        }
+
+        return $this->ok($payload['order'] ?? null, (string) ($payload['message'] ?? 'Nhan don thanh cong'));
+    }
+
+    public function warehouseTransfers(Request $request): JsonResponse
+    {
+        $this->bindWebAuth($request);
+
+        return app(ShipperDashboardController::class)->apiWarehouseTransfers($request);
+    }
+
+    public function warehouseTransferDetail(Request $request, WarehouseDispatchSlip $dispatchSlip): JsonResponse
+    {
+        $this->bindWebAuth($request);
+
+        return app(ShipperDashboardController::class)->apiWarehouseTransferShow($request, $dispatchSlip);
+    }
+
+    public function pickupWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
+    {
+        $this->bindWebAuth($request);
+
+        return app(ShipperDashboardController::class)->pickupWarehouseTransfer($request, $transfer);
+    }
+
+    public function deliverWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
+    {
+        $this->bindWebAuth($request);
+
+        return app(ShipperDashboardController::class)->deliverWarehouseTransfer($request, $transfer);
+    }
+
+    public function rollbackWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
+    {
+        $this->bindWebAuth($request);
+
+        return app(ShipperDashboardController::class)->rollbackWarehouseTransfer($request, $transfer);
+    }
+
+    public function resumeWarehouseTransfer(Request $request, WarehouseTransfer $transfer)
+    {
+        $this->bindWebAuth($request);
+
+        return app(ShipperDashboardController::class)->resumeWarehouseTransfer($request, $transfer);
+    }
+
+    public function warehouses(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+
+        return $this->ok(Warehouse::query()->orderBy('name')->get(['id', 'name']));
+    }
+
+    public function returnOrder(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $user = $request->user();
+        if ((int) $order->shipper_id !== (int) $user->id && ! $user->hasRole('admin')) {
+            return $this->fail('Khong co quyen thao tac don nay.', 403);
+        }
+        if ($order->status !== Order::STATUS_DELIVERING) {
+            return $this->fail('Don khong dang giao.', 422);
+        }
+
+        $validated = $request->validate([
+            'return_reason' => ['required', 'string', 'max:500'],
+            'return_note' => ['nullable', 'string', 'max:500'],
+            'return_warehouse_id' => ['required', 'exists:warehouses,id'],
+        ]);
+        $warehouse = Warehouse::query()->findOrFail((int) $validated['return_warehouse_id']);
+        $note = trim((string) ($validated['return_note'] ?? ''));
+        $note = trim($note.' | Kho trả về: '.$warehouse->name, ' |');
+
+        $orderReturn = DB::transaction(function () use ($order, $user, $validated, $warehouse, $note) {
+            $updates = [
+                'status' => Order::STATUS_RETURNING,
+                'return_reason' => $validated['return_reason'],
+                'shipper_note' => $note,
+            ];
+            if (Schema::hasColumn('orders', 'return_warehouse_id')) {
+                $updates['return_warehouse_id'] = $warehouse->id;
+            }
+            if (Schema::hasColumn('orders', 'warehouse_id')) {
+                $updates['warehouse_id'] = $warehouse->id;
+            }
+            $order->update($updates);
+            $order->loadMissing('items');
+
+            $orderReturn = OrderReturn::query()->firstOrCreate(
+                ['order_id' => $order->id, 'status' => 'pending_warehouse'],
+                [
+                    'customer_id' => $order->customer_id,
+                    'warehouse_id' => $warehouse->id,
+                    'created_by' => $user->id,
+                    'reason' => $validated['return_reason'],
+                    'return_scope' => 'full',
+                    'refund_amount' => (float) ($order->total ?? 0),
+                    'note' => $note,
+                ]
+            );
+            $orderReturn->update(['warehouse_id' => $warehouse->id, 'reason' => $validated['return_reason'], 'note' => $note]);
+
+            if ($orderReturn->returnItems()->count() === 0) {
+                foreach ($order->items as $item) {
+                    ReturnItem::query()->create([
+                        'order_return_id' => $orderReturn->id,
+                        'product_variant_id' => $item->product_variant_id,
+                        'quantity' => (int) $item->quantity,
+                        'condition' => 'good',
+                    ]);
+                }
+            }
+
+            OrderHistory::query()->create([
+                'order_id' => $order->id,
+                'action' => 'return_request',
+                'user_id' => $user->id,
+                'role' => 'shipper',
+                'status_before' => Order::STATUS_DELIVERING,
+                'status_after' => Order::STATUS_RETURNING,
+                'note' => 'Shipper gửi trả hàng qua mobile: '.$validated['return_reason'].' | Kho trả về: '.$warehouse->name,
+            ]);
+
+            return $orderReturn;
+        });
+
+        return $this->ok(['return_id' => (int) $orderReturn->id], 'Da tao phieu tra hang cho kho tiep nhan');
+    }
+
+    public function assignOrder(Request $request, Order $order, User $shipper): JsonResponse
+    {
+        $this->ensureManagerShipperRole($request);
+        if (! in_array($order->status, $this->assignmentStatuses(), true)) {
+            return $this->fail('Don chua o trang thai co the dieu phoi.', 422);
+        }
+        if (! ($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper'))) {
+            return $this->fail('Nguoi dung khong phai shipper.', 422);
+        }
+        $previous = $order->shipper;
+        $order->update(['shipper_id' => $shipper->id]);
+        if ($order->customer && ! $order->customer->default_shipper_id) {
+            $order->customer->update(['default_shipper_id' => $shipper->id]);
+        }
+        OrderHistory::query()->create([
+            'order_id' => $order->id,
+            'action' => $previous ? 'shipper_reassigned' : 'shipper_assigned',
+            'user_id' => $request->user()->id,
+            'role' => 'manager_shipper',
+            'status_before' => $order->status,
+            'status_after' => $order->status,
+            'note' => 'Điều phối mobile: '.($previous?->name ? $previous->name.' -> ' : '').$shipper->name,
+        ]);
+
+        return $this->ok(null, 'Da dieu phoi don cho '.$shipper->name);
+    }
+
+    public function unassignOrder(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureManagerShipperRole($request);
+        if (! in_array($order->status, $this->assignmentStatuses(), true) || ! $order->shipper_id) {
+            return $this->fail('Don khong the go dieu phoi.', 422);
+        }
+        $previous = $order->shipper;
+        $order->update(['shipper_id' => null]);
+        OrderHistory::query()->create([
+            'order_id' => $order->id,
+            'action' => 'shipper_unassigned',
+            'user_id' => $request->user()->id,
+            'role' => 'manager_shipper',
+            'status_before' => $order->status,
+            'status_after' => $order->status,
+            'note' => 'Gỡ điều phối mobile khỏi '.($previous?->name ?? 'shipper'),
+        ]);
+
+        return $this->ok(null, 'Da go dieu phoi don');
+    }
+
+    public function updateCustomerDefaultShipper(Request $request, Customer $customer): JsonResponse
+    {
+        $this->ensureManagerShipperRole($request);
+        $validated = $request->validate([
+            'shipper_id' => ['required', 'integer', 'exists:users,id'],
+            'transfer_pending_orders' => ['nullable', 'boolean'],
+        ]);
+        $shipper = User::query()->findOrFail((int) $validated['shipper_id']);
+        if (! ($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper'))) {
+            return $this->fail('Nguoi dung khong phai shipper.', 422);
+        }
+
+        $previousId = $customer->default_shipper_id ? (int) $customer->default_shipper_id : null;
+        DB::transaction(function () use ($request, $customer, $shipper, $previousId): void {
+            $customer->update(['default_shipper_id' => $shipper->id]);
+            if (! $request->boolean('transfer_pending_orders') || ! $previousId || $previousId === (int) $shipper->id) {
+                return;
+            }
+            Order::query()
+                ->where('customer_id', $customer->id)
+                ->where('shipper_id', $previousId)
+                ->whereIn('status', $this->assignmentStatuses())
+                ->update(['shipper_id' => $shipper->id]);
+        });
+
+        return $this->ok(null, 'Da cap nhat shipper co dinh cho khach hang');
+    }
+
+    public function createDeliverySchedules(Request $request): JsonResponse
+    {
+        $this->ensureManagerShipperRole($request);
+        $validated = $request->validate([
+            'date' => ['nullable', 'date'],
+            'notes' => ['nullable', 'string', 'max:500'],
+        ]);
+        $date = Carbon::parse($validated['date'] ?? now()->toDateString())->toDateString();
+        $groups = Order::query()
+            ->whereNotNull('shipper_id')
+            ->whereIn('status', $this->assignmentStatuses())
+            ->whereDate('created_at', $date)
+            ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('daily_sequence')
+            ->orderBy('delivery_time')
+            ->orderBy('created_at')
+            ->get()
+            ->groupBy('shipper_id');
+
+        if ($groups->isEmpty()) {
+            return $this->fail('Khong co don da gan shipper de tao lich trinh.', 422);
+        }
+
+        $count = 0;
+        foreach ($groups as $shipperId => $orders) {
+            if (app(ShipperAssignmentService::class)->publishDailySchedule(
+                (int) $shipperId,
+                $date,
+                (int) $request->user()->id,
+                'manager_shipper',
+                $validated['notes'] ?? null,
+            )) {
+                $count += $orders->count();
+            }
+        }
+
+        return $this->ok(['orders_count' => $count], 'Da gui lich trinh giao hang');
+    }
+
+    public function myOrders(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $userId = (int) $request->user()->id;
+
+        $orders = Order::query()
+            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
+            ->where('shipper_id', $userId)
+            ->where(function ($query) {
+                $query->whereIn('status', [Order::STATUS_DELIVERING, 'delivered', Order::STATUS_RETURNING, 'completed'])
+                    ->orWhere(function ($readyQuery) {
+                        $readyQuery->where('status', Order::STATUS_READY_TO_SHIP);
+                        $this->constrainConfirmedDeliverySchedule($readyQuery);
+                    });
+            })
+            ->latest('updated_at')
+            ->paginate(20);
+
+        return $this->paginated($orders);
+    }
+
+    public function history(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $userId = (int) $request->user()->id;
+
+        $orders = Order::query()
+            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
+            ->where('shipper_id', $userId)
+            ->whereIn('status', ['delivered', 'completed', Order::STATUS_RETURNING, Order::STATUS_RETURNED_COMPLETED])
+            ->latest('updated_at')
+            ->paginate(20);
+
+        return $this->paginated($orders);
+    }
+
+    public function customers(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $userId = (int) $request->user()->id;
+        $date = Carbon::parse($request->query('date', now()->toDateString()))->toDateString();
+        $sort = in_array($request->query('sort'), ['name', 'delivery_time', 'orders_count', 'total'], true)
+            ? (string) $request->query('sort')
+            : 'delivery_time';
+        $direction = $request->query('direction') === 'desc' ? 'desc' : 'asc';
+
+        $customers = Customer::query()
+            ->where(fn ($query) => $query->where('default_shipper_id', $userId)->orWhereNull('default_shipper_id'))
+            ->whereHas('orders', fn ($query) => $query->where('shipper_id', $userId)->forDeliveryDate($date))
+            ->withCount(['orders as orders_count' => fn ($query) => $query->where('shipper_id', $userId)->forDeliveryDate($date)])
+            ->withSum(['orders as orders_total' => fn ($query) => $query->where('shipper_id', $userId)->forDeliveryDate($date)], 'total')
+            ->when($sort === 'name', fn ($query) => $query->orderBy('name', $direction))
+            ->when($sort === 'delivery_time', fn ($query) => $query->orderByRaw("CASE WHEN delivery_time IS NULL OR delivery_time = '' THEN 1 ELSE 0 END")->orderBy('delivery_time', $direction))
+            ->when($sort === 'orders_count', fn ($query) => $query->orderBy('orders_count', $direction))
+            ->when($sort === 'total', fn ($query) => $query->orderBy('orders_total', $direction))
+            ->orderBy('name')
+            ->get();
+
+        return $this->ok([
+            'date' => $date,
+            'fixed' => $customers->where('default_shipper_id', $userId)->values()->map(fn (Customer $customer) => $this->shipperCustomerPayload($customer)),
+            'unassigned' => $customers->whereNull('default_shipper_id')->values()->map(fn (Customer $customer) => $this->shipperCustomerPayload($customer)),
+        ]);
+    }
+
+    public function deliveryStatistics(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $fromDate = Carbon::parse($request->query('from_date', now()->startOfWeek()->toDateString()))->startOfDay();
+        $toDate = Carbon::parse($request->query('to_date', now()->endOfWeek()->toDateString()))->startOfDay();
+        if ($fromDate->gt($toDate)) {
+            [$fromDate, $toDate] = [$toDate, $fromDate];
+        }
+        if ($fromDate->diffInDays($toDate) > 31) {
+            $toDate = $fromDate->copy()->addDays(31);
+        }
+
+        $dates = collect();
+        for ($date = $fromDate->copy(); $date->lte($toDate); $date->addDay()) {
+            $dates->push($date->toDateString());
+        }
+
+        $orders = Order::query()
+            ->with('customer:id,name')
+            ->where('shipper_id', (int) $request->user()->id)
+            ->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED])
+            ->whereDate('delivery_date', '>=', $fromDate->toDateString())
+            ->whereDate('delivery_date', '<=', $toDate->toDateString())
+            ->get();
+
+        return $this->ok([
+            'from_date' => $fromDate->toDateString(),
+            'to_date' => $toDate->toDateString(),
+            'dates' => $dates,
+            'rows' => $orders->groupBy('customer_id')->map(function ($customerOrders) use ($dates) {
+                return [
+                    'customer_id' => (int) $customerOrders->first()->customer_id,
+                    'customer_name' => $customerOrders->first()->customer?->name ?? 'Khách hàng',
+                    'days' => $dates->mapWithKeys(fn ($date) => [
+                        $date => $customerOrders->where(fn ($order) => optional($order->delivery_date)->toDateString() === $date)->count(),
+                    ]),
+                    'total' => $customerOrders->count(),
+                ];
+            })->sortBy('customer_name')->values(),
+        ]);
+    }
+
+    private function shipperCustomerPayload(Customer $customer): array
+    {
+        return [
+            'id' => (int) $customer->id,
+            'name' => (string) $customer->name,
+            'phone' => (string) ($customer->phone ?? ''),
+            'address' => (string) ($customer->address ?? ''),
+            'delivery_time' => (string) ($customer->delivery_time ?? ''),
+            'is_fixed' => $customer->default_shipper_id !== null,
+            'orders_count' => (int) ($customer->orders_count ?? 0),
+            'orders_total' => (float) ($customer->orders_total ?? 0),
+        ];
+    }
+
+    public function updateStatus(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $user = $request->user();
+        if ((int) $order->shipper_id !== (int) $user->id && ! $user->hasRole('admin')) {
+            return $this->fail('Khong co quyen thao tac don nay', 403);
+        }
+
+        $validated = $request->validate([
+            'status' => ['required', 'in:delivered,returning'],
+            'collected_amount' => ['nullable', 'numeric', 'min:0'],
+            'return_reason' => ['nullable', 'string', 'max:500'],
+            'shipper_note' => ['nullable', 'string', 'max:1000'],
+            'lat' => ['nullable', 'numeric'],
+            'lng' => ['nullable', 'numeric'],
+        ]);
+
+        $before = (string) $order->status;
+        $nextStatus = $validated['status'] === 'returning' ? Order::STATUS_RETURNING : 'delivered';
+
+        $order->update([
+            'status' => $nextStatus,
+            'collected_amount' => $validated['collected_amount'] ?? $order->collected_amount,
+            'return_reason' => $validated['return_reason'] ?? $order->return_reason,
+            'shipper_note' => $validated['shipper_note'] ?? $order->shipper_note,
+            'delivered_at' => $nextStatus === 'delivered' ? now() : $order->delivered_at,
+        ]);
+
+        OrderHistory::query()->create([
+            'order_id' => $order->id,
+            'action' => 'mobile_update_delivery_status',
+            'user_id' => $user->id,
+            'role' => 'shipper',
+            'status_before' => $before,
+            'status_after' => $nextStatus,
+            'note' => 'Mobile update status. GPS: '.($validated['lat'] ?? '-').','.($validated['lng'] ?? '-'),
+        ]);
+
+        return $this->ok([
+            'order_id' => (int) $order->id,
+            'status' => $nextStatus,
+        ], 'Cap nhat trang thai thanh cong');
+    }
+
+    public function completeDelivery(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $user = $request->user();
+        if ((int) $order->shipper_id !== (int) $user->id && ! $user->hasRole('admin')) {
+            return $this->fail('Khong co quyen thao tac don nay', 403);
+        }
+
+        Auth::setUser($user);
+        $request->headers->set('Accept', 'application/json');
+        app(ShipperDashboardController::class)->markDelivered($request, $order);
+
+        $order->refresh();
+        $statusBefore = (string) $order->status;
+        $order->update(['status' => Order::STATUS_COMPLETED]);
+
+        OrderHistory::query()->create([
+            'order_id' => $order->id,
+            'action' => 'mobile_complete_delivery',
+            'user_id' => $user->id,
+            'role' => 'shipper',
+            'status_before' => $statusBefore,
+            'status_after' => Order::STATUS_COMPLETED,
+            'note' => 'Shipper hoàn tất giao hàng trên ứng dụng mobile.',
+        ]);
+
+        return $this->ok([
+            'order_id' => (int) $order->id,
+            'status' => Order::STATUS_COMPLETED,
+        ], 'Hoan tat giao hang thanh cong');
+    }
+
+    public function uploadProof(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $user = $request->user();
+        if ((int) $order->shipper_id !== (int) $user->id && ! $user->hasRole('admin')) {
+            return $this->fail('Khong co quyen upload anh cho don nay', 403);
+        }
+
+        $validated = $request->validate([
+            'proof_image' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:5120'],
+        ]);
+
+        $path = $validated['proof_image']->store('mobile/proof-delivery', 'public');
+
+        $proofImages = $order->proof_images ?: [];
+        $proofImages[] = $path;
+
+        $order->update([
+            'delivered_image_path' => $path,
+            'proof_images' => $proofImages,
+        ]);
+
+        return $this->ok([
+            'path' => $path,
+            'url' => Storage::disk('public')->url($path),
+        ], 'Upload anh thanh cong');
+    }
+
+    public function updateLocation(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+
+        $validated = $request->validate([
+            'lat' => ['required', 'numeric', 'between:-90,90'],
+            'lng' => ['required', 'numeric', 'between:-180,180'],
+            'accuracy' => ['nullable', 'numeric', 'min:0'],
+            'recorded_at' => ['nullable', 'date'],
+        ]);
+
+        MobileLocationPing::query()->create([
+            'user_id' => (int) $request->user()->id,
+            'lat' => (float) $validated['lat'],
+            'lng' => (float) $validated['lng'],
+            'accuracy' => isset($validated['accuracy']) ? (float) $validated['accuracy'] : null,
+            'recorded_at' => $validated['recorded_at'] ?? now(),
+        ]);
+
+        return $this->ok(null, 'GPS updated');
+    }
+
+    public function notifications(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $limit = min(50, max(1, (int) $request->query('limit', 20)));
+
+        $items = $request->user()
+            ->notifications()
+            ->latest()
+            ->limit($limit)
+            ->get()
+            ->map(fn ($n) => [
+                'id' => (string) $n->id,
+                'title' => (string) ($n->data['title'] ?? 'Thong bao'),
+                'message' => (string) ($n->data['message'] ?? ''),
+                'read_at' => optional($n->read_at)->toIso8601String(),
+                'created_at' => optional($n->created_at)->toIso8601String(),
+            ])
+            ->values();
+
+        return $this->ok($items);
+    }
+
+    private function ensureShipperRole(Request $request): void
+    {
+        $user = $request->user();
+        if (! $user || ! ($user->hasRole('shipper') || $user->hasRole('ship') || $user->hasRole('manager_shipper') || $user->hasRole('admin'))) {
+            abort(403, 'Role khong duoc phep truy cap API shipper');
+        }
+    }
+
+    private function bindWebAuth(Request $request): void
+    {
+        $user = $request->user();
+        Auth::setUser($user);
+        Auth::guard('web')->setUser($user);
+        $request->setUserResolver(fn () => $user);
+        $request->headers->set('Accept', 'application/json');
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
+    }
+
+    private function ensureManagerShipperRole(Request $request): void
+    {
+        $user = $request->user();
+        if (! $user || ! ($user->hasRole('manager_shipper') || $user->hasRole('admin'))) {
+            abort(403, 'Role khong duoc phep dieu phoi shipper');
+        }
+    }
+
+    private function recordDeliveryScheduleDecision(Request $request, string $historyAction, string $successMessage): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $user = $request->user();
+        $userId = (int) $user->id;
+        $selectedDate = $this->scheduleDate($request);
+
+        $rules = [
+            'order_ids' => ['required', 'array', 'min:1'],
+            'order_ids.*' => ['integer', 'exists:orders,id'],
+        ];
+
+        if ($historyAction === 'schedule_rejected') {
+            $rules['reason'] = ['required', 'string', 'max:500'];
+        }
+
+        $validated = $request->validate($rules);
+
+        $requestedOrderIds = array_map('intval', $validated['order_ids']);
+        $orders = $this->deliveryScheduleOrdersForShipper($userId, $selectedDate)
+            ->whereIn('id', $requestedOrderIds)
+            ->get();
+
+        if ($orders->count() !== count(array_unique($requestedOrderIds))) {
+            $validIds = $orders->pluck('id')->map(fn ($id) => (int) $id);
+            $removed = Order::query()->with('customer:id,name')
+                ->whereIn('id', collect($requestedOrderIds)->diff($validIds))
+                ->get()
+                ->map(fn (Order $order) => ($order->code ?: '#'.$order->id).' - '.($order->customer?->name ?? 'Khách hàng'));
+
+            return $this->fail(
+                'Lộ trình đang bị thay đổi và chưa được gửi lại. Đơn đã bị loại: '.($removed->implode(', ') ?: 'không xác định').'. Vui lòng chờ Kho Gửi xác nhận lộ trình mới.',
+                409,
+                ['removed_orders' => $removed->values()]
+            );
+        }
+
+        $snapshot = $this->buildDeliveryScheduleSnapshot($orders);
+        $snapshotHash = $this->hashDeliveryScheduleSnapshot($snapshot);
+        $latestHistory = $this->latestDeliveryScheduleHistoryForShipperOnDate($userId, $selectedDate);
+        if ($this->deliveryScheduleStatus($latestHistory, $snapshotHash, $snapshot) !== 'waiting') {
+            return $this->fail(
+                'Lộ trình đang bị thay đổi hoặc chưa được Kho Gửi gửi lại. Vui lòng chờ lộ trình mới trước khi xác nhận.',
+                409
+            );
+        }
+
+        $decisionNote = $historyAction === 'schedule_rejected'
+            ? 'Shipper '.$user->name.' tu choi lo trinh giao hang qua mobile app. Ly do: '.trim((string) $validated['reason'])
+            : 'Shipper '.$user->name.' xac nhan lo trinh giao hang qua mobile app.';
+
+        DB::transaction(function () use ($orders, $userId, $historyAction, $snapshotHash, $snapshot, $decisionNote): void {
+            foreach ($orders as $order) {
+                OrderHistory::query()->create([
+                    'order_id' => $order->id,
+                    'action' => $historyAction,
+                    'user_id' => $userId,
+                    'role' => 'shipper',
+                    'status_before' => $order->status,
+                    'status_after' => $order->status,
+                    'note' => $decisionNote,
+                    'schedule_snapshot_hash' => $snapshotHash,
+                    'schedule_snapshot' => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ]);
+            }
+        });
+
+        return $this->ok(null, $successMessage);
+    }
+
+    private function scheduleDate(Request $request, ?int $shipperId = null, bool $preferLatestPublished = false): string
+    {
+        if ($request->filled('date')) {
+            return Carbon::parse($request->input('date'))->toDateString();
+        }
+
+        if ($preferLatestPublished && $shipperId) {
+            $latestPublishedDate = ShipperDispatchHistory::query()
+                ->whereDate('schedule_date', '<=', Carbon::today()->toDateString())
+                ->whereNull('revoked_at')
+                ->orderByDesc('schedule_date')
+                ->orderByDesc('version')
+                ->orderByDesc('id')
+                ->get()
+                ->first(fn (ShipperDispatchHistory $dispatch) => collect($dispatch->route_plan ?? [])
+                    ->contains(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId))
+                ?->schedule_date?->toDateString();
+
+            if ($latestPublishedDate) {
+                return $latestPublishedDate;
+            }
+        }
+
+        return Carbon::today()->toDateString();
+    }
+
+    private function deliveryScheduleOrdersForShipper(int $shipperId, string $selectedDate)
+    {
+        $plannedOrderIds = $this->plannedOrderIdsForShipperOnDate($shipperId, $selectedDate);
+
+        return Order::query()
+            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
+            ->where('shipper_id', $shipperId)
+            ->whereIn('status', $this->assignmentStatuses())
+            ->whereDoesntHave('histories', fn ($history) => $history->whereIn('action', $this->deliveryCompletionActions()))
+            ->where(function ($dateQuery) use ($selectedDate, $plannedOrderIds): void {
+                $dateQuery->whereDate('created_at', $selectedDate);
+                if ($plannedOrderIds !== []) {
+                    $dateQuery->orWhereIn('id', $plannedOrderIds);
+                }
+            })
+            ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('daily_sequence', 'asc')
+            ->orderBy('delivery_time', 'asc')
+            ->orderBy('created_at', 'asc')
+            ->orderBy('id', 'asc');
+    }
+
+    private function assignmentStatuses(): array
+    {
+        return [
+            Order::STATUS_OVERDUE_DELIVERY,
+            Order::STATUS_APPROVED,
+            Order::STATUS_READY_TO_PACK,
+            Order::STATUS_PACKING,
+            Order::STATUS_PACKED,
+            Order::STATUS_READY_TO_SHIP,
+            Order::STATUS_DELIVERING,
+            Order::STATUS_SHIPPING,
+            Order::STATUS_IN_DELIVERY,
+        ];
+    }
+
+    private function areAllOrdersCompleted(array $orderIds): bool
+    {
+        $orderIds = collect($orderIds)->map(fn ($id) => (int) $id)->filter()->unique()->values();
+        if ($orderIds->isEmpty()) {
+            return false;
+        }
+
+        $completedIds = Order::query()
+            ->whereIn('id', $orderIds->all())
+            ->where(function ($query): void {
+                $query->whereIn('status', [
+                    Order::STATUS_DELIVERED,
+                    Order::STATUS_COMPLETED,
+                    Order::STATUS_RETURNED_COMPLETED,
+                ])->orWhereHas('histories', fn ($history) => $history->whereIn('action', $this->deliveryCompletionActions()));
+            })
+            ->pluck('id')->map(fn ($id) => (int) $id)->unique();
+
+        return $orderIds->diff($completedIds)->isEmpty();
+    }
+
+    private function orderWasDelivered(Order $order): bool
+    {
+        if (in_array($order->status, [
+            Order::STATUS_DELIVERED,
+            Order::STATUS_COMPLETED,
+            Order::STATUS_RETURNED_COMPLETED,
+        ], true)) {
+            return true;
+        }
+
+        if ($order->relationLoaded('histories')) {
+            return $order->histories->contains(
+                fn (OrderHistory $history) => in_array($history->action, $this->deliveryCompletionActions(), true)
+            );
+        }
+
+        return $order->histories()->whereIn('action', $this->deliveryCompletionActions())->exists();
+    }
+
+    private function deliveryCompletionActions(): array
+    {
+        return ['delivered', 'mobile_delivered', 'shipper_delivered_bulk', 'mobile_complete_delivery'];
+    }
+
+    private function buildDeliveryScheduleSnapshot($orders): array
+    {
+        return $orders->map(function ($order) {
+            return [
+                'order_id' => (int) $order->id,
+                'delivery_date' => optional($order->delivery_date)->toDateString(),
+                'delivery_time' => $order->delivery_time,
+                'delivery_time_note' => $order->delivery_time_note ?: $order->customer?->delivery_time_note,
+            ];
+        })->sortBy('order_id')->values()->all();
+    }
+
+    private function hashDeliveryScheduleSnapshot(array $snapshot): string
+    {
+        return hash('sha256', json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    private function latestDeliveryScheduleHistoryForShipperOnDate(int $shipperId, string $selectedDate): ?OrderHistory
+    {
+        $orderIds = collect($this->plannedOrderIdsForShipperOnDate($shipperId, $selectedDate))
+            ->merge(Order::query()->where('shipper_id', $shipperId)->whereDate('created_at', $selectedDate)->pluck('id'))
+            ->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
+        if ($orderIds === []) {
+            return null;
+        }
+
+        return OrderHistory::query()
+            ->whereIn('order_id', $orderIds)
+            ->whereIn('order_histories.action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected', 'schedule_revoked'])
+            ->orderByDesc('order_histories.created_at')
+            ->orderByDesc('order_histories.id')
+            ->select('order_histories.*')
+            ->first();
+    }
+
+    private function plannedOrderIdsForShipperOnDate(int $shipperId, string $selectedDate): array
+    {
+        $dispatch = ShipperDispatchHistory::query()
+            ->whereDate('schedule_date', $selectedDate)
+            ->whereNull('revoked_at')
+            ->orderByDesc('version')->orderByDesc('id')->first();
+        $plan = collect($dispatch?->route_plan ?? [])
+            ->first(fn ($item) => (int) ($item['shipper_id'] ?? 0) === $shipperId);
+
+        return collect($plan['routes'] ?? [])->flatMap(fn ($route) => $route['orders'] ?? [])
+            ->pluck('order_id')->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
+    }
+
+    private function deliveryScheduleStatus(
+        ?OrderHistory $latestHistory,
+        string $currentSnapshotHash,
+        array $currentSnapshot = [],
+        array $ignoredOrderIds = []
+    ): string {
+        if (! $latestHistory) {
+            return 'none';
+        }
+
+        if ($latestHistory->action === 'schedule_revoked') {
+            return 'revoked';
+        }
+
+        if ($latestHistory->action === 'schedule_confirmed' && $latestHistory->schedule_snapshot_hash === $currentSnapshotHash) {
+            return 'confirmed';
+        }
+
+        if ($latestHistory->action === 'schedule_created' && $latestHistory->schedule_snapshot_hash === $currentSnapshotHash) {
+            return 'waiting';
+        }
+
+        $savedSnapshot = json_decode((string) $latestHistory->schedule_snapshot, true);
+        $sameRoute = is_array($savedSnapshot) && $currentSnapshot !== []
+            && $this->normalizeDeliveryScheduleSnapshot($savedSnapshot, $ignoredOrderIds)
+                === $this->normalizeDeliveryScheduleSnapshot($currentSnapshot, $ignoredOrderIds);
+        if ($latestHistory->action === 'schedule_confirmed' && $sameRoute) {
+            return 'confirmed';
+        }
+
+        if ($latestHistory->action === 'schedule_rejected' && $sameRoute) {
+            return 'rejected';
+        }
+
+        if ($latestHistory->action === 'schedule_created' && $sameRoute) {
+            return 'waiting';
+        }
+
+        if ($latestHistory->action === 'schedule_rejected' && $latestHistory->schedule_snapshot_hash === $currentSnapshotHash) {
+            return 'rejected';
+        }
+
+        return 'changed';
+    }
+
+    private function normalizeDeliveryScheduleSnapshot(array $snapshot, array $ignoredOrderIds = []): array
+    {
+        return collect($snapshot)->filter(fn ($order) => is_array($order)
+            && (int) ($order['order_id'] ?? 0) > 0
+            && ! in_array((int) $order['order_id'], $ignoredOrderIds, true))->map(fn (array $order) => [
+                'order_id' => (int) ($order['order_id'] ?? 0),
+                'delivery_date' => $order['delivery_date'] ?? null,
+                'delivery_time' => $order['delivery_time'] ?? null,
+            ])->sortBy('order_id')->values()->all();
+    }
+
+    private function constrainConfirmedDeliverySchedule($query): void
+    {
+        $query->whereExists(function ($historyQuery) {
+            $historyQuery->selectRaw('1')
+                ->from('order_histories as latest_schedule_history')
+                ->whereColumn('latest_schedule_history.order_id', 'orders.id')
+                ->where('latest_schedule_history.action', 'schedule_confirmed')
+                ->whereRaw(
+                    'latest_schedule_history.id = (
+                        select oh2.id
+                        from order_histories as oh2
+                        where oh2.order_id = orders.id
+                          and oh2.action in ("schedule_created", "schedule_confirmed", "schedule_rejected")
+                        order by oh2.created_at desc, oh2.id desc
+                        limit 1
+                    )'
+                );
+        });
+    }
+
+    private function constrainNoActiveWarehouseTransfer($query): void
+    {
+        $query->whereDoesntHave('warehouseTransfers', function ($transferQuery) {
+            $transferQuery->whereIn('status', [
+                WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                WarehouseTransfer::STATUS_IN_TRANSIT,
+                WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+            ]);
+        });
+    }
+
+    private function orderHasConfirmedDeliverySchedule(Order $order): bool
+    {
+        return OrderHistory::query()
+            ->where('order_id', $order->id)
+            ->whereIn('action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
+            ->latest('created_at')
+            ->latest('id')
+            ->value('action') === 'schedule_confirmed';
+    }
+
+    private function deliveryScheduleCode(int $shipperId, string $selectedDate, ?OrderHistory $history): string
+    {
+        $suffix = $history?->schedule_snapshot_hash
+            ? strtoupper(substr((string) $history->schedule_snapshot_hash, 0, 6))
+            : str_pad((string) $shipperId, 3, '0', STR_PAD_LEFT);
+
+        return 'LT-'.Carbon::parse($selectedDate)->format('Ymd').'-'.$suffix;
+    }
+
+    private function attachDeliveryScheduleMetadata($orders): void
+    {
+        $orderIds = $orders->pluck('id')->map(fn ($id) => (int) $id)->all();
+        if (empty($orderIds)) {
+            return;
+        }
+
+        $histories = OrderHistory::query()
+            ->whereIn('order_id', $orderIds)
+            ->whereIn('action', ['schedule_created', 'schedule_confirmed', 'schedule_rejected'])
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get()
+            ->groupBy('order_id')
+            ->map(fn ($items) => $items->first());
+
+        foreach ($orders as $order) {
+            $history = $histories->get($order->id);
+            if (! $history) {
+                continue;
+            }
+
+            $scheduleDate = optional($history->created_at)->toDateString() ?: Carbon::today()->toDateString();
+            $order->setAttribute('delivery_schedule', [
+                'id' => (int) $history->id,
+                'code' => $this->deliveryScheduleCode((int) $order->shipper_id, $scheduleDate, $history),
+                'status' => match ($history->action) {
+                    'schedule_confirmed' => 'confirmed',
+                    'schedule_rejected' => 'rejected',
+                    default => 'waiting',
+                },
+                'confirmed_at' => $history->action === 'schedule_confirmed'
+                    ? optional($history->created_at)->toIso8601String()
+                    : null,
+            ]);
+        }
+    }
+}

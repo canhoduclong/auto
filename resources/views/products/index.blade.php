@@ -1,0 +1,425 @@
+@extends('layouts.app', [
+    'menu' => 'product',
+])
+
+@section('content')
+<div class="content"  id="ProductList">
+<h2>{{ __('admin.product.list') }}</h2> 
+    @if (session('success'))
+        <div class="alert alert-success">
+            {{ session('success') }}
+        </div>
+    @endif
+    @if($errors->any())
+        <div class="alert alert-danger" role="alert">
+            <strong>Chưa nhập dữ liệu:</strong>
+            <ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul>
+        </div>
+    @endif
+    @if(auth()->user()?->isAdmin())
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                    <h5 class="mb-0">Nhập / xuất sản phẩm</h5>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a class="btn btn-outline-secondary" href="{{ route('products.import-template') }}">Tải file mẫu Excel</a>
+                        <a class="btn btn-outline-success" href="{{ route('products.export', request()->only('name', 'category_id', 'status_filter')) }}">Xuất Excel theo bộ lọc</a>
+                    </div>
+                </div>
+                <form method="POST" action="{{ route('products.import') }}" enctype="multipart/form-data" class="row g-2 align-items-end">
+                    @csrf
+                    <div class="col-md-5">
+                        <label for="productImportFile" class="form-label">File sản phẩm (.xlsx, .csv)</label>
+                        <input id="productImportFile" type="file" name="file" class="form-control" accept=".xlsx,.csv" required>
+                    </div>
+                    <div class="col-md-5">
+                        <label for="productImportMode" class="form-label">Cách nhập</label>
+                        <select id="productImportMode" name="mode" class="form-select">
+                            <option value="create" @selected(old('mode', 'create') === 'create')>Chỉ thêm mới</option>
+                            <option value="upsert" @selected(old('mode') === 'upsert')>Thêm mới hoặc cập nhật theo SKU</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Nhập sản phẩm</button></div>
+                </form>
+                <p class="small text-muted mb-0 mt-2">Mỗi dòng là một SKU; tối đa 2.000 dòng, 5 MB. File mẫu có hướng dẫn và danh mục. Xuất toàn bộ kết quả lọc, không giới hạn ở trang hiện tại. Nếu file có lỗi, toàn bộ lần nhập sẽ được hủy.</p>
+            </div>
+        </div>
+    @endif
+ <form action="{{ route('products.index') }}" method="GET" class="mb-4">
+        <div class="input-group">
+            <input type="text" name="name" class="form-control" placeholder="{{ __('admin.product.search_placeholder') }}" value="{{ request('name') }}">
+            <select name="category_id" class="form-control">
+                <option value="">{{ __('admin.product.category') }}</option>
+                @foreach($categories as $category)
+                    <option value="{{ $category->id }}" @if(request('category_id') == $category->id) selected @endif>
+                        {{ $category->name }}
+                    </option>
+                @endforeach
+            </select>
+            <select name="status_filter" class="form-control">
+                <option value="all" {{ ($statusFilter ?? 'active') === 'all' ? 'selected' : '' }}>Tất cả sản phẩm</option>
+                <option value="active" {{ ($statusFilter ?? 'active') === 'active' ? 'selected' : '' }}>Sản phẩm đang hoạt động</option>
+                <option value="deleted" {{ ($statusFilter ?? 'active') === 'deleted' ? 'selected' : '' }}>Sản phẩm đã xóa</option>
+            </select>
+            <div class="input-group-append">
+                <button class="btn btn-primary" type="submit">{{ __('admin.product.search') }}</button>
+            </div>
+        </div>
+    </form>
+    @can('create', App\Models\Product::class)
+        <a href="{{ route('products.create', ['page' => $page, 'perPage' => $perPage]) }}" class="btn btn-success mb-3">{{ __('admin.product.create') }}</a>
+    @endcan
+    @can('update', App\Models\Product::class)
+        <a href="{{ route('products.price-management.index') }}" class="btn btn-outline-primary mb-3">Quản lý giá sản phẩm</a>
+    @endcan
+    <div class="card"> 
+        <div class="card-header">
+            <h5 class="mb-0">{{ __('admin.product.list') }}</h5>
+        </div>
+
+        <div class="card-body d-flex justify-content-between"> 
+            <div class="filter-area">  
+                <div class="input-group">
+                    <input type="text" list-control="search-input" class="form-control" placeholder="{{ __('admin.product.name') }}"> 
+                    <a href="#" list-control="search-button" class="btn btn-secondary" >
+                        <span class="material-symbols-rounded" style="line-height: 1 !important;">{{ __('admin.product.search') }}</span> 
+                    </a>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <form method="GET" action="{{ route('products.index') }}" id="perPageForm" class="d-flex align-items-center">
+                    @foreach(request()->except('perPage', 'page') as $key => $value)
+                        <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                    @endforeach
+                    <label for="perPage" class="me-1 mb-0 small text-muted">Hiển thị:</label>
+                    <select name="perPage" id="perPage" class="form-select form-select-sm w-auto" onchange="document.getElementById('perPageForm').submit()">
+                        @foreach([10, 25, 50, 100] as $size)
+                            <option value="{{ $size }}" {{ $perPage == $size ? 'selected' : '' }}>{{ $size }}</option>
+                        @endforeach
+                    </select>
+                </form>
+                @can('create', App\Models\Product::class)
+                    <a class="btn btn-outline-success btn-sm" href="{{ route('products.create', ['page' => $page, 'perPage' => $perPage]) }}">
+                        <i class="ph-plus ph-sm me-2"></i>
+                        {{ __('admin.product.create') }}
+                    </a> 
+                @endcan
+            </div>
+
+        </div> 
+      
+        
+        <div class="product-container product-bdr">
+    <table class="table border product-list-table"> 
+        <thead class="product-header-bg">
+            <tr>
+                <th>
+                    <span class="d-flex align-items-center padding-cell pl-0">
+                        <span>{{ __('admin.product.image') }}</span>
+                    </span>
+                </th> 
+                        <th>Sản phẩm</th>
+                        <th width="100">Thứ tự</th>
+                        <th>Đơn vị tính</th>
+                        <th>Loại hình</th>
+                        <th class="text-end">Tỷ lệ pha lóc (%)</th>
+                        <th>Trạng thái</th>
+                
+                <th class="text-center" >
+                    <div class="padding-cell">
+                        {{ __('admin.product.actions') }} <i class="ph-arrow-circle-dowsn"></i>
+                    </div>
+                </th>
+            </tr>
+        </thead>
+        <tbody> 
+            @foreach($products as $key => $product)  
+            <tr id="product-row-{{ $product->id }}">
+                <td width="15%">
+                   
+                    @if($product->avatar && $product->avatar->media)
+                        <img src="{{ asset('storage/' . $product->avatar->media->file_path) }}" width="80" id="product-image-{{ $product->id }}">
+                    @else
+                        <span id="product-image-{{ $product->id }}">No image</span>
+                    @endif
+
+                </td>  
+                    <td>
+                        <a href="{{ route('products.edit', ['product' => $product->id, 'page' => $page, 'perPage' => $perPage]) }}" class="product-name" data-product-id="{{ $product->id }}">
+                            {{ $product->name }}
+                        </a>
+                        <div class="text-muted small">{{ $product->brand->name ?? '' }}{{ ($product->brand->name ?? '') && ($product->category->name ?? '') ? ' / ' : '' }}{{ $product->category->name ?? '' }}</div>
+                    </td>
+                    <td>
+                        @can('update', $product)
+                            <div class="product-sort-control" data-product-id="{{ $product->id }}">
+                                <input
+                                    type="number"
+                                    min="0"
+                                    max="999999"
+                                    step="1"
+                                    class="form-control form-control-sm product-sort-input"
+                                    value="{{ $product->sort_order ?? 0 }}"
+                                    data-original-value="{{ $product->sort_order ?? 0 }}"
+                                    aria-label="Thứ tự hiển thị {{ $product->name }}"
+                                >
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline-secondary product-sort-save"
+                                    title="Lưu thứ tự"
+                                    data-url="{{ route('products.sort-order', $product) }}"
+                                >
+                                    Lưu
+                                </button>
+                                <button
+                                    type="button"
+                                    class="btn btn-sm btn-outline-primary product-sort-top"
+                                    title="Đưa sản phẩm lên đầu danh sách"
+                                    data-url="{{ route('products.sort-order', $product) }}"
+                                >
+                                    Top
+                                </button>
+                            </div>
+                        @else
+                            <span class="badge bg-light text-dark border">{{ $product->sort_order ?? 0 }}</span>
+                        @endcan
+                    </td>
+                    <td>{{ $product->unit_label }}</td>
+                    <td>
+                        <span class="badge {{ ($product->product_type ?? \App\Models\Product::TYPE_WHOLE) === \App\Models\Product::TYPE_CUT ? 'bg-info text-dark' : 'bg-secondary' }}">
+                            {{ $product->product_type_label }}
+                        </span>
+                    </td>
+                <td class="text-end">
+                    @if($product->product_type === \App\Models\Product::TYPE_CUT)
+                        @if($product->cutting_percentage !== null)
+                            <span class="fw-semibold">{{ rtrim(rtrim(number_format((float) $product->cutting_percentage, 3, ',', '.'), '0'), ',') }}%</span>
+                        @else
+                            <span class="text-muted small">Chưa cấu hình</span>
+                        @endif
+                    @else
+                        <span class="text-muted">—</span>
+                    @endif
+                </td>
+                <td>
+                    @if($product->status)
+                        <span class="badge bg-success">Đang hoạt động</span>
+                    @else
+                        <span class="badge bg-danger">Đã xóa</span>
+                    @endif
+                </td>
+                <td>
+                    <div class="d-flex justify-content-end list-actions"> 
+                        
+                        @can('update', $product)
+                            <a href="{{ route('products.edit', ['product' => $product->id, 'page' => $page, 'perPage' => $perPage] ) }}" class="btn btn-warning btn-sm me-1">
+                                <i class="ph ph-pencil-line"></i>
+                            </a>
+                        @endcan
+    
+                         @can('update', $product)
+                            <a href="{{ route('products.edit', ['product' => $product->id, 'page' =>  request()->page, 'perPage' => $perPage ]) }}" class="btn btn-primary btn-sm">Sửa</a>
+                        @endcan
+
+                        @can('update', $product)
+                            <a href="{{ route('products.price-management.show', $product) }}" class="btn btn-outline-info btn-sm ms-1">Cập nhật giá</a>
+                        @endcan
+
+                        @can('update', $product)
+                            @if(($product->product_type ?? \App\Models\Product::TYPE_WHOLE) === \App\Models\Product::TYPE_WHOLE)
+                                <a href="{{ route('products.edit', ['product' => $product->id, 'page' => request()->page, 'perPage' => $perPage]) }}#cutting-components" class="btn btn-outline-primary btn-sm ms-1">Thành phần pha lóc</a>
+                            @endif
+                        @endcan
+
+                        @can('delete', $product)
+                        @if(auth()->user()->hasRole('admin') && $product->status)
+                            <form action="{{ route('products.destroy', ['product' => $product->id, 'page' => $page, 'perPage' => $perPage ]) }}" method="POST" style="display:inline;">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Bạn có chắc chắn muốn xóa không?')">
+                                    <i class="ph ph-trash"></i>
+                                </button>
+                            </form>
+                        @endif
+                        @endcan
+
+                        @can('update', $product)
+                        @if(auth()->user()->hasRole('admin') && !$product->status)
+                            <form action="{{ route('products.restore', ['product' => $product->id, 'page' => $page, 'perPage' => $perPage]) }}" method="POST" style="display:inline;">
+                                @csrf
+                                <button type="submit" class="btn btn-success btn-sm" onclick="return confirm('Bạn có chắc chắn muốn khôi phục sản phẩm này không?')">
+                                    <i class="ph ph-arrow-counter-clockwise"></i>
+                                </button>
+                            </form>
+                        @endif
+                        @endcan
+                    </div>
+                </td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table> 
+</div> 
+ 
+
+<div class="d-flex justify-content-between mx-0 mb-3 small mt-3">
+    <div class="d-flex align-items-center"></div>
+    <div class="ms-auto">
+        <div class="">
+            <nav>
+                <ul class="pagination">
+                    <li class="page-item {{ $page == 1 ? 'disabled' : ''}}">
+                        <a class="page-link" 
+                            href="{{ route('products.index', [
+                                'page' => $page > 1 ? $page - 1 : 1,
+                                'perPage' => $perPage,
+                                'keyword' => request()->keyword
+                            ]) }}">Trang trước</a>
+                    </li>
+                    @for ($i=1;$i<=$pageCount;$i++)
+                        <li class="page-item {{ $page == $i ? 'disabled active' : ''}}">
+                            <a class="page-link" href="{{ 
+                                route('products.index', [
+                                    'page' => $i,
+                                    'perPage' => $perPage,
+                                    'keyword' => request()->keyword
+                                ]) }}">{{ $i }}</a>
+                        </li>
+                    @endfor
+                        
+                    <li class="page-item {{ $page == $pageCount ? 'disabled' : '' }}">
+                        <a class="page-link" 
+                        href="{{ route('products.index', [
+                            'page' => $page < $pageCount ? $page + 1 : $pageCount,
+                            'perPage' => $perPage,
+                            'keyword' => request()->keyword
+                        ]) }}">Trang sau</a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+
+ 
+
+
+    </div>
+</div>
+
+@push('scripts')
+<script>
+    $(function() {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}';
+
+        function setSortControlState(control, disabled) {
+            control.querySelectorAll('input, button').forEach((element) => {
+                element.disabled = disabled;
+            });
+        }
+
+        async function updateProductSort(control, payload) {
+            const saveButton = control.querySelector('.product-sort-save');
+            const url = (payload.top ? control.querySelector('.product-sort-top') : saveButton).dataset.url;
+
+            setSortControlState(control, true);
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                const data = await response.json();
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Không thể cập nhật thứ tự sản phẩm.');
+                }
+
+                if (payload.top) {
+                    window.location.reload();
+                    return;
+                }
+
+                const input = control.querySelector('.product-sort-input');
+                input.value = data.sort_order;
+                input.dataset.originalValue = data.sort_order;
+                saveButton.classList.remove('btn-warning');
+                saveButton.classList.add('btn-outline-secondary');
+
+                if (window.showToast) {
+                    window.showToast(data.message || 'Đã cập nhật thứ tự sản phẩm.', 'success');
+                }
+            } catch (error) {
+                if (window.showToast) {
+                    window.showToast(error.message || 'Không thể cập nhật thứ tự sản phẩm.', 'error');
+                } else {
+                    alert(error.message || 'Không thể cập nhật thứ tự sản phẩm.');
+                }
+            } finally {
+                setSortControlState(control, false);
+            }
+        }
+
+        document.querySelectorAll('.product-sort-input').forEach((input) => {
+            input.addEventListener('input', function () {
+                const control = input.closest('.product-sort-control');
+                const saveButton = control.querySelector('.product-sort-save');
+                const changed = String(input.value) !== String(input.dataset.originalValue);
+                saveButton.classList.toggle('btn-warning', changed);
+                saveButton.classList.toggle('btn-outline-secondary', !changed);
+            });
+        });
+
+        document.addEventListener('click', function (event) {
+            const saveButton = event.target.closest('.product-sort-save');
+            if (saveButton) {
+                const control = saveButton.closest('.product-sort-control');
+                const input = control.querySelector('.product-sort-input');
+                updateProductSort(control, { sort_order: Number(input.value || 0) });
+                return;
+            }
+
+            const topButton = event.target.closest('.product-sort-top');
+            if (topButton) {
+                const control = topButton.closest('.product-sort-control');
+                updateProductSort(control, { top: true });
+            }
+        });
+
+        $(document).on('click', '.choose-image-btn', function() {
+            let productId = $(this).data('product-id');
+            var url = "{{ route('media.library.popup') }}?callback=selectProductImage&product_id=" + productId;
+            window.open(url, 'Media Library', 'width=1024,height=768');
+        });
+
+        window.selectProductImage = function(media, productId) {
+            $('#quick-edit-media-id-' + productId).val(media.id);
+            $('#quick-edit-preview-image-' + productId).attr('src', media.url);
+        };
+    });
+</script>
+@endpush
+
+@push('styles')
+<style>
+    .product-sort-control {
+        display: grid;
+        grid-template-columns: 72px auto auto;
+        gap: 6px;
+        align-items: center;
+        min-width: 172px;
+    }
+
+    .product-sort-control .btn {
+        white-space: nowrap;
+    }
+</style>
+@endpush
+
+@endsection

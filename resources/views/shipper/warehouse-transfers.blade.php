@@ -1,0 +1,124 @@
+@extends('layouts.shipper')
+
+@section('title', 'Danh sách phiếu điều chuyển')
+@section('subtitle', 'Tra cứu lịch sử vận chuyển hàng giữa các kho')
+
+@section('content')
+@php
+    $slipsByDate = $dispatchSlips->getCollection()->groupBy(fn ($slip) => $slip->business_date->toDateString());
+@endphp
+
+<style>
+    .dispatch-search-card, .dispatch-history-panel { border: 1px solid #dbe5e3; border-radius: 12px; background: #fff; }
+    .dispatch-history-date { padding: 14px 16px; border-bottom: 1px solid #eef2f7; }
+    .dispatch-history-date:last-child { border-bottom: 0; }
+    .dispatch-history-slips { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 10px; margin-top: 10px; }
+    .dispatch-history-slip { display: flex; align-items: stretch; border: 1px solid #cbd5e1; border-radius: 9px; color: #334155; background: #fff; overflow: hidden; }
+    .dispatch-history-slip:hover { border-color: #0f766e; background: #ecfdf5; color: #0f766e; }
+    .dispatch-history-slip { border-left-width: 5px; }
+    .dispatch-history-slip.progress-pending { border-left-color: #2563eb; }
+    .dispatch-history-slip.progress-transit { border-left-color: #d97706; background: #fffbeb; }
+    .dispatch-history-slip.progress-waiting { border-left-color: #0891b2; background: #ecfeff; }
+    .dispatch-history-slip.progress-completed { border-left-color: #15803d; background: #f0fdf4; }
+    .dispatch-history-slip.progress-cancelled { border-left-color: #64748b; background: #f1f5f9; }
+    .dispatch-slip-main { min-width: 0; }
+    .dispatch-slip-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; color: inherit; text-decoration: none; flex: 1 1 auto; min-width: 0; }
+    .dispatch-slip-delete { display: flex; align-items: center; padding: 8px; border-left: 1px solid #e2e8f0; }
+    .dispatch-slip-route { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    @media (max-width: 576px) {
+        .dispatch-history-slips { grid-template-columns: minmax(0, 1fr); }
+        .dispatch-history-slip { align-items: flex-start; }
+    }
+</style>
+
+<div class="dispatch-search-card p-3 mb-3">
+    <form method="GET" action="{{ route('shipper.warehouse-transfers') }}" class="d-flex flex-wrap align-items-end gap-2">
+        <div>
+            <label for="transfer-date" class="form-label fw-semibold mb-1">Tìm phiếu theo ngày</label>
+            <input id="transfer-date" type="date" name="date" value="{{ $selectedDate }}" class="form-control">
+        </div>
+        <button class="btn btn-primary" type="submit"><i class="bi bi-search me-1"></i>Tìm kiếm</button>
+        @if($selectedDate)
+            <a href="{{ route('shipper.warehouse-transfers') }}" class="btn btn-outline-secondary">Xem tất cả</a>
+        @endif
+    </form>
+</div>
+
+<div class="dispatch-history-panel">
+    <div class="d-flex justify-content-between align-items-center gap-2 p-3 border-bottom">
+        <div>
+            <div class="fw-bold"><i class="bi bi-journal-text me-1"></i>Danh sách phiếu điều chuyển</div>
+            <div class="small text-muted">Mới = bạn chưa mở phiếu; Đã xem = bạn đã mở. Hoàn tất = kho nhận đã xác nhận, không phải chỉ đã chốt phiếu.</div>
+        </div>
+        <span class="badge bg-secondary">{{ $dispatchSlips->total() }} phiếu</span>
+    </div>
+
+    @forelse($slipsByDate as $slipDate => $dateSlips)
+        <section class="dispatch-history-date">
+            <div class="fw-semibold text-muted"><i class="bi bi-calendar3 me-1"></i>{{ \Carbon\Carbon::parse($slipDate)->format('d/m/Y') }}</div>
+            <div class="dispatch-history-slips">
+                @foreach($dateSlips as $slip)
+                    @php
+                        $progress = $slip->transportProgress();
+                        $viewed = $slip->viewers->isNotEmpty();
+                        $progressColors = ['pending' => 'bg-primary', 'transit' => 'bg-warning text-dark', 'waiting' => 'bg-info text-dark', 'completed' => 'bg-success', 'cancelled' => 'bg-secondary'];
+                    @endphp
+                    <div class="dispatch-history-slip progress-{{ $progress['key'] }}">
+                      <a class="dispatch-slip-link" href="{{ route('shipper.warehouse-transfers.show', $slip) }}">
+                        <span class="dispatch-slip-main">
+                            <strong class="d-block">{{ $slip->code }}</strong>
+                            <span class="badge {{ $viewed ? 'bg-light text-dark border' : 'bg-primary' }}"><i class="bi {{ $viewed ? 'bi-eye' : 'bi-envelope-fill' }} me-1"></i>{{ $viewed ? 'Đã xem' : 'Mới · Chưa xem' }}</span>
+                            <span class="d-block mt-1"><span class="badge {{ $progressColors[$progress['key']] }}">{{ $progress['label'] }}</span></span>
+                            <span class="small text-muted d-block">Kho đã nhận {{ $progress['completed'] }}/{{ $progress['total'] }} lượt điều chuyển</span>
+                            <span class="small dispatch-slip-route d-block">{{ $slip->sourceWarehouse?->name ?? '—' }} → {{ $slip->targetWarehouse?->name ?? '—' }}</span>
+                            <span class="small text-muted">Shipper: {{ $slip->shipper?->short_name ?: ($slip->shipper?->name ?? '—') }}</span>
+                        </span>
+                        <span class="d-flex align-items-center gap-1 flex-shrink-0">
+                            <span class="badge {{ $slip->status === 'finalized' ? 'bg-light text-dark border' : ($slip->status === 'cancelled' ? 'bg-danger' : 'bg-warning text-dark') }}">{{ $slip->status === 'finalized' ? 'Phiếu đã chốt' : ($slip->status === 'cancelled' ? 'Đã hủy' : 'Đang mở') }}</span>
+                            <span class="badge bg-light text-dark border">{{ $slip->entries_count }} mục</span>
+                            <i class="bi bi-chevron-right"></i>
+                        </span>
+                      </a>
+                      <form method="POST" action="{{ route('shipper.warehouse-transfers.dismiss', $slip) }}" class="dispatch-slip-delete js-dismiss-slip-form">
+                          @csrf
+                          @method('DELETE')
+                          <input type="hidden" name="delete_reason" value="">
+                          <button type="submit" class="btn btn-outline-danger btn-sm" title="Xóa khỏi danh sách">
+                              <i class="bi bi-trash"></i><span class="visually-hidden">Xóa phiếu</span>
+                          </button>
+                      </form>
+                    </div>
+                @endforeach
+            </div>
+        </section>
+    @empty
+        <div class="p-5 text-center text-muted">
+            <i class="bi bi-truck fs-1 d-block mb-2"></i>
+            {{ $selectedDate ? 'Không có phiếu điều chuyển trong ngày đã chọn.' : 'Chưa có phiếu điều chuyển trong lịch sử.' }}
+        </div>
+    @endforelse
+</div>
+
+@if($dispatchSlips->hasPages())
+    <div class="mt-3">{{ $dispatchSlips->links() }}</div>
+@endif
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.js-dismiss-slip-form').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            if (!window.confirm('Xóa phiếu này khỏi danh sách của bạn? Dữ liệu và chứng từ kho vẫn được giữ nguyên.')) return;
+
+            const reason = window.prompt('Nhập lý do xóa phiếu:', 'Không còn cần theo dõi');
+            if (reason === null || reason.trim() === '') return;
+
+            form.querySelector('input[name="delete_reason"]').value = reason.trim();
+            form.submit();
+        });
+    });
+});
+</script>
+@endpush
+@endsection

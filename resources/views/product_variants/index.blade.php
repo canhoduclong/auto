@@ -1,0 +1,542 @@
+@extends('layouts.app')
+@section('content')
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h4 class="mb-1">Danh sách biến thể sản phẩm</h4>
+            <div class="text-muted small">Tổng cộng: {{ $variants->total() }} biến thể</div>
+        </div>
+        <a href="{{ route('product-variants.create') }}" class="btn btn-success">Thêm biến thể mới</a>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+            <form method="get" id="filter-form">
+                <div class="row g-2">
+                    <div class="col-md-3">
+                        <input type="text" name="q" class="form-control form-control-sm" placeholder="SKU, tên tồn kho, size, tên sản phẩm..." value="{{ request('q') }}">
+                    </div>
+                    <div class="col-md-3">
+                        <select name="product_id" class="form-select form-select-sm">
+                            <option value="">-- Lọc theo sản phẩm --</option>
+                            @foreach($products as $product)
+                                <option value="{{ $product->id }}" {{ request('product_id') == $product->id ? 'selected' : '' }}>{{ $product->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="date" name="from_date" class="form-control form-control-sm" value="{{ request('from_date') }}">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="date" name="to_date" class="form-control form-control-sm" value="{{ request('to_date') }}">
+                    </div>
+                    <div class="col-md-2 d-grid">
+                        <button class="btn btn-primary btn-sm" type="submit">Lọc</button>
+                    </div>
+                </div>
+                <div class="row g-2 mt-1">
+                    <div class="col-md-2">
+                        <select name="per_page" class="form-select form-select-sm">
+                            <option value="20" {{ request('per_page') == 20 ? 'selected' : '' }}>20 / trang</option>
+                            <option value="50" {{ request('per_page') == 50 ? 'selected' : '' }}>50 / trang</option>
+                            <option value="100" {{ request('per_page') == 100 ? 'selected' : '' }}>100 / trang</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" name="min_stock" class="form-control form-control-sm" placeholder="Tồn kho từ" value="{{ request('min_stock') }}">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" name="max_stock" class="form-control form-control-sm" placeholder="Tồn kho đến" value="{{ request('max_stock') }}">
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <button class="btn btn-danger btn-sm" id="bulk-delete-btn">Xóa các mục đã chọn</button>
+        <span class="text-muted small">Hiển thị theo nhóm sản phẩm trong cùng một bảng</span>
+    </div>
+
+    <div class="card border-0 shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th width="40"><input type="checkbox" id="select-all"></th>
+                        <th width="200">Sản phẩm</th>
+                        <th width="60">ID</th>
+                        <th width="70">Ảnh</th>
+                        <th width="180">Tên biến thể</th>
+                        <th>SKU</th>
+                        <th width="120">Tên tồn kho</th>
+                        <th width="90">Size</th>
+                        <th width="80">Thứ tự</th>
+                        <th width="110">Giá bán</th>
+                        <th width="90" style="cursor:pointer; user-select:none;">
+                            @php
+                                $sortDir = request('sort') === 'stock' ? request('direction', 'asc') : 'asc';
+                                $nextDir = ($sortDir === 'asc') ? 'desc' : 'asc';
+                                $sortUrl = request()->fullUrlWithQuery(['sort' => 'stock', 'direction' => $nextDir, 'page' => 1]);
+                            @endphp
+                            <a href="{{ $sortUrl }}" class="text-decoration-none text-dark d-flex align-items-center gap-1">
+                                Tồn kho
+                                @if(request('sort') === 'stock')
+                                    <span>{{ $sortDir === 'asc' ? '↑' : '↓' }}</span>
+                                @else
+                                    <span class="text-muted" style="opacity:.4">↕</span>
+                                @endif
+                            </a>
+                        </th>
+                        <th width="250">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($groupedVariants as $productId => $productVariants)
+                        @php
+                            $product = $productVariants->first()->product;
+                        @endphp
+                        <tr class="table-group-row">
+                            <td>
+                                <input type="checkbox" class="group-select" data-product-id="{{ $productId }}">
+                            </td>
+                            <td colspan="11" class="fw-semibold text-primary bg-light">
+                                {{ $product->name ?? 'Không xác định' }}
+                                <span class="text-muted ms-2">({{ $productVariants->count() }} biến thể)</span>
+                            </td>
+                        </tr>
+
+                        @foreach($productVariants as $variant)
+                            <tr class="variant-row" data-product-id="{{ $productId }}">
+                                <td>
+                                    <input type="checkbox" class="variant-checkbox" value="{{ $variant->id }}" data-product-id="{{ $productId }}">
+                                </td>
+                                <td class="text-muted small">{{ $product->name ?? '-' }}</td>
+                                <td>{{ $variant->id }}</td>
+                                <td class="variant-image-cell">
+                                    @php
+                                        $imgPath = null;
+                                        if ($variant->mediaLink && $variant->mediaLink->media) {
+                                            $imgPath = asset('storage/' . $variant->mediaLink->media->file_path);
+                                        } elseif ($variant->product && $variant->product->avatar && $variant->product->avatar->media) {
+                                            $imgPath = asset('storage/' . $variant->product->avatar->media->file_path);
+                                        }
+                                    @endphp
+                                    @if($imgPath)
+                                        <img src="{{ $imgPath }}" class="variant-image" alt="{{ $variant->sku }}">
+                                    @else
+                                        <span class="text-muted text-center d-block" style="line-height: 72px;">—</span>
+                                    @endif
+                                </td>
+                                <td>{{ $variant->name ?: '-' }}</td>
+                                <td class="fw-semibold">{{ $variant->sku }}</td>
+                                <td><span class="badge bg-light text-dark border">{{ $variant->inventory_name ?: '—' }}</span></td>
+                                <td>{{ $variant->size ?: '-' }}</td>
+                                <td><span class="badge bg-light text-dark border">{{ $variant->sort_order ?? 0 }}</span></td>
+                                <td>
+                                    @php
+                                        $latestPrice = $variant->latestPriceRule ? $variant->latestPriceRule->price : $variant->final_price;
+                                    @endphp
+                                    <span class="text-success fw-semibold">{{ number_format($latestPrice ?? 0, 0, ',', '.') }} đ</span>
+                                </td>
+                                <td>
+                                    @php
+                                        $stock = $variant->stock ?? 0;
+                                        $stockClass = $stock > 50 ? 'success' : ($stock > 10 ? 'warning' : 'danger');
+                                    @endphp
+                                    <span class="badge bg-{{ $stockClass }}">{{ $stock }}</span>
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        <a href="{{ route('product-variants.edit', $variant->id) }}" class="btn btn-outline-warning btn-sm">Sửa</a>
+                                        <a href="{{ route('variants.edit-price', $variant->id) }}?from=product-variants" class="btn btn-outline-info btn-sm">Giá</a>
+                                        @if(($variant->product?->product_type ?? '') === \App\Models\Product::TYPE_WHOLE)
+                                            <a href="{{ route('product-variants.edit', $variant->id) }}#cutting-components" class="btn btn-outline-secondary btn-sm">Thành phần</a>
+                                            @if($variant->product?->cuttingComponents?->isNotEmpty())
+                                                <button type="button"
+                                                        class="btn btn-outline-dark btn-sm"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#quickCuttingComponents{{ $variant->id }}">
+                                                    Pha lóc nhanh
+                                                </button>
+                                            @endif
+                                        @endif
+                                        <button type="button" class="btn btn-outline-primary btn-sm clone-variant-index" data-variant-id="{{ $variant->id }}">Nhân bản</button>
+                                        <button type="button" class="btn btn-outline-success btn-sm quick-edit-variant-index" data-variant-id="{{ $variant->id }}">Sửa nhanh</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
+                    @empty
+                        <tr>
+                            <td colspan="12" class="text-center text-muted py-4">Không có dữ liệu phù hợp</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    @foreach($groupedVariants->flatten(1) as $variant)
+        @if(($variant->product?->product_type ?? '') === \App\Models\Product::TYPE_WHOLE && $variant->product?->cuttingComponents?->isNotEmpty())
+            @php
+                $ratiosByComponent = $variant->componentRatios->keyBy('component_product_variant_id');
+                $componentCount = max(1, $variant->product->cuttingComponents->count());
+                $variantKg = (float) $variant->effective_kg;
+                $defaultComponentWeight = round($variantKg / $componentCount, 3);
+                $defaultComponentPercentage = round(100 / $componentCount, 3);
+            @endphp
+            <div class="modal fade" id="quickCuttingComponents{{ $variant->id }}" tabindex="-1" aria-labelledby="quickCuttingComponents{{ $variant->id }}Label" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <form method="POST"
+                              action="{{ route('product-variants.cutting-components.quick-update', $variant) }}"
+                              class="quick-cutting-components-form"
+                              data-variant-kg="{{ number_format($variantKg, 3, '.', '') }}">
+                            @csrf
+                            <div class="modal-header">
+                                <div>
+                                    <h5 class="modal-title" id="quickCuttingComponents{{ $variant->id }}Label">Sửa nhanh thành phần pha lóc</h5>
+                                    <div class="small text-muted">{{ $variant->product?->name }} - {{ $variant->name ?: 'Mặc định' }}</div>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th>Sản phẩm pha lóc</th>
+                                                <th style="width:180px;">Khối lượng chuẩn</th>
+                                                <th style="width:160px;">Tỷ lệ %</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($variant->product->cuttingComponents as $component)
+                                                @php
+                                                    $componentVariant = $component->componentVariant;
+                                                    $ratio = $ratiosByComponent->get($component->component_product_variant_id);
+                                                    $defaultWeight = $loop->last
+                                                        ? max(0, $variantKg - ($defaultComponentWeight * ($componentCount - 1)))
+                                                        : $defaultComponentWeight;
+                                                    $defaultPercentage = $loop->last
+                                                        ? max(0, 100 - ($defaultComponentPercentage * ($componentCount - 1)))
+                                                        : $defaultComponentPercentage;
+                                                    $weightValue = $ratio ? (float) $ratio->standard_weight : $defaultWeight;
+                                                    $percentageValue = $ratio ? (float) $ratio->percentage : $defaultPercentage;
+                                                @endphp
+                                                <tr>
+                                                    <td>
+                                                        <div class="fw-semibold">{{ $componentVariant?->product?->name ?? 'Sản phẩm' }}</div>
+                                                        <div class="text-muted small">{{ $componentVariant?->name ?: 'Mặc định' }}</div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="input-group input-group-sm">
+                                                            <input type="number"
+                                                                   name="component_weights[{{ $component->component_product_variant_id }}]"
+                                                                   class="form-control"
+                                                                   min="0"
+                                                                   step="0.001"
+                                                                   value="{{ number_format($weightValue, 3, '.', '') }}">
+                                                            <span class="input-group-text">kg</span>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="input-group input-group-sm">
+                                                            <input type="number"
+                                                                   name="component_percentages[{{ $component->component_product_variant_id }}]"
+                                                                   class="form-control"
+                                                                   min="0"
+                                                                   max="100"
+                                                                   step="0.001"
+                                                                   value="{{ number_format($percentageValue, 3, '.', '') }}">
+                                                            <span class="input-group-text">%</span>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="d-flex flex-wrap gap-3 small mt-2">
+                                    <div>Tổng kg: <strong class="quick-cutting-total-weight">0</strong> / {{ rtrim(rtrim(number_format($variantKg, 3, '.', ''), '0'), '.') }} kg</div>
+                                    <div>Tổng tỷ lệ: <strong class="quick-cutting-total-percentage">0</strong>%</div>
+                                </div>
+                                <div class="quick-cutting-components-error text-danger small mt-1 d-none"></div>
+                                <div class="small text-muted mt-2">
+                                    Số liệu này dùng để tính thành phần pha lóc thực tế cho riêng biến thể này.
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Đóng</button>
+                                <button type="submit" class="btn btn-primary">Lưu nhanh</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        @endif
+    @endforeach
+
+    <div class="mt-3">
+        {{ $variants->links() }}
+    </div>
+</div>
+
+<style>
+    .variant-row {
+        height: 72px;
+    }
+
+    .variant-image-cell {
+        padding: 0;
+    }
+
+    .variant-image {
+        width: 100%;
+        height: 72px;
+        display: block;
+        object-fit: cover;
+    }
+</style>
+
+@endsection
+
+@push('scripts')
+<script>
+$(document).ready(function() {
+    $(document).on('change', '#select-all', function() {
+        $('.variant-checkbox').prop('checked', $(this).prop('checked'));
+        $('.group-select').prop('checked', $(this).prop('checked'));
+    });
+
+    $(document).on('change', '.group-select', function() {
+        const productId = $(this).data('product-id');
+        $(`.variant-checkbox[data-product-id="${productId}"]`).prop('checked', $(this).prop('checked'));
+    });
+
+    $(document).on('click', '.clone-variant-index', function() {
+        const variantId = $(this).data('variant-id');
+        if (!variantId) return;
+
+        if (!confirm('Bạn có chắc chắn muốn nhân bản biến thể này?')) return;
+
+        $.ajax({
+            url: `/product-variants/${variantId}/duplicate`,
+            method: 'POST',
+            data: {
+                _token: $('meta[name="csrf-token"]').attr('content')
+            },
+            success: function() {
+                location.reload();
+            },
+            error: function() {
+                alert('Có lỗi xảy ra khi nhân bản.');
+            }
+        });
+    });
+
+    $(document).on('click', '.quick-edit-variant-index', function() {
+        const variantId = $(this).data('variant-id');
+        const tr = $(this).closest('tr');
+
+        if (!variantId || tr.next().hasClass('quick-edit-row')) return;
+
+        const tds = tr.find('td');
+        const sku = $(tds[5]).text().trim() || '';
+        const inventoryName = $(tds[6]).text().trim().replace('—', '') || '';
+        const size = $(tds[7]).text().trim() || '';
+        const sortOrder = $(tds[8]).text().trim().replace(/[^0-9]/g, '') || '0';
+        const price = $(tds[9]).text().trim().replace(/[^0-9]/g, '') || '0';
+        const stock = $(tds[10]).text().trim().replace(/[^0-9]/g, '') || '0';
+
+        const html = `
+            <tr class="quick-edit-row">
+                <td colspan="12" class="bg-light">
+                    <form method="POST" action="/product-variants/${variantId}" class="quick-edit-form d-flex flex-wrap gap-2 align-items-end p-2">
+                        <input type="hidden" name="_token" value="${$('meta[name="csrf-token"]').attr('content')}">
+                        <input type="hidden" name="_method" value="PUT">
+                        <div>
+                            <label class="form-label small mb-1">SKU</label>
+                            <input type="text" name="sku" value="${sku}" class="form-control form-control-sm" style="width: 120px;">
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1">Tên tồn kho</label>
+                            <input type="text" name="inventory_name" value="${inventoryName}" class="form-control form-control-sm" style="width: 110px;" placeholder="M 2,1">
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1">Size</label>
+                            <input type="text" name="size" value="${size === '-' ? '' : size}" class="form-control form-control-sm" style="width: 90px;">
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1">Thứ tự</label>
+                            <input type="number" min="0" name="sort_order" value="${sortOrder}" class="form-control form-control-sm" style="width: 90px;">
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1">Giá</label>
+                            <input type="number" min="0" name="price" value="${price}" class="form-control form-control-sm" style="width: 120px;">
+                        </div>
+                        <div>
+                            <label class="form-label small mb-1">Tồn kho</label>
+                            <input type="number" min="0" name="stock" value="${stock}" class="form-control form-control-sm" style="width: 100px;">
+                        </div>
+                        <div class="d-flex gap-1">
+                            <button type="submit" class="btn btn-primary btn-sm">Lưu</button>
+                            <button type="button" class="btn btn-secondary btn-sm cancel-quick-edit">Hủy</button>
+                        </div>
+                    </form>
+                </td>
+            </tr>
+        `;
+
+        tr.after(html);
+    });
+
+    $(document).on('click', '.cancel-quick-edit', function() {
+        $(this).closest('.quick-edit-row').remove();
+    });
+
+    $(document).on('submit', '.quick-edit-form', function(e) {
+        e.preventDefault();
+        const form = $(this);
+
+        $.ajax({
+            url: form.attr('action'),
+            method: 'POST',
+            data: form.serialize(),
+            success: function() {
+                location.reload();
+            },
+            error: function() {
+                alert('Có lỗi xảy ra khi cập nhật.');
+            }
+        });
+    });
+
+    $(document).on('submit', '.quick-cutting-components-form', function(e) {
+        e.preventDefault();
+        const form = $(this);
+        if (!validateQuickCuttingComponents(form)) {
+            return;
+        }
+        const submitBtn = form.find('button[type="submit"]');
+        submitBtn.prop('disabled', true);
+
+        $.ajax({
+            url: form.attr('action'),
+            method: 'POST',
+            data: form.serialize(),
+            headers: {
+                'Accept': 'application/json'
+            },
+            success: function(response) {
+                alert(response.message || 'Đã cập nhật thành phần pha lóc.');
+                location.reload();
+            },
+            error: function(xhr) {
+                alert(xhr.responseJSON?.message || 'Có lỗi xảy ra khi cập nhật thành phần pha lóc.');
+            },
+            complete: function() {
+                submitBtn.prop('disabled', false);
+            }
+        });
+    });
+
+    function parseQuickCuttingNumber(value) {
+        const number = parseFloat(String(value || '').replace(',', '.'));
+        return Number.isFinite(number) ? number : 0;
+    }
+
+    function formatQuickCuttingNumber(value) {
+        return new Intl.NumberFormat('vi-VN', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 3
+        }).format(value);
+    }
+
+    function updateQuickCuttingTotals(form) {
+        const variantKg = parseQuickCuttingNumber(form.data('variant-kg'));
+        let totalWeight = 0;
+        let totalPercentage = 0;
+
+        form.find('input[name^="component_weights"]').each(function() {
+            totalWeight += parseQuickCuttingNumber($(this).val());
+        });
+
+        form.find('input[name^="component_percentages"]').each(function() {
+            totalPercentage += parseQuickCuttingNumber($(this).val());
+        });
+
+        form.find('.quick-cutting-total-weight').text(formatQuickCuttingNumber(totalWeight));
+        form.find('.quick-cutting-total-percentage').text(formatQuickCuttingNumber(totalPercentage));
+
+        const errorBox = form.find('.quick-cutting-components-error');
+        const errors = [];
+        if (Math.abs(totalPercentage - 100) > 0.001) {
+            errors.push('Tổng tỷ lệ thành phần phải bằng 100%.');
+        }
+        if (totalWeight - variantKg > 0.001) {
+            errors.push(`Tổng kg thành phần không được lớn hơn ${formatQuickCuttingNumber(variantKg)} kg của biến thể.`);
+        }
+
+        if (errors.length > 0) {
+            errorBox.text(errors.join(' ')).removeClass('d-none');
+        } else {
+            errorBox.text('').addClass('d-none');
+        }
+
+        return errors.length === 0;
+    }
+
+    function validateQuickCuttingComponents(form) {
+        return updateQuickCuttingTotals(form);
+    }
+
+    $(document).on('input', '.quick-cutting-components-form input[name^="component_weights"], .quick-cutting-components-form input[name^="component_percentages"]', function() {
+        updateQuickCuttingTotals($(this).closest('.quick-cutting-components-form'));
+    });
+
+    $(document).on('shown.bs.modal', '[id^="quickCuttingComponents"]', function() {
+        updateQuickCuttingTotals($(this).find('.quick-cutting-components-form'));
+    });
+
+    $('.quick-cutting-components-form').each(function() {
+        updateQuickCuttingTotals($(this));
+    });
+
+    $('#bulk-delete-btn').on('click', function() {
+        const selected = $('.variant-checkbox:checked').map(function() {
+            return $(this).val();
+        }).get();
+
+        if (selected.length === 0) {
+            alert('Vui lòng chọn ít nhất một biến thể để xóa.');
+            return;
+        }
+
+        if (!confirm(`Bạn có chắc chắn muốn xóa ${selected.length} biến thể đã chọn?`)) {
+            return;
+        }
+
+        $.ajax({
+            url: "{{ route('product-variants.bulk-delete') }}",
+            method: 'POST',
+            data: {
+                ids: selected,
+                _token: '{{ csrf_token() }}'
+            },
+            success: function() {
+                location.reload();
+            },
+            error: function() {
+                alert('Có lỗi xảy ra khi xóa.');
+            }
+        });
+    });
+
+    $(document).on('change', 'select[name=per_page]', function() {
+        $('#filter-form').submit();
+    });
+});
+</script>
+@endpush

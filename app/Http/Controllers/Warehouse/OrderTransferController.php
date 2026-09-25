@@ -1,0 +1,408 @@
+<?php
+
+namespace App\Http\Controllers\Warehouse;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use App\Models\InventoryMovement;
+use App\Models\Order;
+use App\Models\OrderHistory;
+use App\Models\OrderTransfer;
+use App\Models\ProductVariant;
+use App\Models\User;
+use App\Models\Warehouse;
+use App\Models\WarehouseTransfer;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+
+class OrderTransferController extends Controller
+{
+    public function index(Request $request)
+    {
+        // Lấy user và kho đang quản lý
+        $user = auth()->user();
+        $warehouseId = $user->warehouse_id;
+        $search = trim((string) $request->input('search', ''));
+        $from = $request->filled('from_date')
+            ? Carbon::parse($request->input('from_date'))->toDateString()
+            : Carbon::today()->subDays(30)->toDateString();
+        $to = $request->filled('to_date')
+            ? Carbon::parse($request->input('to_date'))->toDateString()
+            : Carbon::today()->toDateString();
+        if ($from > $to) {
+            [$from, $to] = [$to, $from];
+        }
+
+        // Lấy danh sách đơn chưa điều chuyển, chỉ thuộc kho user quản lý
+        $orders = $this->transferableOrders($warehouseId ? (int) $warehouseId : null)
+            ->where(function ($dateQuery) use ($from, $to): void {
+                $dateQuery->where(function ($normalQuery) use ($from, $to): void {
+                    $normalQuery->whereBetween(DB::raw('DATE(created_at)'), [$from, $to]);
+                })->orWhere(function ($importQuery) use ($from, $to): void {
+                    $importQuery->whereNotNull('accounting_sales_import_batch_id')
+                        ->whereBetween('delivery_date', [$from, $to]);
+                })->orWhereHas('histories', function ($historyQuery) use ($from, $to): void {
+                    $historyQuery->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
+                        ->whereBetween('created_at', [Carbon::parse($from)->startOfDay(), Carbon::parse($to)->endOfDay()]);
+                });
+            })
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($searchQuery) use ($search) {
+                    $searchQuery->where('code', 'like', "%{$search}%")
+                        ->orWhereHas('customer', fn ($customerQuery) => $customerQuery->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->with(['customer', 'items.variant', 'warehouse'])
+            ->orderBy('daily_sequence')
+            ->orderBy('id')
+            ->get();
+
+        // Lấy danh sách shipper và kho
+        $shippers = User::whereHas('roles', function ($q) {
+            $q->whereIn('name', ['shipper', 'manager_shipper']);
+        })->orderBy('name')->get();
+        $warehouses = Warehouse::orderBy('name')->get();
+
+        // Lấy đầy đủ phiếu điều chuyển, hỗ trợ tìm lại theo mã đơn.
+        $recentTransfers = OrderTransfer::with([
+            'orders.customer',
+            'orders.warehouseTransfers' => fn ($query) => $query->latest('id'),
+            'shipper',
+            'warehouse',
+            'dispatchEntry.slip',
+        ])
+            ->when($warehouseId, fn ($query) => $query->where(fn ($query) => $query->whereHas(
+                'orders.warehouseTransfers',
+                fn ($warehouseTransferQuery) => $warehouseTransferQuery->where('source_warehouse_id', $warehouseId)
+            )->orWhereHas('orders', fn ($orders) => $orders
+                ->where('warehouse_id', $warehouseId)->whereDoesntHave('warehouseTransfers'))))
+            ->whereBetween(DB::raw('DATE(created_at)'), [$from, $to])
+            ->when($search !== '', function ($query) use ($search) {
+                $query->whereHas('orders', function ($orderQuery) use ($search) {
+                    $orderQuery->where('code', 'like', "%{$search}%")
+                        ->orWhereHas('customer', fn ($customerQuery) => $customerQuery->where('name', 'like', "%{$search}%"));
+                });
+            })
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->get()
+            ->map(function (OrderTransfer $transfer) {
+                $statuses = $transfer->orders
+                    ->map(fn (Order $order) => $order->warehouseTransfers->first()?->status)
+                    ->filter()
+                    ->values();
+
+                $transfer->setAttribute('can_delete', $statuses->isEmpty() || $statuses->every(
+                    fn ($status) => $status === WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP
+                ));
+                $transfer->setAttribute('is_completed', $statuses->isNotEmpty() && $statuses->every(
+                    fn ($status) => $status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED
+                ));
+                $transfer->setAttribute('status_label', $this->transferStatusLabel($statuses));
+
+                return $transfer;
+            });
+        $transferGroups = $recentTransfers->groupBy(fn (OrderTransfer $transfer) => $transfer->created_at->toDateString());
+
+        return view('warehouse.order-transfers', compact(
+            'orders',
+            'shippers',
+            'warehouses',
+            'recentTransfers',
+            'transferGroups',
+            'search',
+            'from',
+            'to'
+        ));
+    }
+
+    public function destroy($id)
+    {
+        $transfer = OrderTransfer::with(['orders.warehouseTransfers', 'dispatchEntry.slip'])->findOrFail($id);
+        if ($transfer->dispatchEntry) {
+            return back()->with('error', 'Nhóm đơn đã thuộc phiếu xuất kho tổng '.($transfer->dispatchEntry->slip?->code ?: '').'. Hãy xóa phiếu tổng đang mở trước khi xóa nhóm đơn.');
+        }
+        $warehouseId = auth()->user()?->warehouse_id ? (int) auth()->user()->warehouse_id : null;
+        if ($warehouseId && !$transfer->orders
+            ->flatMap->warehouseTransfers
+            ->contains(fn (WarehouseTransfer $warehouseTransfer) => (int) $warehouseTransfer->source_warehouse_id === $warehouseId)) {
+            abort(403, 'Phiếu điều chuyển không thuộc kho bạn quản lý.');
+        }
+
+        $hasStartedTransfer = $transfer->orders
+            ->flatMap->warehouseTransfers
+            ->contains(fn (WarehouseTransfer $warehouseTransfer) => $warehouseTransfer->status !== WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP);
+
+        if ($hasStartedTransfer) {
+            return back()->with('error', 'Phiếu đã được shipper nhận hoặc kho đích tiếp nhận nên không thể xóa.');
+        }
+
+        DB::transaction(function () use ($transfer) {
+            WarehouseTransfer::query()
+                ->whereIn('order_id', $transfer->orders->pluck('id'))
+                ->where('status', WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP)
+                ->delete();
+            Order::where('order_transfer_id', $transfer->id)->update(['order_transfer_id' => null]);
+            $transfer->delete();
+        });
+
+        return redirect()->route('warehouse.order-transfers')->with('success', 'Đã xóa phiếu điều chuyển!');
+    }
+
+    public function detachWaitingTransfer(OrderTransfer $transfer, Order $order)
+    {
+        if (!$order->warehouseTransfers()->exists()) {
+            return $this->detachWithoutTransport($transfer, $order);
+        }
+
+        $transfer->loadMissing('dispatchEntry.slip');
+        if ($transfer->dispatchEntry) {
+            return back()->with('error', 'Không thể gỡ đơn vì nhóm đã thuộc phiếu xuất kho tổng '.($transfer->dispatchEntry->slip?->code ?: '').'.');
+        }
+        if ((int) $order->order_transfer_id !== (int) $transfer->id) {
+            return back()->with('error', 'Đơn hàng không thuộc phiếu điều chuyển này.');
+        }
+
+        $warehouseTransfer = $order->warehouseTransfers()->latest('id')->first();
+        $detachableStatuses = [
+            WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+            WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+        ];
+        if (!$warehouseTransfer || !in_array($warehouseTransfer->status, $detachableStatuses, true)) {
+            return back()->with('error', 'Chỉ có thể gỡ phiếu điều chuyển khi đơn đang chờ shipper nhận hoặc chờ kho chuyển đến tiếp nhận.');
+        }
+
+        $warehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        if ($warehouseId && (int) $warehouseTransfer->source_warehouse_id !== $warehouseId) {
+            abort(403, 'Đơn điều chuyển không thuộc kho bạn quản lý.');
+        }
+
+        try {
+            DB::transaction(function () use ($transfer, $order, $warehouseTransfer): void {
+                $lockedWarehouseTransfer = WarehouseTransfer::query()
+                    ->lockForUpdate()
+                    ->findOrFail($warehouseTransfer->id);
+                $detachableStatuses = [
+                    WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                    WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                ];
+                if (!in_array($lockedWarehouseTransfer->status, $detachableStatuses, true)) {
+                    throw new \RuntimeException('Phiếu điều chuyển của đơn không còn ở trạng thái có thể gỡ.');
+                }
+
+                $needsStockRestore = $lockedWarehouseTransfer->status === WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE;
+                if ($needsStockRestore && $lockedWarehouseTransfer->export_document_id) {
+                    $movements = InventoryMovement::query()
+                        ->with('inventory')
+                        ->where('reference_type', \App\Models\InventoryDocument::class)
+                        ->where('reference_id', $lockedWarehouseTransfer->export_document_id)
+                        ->where('quantity', '<', 0)
+                        ->lockForUpdate()
+                        ->get();
+
+                    foreach ($movements as $movement) {
+                        $inventory = $movement->inventory;
+                        if (!$inventory) {
+                            continue;
+                        }
+
+                        $restoreQty = abs((int) $movement->quantity);
+                        $inventory->increment('quantity', $restoreQty);
+                        InventoryMovement::create([
+                            'inventory_id' => $inventory->id,
+                            'quantity' => $restoreQty,
+                            'type' => 'adjustment',
+                            'reference_id' => $lockedWarehouseTransfer->id,
+                            'reference_type' => WarehouseTransfer::class,
+                            'user_id' => Auth::id(),
+                        ]);
+                    }
+
+                    $movements->pluck('inventory.product_variant_id')
+                        ->filter()
+                        ->unique()
+                        ->each(function ($variantId): void {
+                            $totalStock = (int) \App\Models\Inventory::query()
+                                ->where('product_variant_id', $variantId)
+                                ->sum('quantity');
+                            ProductVariant::query()->whereKey($variantId)->update(['stock' => $totalStock]);
+                        });
+                }
+
+                $lockedWarehouseTransfer->update([
+                    'status' => WarehouseTransfer::STATUS_CANCELLED,
+                    'note' => trim(($lockedWarehouseTransfer->note ? $lockedWarehouseTransfer->note . ' | ' : '')
+                        . ($needsStockRestore
+                            ? 'Kho nguồn gỡ đơn khỏi phiếu điều chuyển khi đang chờ kho đích tiếp nhận; đã hoàn tồn kho nguồn để chọn shipper khác.'
+                            : 'Kho nguồn gỡ đơn khỏi phiếu điều chuyển khi đang chờ shipper nhận để chọn shipper khác.')),
+                ]);
+                $order->forceFill(['order_transfer_id' => null])->save();
+
+                OrderHistory::create([
+                    'order_id' => $order->id,
+                    'action' => 'warehouse_transfer_detached_waiting_receive',
+                    'user_id' => Auth::id(),
+                    'role' => 'warehouse',
+                    'status_before' => $order->status,
+                    'status_after' => $order->status,
+                    'note' => 'Gỡ phiếu điều chuyển #' . $transfer->id . ' khỏi đơn hàng'
+                        . '; hủy vận chuyển #' . $lockedWarehouseTransfer->id
+                        . ($needsStockRestore ? ' và hoàn tồn kho nguồn' : '')
+                        . ' để chọn shipper khác. Đơn hàng vẫn được giữ nguyên.',
+                ]);
+
+                if (!$transfer->orders()->exists()) {
+                    $transfer->delete();
+                }
+            });
+        } catch (\RuntimeException $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        return back()->with('success', 'Đã gỡ phiếu điều chuyển khỏi đơn. Đơn hàng được giữ nguyên và có thể chọn shipper khác.');
+    }
+
+    private function detachWithoutTransport(OrderTransfer $transfer, Order $order)
+    {
+        DB::transaction(function () use ($transfer, $order): void {
+            $transfer = OrderTransfer::query()->lockForUpdate()->findOrFail($transfer->id);
+            $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+            $warehouseId = Auth::user()?->warehouse_id;
+            if ($warehouseId && (int) $order->warehouse_id !== (int) $warehouseId) {
+                abort(403, 'Đơn hàng không thuộc kho bạn quản lý.');
+            }
+            if ((int) $order->order_transfer_id !== (int) $transfer->id
+                || $order->warehouseTransfers()->exists()) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'order' => 'Đơn đã thay đổi phiếu hoặc đã tạo vận chuyển. Vui lòng tải lại trang.',
+                ]);
+            }
+
+            $order->forceFill(['order_transfer_id' => null])->save();
+            OrderHistory::create([
+                'order_id' => $order->id,
+                'action' => 'warehouse_transfer_detached_without_transport',
+                'user_id' => Auth::id(),
+                'role' => 'warehouse',
+                'status_before' => $order->status,
+                'status_after' => $order->status,
+                'note' => 'Gỡ đơn chưa tạo vận chuyển khỏi phiếu điều chuyển #'.$transfer->id.'.',
+            ]);
+        });
+
+        return back()->with('success', 'Đã gỡ đơn chưa tạo vận chuyển khỏi phiếu cũ. Đơn đủ điều kiện có thể được chọn để tạo phiếu mới.');
+    }
+
+    public function store(Request $request)
+    {
+        $data = $request->validate([
+            'shipper_id' => 'required|exists:users,id',
+            'warehouse_id' => 'required|exists:warehouses,id',
+            'order_ids' => 'required|string',
+        ]);
+
+        $orderIds = array_values(array_unique(array_filter(array_map('trim', explode(',', $data['order_ids'])))));
+        foreach ($orderIds as $orderId) {
+            if (!ctype_digit($orderId) || (int) $orderId <= 0) {
+                return back()->withErrors(['order_ids' => 'Danh sách mã đơn không hợp lệ. Vui lòng tải lại trang và chọn lại đơn.']);
+            }
+        }
+        if (empty($orderIds)) {
+            return back()->withErrors(['order_ids' => 'Vui lòng chọn ít nhất một đơn hàng.']);
+        }
+
+
+        $sourceWarehouseId = auth()->user()?->warehouse_id ? (int) auth()->user()->warehouse_id : null;
+        if ($sourceWarehouseId && $sourceWarehouseId === (int) $data['warehouse_id']) {
+            return back()->withErrors(['warehouse_id' => 'Kho nhận phải khác kho đang quản lý.']);
+        }
+
+        $orderTransfer = DB::transaction(function () use ($data, $orderIds, $sourceWarehouseId) {
+            $orders = $this->transferableOrders($sourceWarehouseId)
+                ->whereIn('id', $orderIds)
+                ->lockForUpdate()
+                ->get();
+
+            if ($orders->count() !== count($orderIds)) {
+                $invalidIds = array_diff($orderIds, $orders->modelKeys());
+                $visibleOrders = Order::query()->whereIn('id', $invalidIds)
+                    ->when($sourceWarehouseId, fn ($query) => $query->where('warehouse_id', $sourceWarehouseId))
+                    ->get()->keyBy('id');
+                $reasons = collect($invalidIds)->map(function ($id) use ($visibleOrders) {
+                    $order = $visibleOrders->get($id);
+                    if (!$order) {
+                        return 'Đơn #'.$id.': không tồn tại hoặc chưa được gán cho kho đang quản lý';
+                    }
+                    $reason = $order->order_transfer_id
+                        ? 'đã thuộc phiếu điều chuyển #'.$order->order_transfer_id
+                        : (!$order->warehouse_id ? 'chưa được gán kho' : 'trạng thái hiện tại không cho phép điều chuyển');
+                    return 'Đơn '.($order->code ?: '#'.$id).': '.$reason;
+                });
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'order_ids' => $reasons->implode('; ').'. Vui lòng tải lại danh sách và chọn lại đơn.',
+                ]);
+            }
+
+            // Each explicit creation is a new group. Never append today's
+            // selection to an existing transfer or change an earlier manifest.
+            $orderTransfer = OrderTransfer::create([
+                'shipper_id' => $data['shipper_id'],
+                'warehouse_id' => $data['warehouse_id'],
+                'notes' => null,
+                'created_by' => auth()->id(),
+            ]);
+
+            foreach ($orders as $order) {
+                $order->order_transfer_id = $orderTransfer->id;
+                $order->save();
+                WarehouseTransfer::create([
+                    'order_id' => $order->id,
+                    'source_warehouse_id' => $order->warehouse_id,
+                    'target_warehouse_id' => $data['warehouse_id'],
+                    'shipper_id' => $data['shipper_id'],
+                    'status' => \App\Models\WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                    'packed_total_weight' => $order->transferBaselineWeight(),
+                ]);
+            }
+
+            return $orderTransfer;
+        });
+
+        return redirect()->route('warehouse.order-transfers')
+            ->with('success', 'Đã tạo phiếu điều chuyển mới #' . $orderTransfer->id . '.');
+    }
+
+    private function transferableOrders(?int $warehouseId): \Illuminate\Database\Eloquent\Builder
+    {
+        return Order::query()
+            ->whereNull('order_transfer_id')
+            ->whereIn('status', ['ready_to_ship', 'packed', 'packed_waiting_pickup'])
+            ->whereNotNull('warehouse_id')
+            // Điều chuyển kho và lộ trình đi giao là hai nghiệp vụ độc lập.
+            // Một đơn đã có lịch giao vẫn phải xuất hiện để tạo điều chuyển;
+            // sau khi kho đích tiếp nhận, đơn tiếp tục lộ trình giao hiện có.
+            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId));
+    }
+
+    private function transferStatusLabel($statuses): string
+    {
+        if ($statuses->isEmpty()) {
+            return 'Chưa có đơn';
+        }
+        if ($statuses->every(fn ($status) => $status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED)) {
+            return 'Đã tiếp nhận hoàn tất';
+        }
+        if ($statuses->contains(WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE)) {
+            return 'Chờ kho đích tiếp nhận';
+        }
+        if ($statuses->contains(WarehouseTransfer::STATUS_IN_TRANSIT)) {
+            return 'Đang vận chuyển';
+        }
+        if ($statuses->contains(WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP)) {
+            return 'Chờ shipper nhận';
+        }
+
+        return 'Đã hủy / hoàn lại';
+    }
+}

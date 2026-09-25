@@ -1,0 +1,48 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class TextOrderDraft extends Model
+{
+    public const SCOPE_ADMIN_IMPORT = 'admin_import';
+    public const SCOPE_SALE_PRIVATE = 'sale_private';
+    public const AUTOMATION_DAILY = 'daily';
+    public const AUTOMATION_SCHEDULED = 'scheduled';
+
+    protected $fillable = [
+        'created_by', 'draft_scope', 'sale_id', 'customer_id', 'truck_brand_id', 'truck_station_id', 'product_variant_id', 'order_id',
+        'zalo_name', 'customer_name', 'phone', 'address', 'use_truck_station', 'truck_brand_name', 'truck_station_name',
+        'truck_station_address', 'truck_station_phone', 'truck_receive_time', 'product_text',
+        'parsed_items', 'quantity', 'size_kg', 'unit_price', 'delivery_date', 'delivery_time',
+        'note', 'raw_text', 'status', 'error_message', 'automation_mode', 'automation_enabled',
+        'automation_dates', 'automation_last_run_at', 'automation_last_error',
+        'charge_vat', 'vat_percent', 'collect_customer_shipping_fee', 'customer_shipping_fee',
+        'warehouse_product_permissions',
+    ];
+
+    protected $casts = [
+        'charge_vat' => 'boolean',
+        'vat_percent' => 'decimal:2',
+        'collect_customer_shipping_fee' => 'boolean',
+        'customer_shipping_fee' => 'decimal:2',
+        'delivery_date' => 'date',
+        'size_kg' => 'decimal:3',
+        'unit_price' => 'decimal:2',
+        'parsed_items' => 'array',
+        'warehouse_product_permissions' => 'array',
+        'use_truck_station' => 'boolean',
+        'automation_enabled' => 'boolean',
+        'automation_dates' => 'array',
+        'automation_last_run_at' => 'datetime',
+    ];
+
+    public function sale() { return $this->belongsTo(User::class, 'sale_id'); }
+    public function customer() { return $this->belongsTo(Customer::class); }
+    public function truckBrand() { return $this->belongsTo(TruckBrand::class); }
+    public function truckStation() { return $this->belongsTo(TruckStation::class); }
+    public function variant() { return $this->belongsTo(ProductVariant::class, 'product_variant_id'); }
+    public function order() { return $this->belongsTo(Order::class); }
+    public function automatedSchedules() { return $this->hasMany(OrderSchedule::class); }
+}

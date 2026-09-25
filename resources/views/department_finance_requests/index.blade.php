@@ -1,0 +1,843 @@
+@extends($config['layout'])
+
+@section('title', 'Phiếu tài chính')
+@section('subtitle', $source === 'manager' && !($showCreateForm ?? false) ? 'Danh sách phiếu yêu cầu đã gửi' : 'Tạo phiếu yêu cầu thu/chi hoặc phiếu đề nghị thanh toán')
+
+@section('content')
+@php
+    $statusLabels = [
+        \App\Models\Transaction::STATUS_PENDING_APPROVAL => ['label' => 'Chờ duyệt', 'class' => 'warning text-dark'],
+        \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION => ['label' => 'Đã duyệt - chờ hoàn thành', 'class' => 'info text-dark'],
+        \App\Models\Transaction::STATUS_APPROVED => ['label' => 'Đã duyệt', 'class' => 'success'],
+        \App\Models\Transaction::STATUS_REJECTED => ['label' => 'Từ chối', 'class' => 'danger'],
+    ];
+    $editingRequest = $editingRequest ?? null;
+    $showCreateForm = $showCreateForm ?? false;
+    $isManagerPage = $source === 'manager';
+    $selectedFormType = old('request_form_type', $editingRequest?->request_form_type ?? \App\Models\Transaction::REQUEST_FORM_CASH);
+    $oldItems = old('items', $editingRequest?->request_items ?? [['content' => '', 'unit' => '', 'quantity' => 1, 'unit_price' => 0]]);
+    $selectedMethod = old('method', $editingRequest?->method ?? 'cash');
+    $selectedFlow = old('flow_direction', $editingRequest?->type === 'extra_income' ? 'in' : 'out');
+    $currentUser = auth()->user();
+    $formSubmitter = $editingRequest?->submitter ?: $currentUser;
+    $currentDepartmentName = $formSubmitter?->department?->name;
+    $currentBlockName = $formSubmitter?->department?->block?->name ?: $formSubmitter?->block?->name;
+    $requestJobTitle = $formSubmitter?->job_title ?: $config['label'];
+    $storedDocumentTitle = $editingRequest?->request_document_title
+        ?: ($selectedFormType === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu');
+    $standardDocumentTitles = ['Phiếu yêu cầu', 'Phiếu đề nghị thanh toán'];
+    $selectedDocumentTitle = old('request_document_title', in_array($storedDocumentTitle, $standardDocumentTitles, true) ? $storedDocumentTitle : '__custom__');
+    $customDocumentTitle = old('request_document_title_custom', in_array($storedDocumentTitle, $standardDocumentTitles, true) ? '' : $storedDocumentTitle);
+@endphp
+<style>
+    .finance-request-page {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 0 12px 24px;
+    }
+    .fr-panel {
+        min-width: 0;
+        border: 1px solid rgba(148, 163, 184, .24);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, .06);
+        overflow: hidden;
+    }
+    .fr-panel-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 18px;
+        border-bottom: 1px solid #eef2f7;
+        background: #f8fafc;
+    }
+    .fr-title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 800;
+        color: #0f172a;
+    }
+    .fr-subtitle {
+        margin-top: 2px;
+        color: #64748b;
+        font-size: 13px;
+    }
+    .fr-panel-body {
+        min-width: 0;
+        padding: 18px;
+        overflow: hidden;
+    }
+    .fr-section-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        font-weight: 800;
+        color: #334155;
+    }
+    .fr-section-label i {
+        color: var(--theme-primary, #0f766e);
+    }
+    .fr-meta-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+    }
+    .fr-note-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 16px;
+        align-items: start;
+    }
+    .fr-existing-attachment {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+        padding: 8px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        background: #f8fafc;
+    }
+    .fr-attachment-preview {
+        width: 72px;
+        height: 56px;
+        flex: 0 0 auto;
+        border-radius: 6px;
+        object-fit: cover;
+        border: 1px solid #dbe3ec;
+        background: #fff;
+    }
+    .fr-summary-box {
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
+        background: #f8fafc;
+        padding: 14px;
+    }
+    .fr-summary-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 7px 0;
+        color: #334155;
+    }
+    .fr-summary-total {
+        border-top: 1px solid #cbd5e1;
+        margin-top: 6px;
+        padding-top: 12px;
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--theme-primary, #0f766e);
+    }
+    .fr-items-table th {
+        white-space: nowrap;
+        font-size: 12px;
+        color: #475569;
+    }
+    .fr-items-table td {
+        vertical-align: middle;
+    }
+    .fr-items-table .form-control-sm {
+        min-height: 34px;
+    }
+    .fr-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 16px;
+    }
+    .fr-history-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .fr-id-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 52px;
+        border-radius: 999px;
+        padding: 4px 8px;
+        background: #f1f5f9;
+        color: #475569;
+        font-weight: 700;
+        font-size: 12px;
+    }
+    .fr-action-icon {
+        width: 34px;
+        height: 34px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+    }
+    .fr-user-card {
+        border: 1px solid #dbe4ee;
+        border-radius: 8px;
+        background: #f8fafc;
+        padding: 10px 12px;
+        color: #334155;
+    }
+    .fr-user-card strong {
+        color: #0f172a;
+    }
+    .fr-creator-line {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 4px;
+        font-size: 12px;
+        color: #64748b;
+    }
+    .fr-creator-line span {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .finance-request-page .row > [class*="col-"] {
+        min-width: 0;
+    }
+    .manager-create-page .fr-meta-grid,
+    .manager-create-page .fr-note-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .manager-create-page #externalBankGroup {
+        grid-column: 1 / -1;
+    }
+    .manager-create-page .form-control,
+    .manager-create-page .form-select,
+    .manager-create-page .input-group,
+    .manager-create-page .input-group > .form-control {
+        min-width: 0;
+        max-width: 100%;
+    }
+    .manager-create-page .fr-items-table {
+        min-width: 860px;
+    }
+    @media (max-width: 1199.98px) {
+        .fr-meta-grid,
+        .fr-note-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    @media (max-width: 767.98px) {
+        .finance-request-page {
+            padding-inline: 8px;
+        }
+        .fr-panel-head {
+            align-items: flex-start;
+            flex-direction: column;
+        }
+        .fr-meta-grid,
+        .fr-note-grid {
+            grid-template-columns: 1fr;
+        }
+        .fr-panel-body {
+            padding: 14px;
+        }
+        .fr-actions {
+            flex-direction: column;
+        }
+        .fr-actions .btn {
+            width: 100%;
+        }
+        .manager-create-page .fr-meta-grid,
+        .manager-create-page .fr-note-grid {
+            grid-template-columns: minmax(0, 1fr);
+        }
+        .manager-create-page #externalBankGroup {
+            grid-column: auto;
+        }
+    }
+</style>
+
+<div class="finance-request-page {{ $isManagerPage && $showCreateForm ? 'manager-create-page' : '' }}">
+    @if($errors->any())
+        <div class="alert alert-danger border-0 shadow-sm">
+            @foreach($errors->all() as $error)
+                <div>{{ $error }}</div>
+            @endforeach
+        </div>
+    @endif
+
+    <div class="row g-3 align-items-start">
+        @if(!$isManagerPage || $showCreateForm)
+        <div class="{{ $isManagerPage ? 'col-12' : 'col-lg-5' }}">
+    <div class="fr-panel">
+        <div class="fr-panel-head">
+            <div>
+                <h2 class="fr-title">{{ $editingRequest ? ($editingRequest->status === \App\Models\Transaction::STATUS_REJECTED ? 'Sửa và gửi lại phiếu #' : 'Sửa phiếu #') . $editingRequest->id : 'Tạo phiếu tài chính' }}</h2>
+                <div class="fr-subtitle">{{ $config['label'] }} gửi duyệt theo luồng Kế toán xác nhận → Director duyệt → Kế toán hoàn thành</div>
+            </div>
+            <span class="badge text-bg-light border px-3 py-2" id="requestJobTitleBadge">{{ $requestJobTitle }}</span>
+        </div>
+        <div class="fr-panel-body">
+            <form method="POST" action="{{ $editingRequest ? route(($isManagerPage ? 'manager' : 'leader') . '.finance-requests.update', $editingRequest) : route($config['route_prefix'] . '.store') }}" enctype="multipart/form-data">
+                @csrf
+                @if($editingRequest)
+                    @method('PUT')
+                @endif
+
+                <div class="fr-section-label"><i class="bi bi-card-checklist"></i> Thông tin phiếu</div>
+                <div class="fr-user-card mb-3">
+                    <div class="small text-muted">Người tạo phiếu</div>
+                    <div><strong>{{ $formSubmitter?->name ?: '-' }}</strong></div>
+                    <div class="fr-creator-line">
+                        <span><i class="bi bi-diagram-3"></i>{{ $currentBlockName ?: 'Chưa gán khối' }}</span>
+                        <span><i class="bi bi-building"></i>{{ $currentDepartmentName ?: 'Chưa gán phòng ban' }}</span>
+                    </div>
+                </div>
+                <div class="fr-meta-grid mb-4">
+                    <div>
+                        <label class="form-label fw-semibold">Tiêu đề chứng từ <span class="text-danger">*</span></label>
+                        <select name="request_document_title" id="requestDocumentTitle" class="form-select" required>
+                            <option value="Phiếu yêu cầu" @selected($selectedDocumentTitle === 'Phiếu yêu cầu')>Phiếu yêu cầu</option>
+                            <option value="Phiếu đề nghị thanh toán" @selected($selectedDocumentTitle === 'Phiếu đề nghị thanh toán')>Phiếu đề nghị thanh toán</option>
+                            <option value="__custom__" @selected($selectedDocumentTitle === '__custom__')>Nhập tiêu đề khác...</option>
+                        </select>
+                        <input type="text" name="request_document_title_custom" id="requestDocumentTitleCustom" class="form-control mt-2" maxlength="255" value="{{ $customDocumentTitle }}" placeholder="Nhập tiêu đề chứng từ khác">
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold">Loại chứng từ <span class="text-danger">*</span></label>
+                        <select name="request_form_type" id="requestFormType" class="form-select" required>
+                            <option value="{{ \App\Models\Transaction::REQUEST_FORM_CASH }}" @selected($selectedFormType === \App\Models\Transaction::REQUEST_FORM_CASH)>Phiếu yêu cầu</option>
+                            <option value="{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}" @selected($selectedFormType === \App\Models\Transaction::REQUEST_FORM_PAYMENT)>Phiếu đề nghị thanh toán</option>
+                        </select>
+                    </div>
+                    <div id="flowDirectionGroup">
+                        <label class="form-label fw-semibold">Dòng tiền <span class="text-danger">*</span></label>
+                        <div class="btn-group w-100" role="group" aria-label="Dòng tiền">
+                            <input type="radio" class="btn-check" name="flow_direction" id="requestIn" value="in" @checked($selectedFlow === 'in')>
+                            <label class="btn btn-outline-success" for="requestIn"><i class="bi bi-arrow-down-circle me-1"></i>Thu</label>
+
+                            <input type="radio" class="btn-check" name="flow_direction" id="requestOut" value="out" @checked($selectedFlow === 'out')>
+                            <label class="btn btn-outline-danger" for="requestOut"><i class="bi bi-arrow-up-circle me-1"></i>Chi</label>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold">Tiêu đề phiếu <span class="text-danger">*</span></label>
+                        <input type="text" name="request_title" class="form-control" value="{{ old('request_title', $editingRequest?->request_title) }}" placeholder="VD: Mua vật tư đóng gói">
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold">Hình thức chi trả <span class="text-danger">*</span></label>
+                        <select name="method" id="paymentMethod" class="form-select" required>
+                            <option value="cash" @selected($selectedMethod === 'cash')>Tiền mặt</option>
+                            @if($managedAccounts->isNotEmpty())
+                                <option value="managed_transfer" @selected($selectedMethod === 'managed_transfer')>Chuyển khoản đang quản lý</option>
+                            @endif
+                            <option value="bank_transfer" @selected($selectedMethod === 'bank_transfer')>Chuyển khoản</option>
+                        </select>
+                    </div>
+                    @if($managedAccounts->isNotEmpty())
+                        <div id="managedTransferGroup">
+                            <label class="form-label fw-semibold">Tài khoản chuyển khoản đang quản lý <span class="text-danger">*</span></label>
+                            <select name="destination_account_id" id="managedDestinationAccountId" class="form-select">
+                                <option value="">-- Chọn tài khoản --</option>
+                                @foreach($managedAccounts as $account)
+                                    <option value="{{ $account->id }}" @selected((string) old('destination_account_id', $editingRequest?->destination_account_id ?? $defaultManagedAccountId) === (string) $account->id)>
+                                        {{ $account->name }}{{ $account->account_number ? ' - ' . $account->account_number : '' }}{{ $account->bank_name ? ' (' . $account->bank_name . ')' : '' }}
+                                    </option>
+                                @endforeach
+                            </select>
+                            <div class="form-text">Chỉ hiển thị tài khoản bạn được gán quản lý.</div>
+                        </div>
+                    @endif
+                    <div id="externalBankGroup" class="fr-meta-grid">
+                        <div>
+                            <label class="form-label fw-semibold">Tên tài khoản <span class="text-danger">*</span></label>
+                            <input type="text" name="external_recipient" id="externalRecipient" class="form-control" maxlength="255" value="{{ old('external_recipient', $editingRequest?->external_recipient) }}" placeholder="VD: Công ty ABC, Nguyễn Văn A...">
+                        </div>
+                        <div>
+                            <label class="form-label fw-semibold">Số tài khoản <span class="text-danger">*</span></label>
+                            <input type="text" name="external_account_number" id="externalAccountNumber" class="form-control" maxlength="100" value="{{ old('external_account_number', $editingRequest?->external_account_number) }}">
+                        </div>
+                        <div>
+                            <label class="form-label fw-semibold">Ngân hàng <span class="text-danger">*</span></label>
+                            <input type="text" name="external_bank_name" id="externalBankName" class="form-control" maxlength="150" value="{{ old('external_bank_name', $editingRequest?->external_bank_name) }}">
+                        </div>
+                        <div>
+                            <label class="form-label fw-semibold">Chi nhánh</label>
+                            <input type="text" name="external_bank_branch" id="externalBankBranch" class="form-control" maxlength="150" value="{{ old('external_bank_branch', $editingRequest?->external_bank_branch) }}">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fr-note-grid mb-4">
+                    <div>
+                        <label class="form-label fw-semibold">Nội dung/Lý do <span class="text-danger">*</span></label>
+                        <textarea name="note" class="form-control" rows="5" maxlength="1000" placeholder="Mô tả rõ lý do thu/chi, nhà cung cấp, vật tư, ghi chú kế toán...">{{ old('note', $editingRequest?->note) }}</textarea>
+                    </div>
+                    @if($isManagerPage)
+                        <div>
+                            <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                                <label class="form-label fw-semibold mb-0">Chứng từ đính kèm</label>
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="addRequestAttachment" title="Thêm chứng từ">
+                                    <i class="bi bi-plus-lg me-1"></i>Thêm chứng từ
+                                </button>
+                            </div>
+                            <div id="requestAttachments" class="d-grid gap-2">
+                                @if($editingRequest && !empty($editingRequest->request_attachments))
+                                    @foreach($editingRequest->request_attachments as $attachmentIndex => $attachment)
+                                        @php
+                                            $attachmentMime = strtolower((string) ($attachment['mime_type'] ?? ''));
+                                            $attachmentPath = (string) ($attachment['path'] ?? '');
+                                            $isImageAttachment = str_starts_with($attachmentMime, 'image/') || preg_match('/\.(jpe?g|png|webp|gif)$/i', $attachmentPath);
+                                            $attachmentUrl = Storage::disk('public')->url($attachmentPath);
+                                        @endphp
+                                        <div class="fr-existing-attachment">
+                                            @if($isImageAttachment)
+                                                <a href="{{ $attachmentUrl }}" target="_blank" rel="noopener" title="Mở ảnh chứng từ">
+                                                    <img src="{{ $attachmentUrl }}" class="fr-attachment-preview" alt="{{ $attachment['name'] ?? 'Chứng từ' }}">
+                                                </a>
+                                            @else
+                                                <a href="{{ $attachmentUrl }}" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm flex-shrink-0">
+                                                    <i class="bi bi-file-earmark-arrow-down me-1"></i>Mở file
+                                                </a>
+                                            @endif
+                                            <a href="{{ $attachmentUrl }}" target="_blank" rel="noopener" class="text-decoration-none text-truncate flex-grow-1" title="{{ $attachment['name'] ?? 'Chứng từ' }}">
+                                                {{ $attachment['name'] ?? 'Chứng từ' }}
+                                            </a>
+                                            <button type="button" class="btn btn-outline-danger btn-sm remove-existing-attachment" title="Xóa chứng từ">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                            <input type="checkbox" class="d-none remove-existing-attachment-input" name="remove_attachments[]" value="{{ $attachmentIndex }}">
+                                        </div>
+                                    @endforeach
+                                @endif
+                                <div class="input-group request-attachment-row">
+                                    <input type="file" name="attachments[]" class="form-control" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">
+                                    <button type="button" class="btn btn-outline-danger remove-request-attachment" title="Bỏ chứng từ"><i class="bi bi-x-lg"></i></button>
+                                </div>
+                            </div>
+                            <div class="form-text">Tối đa 10 tệp; mỗi tệp không quá 20MB.</div>
+                        </div>
+                    @else
+                        <div>
+                            <label class="form-label fw-semibold">Chứng từ đính kèm</label>
+                            <input type="file" name="receipt_image" class="form-control" accept="image/*">
+                        </div>
+                    @endif
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                    <div class="fr-section-label mb-0"><i class="bi bi-list-ul"></i> Danh sách nội dung</div>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="addRequestLine">
+                        <i class="bi bi-plus-circle me-1"></i>Thêm dòng
+                    </button>
+                </div>
+                <div class="table-responsive border rounded mb-3">
+                    <table class="table table-sm align-middle mb-0 fr-items-table" id="requestItemsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="text-center" style="width:56px">STT</th>
+                                <th style="min-width:260px">Nội dung</th>
+                                <th style="width:96px">ĐVT</th>
+                                <th style="width:130px">Số lượng</th>
+                                <th style="width:150px">Đơn giá</th>
+                                <th style="width:150px">Thành tiền</th>
+                                <th style="width:48px"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($oldItems as $itemIndex => $item)
+                                <tr class="request-line">
+                                    <td class="line-index text-center">{{ $itemIndex + 1 }}</td>
+                                    <td>
+                                        <input type="text" name="items[{{ $itemIndex }}][content]" class="form-control form-control-sm line-content" value="{{ $item['content'] ?? '' }}" required>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="items[{{ $itemIndex }}][unit]" class="form-control form-control-sm" value="{{ $item['unit'] ?? '' }}">
+                                    </td>
+                                    <td>
+                                        <input type="number" name="items[{{ $itemIndex }}][quantity]" class="form-control form-control-sm line-quantity" min="0.01" step="0.01" value="{{ $item['quantity'] ?? 1 }}" required>
+                                    </td>
+                                    <td>
+                                        <input type="number" name="items[{{ $itemIndex }}][unit_price]" class="form-control form-control-sm line-price" min="0" step="any" value="{{ $item['unit_price'] ?? 0 }}" required>
+                                    </td>
+                                    <td class="line-total text-end fw-semibold">0đ</td>
+                                    <td class="text-center">
+                                        <button type="button" class="btn btn-outline-danger btn-sm fr-action-icon remove-request-line" title="Xóa dòng">
+                                            <i class="bi bi-x"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="fr-note-grid">
+                    <div></div>
+                    <div class="fr-summary-box">
+                        <div class="fr-summary-row">
+                            <span>Tổng tiền</span>
+                            <strong id="requestSubtotalText">0đ</strong>
+                        </div>
+                        <div class="fr-summary-row align-items-center">
+                            <label class="form-label mb-0" for="requestVat">VAT</label>
+                            <div class="input-group input-group-sm" style="max-width: 190px;">
+                                <input type="number" name="request_vat" id="requestVat" class="form-control text-end" min="0" step="any" value="{{ old('request_vat', $editingRequest?->request_vat ?? 0) }}">
+                                <span class="input-group-text">đ</span>
+                            </div>
+                        </div>
+                        <div class="fr-summary-row fr-summary-total">
+                            <span>Tổng cộng</span>
+                            <strong id="requestTotalText">0đ</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fr-actions">
+                    @if($isManagerPage)
+                        <a href="{{ route('manager.finance-requests.index') }}" class="btn btn-outline-secondary px-4">Hủy</a>
+                    @endif
+                    @if($editingRequest && !$isManagerPage)
+                        <a href="{{ route('leader.finance-requests.index') }}" class="btn btn-outline-secondary px-4">Hủy sửa</a>
+                    @endif
+                    <button type="submit" class="btn btn-primary px-4">
+                        <i class="bi bi-{{ $editingRequest ? 'check-lg' : 'send' }} me-1"></i>{{ $editingRequest?->status === \App\Models\Transaction::STATUS_REJECTED ? 'Lưu và gửi lại' : ($editingRequest ? 'Lưu thay đổi' : 'Gửi duyệt') }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+        </div>
+        @endif
+
+        @if(!$isManagerPage || !$showCreateForm)
+        <div class="{{ $isManagerPage ? 'col-12' : 'col-lg-7' }}">
+    <div class="fr-panel">
+        <div class="fr-panel-head">
+            <div>
+                <h2 class="fr-title">Phiếu đã gửi</h2>
+                <div class="fr-subtitle">Theo dõi trạng thái duyệt và xác nhận chuyển tiền</div>
+            </div>
+            <div class="d-flex gap-2 align-items-end flex-wrap justify-content-end">
+            @if($isManagerPage)
+                <a href="{{ route('manager.finance-requests.create') }}" class="btn btn-primary btn-sm align-self-end">
+                    <i class="bi bi-plus-lg me-1"></i>Tạo mới
+                </a>
+            @endif
+            <form method="GET" class="d-flex gap-2 align-items-end flex-wrap">
+                @if($isManagerPage)
+                <div>
+                    <label class="form-label small mb-1">Tìm kiếm</label>
+                    <input type="search" name="search" class="form-control form-control-sm" value="{{ $search }}" placeholder="Mã, tiêu đề, nội dung, người lập">
+                </div>
+                @endif
+                <div>
+                    <label class="form-label small mb-1">Loại chứng từ</label>
+                    <select name="form_type" class="form-select form-select-sm">
+                        <option value="all" @selected($formType === 'all')>Tất cả</option>
+                        <option value="{{ \App\Models\Transaction::REQUEST_FORM_CASH }}" @selected($formType === \App\Models\Transaction::REQUEST_FORM_CASH)>Yêu cầu thu/chi</option>
+                        <option value="{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}" @selected($formType === \App\Models\Transaction::REQUEST_FORM_PAYMENT)>Đề nghị thanh toán</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label small mb-1">Trạng thái</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="all" @selected($status === 'all')>Tất cả</option>
+                        <option value="{{ \App\Models\Transaction::STATUS_PENDING_APPROVAL }}" @selected($status === \App\Models\Transaction::STATUS_PENDING_APPROVAL)>Chờ duyệt</option>
+                        <option value="{{ \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION }}" @selected($status === \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION)>Đã duyệt - chờ hoàn thành</option>
+                        <option value="{{ \App\Models\Transaction::STATUS_APPROVED }}" @selected($status === \App\Models\Transaction::STATUS_APPROVED)>Đã duyệt</option>
+                        <option value="{{ \App\Models\Transaction::STATUS_REJECTED }}" @selected($status === \App\Models\Transaction::STATUS_REJECTED)>Từ chối</option>
+                    </select>
+                </div>
+                <button class="btn btn-outline-primary btn-sm"><i class="bi bi-funnel me-1"></i>Lọc</button>
+            </form>
+            </div>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Phiếu</th>
+                        <th>Dòng tiền</th>
+                        <th class="text-end">Số tiền</th>
+                        <th>Trạng thái</th>
+                        <th>Người xử lý</th>
+                        <th>Ngày gửi</th>
+                        <th class="text-end"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @forelse($requests as $requestItem)
+                        @php
+                            $flow = $requestItem->transactionCategory?->flow_direction === 'in' ? 'in' : 'out';
+                            $statusMeta = $statusLabels[$requestItem->status] ?? ['label' => $requestItem->status, 'class' => 'secondary'];
+                        @endphp
+                        <tr>
+                            <td><span class="fr-id-pill">#{{ $requestItem->id }}</span></td>
+                            <td>
+                                <div class="mb-1">
+                                    <span class="badge text-bg-light border">
+                                        {{ $requestItem->request_document_title ?: ($requestItem->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu') }}
+                                    </span>
+                                </div>
+                                <div class="fw-semibold">{{ $requestItem->request_title ?: 'Phiếu yêu cầu' }}</div>
+                                <div class="small text-muted">{{ $requestItem->transactionCategory?->name ?: '-' }}</div>
+                                <div class="fr-creator-line">
+                                    <span><i class="bi bi-person"></i>{{ $requestItem->submitter?->name ?: '-' }}</span>
+                                    <span><i class="bi bi-diagram-3"></i>{{ $requestItem->submitter?->department?->block?->name ?: $requestItem->submitter?->block?->name ?: 'Chưa gán khối' }}</span>
+                                    <span><i class="bi bi-building"></i>{{ $requestItem->submitter?->department?->name ?: 'Chưa gán phòng ban' }}</span>
+                                </div>
+                                @if($requestItem->note)
+                                    <div class="small text-muted">{{ \Illuminate\Support\Str::limit($requestItem->note, 90) }}</div>
+                                @endif
+                                @if(!empty($requestItem->request_attachments))
+                                    <div class="d-flex flex-wrap gap-1 mt-1">
+                                        @foreach($requestItem->request_attachments as $attachment)
+                                            <a href="{{ asset('storage/' . $attachment['path']) }}" target="_blank" class="badge text-bg-light border text-decoration-none" title="{{ $attachment['name'] ?? 'Chứng từ' }}">
+                                                <i class="bi bi-paperclip"></i>{{ \Illuminate\Support\Str::limit($attachment['name'] ?? 'Chứng từ', 24) }}
+                                            </a>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </td>
+                            <td>
+                                <span class="badge bg-{{ $flow === 'in' ? 'success' : 'danger' }}">
+                                    {{ $flow === 'in' ? 'Thu' : 'Chi' }}
+                                </span>
+                            </td>
+                            <td class="text-end fw-bold">{{ number_format((float) $requestItem->amount) }}đ</td>
+                            <td>
+                                <span class="badge bg-{{ $statusMeta['class'] }}">{{ $statusMeta['label'] }}</span>
+                                @if($requestItem->status === \App\Models\Transaction::STATUS_REJECTED && $requestItem->reject_reason)
+                                    <div class="small text-danger mt-1">{{ \Illuminate\Support\Str::limit($requestItem->reject_reason, 80) }}</div>
+                                @endif
+                            </td>
+                            <td>
+                                @if(in_array($requestItem->status, [\App\Models\Transaction::STATUS_APPROVED, \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION], true))
+                                    {{ $requestItem->approver?->name ?: '-' }}
+                                @elseif($requestItem->status === \App\Models\Transaction::STATUS_REJECTED)
+                                    {{ $requestItem->rejecter?->name ?: '-' }}
+                                @else
+                                    <span class="text-muted">Đang chờ duyệt</span>
+                                @endif
+                            </td>
+                            <td>{{ $requestItem->created_at?->copy()->timezone(config('app.display_timezone'))->format('d/m/Y H:i') ?: '-' }}</td>
+                            <td class="text-end">
+                                @php
+                                    $canEditLeaderRequest = $source === 'leader'
+                                        && ((int) $requestItem->submitted_by === (int) auth()->id() || auth()->user()->hasRole('admin'))
+                                        && ($requestItem->status === \App\Models\Transaction::STATUS_REJECTED
+                                            || ($requestItem->status === \App\Models\Transaction::STATUS_PENDING_APPROVAL
+                                                && !$requestItem->approvalSteps->contains(fn ($step) => $step->approved_by !== null || $step->status !== 'pending')));
+                                @endphp
+                                @if($canEditLeaderRequest)
+                                    <a href="{{ route('leader.finance-requests.edit', $requestItem) }}" class="btn btn-outline-primary btn-sm fr-action-icon" title="{{ $requestItem->status === \App\Models\Transaction::STATUS_REJECTED ? 'Sửa và gửi lại' : 'Sửa phiếu' }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                @endif
+                                @if($isManagerPage)
+                                    @php($canManageManagerRequest = in_array($requestItem->status, [\App\Models\Transaction::STATUS_PENDING_APPROVAL, \App\Models\Transaction::STATUS_REJECTED], true))
+                                    @if($canManageManagerRequest)
+                                        <a href="{{ route('manager.finance-requests.edit', $requestItem) }}" class="btn btn-outline-success btn-sm fr-action-icon" title="Sửa phiếu">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                    @endif
+                                    <form method="POST" action="{{ route('manager.finance-requests.duplicate', $requestItem) }}" class="d-inline" onsubmit="return confirm('Nhân bản phiếu #{{ $requestItem->id }} và gửi vào luồng duyệt mới?');">
+                                        @csrf
+                                        <button type="submit" class="btn btn-outline-primary btn-sm fr-action-icon" title="Nhân bản phiếu">
+                                            <i class="bi bi-copy"></i>
+                                        </button>
+                                    </form>
+                                    @if($canManageManagerRequest)
+                                        <form method="POST" action="{{ route('manager.finance-requests.destroy', $requestItem) }}" class="d-inline" onsubmit="return confirm('Xóa phiếu #{{ $requestItem->id }}? Thao tác này không thể hoàn tác.');">
+                                            @csrf @method('DELETE')
+                                            <button type="submit" class="btn btn-outline-danger btn-sm fr-action-icon" title="Xóa phiếu">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    @endif
+                                @endif
+                                <a href="{{ route($config['route_prefix'] . '.print', $requestItem) }}" target="_blank" class="btn btn-outline-secondary btn-sm fr-action-icon" title="In phiếu">
+                                    <i class="bi bi-printer"></i>
+                                </a>
+                            </td>
+                        </tr>
+                    @empty
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">Chưa có phiếu yêu cầu.</td>
+                        </tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </div>
+        <div class="p-3 border-top bg-white">
+            {{ $requests->links() }}
+        </div>
+    </div>
+        </div>
+        @endif
+    </div>
+
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const requestDocumentTitle = document.getElementById('requestDocumentTitle');
+    const requestDocumentTitleCustom = document.getElementById('requestDocumentTitleCustom');
+    const flowInputs = Array.from(document.querySelectorAll('input[name="flow_direction"]'));
+    const formTypeInput = document.getElementById('requestFormType');
+    const flowDirectionGroup = document.getElementById('flowDirectionGroup');
+    const requestItemsTable = document.getElementById('requestItemsTable');
+    const addLineButton = document.getElementById('addRequestLine');
+    const requestVatInput = document.getElementById('requestVat');
+    const requestSubtotalText = document.getElementById('requestSubtotalText');
+    const requestTotalText = document.getElementById('requestTotalText');
+    const paymentMethod = document.getElementById('paymentMethod');
+    const managedTransferGroup = document.getElementById('managedTransferGroup');
+    const managedDestinationAccountId = document.getElementById('managedDestinationAccountId');
+    const externalBankGroup = document.getElementById('externalBankGroup');
+    const externalRecipient = document.getElementById('externalRecipient');
+    const externalAccountNumber = document.getElementById('externalAccountNumber');
+    const externalBankName = document.getElementById('externalBankName');
+    const attachmentsContainer = document.getElementById('requestAttachments');
+    const addAttachmentButton = document.getElementById('addRequestAttachment');
+
+    function bindAttachmentRow(row) {
+        row.querySelector('.remove-request-attachment')?.addEventListener('click', function () {
+            const rows = attachmentsContainer.querySelectorAll('.request-attachment-row');
+            if (rows.length === 1) {
+                row.querySelector('input[type="file"]').value = '';
+                return;
+            }
+            row.remove();
+        });
+    }
+
+    if (attachmentsContainer) {
+        attachmentsContainer.querySelectorAll('.remove-existing-attachment').forEach((button) => {
+            button.addEventListener('click', function () {
+                const row = this.closest('.fr-existing-attachment');
+                row.querySelector('.remove-existing-attachment-input').checked = true;
+                row.classList.add('d-none');
+            });
+        });
+        attachmentsContainer.querySelectorAll('.request-attachment-row').forEach(bindAttachmentRow);
+        addAttachmentButton?.addEventListener('click', function () {
+            if (attachmentsContainer.querySelectorAll('.request-attachment-row').length >= 10) return;
+            const row = attachmentsContainer.querySelector('.request-attachment-row').cloneNode(true);
+            row.querySelector('input[type="file"]').value = '';
+            attachmentsContainer.appendChild(row);
+            bindAttachmentRow(row);
+            row.querySelector('input[type="file"]').click();
+        });
+    }
+
+    if (!requestItemsTable) return;
+
+    function syncPaymentMethod() {
+        const method = paymentMethod?.value || 'cash';
+        const isManagedTransfer = method === 'managed_transfer';
+        const isBankTransfer = method === 'bank_transfer';
+
+        managedTransferGroup?.classList.toggle('d-none', !isManagedTransfer);
+        externalBankGroup?.classList.toggle('d-none', !isBankTransfer);
+
+        if (managedDestinationAccountId) managedDestinationAccountId.required = isManagedTransfer;
+        if (externalRecipient) externalRecipient.required = isBankTransfer;
+        if (externalAccountNumber) externalAccountNumber.required = isBankTransfer;
+        if (externalBankName) externalBankName.required = isBankTransfer;
+    }
+
+    paymentMethod?.addEventListener('change', syncPaymentMethod);
+    syncPaymentMethod();
+
+    function formatMoney(value) {
+        return Math.round(Number(value) || 0).toLocaleString('vi-VN') + 'đ';
+    }
+
+    function currentFlow() {
+        return document.querySelector('input[name="flow_direction"]:checked')?.value || 'out';
+    }
+
+    function syncFormType() {
+        const isPaymentProposal = formTypeInput?.value === '{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}';
+        flowDirectionGroup?.classList.toggle('d-none', isPaymentProposal);
+        if (isPaymentProposal) {
+            const outInput = document.getElementById('requestOut');
+            if (outInput) outInput.checked = true;
+        }
+    }
+
+    function syncDocumentTitle() {
+        const isCustom = requestDocumentTitle?.value === '__custom__';
+        requestDocumentTitleCustom?.classList.toggle('d-none', !isCustom);
+        requestDocumentTitleCustom?.toggleAttribute('required', isCustom);
+        if (requestDocumentTitle?.value === 'Phiếu yêu cầu') formTypeInput.value = '{{ \App\Models\Transaction::REQUEST_FORM_CASH }}';
+        if (requestDocumentTitle?.value === 'Phiếu đề nghị thanh toán') formTypeInput.value = '{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}';
+        syncFormType();
+    }
+
+    flowInputs.forEach((input) => input.addEventListener('change', function () {
+        syncPaymentMethod();
+    }));
+    formTypeInput?.addEventListener('change', syncFormType);
+    requestDocumentTitle?.addEventListener('change', syncDocumentTitle);
+    syncDocumentTitle();
+    syncFormType();
+
+    function requestRows() {
+        return Array.from(requestItemsTable.querySelectorAll('tbody tr.request-line'));
+    }
+
+    function recalculateRequestItems() {
+        let subtotal = 0;
+
+        requestRows().forEach((row, index) => {
+            row.querySelector('.line-index').textContent = index + 1;
+            row.querySelectorAll('input').forEach((input) => {
+                input.name = input.name.replace(/items\[\d+\]/, 'items[' + index + ']');
+            });
+
+            const quantity = Number(row.querySelector('.line-quantity')?.value || 0);
+            const unitPrice = Number(row.querySelector('.line-price')?.value || 0);
+            const lineTotal = quantity * unitPrice;
+            subtotal += lineTotal;
+            row.querySelector('.line-total').textContent = formatMoney(lineTotal);
+        });
+
+        const vat = Number(requestVatInput?.value || 0);
+        requestSubtotalText.textContent = formatMoney(subtotal);
+        requestTotalText.textContent = formatMoney(subtotal + vat);
+    }
+
+    function bindRequestLine(row) {
+        row.querySelectorAll('.line-quantity, .line-price').forEach((input) => {
+            input.addEventListener('input', recalculateRequestItems);
+        });
+        row.querySelector('.remove-request-line')?.addEventListener('click', function () {
+            if (requestRows().length <= 1) {
+                row.querySelectorAll('input').forEach((input) => {
+                    input.value = input.classList.contains('line-quantity') ? '1' : '';
+                });
+                row.querySelector('.line-price').value = '0';
+            } else {
+                row.remove();
+            }
+            recalculateRequestItems();
+        });
+    }
+
+    addLineButton?.addEventListener('click', function () {
+        const rows = requestRows();
+        const newRow = rows[rows.length - 1].cloneNode(true);
+        newRow.querySelectorAll('input').forEach((input) => {
+            input.value = input.classList.contains('line-quantity') ? '1' : '';
+        });
+        newRow.querySelector('.line-price').value = '0';
+        requestItemsTable.querySelector('tbody').appendChild(newRow);
+        bindRequestLine(newRow);
+        recalculateRequestItems();
+        newRow.querySelector('.line-content')?.focus();
+    });
+
+    requestRows().forEach(bindRequestLine);
+    requestVatInput?.addEventListener('input', recalculateRequestItems);
+    recalculateRequestItems();
+});
+</script>
+@endsection
