@@ -430,6 +430,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/orders', [WarehouseDashboardController::class, 'orders'])->name('orders');
         Route::post('/orders/{order}/transfer-packing-warehouse', [WarehouseDashboardController::class, 'transferPackingWarehouse'])->name('orders.transfer-packing-warehouse');
         Route::post('/orders/{order}/pull-packing-warehouse', [WarehouseDashboardController::class, 'pullPackingWarehouse'])->name('orders.pull-packing-warehouse');
+        Route::post('/orders/{order}/undo-pull-packing-warehouse', [WarehouseDashboardController::class, 'undoPullPackingWarehouse'])->name('orders.undo-pull-packing-warehouse');
         Route::post('/orders/{order}/allow-historical-packing', [WarehouseDashboardController::class, 'allowHistoricalPacking'])->name('orders.allow-historical-packing');
         Route::post('/orders/{order}/logistics', [WarehouseDashboardController::class, 'updateLogistics'])->name('orders.logistics');
         Route::post('/orders/{order}/confirm-sale-changes', [WarehouseDashboardController::class, 'confirmSaleChanges'])->name('orders.confirm-sale-changes');

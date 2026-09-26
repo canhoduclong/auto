@@ -1263,8 +1263,6 @@ class WarehouseDashboardController extends Controller
         if (! $isPackageModule && $managedWarehouseId) {
             $otherWarehouseOrders = Order::query()
                 ->with(['customer:id,name,phone,address', 'warehouse:id,name', 'items:id,order_id,product_id,product_variant_id,quantity'])
-                ->where('warehouse_id', '>', 0)
-                ->where('warehouse_id', '!=', $managedWarehouseId)
                 ->whereNull('trash_at')
                 ->forPackingDate($selectedDate)
                 ->orderBy('daily_sequence')
@@ -1289,10 +1287,23 @@ class WarehouseDashboardController extends Controller
                 ->where('status', WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)
                 ->pluck('order_id')->flip();
             $transferableStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
+            $latestPullActions = OrderHistory::query()
+                ->whereIn('order_id', $candidateIds)
+                ->whereIn('action', ['warehouse_pull_packing_order', 'warehouse_undo_pull_packing_order'])
+                ->orderByDesc('id')
+                ->get()
+                ->unique('order_id')
+                ->keyBy('order_id');
 
-            $otherWarehouseOrders->each(function (Order $candidate) use ($transferableStatuses, $ordersWithCutting, $ordersWithTransfers, $ordersWithInventoryTransfers): void {
+            $otherWarehouseOrders->each(function (Order $candidate) use ($managedWarehouseId, $transferableStatuses, $ordersWithCutting, $ordersWithTransfers, $ordersWithInventoryTransfers, $latestPullActions): void {
                 $reason = null;
-                if ((bool) $candidate->is_return_order) {
+                $assignedWarehouseId = (int) ($candidate->warehouse_id ?? 0);
+                $isOtherWarehouse = $assignedWarehouseId > 0 && $assignedWarehouseId !== $managedWarehouseId;
+                if (! $isOtherWarehouse) {
+                    $reason = $assignedWarehouseId <= 0
+                        ? 'Đơn chưa thuộc kho nào; nhận đóng hàng từ danh sách Đơn cần đóng.'
+                        : 'Đơn đang thuộc kho hiện tại.';
+                } elseif ((bool) $candidate->is_return_order) {
                     $reason = 'Đơn trả hàng không thuộc quy trình kéo về đóng hàng.';
                 } elseif (! in_array((string) $candidate->status, $transferableStatuses, true)) {
                     $reason = 'Trạng thái đơn không còn cho phép kéo về đóng hàng.';
@@ -1315,6 +1326,23 @@ class WarehouseDashboardController extends Controller
 
                 $candidate->setAttribute('can_pull_to_warehouse', $reason === null);
                 $candidate->setAttribute('pull_block_reason', $reason);
+
+                $latestPull = $latestPullActions->get($candidate->id);
+                $snapshot = $latestPull?->action === 'warehouse_pull_packing_order'
+                    ? json_decode((string) $latestPull->schedule_snapshot, true)
+                    : null;
+                $canUndoPull = is_array($snapshot)
+                    && (int) ($snapshot['target_warehouse_id'] ?? 0) === $managedWarehouseId
+                    && (int) ($snapshot['source_warehouse_id'] ?? 0) > 0
+                    && $assignedWarehouseId === $managedWarehouseId
+                    && in_array((string) $candidate->status, $transferableStatuses, true)
+                    && ! $ordersWithCutting->has($candidate->id)
+                    && ! $ordersWithTransfers->has($candidate->id)
+                    && ! $ordersWithInventoryTransfers->has($candidate->id);
+                $candidate->setAttribute('can_undo_pull_to_warehouse', $canUndoPull);
+                $candidate->setAttribute('undo_pull_block_reason', $latestPull?->action === 'warehouse_pull_packing_order' && ! $canUndoPull
+                    ? 'Không thể Undo vì đơn đã phát sinh xử lý hoặc phiếu chuyển hàng sau khi kéo.'
+                    : null);
             });
         }
 
@@ -1579,6 +1607,11 @@ class WarehouseDashboardController extends Controller
                     'status_after' => $lockedOrder->status,
                     'note' => "{$targetWarehouse->name} kéo đơn chưa hoàn thành từ {$sourceName} về tiếp tục đóng hàng."
                         .($goodsTransfer ? ' Hàng đang giữ được gửi kèm phiếu '.$goodsTransfer->transfer_code.'.' : ' Không có hàng giữ tại kho nguồn.'),
+                    'schedule_snapshot' => json_encode([
+                        'source_warehouse_id' => $sourceWarehouseId,
+                        'target_warehouse_id' => $targetWarehouseId,
+                        'inventory_transfer_id' => $goodsTransfer?->id,
+                    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                 ]);
 
                 return [$sourceName, (string) $targetWarehouse->name, $goodsTransfer];
@@ -1593,6 +1626,79 @@ class WarehouseDashboardController extends Controller
         }
 
         return back()->with('success', $message);
+    }
+
+    /** Undo the latest pull when no subsequent warehouse operation has started. */
+    public function undoPullPackingWarehouse(Request $request, Order $order)
+    {
+        $targetWarehouseId = (int) ($request->user()?->warehouse_id ?? 0);
+        if ($targetWarehouseId <= 0) {
+            return back()->with('error', 'Tài khoản chưa được gán kho đang làm việc.');
+        }
+
+        try {
+            $sourceWarehouseName = DB::transaction(function () use ($order, $request, $targetWarehouseId): string {
+                $lockedOrder = Order::query()->lockForUpdate()->findOrFail($order->id);
+                $latestAction = OrderHistory::query()
+                    ->where('order_id', $lockedOrder->id)
+                    ->whereIn('action', ['warehouse_pull_packing_order', 'warehouse_undo_pull_packing_order'])
+                    ->orderByDesc('id')
+                    ->lockForUpdate()
+                    ->first();
+                $snapshot = $latestAction?->action === 'warehouse_pull_packing_order'
+                    ? json_decode((string) $latestAction->schedule_snapshot, true)
+                    : null;
+                $sourceWarehouseId = (int) ($snapshot['source_warehouse_id'] ?? 0);
+                if (! is_array($snapshot) || $sourceWarehouseId <= 0 || (int) ($snapshot['target_warehouse_id'] ?? 0) !== $targetWarehouseId) {
+                    throw new \RuntimeException('Không tìm thấy lượt kéo gần nhất có thể Undo.');
+                }
+                if ((int) $lockedOrder->warehouse_id !== $targetWarehouseId) {
+                    throw new \RuntimeException('Đơn không còn thuộc kho hiện tại.');
+                }
+                if (! in_array((string) $lockedOrder->status, array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]), true)) {
+                    throw new \RuntimeException('Đơn đã chuyển sang bước khác nên không thể Undo kéo đơn.');
+                }
+                $hasBlockingWork = ProductCuttingBatch::query()->where('order_id', $lockedOrder->id)->where('status', ProductCuttingBatch::STATUS_IN_PROGRESS)->exists()
+                    || WarehouseTransfer::query()->where('order_id', $lockedOrder->id)->whereIn('status', [
+                        WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                        WarehouseTransfer::STATUS_IN_TRANSIT,
+                        WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                    ])->exists()
+                    || WarehouseInventoryTransfer::query()->where('order_id', $lockedOrder->id)->where('status', WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)->exists();
+                if ($hasBlockingWork) {
+                    throw new \RuntimeException('Đơn đã phát sinh pha lóc hoặc phiếu điều chuyển nên không thể Undo.');
+                }
+
+                $sourceWarehouse = Warehouse::query()->whereKey($sourceWarehouseId)->where('status', true)->first();
+                if (! $sourceWarehouse) {
+                    throw new \RuntimeException('Kho nguồn không còn hoạt động.');
+                }
+                $this->releaseOrderReservations($lockedOrder);
+                $this->reserveOrderStockAtWarehouse($lockedOrder, $sourceWarehouseId);
+                $lockedOrder->forceFill([
+                    'warehouse_id' => $sourceWarehouseId,
+                    'stock_sufficient' => null,
+                    'stock_shortage_detail' => null,
+                    'stock_alert_status' => null,
+                ])->save();
+                OrderHistory::create([
+                    'order_id' => $lockedOrder->id,
+                    'action' => 'warehouse_undo_pull_packing_order',
+                    'user_id' => $request->user()->id,
+                    'role' => 'warehouse',
+                    'status_before' => $lockedOrder->status,
+                    'status_after' => $lockedOrder->status,
+                    'note' => 'Undo kéo đơn; trả đơn về '.$sourceWarehouse->name.'.',
+                    'schedule_snapshot' => json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                ]);
+
+                return (string) $sourceWarehouse->name;
+            });
+        } catch (\Throwable $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        return back()->with('success', 'Đã Undo kéo đơn #'.$order->code.' và trả về '.$sourceWarehouseName.'.');
     }
 
     /** Admin explicitly authorizes an unfinished historical order to continue at its original date. */

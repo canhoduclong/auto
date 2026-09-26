@@ -1300,7 +1300,7 @@
             <li class="nav-item">
                 <a class="nav-link {{ $activeOrdersTab === 'pull' ? 'active' : '' }}" href="{{ route('warehouse.orders', array_filter(['date' => $selectedDate, 'tab' => 'pull'])) }}">
                     <i class="bi bi-box-arrow-in-left me-1"></i>Kéo đơn hàng
-                    <span class="badge bg-success ms-1">{{ ($otherWarehouseOrders ?? collect())->where('can_pull_to_warehouse', true)->count() }}</span>
+                    <span class="badge bg-secondary ms-1">{{ ($otherWarehouseOrders ?? collect())->count() }}</span>
                 </a>
             </li>
         @endif
@@ -1310,8 +1310,8 @@
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center gap-2 flex-wrap">
                 <div>
-                    <h5 class="mb-1 fw-bold"><i class="bi bi-box-arrow-in-left me-2 text-success"></i>Đơn hàng tại các kho khác</h5>
-                    <div class="small text-muted">Ngày {{ \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m/Y') }} · Chỉ những đơn đủ điều kiện mới có nút kéo về kho hiện tại.</div>
+                    <h5 class="mb-1 fw-bold"><i class="bi bi-box-arrow-in-left me-2 text-success"></i>Tất cả đơn hàng trong ngày</h5>
+                    <div class="small text-muted">Ngày {{ \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m/Y') }} · Theo dõi kho đang giữ đơn, kéo về hoặc Undo lượt kéo gần nhất.</div>
                 </div>
                 <span class="badge bg-light text-dark border">{{ ($otherWarehouseOrders ?? collect())->count() }} đơn</span>
             </div>
@@ -1331,7 +1331,13 @@
                                 <strong>{{ $otherOrder->customer?->name ?: $otherOrder->recipient_name ?: '—' }}</strong>
                                 <div class="small text-muted">{{ $otherOrder->recipient_phone ?: $otherOrder->customer?->phone ?: 'Chưa có SĐT' }}</div>
                             </td>
-                            <td><span class="badge bg-secondary">{{ $otherOrder->warehouse?->name ?: 'Chưa xác định' }}</span></td>
+                            <td>
+                                @if((int) ($otherOrder->warehouse_id ?? 0) > 0)
+                                    <span class="badge {{ (int) $otherOrder->warehouse_id === (int) auth()->user()?->warehouse_id ? 'bg-success' : 'bg-secondary' }}">{{ $otherOrder->warehouse?->name ?: ('Kho #'.$otherOrder->warehouse_id) }}</span>
+                                @else
+                                    <span class="badge bg-light text-dark border">Chưa thuộc kho</span>
+                                @endif
+                            </td>
                             <td>{{ $statusMeta[$otherOrder->status]['label'] ?? $otherOrder->status }}</td>
                             <td class="text-end" style="min-width: 230px;">
                                 @if($otherOrder->can_pull_to_warehouse)
@@ -1340,8 +1346,15 @@
                                         <input type="hidden" name="packing_date" value="{{ $selectedDate }}">
                                         <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-box-arrow-in-left me-1"></i>Kéo đơn về kho</button>
                                     </form>
+                                @elseif($otherOrder->can_undo_pull_to_warehouse)
+                                    <form method="POST" action="{{ route('warehouse.orders.undo-pull-packing-warehouse', $otherOrder) }}" onsubmit="return confirm('Undo lượt kéo đơn {{ addslashes($otherOrder->code ?: '#'.$otherOrder->id) }} và trả về kho nguồn?');">
+                                        @csrf
+                                        <button type="submit" class="btn btn-outline-danger btn-sm"><i class="bi bi-arrow-counterclockwise me-1"></i>Undo kéo đơn</button>
+                                    </form>
+                                @elseif($otherOrder->undo_pull_block_reason)
+                                    <div class="small text-danger fw-semibold"><i class="bi bi-lock me-1"></i>{{ $otherOrder->undo_pull_block_reason }}</div>
                                 @else
-                                    <div class="small text-danger fw-semibold"><i class="bi bi-info-circle me-1"></i>{{ $otherOrder->pull_block_reason }}</div>
+                                    <div class="small text-muted"><i class="bi bi-info-circle me-1"></i>{{ $otherOrder->pull_block_reason }}</div>
                                 @endif
                             </td>
                         </tr>
