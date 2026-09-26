@@ -1240,6 +1240,7 @@
     <div class="card border-0 shadow-sm mb-3">
         <div class="card-body">
             <form method="GET" action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders') }}" class="row g-2 align-items-end">
+                <input type="hidden" name="tab" value="{{ request('tab') === 'pull' ? 'pull' : 'orders' }}">
                 <div class="col-md-2">
                     <label class="form-label small text-muted mb-1">Ngày</label>
                     <input type="date" name="date" class="form-control" value="{{ $selectedDate ?? now()->toDateString() }}">
@@ -1259,7 +1260,7 @@
                     <button class="btn btn-primary" type="submit">
                         <i class="bi bi-funnel me-1"></i>Lọc
                     </button>
-                    <a href="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders') }}" class="btn btn-outline-secondary">
+                    <a href="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders', request('tab') === 'pull' ? ['tab' => 'pull'] : []) }}" class="btn btn-outline-secondary">
                         <i class="bi bi-arrow-clockwise me-1"></i>Hôm nay
                     </a>
                     <div class="mx-3 wh-orders-quick-dates">
@@ -1267,7 +1268,7 @@
                         <div class="wh-quick-wrap">
                             @foreach($quickDates as $quickDate)
                                 @if($quickDate['available'])
-                                    <a href="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders', array_filter(['date' => $quickDate['date'], 'status' => $status ?: null])) }}"
+                                    <a href="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders', array_filter(['date' => $quickDate['date'], 'status' => $status ?: null, 'tab' => request('tab') === 'pull' ? 'pull' : null])) }}"
                                     class="wh-quick-pill {{ $quickDate['active'] ? 'active' : '' }}">
                                         {{ $quickDate['label'] }}
                                         <span class="wh-quick-count">{{ $quickDate['count'] }}</span>
@@ -1288,6 +1289,70 @@
         </div>
     </div>
 
+    @php $activeOrdersTab = request('tab') === 'pull' && ($orderRoutePrefix ?? 'warehouse') === 'warehouse' ? 'pull' : 'orders'; @endphp
+    <ul class="nav nav-tabs mb-3">
+        <li class="nav-item">
+            <a class="nav-link {{ $activeOrdersTab === 'orders' ? 'active' : '' }}" href="{{ route(($orderRoutePrefix ?? 'warehouse').'.orders', array_filter(['date' => $selectedDate, 'status' => $status ?: null])) }}">
+                <i class="bi bi-box-seam me-1"></i>Đơn cần đóng <span class="badge bg-secondary ms-1">{{ $orders->count() }}</span>
+            </a>
+        </li>
+        @if(($orderRoutePrefix ?? 'warehouse') === 'warehouse')
+            <li class="nav-item">
+                <a class="nav-link {{ $activeOrdersTab === 'pull' ? 'active' : '' }}" href="{{ route('warehouse.orders', array_filter(['date' => $selectedDate, 'tab' => 'pull'])) }}">
+                    <i class="bi bi-box-arrow-in-left me-1"></i>Kéo đơn hàng
+                    <span class="badge bg-success ms-1">{{ ($otherWarehouseOrders ?? collect())->where('can_pull_to_warehouse', true)->count() }}</span>
+                </a>
+            </li>
+        @endif
+    </ul>
+
+    @if($activeOrdersTab === 'pull')
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                <div>
+                    <h5 class="mb-1 fw-bold"><i class="bi bi-box-arrow-in-left me-2 text-success"></i>Đơn hàng tại các kho khác</h5>
+                    <div class="small text-muted">Ngày {{ \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m/Y') }} · Chỉ những đơn đủ điều kiện mới có nút kéo về kho hiện tại.</div>
+                </div>
+                <span class="badge bg-light text-dark border">{{ ($otherWarehouseOrders ?? collect())->count() }} đơn</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr><th>STT / Đơn hàng</th><th>Khách hàng</th><th>Kho hiện tại</th><th>Trạng thái</th><th class="text-end">Thao tác</th></tr>
+                    </thead>
+                    <tbody>
+                    @forelse(($otherWarehouseOrders ?? collect()) as $otherOrder)
+                        <tr>
+                            <td>
+                                <strong>#{{ $otherOrder->daily_sequence ?: '—' }}</strong> · {{ $otherOrder->code ?: ('Đơn '.$otherOrder->id) }}
+                                <div class="small text-muted">{{ number_format((float) $otherOrder->items->sum('quantity'), 0, ',', '.') }} sản phẩm</div>
+                            </td>
+                            <td>
+                                <strong>{{ $otherOrder->customer?->name ?: $otherOrder->recipient_name ?: '—' }}</strong>
+                                <div class="small text-muted">{{ $otherOrder->recipient_phone ?: $otherOrder->customer?->phone ?: 'Chưa có SĐT' }}</div>
+                            </td>
+                            <td><span class="badge bg-secondary">{{ $otherOrder->warehouse?->name ?: 'Chưa xác định' }}</span></td>
+                            <td>{{ $statusMeta[$otherOrder->status]['label'] ?? $otherOrder->status }}</td>
+                            <td class="text-end" style="min-width: 230px;">
+                                @if($otherOrder->can_pull_to_warehouse)
+                                    <form method="POST" action="{{ route('warehouse.orders.pull-packing-warehouse', $otherOrder) }}" onsubmit="return confirm('Kéo đơn {{ addslashes($otherOrder->code ?: '#'.$otherOrder->id) }} từ {{ addslashes($otherOrder->warehouse?->name ?: 'kho khác') }} về kho hiện tại để tiếp tục đóng hàng?');">
+                                        @csrf
+                                        <input type="hidden" name="packing_date" value="{{ $selectedDate }}">
+                                        <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-box-arrow-in-left me-1"></i>Kéo đơn về kho</button>
+                                    </form>
+                                @else
+                                    <div class="small text-danger fw-semibold"><i class="bi bi-info-circle me-1"></i>{{ $otherOrder->pull_block_reason }}</div>
+                                @endif
+                            </td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="5" class="text-center text-muted py-5"><i class="bi bi-inbox fs-2 d-block mb-2"></i>Không có đơn của kho khác trong ngày này.</td></tr>
+                    @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    @else
     <div class="d-flex justify-content-between align-items-center gap-2 mb-3 flex-wrap">
         <div class="d-flex gap-2 flex-wrap">
             <span class="badge bg-dark wh-summary-pill">Tổng đơn: {{ $orders->count() }}</span>
@@ -1296,12 +1361,6 @@
             <span class="badge bg-danger wh-summary-pill">Sale từ chối điều chỉnh: {{ $orders->where('warehouse_adjustment_status', \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED)->count() }}</span>
         </div>
         <div class="d-flex gap-2 flex-wrap">
-            @if(($pullableOrders ?? collect())->isNotEmpty())
-                <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#pullPackingOrderModal">
-                    <i class="bi bi-box-arrow-in-left me-1"></i>Kéo đơn từ kho khác
-                    <span class="badge bg-success ms-1">{{ $pullableOrders->count() }}</span>
-                </button>
-            @endif
             @if($deferredComponentImportRequests->isNotEmpty())
                 <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal"
                     data-bs-target="#cuttingImportModal" aria-controls="cuttingImportModal">
@@ -1328,48 +1387,6 @@
             </a>
         </div>
     </div>
-
-
-    @if(($pullableOrders ?? collect())->isNotEmpty())
-        <div class="modal fade" id="pullPackingOrderModal" tabindex="-1" aria-labelledby="pullPackingOrderModalLabel" aria-hidden="true">
-            <div class="modal-dialog modal-xl modal-dialog-scrollable">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <div>
-                            <h5 class="modal-title" id="pullPackingOrderModalLabel">Đơn chưa hoàn thành tại kho khác</h5>
-                            <div class="small text-muted">Ngày {{ \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m/Y') }} · Kéo về kho hiện tại để tiếp tục đóng hàng</div>
-                        </div>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
-                    </div>
-                    <div class="modal-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover align-middle mb-0">
-                                <thead class="table-light"><tr><th>Đơn hàng</th><th>Khách hàng</th><th>Kho hiện tại</th><th>Trạng thái</th><th class="text-end">Thao tác</th></tr></thead>
-                                <tbody>
-                                @foreach($pullableOrders as $pullableOrder)
-                                    <tr>
-                                        <td><strong>#{{ $pullableOrder->daily_sequence ?: '—' }}</strong> · {{ $pullableOrder->code }}<div class="small text-muted">{{ $pullableOrder->items->sum('quantity') }} sản phẩm</div></td>
-                                        <td>{{ $pullableOrder->customer?->name ?: '—' }}<div class="small text-muted">{{ $pullableOrder->recipient_phone ?: $pullableOrder->customer?->phone ?: 'Chưa có SĐT' }}</div></td>
-                                        <td><span class="badge bg-secondary">{{ $pullableOrder->warehouse?->name ?: 'Chưa xác định' }}</span></td>
-                                        <td>{{ $statusMeta[$pullableOrder->status]['label'] ?? $pullableOrder->status }}</td>
-                                        <td class="text-end">
-                                            <form method="POST" action="{{ route('warehouse.orders.pull-packing-warehouse', $pullableOrder) }}" onsubmit="return confirm('Kéo đơn {{ addslashes($pullableOrder->code ?: '#'.$pullableOrder->id) }} từ {{ addslashes($pullableOrder->warehouse?->name ?: 'kho khác') }} về kho hiện tại để tiếp tục đóng hàng?');">
-                                                @csrf
-                                                <input type="hidden" name="packing_date" value="{{ $selectedDate }}">
-                                                <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-box-arrow-in-left me-1"></i>Kéo về kho</button>
-                                            </form>
-                                        </td>
-                                    </tr>
-                                @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    @endif
-
 
 
     @if($deferredComponentImportRequests->isNotEmpty())
@@ -1477,6 +1494,7 @@
         @endforeach
     </aside>
     </div>
+    @endif
     @endif
 </div>
 

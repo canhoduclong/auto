@@ -1249,25 +1249,63 @@ class WarehouseDashboardController extends Controller
         $packingInventoryRoute = $isPackageModule ? 'package.inventory' : 'warehouse.stock-in';
         $packingDashboardRoute = $isPackageModule ? 'package.dashboard' : 'warehouse.dashboard';
 
-        $pullableOrders = collect();
+        $otherWarehouseOrders = collect();
         if (! $isPackageModule && $managedWarehouseId) {
-            $pullableOrders = Order::query()
+            $otherWarehouseOrders = Order::query()
                 ->with(['customer:id,name,phone,address', 'warehouse:id,name', 'items:id,order_id,product_id,product_variant_id,quantity'])
-                ->whereIn('status', array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]))
                 ->whereNotNull('warehouse_id')
                 ->where('warehouse_id', '!=', $managedWarehouseId)
                 ->whereNull('trash_at')
-                ->where(fn ($query) => $query->whereNull('is_return_order')->orWhere('is_return_order', false))
                 ->forPackingDate($selectedDate)
                 ->orderBy('daily_sequence')
                 ->orderBy('created_at')
-                ->get()
-                ->filter(fn (Order $candidate) => $this->canProcessOrderOnCurrentRun($candidate)
-                    && ! in_array($candidate->warehouse_adjustment_status, [
-                        Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION,
-                        Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED,
-                    ], true))
-                ->values();
+                ->get();
+
+            $candidateIds = $otherWarehouseOrders->pluck('id');
+            $ordersWithCutting = ProductCuttingBatch::query()
+                ->whereIn('order_id', $candidateIds)
+                ->where('status', ProductCuttingBatch::STATUS_IN_PROGRESS)
+                ->pluck('order_id')->flip();
+            $ordersWithTransfers = WarehouseTransfer::query()
+                ->whereIn('order_id', $candidateIds)
+                ->whereIn('status', [
+                    WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                    WarehouseTransfer::STATUS_IN_TRANSIT,
+                    WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                ])
+                ->pluck('order_id')->flip();
+            $ordersWithInventoryTransfers = WarehouseInventoryTransfer::query()
+                ->whereIn('order_id', $candidateIds)
+                ->where('status', WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)
+                ->pluck('order_id')->flip();
+            $transferableStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
+
+            $otherWarehouseOrders->each(function (Order $candidate) use ($transferableStatuses, $ordersWithCutting, $ordersWithTransfers, $ordersWithInventoryTransfers): void {
+                $reason = null;
+                if ((bool) $candidate->is_return_order) {
+                    $reason = 'Đơn trả hàng không thuộc quy trình kéo về đóng hàng.';
+                } elseif (! in_array((string) $candidate->status, $transferableStatuses, true)) {
+                    $reason = 'Trạng thái đơn không còn cho phép kéo về đóng hàng.';
+                } elseif (in_array($candidate->warehouse_adjustment_status, [
+                    Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION,
+                    Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED,
+                ], true)) {
+                    $reason = 'Đơn đang chờ xử lý điều chỉnh với Sale.';
+                } elseif (! $this->canProcessOrderOnCurrentRun($candidate)) {
+                    $reason = 'Đơn qua ngày chưa được Admin cho phép tiếp tục đóng hàng.';
+                } elseif ($candidate->order_transfer_id) {
+                    $reason = 'Đơn đang thuộc một quy trình điều chuyển khác.';
+                } elseif ($ordersWithCutting->has($candidate->id)) {
+                    $reason = 'Đơn đang thực hiện pha lóc.';
+                } elseif ($ordersWithTransfers->has($candidate->id)) {
+                    $reason = 'Đơn đang có điều chuyển giao nhận chưa hoàn tất.';
+                } elseif ($ordersWithInventoryTransfers->has($candidate->id)) {
+                    $reason = 'Đơn đang có phiếu chuyển hàng chờ tiếp nhận.';
+                }
+
+                $candidate->setAttribute('can_pull_to_warehouse', $reason === null);
+                $candidate->setAttribute('pull_block_reason', $reason);
+            });
         }
 
         return view('warehouse.orders.index', compact(
@@ -1288,7 +1326,7 @@ class WarehouseDashboardController extends Controller
             'orderRoutePrefix',
             'packingInventoryRoute',
             'packingDashboardRoute',
-            'pullableOrders',
+            'otherWarehouseOrders',
             'cuttingPlansByOrder',
             'activeCuttingBatchesByOrder',
             'packingSizeOptionsByItem'
@@ -1483,6 +1521,9 @@ class WarehouseDashboardController extends Controller
                 }
                 if (! in_array((string) $lockedOrder->status, $transferableStatuses, true)) {
                     throw new \RuntimeException('Chỉ được kéo đơn chưa hoàn thành đóng hàng.');
+                }
+                if ((bool) $lockedOrder->is_return_order) {
+                    throw new \RuntimeException('Đơn trả hàng không thuộc quy trình kéo về đóng hàng.');
                 }
                 if (in_array($lockedOrder->warehouse_adjustment_status, [
                     Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION,
