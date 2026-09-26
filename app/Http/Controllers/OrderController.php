@@ -14,6 +14,7 @@ use App\Models\OrderHistory;
 use App\Models\ProductVariant;
 use App\Models\Team;
 use App\Models\Transaction;
+use App\Models\TruckStation;
 use App\Models\User;
 use App\Models\UserProductVariantPreference;
 use App\Models\Warehouse;
@@ -1169,7 +1170,7 @@ class OrderController extends Controller
         ]);
 
         $authUser = auth()->user();
-        $customerQuery = Customer::query()->orderBy('name');
+        $customerQuery = Customer::query()->with('truckStation')->orderBy('name');
 
         if ($authUser && !$this->hasAnyRole($authUser, ['admin', 'manager', 'leader'])) {
             $customerQuery->where(function ($query) use ($authUser) {
@@ -1188,6 +1189,7 @@ class OrderController extends Controller
             ->orderBy('name')
             ->get();
         $warehouses = Warehouse::query()->orderBy('name')->get();
+        $truckStations = TruckStation::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'address', 'phone']);
         $statusOptions = collect(OrderStatus::cases())->mapWithKeys(function ($case) {
             return [$case->value => __('orders.statuses.' . $case->value)];
         });
@@ -1204,6 +1206,7 @@ class OrderController extends Controller
             'users',
             'shippers',
             'warehouses',
+            'truckStations',
             'statusOptions',
             'paymentStatusOptions',
             'deliveryStatusOptions'
@@ -1255,7 +1258,18 @@ class OrderController extends Controller
             'payment_method' => ['nullable', 'string', 'max:100'],
             'return_reason' => ['nullable', 'string', 'max:500'],
             'shipper_note' => ['nullable', 'string', 'max:1000'],
+            'use_truck_station' => ['nullable', 'boolean'],
+            'truck_station_id' => ['nullable', 'integer', 'exists:truck_stations,id'],
+            'truck_station_name' => ['nullable', 'string', 'max:255'],
+            'truck_station_address' => ['nullable', 'string', 'max:255'],
+            'truck_station_phone' => ['nullable', 'string', 'max:30'],
+            'truck_receive_time' => ['nullable', 'string', 'max:255'],
         ]);
+
+        $useTruckStation = $request->boolean('use_truck_station');
+        $station = $useTruckStation && ! empty($validated['truck_station_id'])
+            ? TruckStation::query()->find($validated['truck_station_id'])
+            : null;
 
         $statusBefore = (string) $order->status;
 
@@ -1285,6 +1299,12 @@ class OrderController extends Controller
             'payment_method' => $validated['payment_method'] ?? null,
             'return_reason' => $validated['return_reason'] ?? null,
             'shipper_note' => $validated['shipper_note'] ?? null,
+            'use_truck_station' => $useTruckStation,
+            'truck_station_id' => $useTruckStation ? ($station?->id) : null,
+            'truck_station_name' => $useTruckStation ? (trim((string) ($validated['truck_station_name'] ?? '')) ?: $station?->name) : null,
+            'truck_station_address' => $useTruckStation ? (trim((string) ($validated['truck_station_address'] ?? '')) ?: $station?->address) : null,
+            'truck_station_phone' => $useTruckStation ? (trim((string) ($validated['truck_station_phone'] ?? '')) ?: $station?->phone) : null,
+            'truck_receive_time' => $useTruckStation ? (trim((string) ($validated['truck_receive_time'] ?? '')) ?: null) : null,
         ];
 
         $order->forceFill($this->filterExistingColumns('orders', $updates))->save();

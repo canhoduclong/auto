@@ -30,6 +30,12 @@
                     <p><strong>{{ __('orders.labels.payment_status') }}:</strong> {{ __('orders.payment_statuses.' . $order->payment_status) }}</p>
                     <p><strong>{{ __('orders.labels.delivery_status') }}:</strong> {{ __('orders.delivery_statuses.' . $order->delivery_status) }}</p>
                     <p><strong>Giờ giao hàng:</strong> {{ $order->delivery_time ?: ($order->customer->delivery_time ?? '-') }}</p>
+                    <p><strong>Giao nhà xe:</strong> {{ $order->use_truck_station ? 'Có' : 'Không' }}</p>
+                    @if($order->use_truck_station)
+                        <p class="mb-1"><strong>Trạm xe:</strong> {{ $order->truck_station_name ?: $order->truckStation?->name ?: 'Chưa cập nhật' }}</p>
+                        <p class="mb-1"><strong>Địa chỉ trạm:</strong> {{ $order->truck_station_address ?: $order->truckStation?->address ?: 'Chưa cập nhật' }}</p>
+                        <p><strong>SĐT trạm:</strong> {{ $order->truck_station_phone ?: $order->truckStation?->phone ?: 'Chưa cập nhật' }}</p>
+                    @endif
                     @if($currentPendingApproval && $currentPendingApproval->step)
                         <p><strong>{{ __('orders.labels.pending_approval') }}:</strong> {{ __('orders.labels.step') }} {{ $currentPendingApproval->step->step_order }} ({{ __('orders.labels.role') }}: {{ $currentPendingApproval->step->role_slug }})</p>
                     @endif

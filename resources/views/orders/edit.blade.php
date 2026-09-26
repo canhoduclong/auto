@@ -58,7 +58,12 @@
                             <label for="customer_id" class="form-label">{{ __('orders.labels.customer') }}</label>
                             <select name="customer_id" id="customer_id" class="form-select" required>
                                 @foreach($customers as $customer)
-                                    <option value="{{ $customer->id }}" @selected(old('customer_id', $order->customer_id) == $customer->id)>
+                                    <option value="{{ $customer->id }}" @selected(old('customer_id', $order->customer_id) == $customer->id)
+                                            data-use-truck="{{ $customer->use_truck_station ? '1' : '0' }}"
+                                            data-truck-id="{{ $customer->truck_station_id ?: '' }}"
+                                            data-truck-name="{{ $customer->truckStation?->name ?: '' }}"
+                                            data-truck-address="{{ $customer->truck_station_address ?: $customer->truckStation?->address ?: '' }}"
+                                            data-truck-phone="{{ $customer->truck_station_phone ?: $customer->truckStation?->phone ?: '' }}">
                                         {{ $customer->name }}{{ $customer->phone ? ' - ' . $customer->phone : '' }}
                                     </option>
                                 @endforeach
@@ -123,6 +128,47 @@
                                 @endforeach
                             </select>
                         </div>
+                    </div>
+
+                    <div class="border rounded p-3 mt-3 bg-light">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                            <div class="form-check form-switch mb-0">
+                                <input type="hidden" name="use_truck_station" value="0">
+                                <input class="form-check-input" type="checkbox" role="switch" name="use_truck_station" id="use_truck_station" value="1" @checked(old('use_truck_station', $order->use_truck_station))>
+                                <label class="form-check-label fw-semibold" for="use_truck_station">Giao đơn qua nhà xe / trạm xe</label>
+                            </div>
+                            <button type="button" class="btn btn-outline-success btn-sm" id="copy-customer-truck">
+                                <i class="bi bi-arrow-down-circle me-1"></i>Lấy thông tin nhà xe từ khách hàng
+                            </button>
+                        </div>
+                        <div id="truck-station-fields" class="row g-3">
+                            <div class="col-md-6">
+                                <label for="truck_station_id" class="form-label">Trạm xe</label>
+                                <select name="truck_station_id" id="truck_station_id" class="form-select">
+                                    <option value="">-- Chọn trạm xe --</option>
+                                    @foreach($truckStations as $station)
+                                        <option value="{{ $station->id }}" data-name="{{ $station->name }}" data-address="{{ $station->address }}" data-phone="{{ $station->phone }}" @selected(old('truck_station_id', $order->truck_station_id) == $station->id)>{{ $station->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="truck_station_name" class="form-label">Tên nhà xe/trạm xe</label>
+                                <input name="truck_station_name" id="truck_station_name" class="form-control" value="{{ old('truck_station_name', $order->truck_station_name ?: $order->truckStation?->name) }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label for="truck_station_address" class="form-label">Địa chỉ trạm xe</label>
+                                <input name="truck_station_address" id="truck_station_address" class="form-control" value="{{ old('truck_station_address', $order->truck_station_address ?: $order->truckStation?->address) }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="truck_station_phone" class="form-label">SĐT trạm xe</label>
+                                <input name="truck_station_phone" id="truck_station_phone" class="form-control" value="{{ old('truck_station_phone', $order->truck_station_phone ?: $order->truckStation?->phone) }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="truck_receive_time" class="form-label">Giờ nhà xe nhận</label>
+                                <input name="truck_receive_time" id="truck_receive_time" class="form-control" value="{{ old('truck_receive_time', $order->truck_receive_time) }}">
+                            </div>
+                        </div>
+                        <div class="form-text mt-2">Chỉ khi bật mục này, kho mới thấy thông tin nhà xe và chức năng in.</div>
                     </div>
 
                     <hr>
@@ -314,6 +360,33 @@ function loadEditVariants() {
     });
 }
 $(function() {
+    const truckToggle = $('#use_truck_station');
+    const truckFields = $('#truck-station-fields');
+    const syncTruckVisibility = () => truckFields.toggleClass('d-none', !truckToggle.is(':checked'));
+    const fillTruckFields = (data) => {
+        $('#truck_station_id').val(data.id || '');
+        $('#truck_station_name').val(data.name || '');
+        $('#truck_station_address').val(data.address || '');
+        $('#truck_station_phone').val(data.phone || '');
+    };
+    truckToggle.on('change', syncTruckVisibility);
+    syncTruckVisibility();
+    $('#truck_station_id').on('change', function() {
+        const option = this.selectedOptions[0];
+        if (this.value && option) {
+            fillTruckFields({id: this.value, name: option.dataset.name, address: option.dataset.address, phone: option.dataset.phone});
+        }
+    });
+    $('#copy-customer-truck').on('click', function() {
+        const option = document.getElementById('customer_id').selectedOptions[0];
+        if (!option || option.dataset.useTruck !== '1') {
+            window.alert('Khách hàng chưa được cấu hình trạm xe.');
+            return;
+        }
+        truckToggle.prop('checked', true);
+        fillTruckFields({id: option.dataset.truckId, name: option.dataset.truckName, address: option.dataset.truckAddress, phone: option.dataset.truckPhone});
+        syncTruckVisibility();
+    });
     loadEditVariants();
     $('#edit-variant-list').on('click', '.remove-variant-btn', function() {
         let vid = $(this).data('variant-id');

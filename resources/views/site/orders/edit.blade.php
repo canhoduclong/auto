@@ -493,6 +493,24 @@
                                 </div>
 
                                 <div class="col-12 mb-3">
+                                    <div class="border rounded-3 p-3 bg-light">
+                                        <div class="form-check form-switch mb-3">
+                                            <input type="hidden" name="use_truck_station" value="0">
+                                            <input class="form-check-input" type="checkbox" role="switch" name="use_truck_station" id="use_truck_station" value="1" @checked(old('use_truck_station', $order->use_truck_station))>
+                                            <label class="form-check-label fw-bold" for="use_truck_station">Giao đơn qua nhà xe / trạm xe</label>
+                                        </div>
+                                        <div id="order-truck-fields" class="row g-2">
+                                            <input type="hidden" name="truck_station_id" id="truck_station_id" value="{{ old('truck_station_id', $order->truck_station_id) }}">
+                                            <div class="col-md-6"><label class="form-label">Tên nhà xe/trạm xe</label><input class="form-control" name="truck_station_name" id="truck_station_name" value="{{ old('truck_station_name', $order->truck_station_name ?: $order->customer?->truckStation?->name) }}"></div>
+                                            <div class="col-md-6"><label class="form-label">Địa chỉ trạm xe</label><input class="form-control" name="truck_station_address" id="truck_station_address" value="{{ old('truck_station_address', $order->truck_station_address ?: $order->customer?->truck_station_address ?: $order->customer?->truckStation?->address) }}"></div>
+                                            <div class="col-md-6"><label class="form-label">SĐT trạm xe</label><input class="form-control" name="truck_station_phone" id="truck_station_phone" value="{{ old('truck_station_phone', $order->truck_station_phone ?: $order->customer?->truck_station_phone ?: $order->customer?->truckStation?->phone) }}"></div>
+                                            <div class="col-md-6"><label class="form-label">Giờ nhà xe nhận</label><input class="form-control" name="truck_receive_time" id="truck_receive_time" value="{{ old('truck_receive_time', $order->truck_receive_time ?: $order->customer?->truck_receive_time) }}"></div>
+                                        </div>
+                                        <div class="form-text mt-2">Bật mục này để kho hiển thị thông tin khách, nhà xe và nút in.</div>
+                                    </div>
+                                </div>
+
+                                <div class="col-12 mb-3">
                                     <label for="note" class="form-label fw-bold">Ghi chú</label>
                                     <textarea name="note" id="note" rows="3" class="form-control" placeholder="Ghi chú cho đơn hàng">{{ old('note', $order->note) }}</textarea>
                                 </div>
@@ -801,6 +819,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const customerIdInput       = document.getElementById('customer_id');
     const selectedCustomerName  = document.getElementById('selected-customer-name');
     const noCustomerPlaceholder = document.getElementById('no-customer-placeholder');
+    const useTruckStationToggle = document.getElementById('use_truck_station');
+    const orderTruckFields = document.getElementById('order-truck-fields');
+    const syncOrderTruckFields = () => orderTruckFields?.classList.toggle('d-none', !useTruckStationToggle?.checked);
+    useTruckStationToggle?.addEventListener('change', syncOrderTruckFields);
+    syncOrderTruckFields();
 
     let cpSearchTimeout   = null;
     let cpCurrentPage     = 1;
@@ -894,6 +917,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const phone   = selectBtn.dataset.customerPhone   || '';
                 const email   = selectBtn.dataset.customerEmail   || '';
                 const address = selectBtn.dataset.customerAddress || '';
+                const useTruck = selectBtn.dataset.customerUseTruckStation === '1';
 
                 // Set hidden input
                 if (customerIdInput) customerIdInput.value = id;
@@ -916,6 +940,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (recipientPhone)   recipientPhone.value   = phone;
                 if (recipientEmail)   recipientEmail.value   = email;
                 if (recipientAddress) recipientAddress.value = address;
+                const truckToggle = document.getElementById('use_truck_station');
+                if (truckToggle) truckToggle.checked = useTruck;
+                const truckValues = {
+                    truck_station_id: selectBtn.dataset.customerTruckStationId || '',
+                    truck_station_name: selectBtn.dataset.customerTruckStationName || '',
+                    truck_station_address: selectBtn.dataset.customerTruckStationAddress || '',
+                    truck_station_phone: selectBtn.dataset.customerTruckStationPhone || '',
+                    truck_receive_time: selectBtn.dataset.customerTruckReceiveTime || '',
+                };
+                Object.entries(truckValues).forEach(([fieldId, value]) => {
+                    const field = document.getElementById(fieldId);
+                    if (field) field.value = value;
+                });
+                document.getElementById('order-truck-fields')?.classList.toggle('d-none', !useTruck);
 
                 // Close modal
                 bootstrap.Modal.getInstance(customerPickerModal)?.hide();

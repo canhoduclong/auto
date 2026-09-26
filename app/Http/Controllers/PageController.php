@@ -5384,6 +5384,12 @@ public function apiTruckRoutes(Request $request)
             'warehouse_product_permissions.*.quantity' => ['required', 'boolean'],
             'warehouse_product_permissions.*.sizes' => ['nullable', 'array'],
             'warehouse_product_permissions.*.sizes.*' => ['numeric', 'gt:0'],
+            'use_truck_station' => ['nullable', 'boolean'],
+            'truck_station_id' => ['nullable', 'integer', 'exists:truck_stations,id'],
+            'truck_station_name' => ['nullable', 'string', 'max:255'],
+            'truck_station_address' => ['nullable', 'string', 'max:255'],
+            'truck_station_phone' => ['nullable', 'string', 'max:30'],
+            'truck_receive_time' => ['nullable', 'string', 'max:255'],
             'item_discount' => ['nullable', 'array'],
             'item_discount.*' => ['nullable', 'numeric', 'min:0'],
             'item_discount_type' => ['nullable', 'array'],
@@ -5571,6 +5577,12 @@ public function apiTruckRoutes(Request $request)
                 'stock_sufficient' => true,
                 'stock_shortage_detail' => null,
                 'stock_alert_status' => 'ready',
+                'use_truck_station' => (bool) ($validated['use_truck_station'] ?? false),
+                'truck_station_id' => ! empty($validated['use_truck_station']) ? ($validated['truck_station_id'] ?? null) : null,
+                'truck_station_name' => ! empty($validated['use_truck_station']) ? (trim((string) ($validated['truck_station_name'] ?? '')) ?: null) : null,
+                'truck_station_address' => ! empty($validated['use_truck_station']) ? (trim((string) ($validated['truck_station_address'] ?? '')) ?: null) : null,
+                'truck_station_phone' => ! empty($validated['use_truck_station']) ? (trim((string) ($validated['truck_station_phone'] ?? '')) ?: null) : null,
+                'truck_receive_time' => ! empty($validated['use_truck_station']) ? (trim((string) ($validated['truck_receive_time'] ?? '')) ?: null) : null,
             ];
 
             if ($isReturnOrder) {
