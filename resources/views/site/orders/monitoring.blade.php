@@ -2444,14 +2444,20 @@
                                                         <label class="form-check-label fw-bold" for="monitorEditUseTruck{{ $order->id }}">Giao đơn qua nhà xe / trạm xe</label>
                                                     </div>
                                                     <div class="row g-2 monitor-edit-truck-fields" @if(!$order->use_truck_station) hidden @endif>
-                                                        <div class="col-md-6">
+                                                        <div class="col-12">
                                                             <label>Chọn trạm xe</label>
-                                                            <select class="form-select form-select-sm monitor-edit-truck-id" name="truck_station_id">
-                                                                <option value="">-- Chọn trạm xe --</option>
-                                                                @foreach($truckStations as $station)
-                                                                    <option value="{{ $station->id }}" data-name="{{ $station->name }}" data-address="{{ $station->address }}" data-phone="{{ $station->phone }}" @selected((int) $order->truck_station_id === (int) $station->id)>{{ $station->name }}</option>
-                                                                @endforeach
-                                                            </select>
+                                                            <input type="hidden" class="monitor-edit-truck-id" name="truck_station_id" value="{{ $order->truck_station_id }}">
+                                                            <div class="d-flex flex-wrap align-items-center gap-2 rounded border bg-white p-2">
+                                                                <div class="monitor-edit-truck-selected flex-grow-1 small fw-semibold">
+                                                                    {{ $order->truck_station_name ?: ($order->truckStation?->name ?: 'Chưa chọn trạm xe') }}
+                                                                </div>
+                                                                <button type="button" class="btn btn-sm btn-outline-primary monitor-edit-open-truck-picker">
+                                                                    <i class="bi bi-search me-1"></i>Tìm & chọn trạm xe
+                                                                </button>
+                                                                <button type="button" class="btn btn-sm btn-outline-secondary monitor-edit-clear-truck" @disabled(!$order->truck_station_id && !$order->truck_station_name)>
+                                                                    <i class="bi bi-x-lg me-1"></i>Xóa chọn
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                         <div class="col-md-6"><label>Tên trạm / nhà xe</label><input class="form-control form-control-sm monitor-edit-truck-name" name="truck_station_name" value="{{ $order->truck_station_name ?: $order->truckStation?->name }}"></div>
                                                         <div class="col-md-6"><label>Địa chỉ trạm xe</label><input class="form-control form-control-sm monitor-edit-truck-address" name="truck_station_address" value="{{ $order->truck_station_address ?: $order->truckStation?->address }}"></div>
@@ -2752,6 +2758,29 @@
 </section>
 @if($activeTab === 'today' && $canAccessMonitoringSalesJournal)
     @include('site.orders.partials.sales_journal_modal')
+@endif
+@if($activeTab === 'today')
+    <div class="modal fade" id="monitorTruckStationPickerModal" tabindex="-1" aria-labelledby="monitorTruckStationPickerTitle" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="monitorTruckStationPickerTitle"><i class="bi bi-truck me-2"></i>Tìm và chọn trạm xe</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="input-group mb-3">
+                        <input type="search" class="form-control" id="monitorTruckStationPickerSearch" placeholder="Tìm theo tên trạm, địa chỉ hoặc số điện thoại..." autocomplete="off">
+                        <button type="button" class="btn btn-primary" id="monitorTruckStationPickerSearchButton"><i class="bi bi-search me-1"></i>Tìm kiếm</button>
+                    </div>
+                    <div id="monitorTruckStationPickerResults" aria-live="polite"></div>
+                </div>
+                <div class="modal-footer justify-content-between">
+                    <small class="text-muted" id="monitorTruckStationPickerSummary"></small>
+                    <nav aria-label="Phân trang trạm xe"><ul class="pagination pagination-sm mb-0" id="monitorTruckStationPickerPagination"></ul></nav>
+                </div>
+            </div>
+        </div>
+    </div>
 @endif
 @endsection
 
@@ -3545,6 +3574,8 @@ document.addEventListener('click', async event => {
             form.querySelector('.monitor-edit-truck-address').value = customerButton.dataset.customerTruckStationAddress || '';
             form.querySelector('.monitor-edit-truck-phone').value = customerButton.dataset.customerTruckStationPhone || '';
             form.querySelector('.monitor-edit-truck-time').value = customerButton.dataset.customerTruckReceiveTime || '';
+            form.querySelector('.monitor-edit-truck-selected').textContent = customerButton.dataset.customerTruckStationName || 'Chưa chọn trạm xe';
+            form.querySelector('.monitor-edit-clear-truck').disabled = !(customerButton.dataset.customerTruckStationId || customerButton.dataset.customerTruckStationName);
             form.querySelector('.monitor-edit-customer-picker').hidden = true;
             return;
         }
@@ -3621,16 +3652,6 @@ document.addEventListener('click', async event => {
             event.target.closest('[data-monitor-edit-truck]').querySelector('.monitor-edit-truck-fields').hidden = !event.target.checked;
             return;
         }
-        if (event.target.matches('[data-monitor-edit-form] .monitor-edit-truck-id')) {
-            const option = event.target.selectedOptions[0];
-            const group = event.target.closest('[data-monitor-edit-truck]');
-            if (option?.value) {
-                group.querySelector('.monitor-edit-truck-name').value = option.dataset.name || '';
-                group.querySelector('.monitor-edit-truck-address').value = option.dataset.address || '';
-                group.querySelector('.monitor-edit-truck-phone').value = option.dataset.phone || '';
-            }
-            return;
-        }
         if (!event.target.matches('[data-monitor-edit-form] .monitor-edit-product-results #per-page-select')) return;
         const form = event.target.closest('[data-monitor-edit-form]');
         if (!form) return;
@@ -3654,6 +3675,135 @@ document.addEventListener('click', async event => {
             setTimeout(() => (adjustmentTarget || card).scrollIntoView({ behavior: 'smooth', block: adjustmentTarget ? 'start' : 'center' }), 250);
         }
     }
+})();
+
+(() => {
+    const modalElement = document.getElementById('monitorTruckStationPickerModal');
+    if (!modalElement) return;
+
+    const endpoint = @json(route('pages.my_truck_stations.ajax'));
+    const searchInput = document.getElementById('monitorTruckStationPickerSearch');
+    const searchButton = document.getElementById('monitorTruckStationPickerSearchButton');
+    const results = document.getElementById('monitorTruckStationPickerResults');
+    const pagination = document.getElementById('monitorTruckStationPickerPagination');
+    const summary = document.getElementById('monitorTruckStationPickerSummary');
+    const pickerModal = bootstrap.Modal.getOrCreateInstance(modalElement);
+    let activeForm = null;
+    let requestSequence = 0;
+
+    const escapeTruckText = value => {
+        const node = document.createElement('div');
+        node.textContent = String(value ?? '');
+        return node.innerHTML;
+    };
+
+    const pageNumbers = (current, last) => {
+        const pages = new Set([1, last, current - 1, current, current + 1]);
+        return [...pages].filter(page => page >= 1 && page <= last).sort((a, b) => a - b);
+    };
+
+    function renderTruckPagination(links) {
+        const current = Number(links.current_page) || 1;
+        const last = Math.max(1, Number(links.last_page) || 1);
+        const controls = [{label: '&laquo;', page: current - 1, disabled: current <= 1}];
+        let previousPage = 0;
+        pageNumbers(current, last).forEach(page => {
+            if (previousPage && page - previousPage > 1) controls.push({label: '…', disabled: true});
+            controls.push({label: String(page), page, active: page === current});
+            previousPage = page;
+        });
+        controls.push({label: '&raquo;', page: current + 1, disabled: current >= last});
+        pagination.innerHTML = controls.map(control => `
+            <li class="page-item ${control.active ? 'active' : ''} ${control.disabled ? 'disabled' : ''}">
+                <button type="button" class="page-link monitor-truck-picker-page" ${control.page ? `data-page="${control.page}"` : ''} ${control.disabled ? 'disabled' : ''}>${control.label}</button>
+            </li>`).join('');
+    }
+
+    async function loadTruckStations(page = 1) {
+        const sequence = ++requestSequence;
+        const target = new URL(endpoint, window.location.origin);
+        target.searchParams.set('q', searchInput.value.trim());
+        target.searchParams.set('is_active', '1');
+        target.searchParams.set('per_page', '10');
+        target.searchParams.set('page', String(page));
+        results.innerHTML = '<div class="text-center text-muted py-5"><span class="spinner-border spinner-border-sm me-2"></span>Đang tải danh sách trạm xe...</div>';
+        pagination.innerHTML = '';
+        summary.textContent = '';
+        try {
+            const response = await fetch(target, {headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'}});
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.message || 'Không tải được danh sách trạm xe.');
+            if (sequence !== requestSequence) return;
+            const stations = Array.isArray(payload.data) ? payload.data : [];
+            results.innerHTML = stations.length ? stations.map(station => `
+                <div class="border rounded p-3 mb-2 d-flex flex-column flex-md-row align-items-md-center gap-3">
+                    <div class="flex-grow-1">
+                        <div class="fw-bold text-dark">${escapeTruckText(station.name || 'Trạm xe')}</div>
+                        ${station.brand ? `<div class="small text-primary">Nhà xe: ${escapeTruckText(station.brand)}</div>` : ''}
+                        <div class="small text-muted"><i class="bi bi-geo-alt me-1"></i>${escapeTruckText(station.address || 'Chưa có địa chỉ')}</div>
+                        <div class="small text-muted"><i class="bi bi-telephone me-1"></i>${escapeTruckText(station.phone || 'Chưa có số điện thoại')}</div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-success monitor-pick-truck-station"
+                        data-id="${escapeTruckText(station.id)}" data-name="${escapeTruckText(station.name)}"
+                        data-address="${escapeTruckText(station.address)}" data-phone="${escapeTruckText(station.phone)}">
+                        <i class="bi bi-check2 me-1"></i>Chọn trạm này
+                    </button>
+                </div>`).join('') : '<div class="alert alert-light border text-center mb-0">Không tìm thấy trạm xe phù hợp.</div>';
+            const links = payload.links || {};
+            summary.textContent = `Trang ${links.current_page || 1}/${links.last_page || 1} · ${links.total || 0} trạm xe`;
+            renderTruckPagination(links);
+        } catch (error) {
+            if (sequence !== requestSequence) return;
+            results.innerHTML = `<div class="alert alert-danger mb-0">${escapeTruckText(error.message)}</div>`;
+        }
+    }
+
+    document.addEventListener('click', event => {
+        const openButton = event.target.closest('.monitor-edit-open-truck-picker');
+        if (openButton) {
+            activeForm = openButton.closest('[data-monitor-edit-form]');
+            searchInput.value = '';
+            pickerModal.show();
+            loadTruckStations(1);
+            return;
+        }
+
+        const clearButton = event.target.closest('.monitor-edit-clear-truck');
+        if (clearButton) {
+            const form = clearButton.closest('[data-monitor-edit-form]');
+            form.querySelector('.monitor-edit-truck-id').value = '';
+            form.querySelector('.monitor-edit-truck-name').value = '';
+            form.querySelector('.monitor-edit-truck-address').value = '';
+            form.querySelector('.monitor-edit-truck-phone').value = '';
+            form.querySelector('.monitor-edit-truck-selected').textContent = 'Chưa chọn trạm xe';
+            clearButton.disabled = true;
+            return;
+        }
+
+        const stationButton = event.target.closest('.monitor-pick-truck-station');
+        if (stationButton && activeForm) {
+            activeForm.querySelector('.monitor-edit-truck-id').value = stationButton.dataset.id || '';
+            activeForm.querySelector('.monitor-edit-truck-name').value = stationButton.dataset.name || '';
+            activeForm.querySelector('.monitor-edit-truck-address').value = stationButton.dataset.address || '';
+            activeForm.querySelector('.monitor-edit-truck-phone').value = stationButton.dataset.phone || '';
+            activeForm.querySelector('.monitor-edit-truck-selected').textContent = stationButton.dataset.name || 'Chưa chọn trạm xe';
+            activeForm.querySelector('.monitor-edit-clear-truck').disabled = false;
+            pickerModal.hide();
+            return;
+        }
+
+        const pageButton = event.target.closest('.monitor-truck-picker-page');
+        if (pageButton && !pageButton.disabled) loadTruckStations(Number(pageButton.dataset.page) || 1);
+    });
+
+    searchButton.addEventListener('click', () => loadTruckStations(1));
+    searchInput.addEventListener('keydown', event => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        loadTruckStations(1);
+    });
+    modalElement.addEventListener('shown.bs.modal', () => searchInput.focus());
+    modalElement.addEventListener('hidden.bs.modal', () => { activeForm = null; });
 })();
 
 document.addEventListener('submit', async function (event) {
