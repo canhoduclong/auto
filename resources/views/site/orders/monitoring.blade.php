@@ -2437,6 +2437,29 @@
                                                     <label for="monitorEditAddress{{ $order->id }}">Địa chỉ nhận hàng</label>
                                                     <input class="form-control form-control-sm" id="monitorEditAddress{{ $order->id }}" name="recipient_address" value="{{ $order->recipient_address ?: ($order->customer?->address ?? '') }}" required>
                                                 </div>
+                                                <div class="is-wide border rounded p-3 bg-light" data-monitor-edit-truck>
+                                                    <div class="form-check form-switch mb-2">
+                                                        <input type="hidden" name="use_truck_station" value="0">
+                                                        <input class="form-check-input monitor-edit-use-truck" type="checkbox" role="switch" name="use_truck_station" value="1" id="monitorEditUseTruck{{ $order->id }}" @checked($order->use_truck_station)>
+                                                        <label class="form-check-label fw-bold" for="monitorEditUseTruck{{ $order->id }}">Giao đơn qua nhà xe / trạm xe</label>
+                                                    </div>
+                                                    <div class="row g-2 monitor-edit-truck-fields" @if(!$order->use_truck_station) hidden @endif>
+                                                        <div class="col-md-6">
+                                                            <label>Chọn trạm xe</label>
+                                                            <select class="form-select form-select-sm monitor-edit-truck-id" name="truck_station_id">
+                                                                <option value="">-- Chọn trạm xe --</option>
+                                                                @foreach($truckStations as $station)
+                                                                    <option value="{{ $station->id }}" data-name="{{ $station->name }}" data-address="{{ $station->address }}" data-phone="{{ $station->phone }}" @selected((int) $order->truck_station_id === (int) $station->id)>{{ $station->name }}</option>
+                                                                @endforeach
+                                                            </select>
+                                                        </div>
+                                                        <div class="col-md-6"><label>Tên trạm / nhà xe</label><input class="form-control form-control-sm monitor-edit-truck-name" name="truck_station_name" value="{{ $order->truck_station_name ?: $order->truckStation?->name }}"></div>
+                                                        <div class="col-md-6"><label>Địa chỉ trạm xe</label><input class="form-control form-control-sm monitor-edit-truck-address" name="truck_station_address" value="{{ $order->truck_station_address ?: $order->truckStation?->address }}"></div>
+                                                        <div class="col-md-3"><label>SĐT trạm xe</label><input class="form-control form-control-sm monitor-edit-truck-phone" name="truck_station_phone" value="{{ $order->truck_station_phone ?: $order->truckStation?->phone }}"></div>
+                                                        <div class="col-md-3"><label>Giờ nhà xe nhận</label><input class="form-control form-control-sm monitor-edit-truck-time" name="truck_receive_time" value="{{ $order->truck_receive_time }}"></div>
+                                                    </div>
+                                                    <div class="form-text">Bật mục này để kho hiển thị thông tin nhà xe và chức năng in.</div>
+                                                </div>
                                                 <div class="is-wide">
                                                     <label for="monitorEditNote{{ $order->id }}">Ghi chú</label>
                                                     <textarea class="form-control form-control-sm" id="monitorEditNote{{ $order->id }}" name="note" rows="3">{{ $order->note }}</textarea>
@@ -3513,6 +3536,15 @@ document.addEventListener('click', async event => {
             form.elements.namedItem('recipient_email').value = customerButton.dataset.customerEmail || '';
             form.elements.namedItem('recipient_address').value = customerButton.dataset.customerAddress || '';
             form.querySelector('.monitor-edit-selected-customer').textContent = [customerButton.dataset.customerName, customerButton.dataset.customerPhone].filter(Boolean).join(' · ');
+            const useTruck = customerButton.dataset.customerUseTruckStation === '1';
+            const truckToggle = form.querySelector('.monitor-edit-use-truck');
+            if (truckToggle) truckToggle.checked = useTruck;
+            form.querySelector('.monitor-edit-truck-fields').hidden = !useTruck;
+            form.querySelector('.monitor-edit-truck-id').value = customerButton.dataset.customerTruckStationId || '';
+            form.querySelector('.monitor-edit-truck-name').value = customerButton.dataset.customerTruckStationName || '';
+            form.querySelector('.monitor-edit-truck-address').value = customerButton.dataset.customerTruckStationAddress || '';
+            form.querySelector('.monitor-edit-truck-phone').value = customerButton.dataset.customerTruckStationPhone || '';
+            form.querySelector('.monitor-edit-truck-time').value = customerButton.dataset.customerTruckReceiveTime || '';
             form.querySelector('.monitor-edit-customer-picker').hidden = true;
             return;
         }
@@ -3585,6 +3617,20 @@ document.addEventListener('click', async event => {
     });
 
     document.addEventListener('change', event => {
+        if (event.target.matches('[data-monitor-edit-form] .monitor-edit-use-truck')) {
+            event.target.closest('[data-monitor-edit-truck]').querySelector('.monitor-edit-truck-fields').hidden = !event.target.checked;
+            return;
+        }
+        if (event.target.matches('[data-monitor-edit-form] .monitor-edit-truck-id')) {
+            const option = event.target.selectedOptions[0];
+            const group = event.target.closest('[data-monitor-edit-truck]');
+            if (option?.value) {
+                group.querySelector('.monitor-edit-truck-name').value = option.dataset.name || '';
+                group.querySelector('.monitor-edit-truck-address').value = option.dataset.address || '';
+                group.querySelector('.monitor-edit-truck-phone').value = option.dataset.phone || '';
+            }
+            return;
+        }
         if (!event.target.matches('[data-monitor-edit-form] .monitor-edit-product-results #per-page-select')) return;
         const form = event.target.closest('[data-monitor-edit-form]');
         if (!form) return;
