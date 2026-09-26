@@ -922,6 +922,7 @@ class WarehouseApiController extends BaseApiController
                 'address' => (string) ($order->customer?->address ?? ''),
             ],
             'shipping_address' => (string) ($order->recipient_address ?: $order->customer?->address ?: ''),
+            'shipping_phone' => (string) ($order->recipient_phone ?: $order->customer?->phone ?: ''),
             'delivery_time' => (string) ($order->delivery_time ?: $order->customer?->delivery_time ?: ''),
             'delivery_time_note' => (string) ($order->delivery_time_note ?: $order->customer?->delivery_time_note ?: ''),
             'delivery_date' => optional($order->delivery_date)->toDateString(),

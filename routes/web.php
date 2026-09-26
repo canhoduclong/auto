@@ -122,6 +122,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/{order}/transfer-request', [OrderPackingController::class, 'createTransferRequest'])->name('orders.transfer-request');
         Route::post('/orders/{order}/return-to-ready', [OrderPackingController::class, 'returnToReadyToPack'])->name('orders.return-to-ready');
         Route::post('/orders/{order}/reopen-packing', [OrderPackingController::class, 'reopenPacking'])->name('orders.reopen-packing');
+        Route::post('/orders/{order}/print-truck-label', [WarehouseDashboardController::class, 'printTruckLabel'])->name('orders.print-truck-label');
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'packageIndex'])->name('finance-requests.index');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'packageStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'packagePrint'])->name('finance-requests.print');
@@ -424,9 +425,12 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/cutting/{variant}', [WarehouseDashboardController::class, 'executeCutting'])->name('cutting.execute');
         Route::post('/cutting/{variant}/confirm', [WarehouseDashboardController::class, 'confirmCuttingMaterials'])->name('cutting.confirm');
         Route::post('/cutting-batches/{batch}/revert', [WarehouseDashboardController::class, 'revertCuttingBatch'])->name('cutting-batches.revert');
+        Route::post('/cutting-batches/{batch}/complete', [WarehouseDashboardController::class, 'completeCuttingBatch'])->name('cutting-batches.complete');
         Route::post('/cutting-component-import-requests/{componentImportRequest}/receive', [WarehouseDashboardController::class, 'receiveCuttingComponentImportRequest'])->name('cutting-component-import-requests.receive');
         Route::get('/orders', [WarehouseDashboardController::class, 'orders'])->name('orders');
         Route::post('/orders/{order}/transfer-packing-warehouse', [WarehouseDashboardController::class, 'transferPackingWarehouse'])->name('orders.transfer-packing-warehouse');
+        Route::post('/orders/{order}/pull-packing-warehouse', [WarehouseDashboardController::class, 'pullPackingWarehouse'])->name('orders.pull-packing-warehouse');
+        Route::post('/orders/{order}/allow-historical-packing', [WarehouseDashboardController::class, 'allowHistoricalPacking'])->name('orders.allow-historical-packing');
         Route::post('/orders/{order}/logistics', [WarehouseDashboardController::class, 'updateLogistics'])->name('orders.logistics');
         Route::post('/orders/{order}/confirm-sale-changes', [WarehouseDashboardController::class, 'confirmSaleChanges'])->name('orders.confirm-sale-changes');
         Route::post('/orders/{order}/packing-size-allocation', [WarehouseDashboardController::class, 'updatePackingSizeAllocation'])->name('orders.packing-size-allocation');
@@ -436,6 +440,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/{order}/transfer-request', [WarehouseDashboardController::class, 'createTransferRequest'])->name('orders.transfer-request');
         Route::post('/orders/{order}/return-to-ready', [WarehouseDashboardController::class, 'returnToReadyToPack'])->name('orders.return-to-ready');
         Route::post('/orders/{order}/reopen-packing', [WarehouseDashboardController::class, 'reopenPacking'])->name('orders.reopen-packing');
+        Route::post('/orders/{order}/print-truck-label', [WarehouseDashboardController::class, 'printTruckLabel'])->name('orders.print-truck-label');
         Route::post('/orders/rap-don-hang', [WarehouseDashboardController::class, 'rapDonHang'])->name('orders.rap-don-hang');
         Route::get('/transfers/incoming', [WarehouseDashboardController::class, 'incomingTransfers'])->name('transfers.incoming');
         Route::get('/receiving', [WarehouseDashboardController::class, 'incomingTransfers'])->name('receiving');

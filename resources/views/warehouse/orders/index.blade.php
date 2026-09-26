@@ -1296,6 +1296,12 @@
             <span class="badge bg-danger wh-summary-pill">Sale từ chối điều chỉnh: {{ $orders->where('warehouse_adjustment_status', \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED)->count() }}</span>
         </div>
         <div class="d-flex gap-2 flex-wrap">
+            @if(($pullableOrders ?? collect())->isNotEmpty())
+                <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#pullPackingOrderModal">
+                    <i class="bi bi-box-arrow-in-left me-1"></i>Kéo đơn từ kho khác
+                    <span class="badge bg-success ms-1">{{ $pullableOrders->count() }}</span>
+                </button>
+            @endif
             @if($deferredComponentImportRequests->isNotEmpty())
                 <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal"
                     data-bs-target="#cuttingImportModal" aria-controls="cuttingImportModal">
@@ -1322,6 +1328,47 @@
             </a>
         </div>
     </div>
+
+
+    @if(($pullableOrders ?? collect())->isNotEmpty())
+        <div class="modal fade" id="pullPackingOrderModal" tabindex="-1" aria-labelledby="pullPackingOrderModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-xl modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div>
+                            <h5 class="modal-title" id="pullPackingOrderModalLabel">Đơn chưa hoàn thành tại kho khác</h5>
+                            <div class="small text-muted">Ngày {{ \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m/Y') }} · Kéo về kho hiện tại để tiếp tục đóng hàng</div>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                    </div>
+                    <div class="modal-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0">
+                                <thead class="table-light"><tr><th>Đơn hàng</th><th>Khách hàng</th><th>Kho hiện tại</th><th>Trạng thái</th><th class="text-end">Thao tác</th></tr></thead>
+                                <tbody>
+                                @foreach($pullableOrders as $pullableOrder)
+                                    <tr>
+                                        <td><strong>#{{ $pullableOrder->daily_sequence ?: '—' }}</strong> · {{ $pullableOrder->code }}<div class="small text-muted">{{ $pullableOrder->items->sum('quantity') }} sản phẩm</div></td>
+                                        <td>{{ $pullableOrder->customer?->name ?: '—' }}<div class="small text-muted">{{ $pullableOrder->recipient_phone ?: $pullableOrder->customer?->phone ?: 'Chưa có SĐT' }}</div></td>
+                                        <td><span class="badge bg-secondary">{{ $pullableOrder->warehouse?->name ?: 'Chưa xác định' }}</span></td>
+                                        <td>{{ $statusMeta[$pullableOrder->status]['label'] ?? $pullableOrder->status }}</td>
+                                        <td class="text-end">
+                                            <form method="POST" action="{{ route('warehouse.orders.pull-packing-warehouse', $pullableOrder) }}" onsubmit="return confirm('Kéo đơn {{ addslashes($pullableOrder->code ?: '#'.$pullableOrder->id) }} từ {{ addslashes($pullableOrder->warehouse?->name ?: 'kho khác') }} về kho hiện tại để tiếp tục đóng hàng?');">
+                                                @csrf
+                                                <input type="hidden" name="packing_date" value="{{ $selectedDate }}">
+                                                <button type="submit" class="btn btn-success btn-sm"><i class="bi bi-box-arrow-in-left me-1"></i>Kéo về kho</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 
 
 

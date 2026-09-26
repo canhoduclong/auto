@@ -126,6 +126,33 @@
                     </div>
 
                     <div class="card-body">
+                        @php
+                            $customerPhone = $order->recipient_phone ?: $order->customer?->phone;
+                            $customerAddress = $order->recipient_address ?: $order->customer?->address;
+                            $stationName = $order->truck_station_name ?: $order->truckStation?->name;
+                            $stationAddress = $order->truck_station_address ?: $order->truckStation?->address;
+                            $stationPhone = $order->truck_station_phone ?: $order->truckStation?->phone;
+                        @endphp
+                        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                            <div class="d-grid gap-2 fs-6">
+                                <div><i class="bi bi-telephone me-1"></i><strong>SĐT khách:</strong> {{ $customerPhone ?: 'Chưa cập nhật' }}</div>
+                                <div><i class="bi bi-geo-alt me-1"></i>{{ $customerAddress ?: 'Chưa cập nhật địa chỉ' }}</div>
+                                <div><i class="bi bi-clock me-1"></i>Giờ giao: <strong>{{ $order->delivery_time ?: 'Chưa cập nhật' }}</strong></div>
+                                @if($order->use_truck_station)
+                                    <div><i class="bi bi-truck me-1"></i><strong>Trạm xe:</strong> {{ $stationName ?: 'Chưa cập nhật' }} - {{ $stationAddress ?: 'Chưa có địa chỉ' }} - {{ $stationPhone ?: 'Chưa có SĐT' }}</div>
+                                @endif
+                            </div>
+                            @if($order->use_truck_station)
+                                <form method="POST" target="_blank" action="{{ route(($orderRoutePrefix ?? 'warehouse').'.orders.print-truck-label', $order) }}"
+                                      onsubmit="const b=this.querySelector('[data-print-label]');const c=this.querySelector('[data-print-count]');const n=Number(b.dataset.count||0)+1;b.dataset.count=n;b.innerHTML='<i class=&quot;bi bi-printer me-1&quot;></i>Đã in';c.textContent=n+' lần';c.classList.remove('d-none');">
+                                    @csrf
+                                    <button type="submit" class="btn btn-outline-primary text-nowrap" data-print-label data-count="{{ (int) $order->truck_label_print_count }}">
+                                        <i class="bi bi-printer me-1"></i>{{ (int) $order->truck_label_print_count > 0 ? 'Đã in' : 'In' }}
+                                    </button>
+                                    <div class="small text-muted text-center mt-1 {{ (int) $order->truck_label_print_count > 0 ? '' : 'd-none' }}" data-print-count>{{ (int) $order->truck_label_print_count }} lần</div>
+                                </form>
+                            @endif
+                        </div>
                         @if($hasActiveCuttingBatch)
                             <div class="alert wh-cutting-progress-alert py-2 px-3 mb-2">
                                 <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
@@ -140,14 +167,13 @@
                                             @php
                                                 $batchModalId = 'complete-cutting-batch-' . (int) $batch->id;
                                             @endphp
-                                            @if($isPackageOrderLayout)
-                                                <button type="button"
-                                                        class="btn btn-sm btn-warning"
-                                                        data-bs-toggle="modal"
-                                                        data-bs-target="#{{ $batchModalId }}">
-                                                    <i class="bi bi-play-fill me-1"></i>Thực hiện
-                                                </button>
-                                            @else
+                                            <button type="button"
+                                                    class="btn btn-sm btn-warning"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#{{ $batchModalId }}">
+                                                <i class="bi bi-play-fill me-1"></i>Thực hiện
+                                            </button>
+                                            @if(!$isPackageOrderLayout)
                                                 <form method="POST"
                                                       action="{{ route('warehouse.cutting-batches.revert', $batch) }}"
                                                       onsubmit="return confirm('Quay lại xác nhận lấy hàng pha lóc và hoàn nguyên tồn nguyên liệu?')">
@@ -993,7 +1019,29 @@
                                 @endif
 
                                 @if($isReadyToPack)
-                                    @if($canStartPacking && !$isPendingSaleConfirmation)
+                                    @if($isPendingSaleConfirmation)
+                                        <button class="btn btn-warning btn-sm" type="button" disabled>
+                                            <i class="bi bi-hourglass-split me-1"></i>Đang chờ Sale xác nhận thay đổi đơn
+                                        </button>
+                                    @elseif($isRejectedBySale)
+                                        <div class="alert alert-danger py-2 px-3 mb-0" role="alert">
+                                            <i class="bi bi-x-circle-fill me-1"></i><strong>Không thể đóng hàng:</strong> Sale đã từ chối điều chỉnh; kho cần xử lý và gửi lại yêu cầu.
+                                        </div>
+                                    @elseif(!$canProcessThisOrder)
+                                        <div class="alert alert-warning py-2 px-3 mb-0 d-flex align-items-center gap-2 flex-wrap" role="alert">
+                                            <i class="bi bi-calendar-x-fill"></i>
+                                            <span><strong>Không thể đóng hàng:</strong> Đơn qua ngày, đang chờ Admin cho phép tiếp tục đóng hàng.</span>
+                                            @if(auth()->user()?->hasRole('admin') && ($orderRoutePrefix ?? 'warehouse') === 'warehouse')
+                                                <form method="POST" action="{{ route('warehouse.orders.allow-historical-packing', $order) }}" class="ms-1"
+                                                      onsubmit="return confirm('Cho phép kho tiếp tục đóng đơn {{ addslashes($order->code ?: '#'.$order->id) }} tại ngày nghiệp vụ gốc?');">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-warning btn-sm fw-semibold">
+                                                        <i class="bi bi-unlock me-1"></i>Cho phép tiếp tục đóng hàng
+                                                    </button>
+                                                </form>
+                                            @endif
+                                        </div>
+                                    @elseif($canStartPacking)
                                         <form action="{{ route(($orderRoutePrefix ?? 'warehouse') . '.orders.start-packing', $order) }}" method="POST" class="js-start-packing-form">
                                             @csrf
                                             <input type="hidden" name="packing_date" value="{{ $selectedDate ?? now()->toDateString() }}">
@@ -1002,10 +1050,6 @@
                                                 {{ $isTodaySelected ? 'Đóng hàng' : 'Đóng hàng ngày ' . \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m') }}
                                             </button>
                                         </form>
-                                    @elseif($isPendingSaleConfirmation)
-                                        <button class="btn btn-warning btn-sm" type="button" disabled>
-                                            <i class="bi bi-hourglass-split me-1"></i>Đang chờ sale xác nhận thay đổi đơn
-                                        </button>
                                     @else
                                         <button class="btn btn-danger btn-sm" type="button" disabled>
                                             <i class="bi bi-exclamation-triangle-fill me-1"></i>Không đủ hàng - Chờ nhập kho
@@ -1059,8 +1103,7 @@
                 @foreach($orderCuttingPlans as $cuttingPlan)
                     @include('warehouse.cutting._order_modal', ['cuttingOrder' => $order, 'cuttingPlan' => $cuttingPlan, 'selectedDate' => $selectedDate ?? now()->toDateString()])
                 @endforeach
-                @if($isPackageOrderLayout)
-                    @foreach($activeCuttingBatches as $batch)
+                @foreach($activeCuttingBatches as $batch)
                         @php
                             $batchModalId = 'complete-cutting-batch-' . (int) $batch->id;
                             $plannedComponents = collect($batch->planned_components ?? []);
@@ -1073,7 +1116,7 @@
                         <div class="modal fade" id="{{ $batchModalId }}" tabindex="-1" aria-hidden="true">
                             <div class="modal-dialog modal-lg modal-dialog-scrollable wh-orders-scroll-modal">
                                 <div class="modal-content border-warning">
-                                    <form method="POST" action="{{ route('package.cutting-batches.complete', $batch) }}">
+                                    <form method="POST" action="{{ route(($isPackageOrderLayout ? 'package' : 'warehouse').'.cutting-batches.complete', $batch) }}">
                                         @csrf
                                         <div class="modal-header bg-warning-subtle">
                                             <div>
@@ -1117,6 +1160,7 @@
                                                                     <span data-picked-material-verify-text>{{ $isPickedVerified ? ' · Verify bởi ' . ($pickedVerification['verified_by_name'] ?? 'Package') : '' }}</span>
                                                                 </div>
                                                             </div>
+                                                            @if($isPackageOrderLayout)
                                                             <div class="wh-picked-material-actions">
                                                                 <span class="badge wh-picked-material-badge {{ $isPickedVerified ? '' : 'd-none' }}" data-picked-material-badge>
                                                                     <i class="bi bi-check2-circle me-1"></i>Đã lấy
@@ -1128,6 +1172,7 @@
                                                                     <i class="bi bi-arrow-counterclockwise me-1"></i>Quay lại
                                                                 </button>
                                                             </div>
+                                                            @endif
                                                         </div>
                                                     @empty
                                                         <div class="small text-muted">Chưa có dữ liệu nguyên liệu kho đã xuất.</div>
@@ -1176,11 +1221,11 @@
                                             </div>
                                         </div>
                                         <div class="modal-footer">
-                                            <div class="me-auto small text-danger fw-semibold js-cutting-picked-warning {{ $allMaterialsPicked ? 'd-none' : '' }}" data-batch-id="{{ (int) $batch->id }}">
+                                            <div class="me-auto small text-danger fw-semibold js-cutting-picked-warning {{ (!$isPackageOrderLayout || $allMaterialsPicked) ? 'd-none' : '' }}" data-batch-id="{{ (int) $batch->id }}">
                                                 Cần bấm Đã lấy cho tất cả mặt hàng kho đã xuất.
                                             </div>
                                             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Đóng</button>
-                                            <button type="submit" class="btn btn-success js-complete-cutting-batch-btn" data-batch-id="{{ (int) $batch->id }}" {{ $allMaterialsPicked ? '' : 'disabled' }}>
+                                            <button type="submit" class="btn btn-success js-complete-cutting-batch-btn" data-batch-id="{{ (int) $batch->id }}" {{ (!$isPackageOrderLayout || $allMaterialsPicked) ? '' : 'disabled' }}>
                                                 <i class="bi bi-check2-circle me-1"></i>Hoàn thiện nhập kho
                                             </button>
                                         </div>
@@ -1188,8 +1233,7 @@
                                 </div>
                             </div>
                         </div>
-                    @endforeach
-                @endif
+                @endforeach
                 @if($hasCustomerFeedback)
                 <div class="wh-customer-feedback-panel is-alert">
                     <div class="d-flex justify-content-between align-items-start gap-2 mb-2">

@@ -1,8 +1,8 @@
 {
-  "version": "1.1.25",
-  "version_code": 68,
+  "version": "1.1.26",
+  "version_code": 69,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": true,
-  "message": "Bản cập nhật 1.1.25: Khắc phục lỗi không tìm thấy đường dẫn API khi đăng nhập ứng dụng."
+  "message": "Bản cập nhật 1.1.26: Hiển thị số điện thoại và địa chỉ khách trong phần đóng hàng; đồng bộ đơn chờ đóng hàng qua ngày."
 }

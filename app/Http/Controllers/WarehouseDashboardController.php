@@ -1249,6 +1249,27 @@ class WarehouseDashboardController extends Controller
         $packingInventoryRoute = $isPackageModule ? 'package.inventory' : 'warehouse.stock-in';
         $packingDashboardRoute = $isPackageModule ? 'package.dashboard' : 'warehouse.dashboard';
 
+        $pullableOrders = collect();
+        if (! $isPackageModule && $managedWarehouseId) {
+            $pullableOrders = Order::query()
+                ->with(['customer:id,name,phone,address', 'warehouse:id,name', 'items:id,order_id,product_id,product_variant_id,quantity'])
+                ->whereIn('status', array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]))
+                ->whereNotNull('warehouse_id')
+                ->where('warehouse_id', '!=', $managedWarehouseId)
+                ->whereNull('trash_at')
+                ->where(fn ($query) => $query->whereNull('is_return_order')->orWhere('is_return_order', false))
+                ->forPackingDate($selectedDate)
+                ->orderBy('daily_sequence')
+                ->orderBy('created_at')
+                ->get()
+                ->filter(fn (Order $candidate) => $this->canProcessOrderOnCurrentRun($candidate)
+                    && ! in_array($candidate->warehouse_adjustment_status, [
+                        Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION,
+                        Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED,
+                    ], true))
+                ->values();
+        }
+
         return view('warehouse.orders.index', compact(
             'orders',
             'selectedDate',
@@ -1267,10 +1288,34 @@ class WarehouseDashboardController extends Controller
             'orderRoutePrefix',
             'packingInventoryRoute',
             'packingDashboardRoute',
+            'pullableOrders',
             'cuttingPlansByOrder',
             'activeCuttingBatchesByOrder',
             'packingSizeOptionsByItem'
         ));
+    }
+
+    public function printTruckLabel(Order $order)
+    {
+        $this->authorizePackingOrderAccess($order);
+        abort_unless((bool) $order->use_truck_station, 404, 'Đơn hàng không giao qua nhà xe.');
+        $order->forceFill([
+            'truck_label_print_count' => ((int) $order->truck_label_print_count) + 1,
+            'truck_label_printed_at' => now(),
+            'truck_label_printed_by' => Auth::id(),
+        ])->save();
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'action' => 'print_truck_label',
+            'user_id' => Auth::id(),
+            'role' => $this->packingActorRole(),
+            'status_before' => $order->status,
+            'status_after' => $order->status,
+            'note' => 'In thông tin giao nhà xe lần '.(int) $order->truck_label_print_count.'.',
+        ]);
+        $order->loadMissing(['customer', 'truckStation']);
+
+        return view('warehouse.orders.print-truck-label', compact('order'));
     }
 
     /** Move a waiting or partially packed order to another packing warehouse. */
@@ -1410,6 +1455,117 @@ class WarehouseDashboardController extends Controller
             : "Đã chuyển đơn thiếu hàng từ {$sourceWarehouseName} sang {$targetWarehouseName}.";
 
         return back()->with('success', $actionMessage.' Đơn sẽ chỉ xuất hiện tại kho mới để tiếp tục đóng hàng.'.$goodsMessage);
+    }
+
+    /** Pull an unfinished packing order from another warehouse into the current warehouse. */
+    public function pullPackingWarehouse(Request $request, Order $order)
+    {
+        $user = $request->user();
+        $targetWarehouseId = $user?->warehouse_id ? (int) $user->warehouse_id : 0;
+        if ($targetWarehouseId <= 0) {
+            return back()->with('error', 'Tài khoản chưa được gán kho đang làm việc.');
+        }
+
+        $validated = $request->validate([
+            'packing_date' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
+        ]);
+        if (! Order::query()->whereKey($order->id)->forPackingDate($validated['packing_date'])->exists()) {
+            return back()->with('error', 'Đơn không thuộc ngày đóng hàng đang chọn.');
+        }
+
+        $transferableStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
+        try {
+            [$sourceName, $targetName, $goodsTransfer] = DB::transaction(function () use ($order, $user, $targetWarehouseId, $transferableStatuses): array {
+                $lockedOrder = Order::query()->with('warehouse:id,name')->lockForUpdate()->findOrFail($order->id);
+                $sourceWarehouseId = (int) ($lockedOrder->warehouse_id ?? 0);
+                if ($sourceWarehouseId <= 0 || $sourceWarehouseId === $targetWarehouseId) {
+                    throw new \RuntimeException('Đơn không còn thuộc kho khác hoặc đã được kéo về kho hiện tại.');
+                }
+                if (! in_array((string) $lockedOrder->status, $transferableStatuses, true)) {
+                    throw new \RuntimeException('Chỉ được kéo đơn chưa hoàn thành đóng hàng.');
+                }
+                if (in_array($lockedOrder->warehouse_adjustment_status, [
+                    Order::WAREHOUSE_ADJUSTMENT_STATUS_PENDING_SALE_CONFIRMATION,
+                    Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED,
+                ], true)) {
+                    throw new \RuntimeException('Đơn đang chờ xử lý điều chỉnh với Sale nên chưa thể kéo về kho khác.');
+                }
+                if (! $this->canProcessOrderOnCurrentRun($lockedOrder)) {
+                    throw new \RuntimeException('Đơn qua ngày chưa được Admin xác nhận cho phép tiếp tục đóng hàng.');
+                }
+                if ($lockedOrder->order_transfer_id
+                    || ProductCuttingBatch::query()->where('order_id', $lockedOrder->id)->where('status', ProductCuttingBatch::STATUS_IN_PROGRESS)->exists()
+                    || WarehouseTransfer::query()->where('order_id', $lockedOrder->id)->whereIn('status', [
+                        WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                        WarehouseTransfer::STATUS_IN_TRANSIT,
+                        WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                    ])->exists()
+                    || WarehouseInventoryTransfer::query()->where('order_id', $lockedOrder->id)->where('status', WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)->exists()) {
+                    throw new \RuntimeException('Đơn đang có pha lóc hoặc điều chuyển khác chưa hoàn tất nên chưa thể kéo về.');
+                }
+
+                $targetWarehouse = Warehouse::query()->whereKey($targetWarehouseId)->where('status', true)->firstOrFail();
+                $sourceName = $lockedOrder->warehouse?->name ?: 'Kho nguồn';
+                $goodsTransfer = $this->createPackingOrderGoodsTransfer($lockedOrder, $sourceWarehouseId, $targetWarehouseId, (int) $user->id);
+                $this->releaseOrderReservations($lockedOrder);
+                $incomingQuantities = $goodsTransfer
+                    ? $goodsTransfer->items()->selectRaw('product_variant_id, SUM(quantity) as quantity')->groupBy('product_variant_id')->pluck('quantity', 'product_variant_id')->all()
+                    : [];
+                $this->reserveOrderStockAtWarehouse($lockedOrder, $targetWarehouseId, $incomingQuantities);
+                $lockedOrder->forceFill([
+                    'warehouse_id' => $targetWarehouseId,
+                    'stock_sufficient' => null,
+                    'stock_shortage_detail' => null,
+                    'stock_alert_status' => null,
+                ])->save();
+
+                OrderHistory::create([
+                    'order_id' => $lockedOrder->id,
+                    'action' => 'warehouse_pull_packing_order',
+                    'user_id' => $user->id,
+                    'role' => 'warehouse',
+                    'status_before' => $lockedOrder->status,
+                    'status_after' => $lockedOrder->status,
+                    'note' => "{$targetWarehouse->name} kéo đơn chưa hoàn thành từ {$sourceName} về tiếp tục đóng hàng."
+                        .($goodsTransfer ? ' Hàng đang giữ được gửi kèm phiếu '.$goodsTransfer->transfer_code.'.' : ' Không có hàng giữ tại kho nguồn.'),
+                ]);
+
+                return [$sourceName, (string) $targetWarehouse->name, $goodsTransfer];
+            });
+        } catch (\Throwable $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        $message = "Đã kéo đơn #{$order->code} từ {$sourceName} về {$targetName} để tiếp tục đóng hàng.";
+        if ($goodsTransfer) {
+            $message .= ' Phần hàng kho nguồn đang giữ được chuyển theo phiếu '.$goodsTransfer->transfer_code.'; vui lòng xác nhận tại mục Tiếp nhận.';
+        }
+
+        return back()->with('success', $message);
+    }
+
+    /** Admin explicitly authorizes an unfinished historical order to continue at its original date. */
+    public function allowHistoricalPacking(Request $request, Order $order)
+    {
+        abort_unless($request->user()?->hasRole('admin'), 403);
+        abort_unless(in_array((string) $order->status, array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]), true), 422, 'Đơn không còn ở bước đóng hàng.');
+
+        if ($order->created_at?->isToday() || $order->accounting_sales_import_batch_id !== null) {
+            return back()->with('error', 'Đơn hiện tại không cần Admin cho phép xử lý qua ngày.');
+        }
+
+        $order->forceFill(['skip_auto_cancel' => true])->save();
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'action' => 'admin_allow_historical_packing',
+            'user_id' => $request->user()->id,
+            'role' => 'admin',
+            'status_before' => $order->status,
+            'status_after' => $order->status,
+            'note' => 'Admin xác nhận cho phép kho tiếp tục đóng đơn qua ngày tại ngày nghiệp vụ gốc.',
+        ]);
+
+        return back()->with('success', 'Đã cho phép kho tiếp tục đóng đơn #'.$order->code.' tại ngày nghiệp vụ gốc.');
     }
 
     private function createPackingOrderGoodsTransfer(
