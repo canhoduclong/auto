@@ -53,6 +53,7 @@
                 $customerFeedbackRows = collect($customerFeedbackContext['recent'] ?? []);
                 $hasCustomerFeedback = (bool) ($customerFeedbackContext['has_feedback'] ?? false);
                 $currentWorkingWarehouseId = (int) (auth()->user()?->warehouse_id ?? 0);
+                $isUnassignedOrder = (int) ($order->warehouse_id ?? 0) <= 0;
                 $packingWarehouseOptions = collect($warehouses ?? [])->filter(
                     fn ($warehouse) => (int) $warehouse->id !== $currentWorkingWarehouseId
                 );
@@ -115,6 +116,11 @@
                                 </div>
                             </div> 
                             <div class="d-flex align-items-center gap-2 wh-order-card-header-actions">
+                                @if($isUnassignedOrder && $isReadyToPack)
+                                    <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">
+                                        <i class="bi bi-shop me-1"></i>Chưa thuộc kho · Có thể nhận
+                                    </span>
+                                @endif
                                 @if($warehouseCanAdjust)
                                     <span class="badge bg-primary-subtle text-primary border border-primary-subtle" title="Kho được phép trực tiếp điều chỉnh đơn">
                                         <i class="bi bi-pencil-square me-1"></i>Kho được sửa
@@ -1042,7 +1048,11 @@
                                             <input type="hidden" name="packing_date" value="{{ $selectedDate ?? now()->toDateString() }}">
                                             <button class="btn btn-primary btn-sm js-start-packing-btn" type="submit">
                                                 <i class="bi bi-box2 me-1"></i>
-                                                {{ $isTodaySelected ? 'Đóng hàng' : 'Đóng hàng ngày ' . \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m') }}
+                                                @if($isUnassignedOrder)
+                                                    {{ $isTodaySelected ? 'Nhận đơn & đóng hàng' : 'Nhận đơn & đóng hàng ngày '.\Illuminate\Support\Carbon::parse($selectedDate)->format('d/m') }}
+                                                @else
+                                                    {{ $isTodaySelected ? 'Đóng hàng' : 'Đóng hàng ngày ' . \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m') }}
+                                                @endif
                                             </button>
                                         </form>
                                     @else

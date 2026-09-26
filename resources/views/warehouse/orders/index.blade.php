@@ -1369,6 +1369,7 @@
     <div class="d-flex justify-content-between align-items-center gap-2 mb-3 flex-wrap">
         <div class="d-flex gap-2 flex-wrap">
             <span class="badge bg-dark wh-summary-pill">Tổng đơn: {{ $orders->count() }}</span>
+            <span class="badge bg-info text-dark wh-summary-pill">Chưa thuộc kho: {{ $orders->filter(fn ($entry) => (int) ($entry->warehouse_id ?? 0) <= 0 && in_array((string) $entry->status, ['approved', 'ready_to_pack'], true))->count() }}</span>
             <span class="badge bg-primary wh-summary-pill">Chờ đóng gói: {{ $orders->whereIn('status', ['approved', 'ready_to_pack'])->count() }}</span>
             <span class="badge bg-warning text-dark wh-summary-pill">Đang đóng: {{ $orders->where('status', 'packing')->count() }}</span>
             <span class="badge bg-danger wh-summary-pill">Sale từ chối điều chỉnh: {{ $orders->where('warehouse_adjustment_status', \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED)->count() }}</span>
