@@ -80,7 +80,9 @@ class WarehouseDashboardController extends Controller
         $newOrders = Order::query()
             ->with(['customer', 'user', 'items.product', 'items.variant'])
             ->when($warehouseId, fn ($query) => $query->where(function ($scope) use ($warehouseId) {
-                $scope->where('warehouse_id', $warehouseId)->orWhereNull('warehouse_id');
+                $scope->where('warehouse_id', $warehouseId)
+                    ->orWhereNull('warehouse_id')
+                    ->orWhere('warehouse_id', '<=', 0);
             }))
             ->whereIn('status', [Order::STATUS_APPROVED, Order::STATUS_READY_TO_PACK])
             ->orderByDesc('created_at')
@@ -295,7 +297,9 @@ class WarehouseDashboardController extends Controller
                 $query->where(function ($warehouseScope) use ($managedWarehouseId) {
                     $warehouseScope->where('warehouse_id', $managedWarehouseId)
                         ->orWhere(function ($sharedScope) {
-                            $sharedScope->whereNull('warehouse_id')
+                            $sharedScope->where(fn ($unassigned) => $unassigned
+                                ->whereNull('warehouse_id')
+                                ->orWhere('warehouse_id', '<=', 0))
                                 ->whereIn('status', array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]));
                         });
                 });
@@ -919,7 +923,9 @@ class WarehouseDashboardController extends Controller
             $todayOrdersQuery->where(function ($warehouseScope) use ($managedWarehouseId, $queueStatuses) {
                 $warehouseScope->where('warehouse_id', $managedWarehouseId)
                     ->orWhere(function ($sharedScope) use ($queueStatuses) {
-                        $sharedScope->whereNull('warehouse_id')
+                        $sharedScope->where(fn ($unassigned) => $unassigned
+                            ->whereNull('warehouse_id')
+                            ->orWhere('warehouse_id', '<=', 0))
                             ->whereIn('status', $queueStatuses);
                     });
             });
@@ -1008,7 +1014,9 @@ class WarehouseDashboardController extends Controller
             $dailyCountsQuery->where(function ($warehouseScope) use ($managedWarehouseId, $sharedQueueStatuses) {
                 $warehouseScope->where('warehouse_id', $managedWarehouseId)
                     ->orWhere(function ($sharedScope) use ($sharedQueueStatuses) {
-                        $sharedScope->whereNull('warehouse_id')
+                        $sharedScope->where(fn ($unassigned) => $unassigned
+                            ->whereNull('warehouse_id')
+                            ->orWhere('warehouse_id', '<=', 0))
                             ->whereIn('status', $sharedQueueStatuses);
                     });
             });
@@ -1061,7 +1069,9 @@ class WarehouseDashboardController extends Controller
             $ordersQuery->where(function ($warehouseScope) use ($managedWarehouseId, $sharedQueueStatuses) {
                 $warehouseScope->where('warehouse_id', $managedWarehouseId)
                     ->orWhere(function ($sharedScope) use ($sharedQueueStatuses) {
-                        $sharedScope->whereNull('warehouse_id')
+                        $sharedScope->where(fn ($unassigned) => $unassigned
+                            ->whereNull('warehouse_id')
+                            ->orWhere('warehouse_id', '<=', 0))
                             ->whereIn('status', $sharedQueueStatuses);
                     });
             });
@@ -1253,7 +1263,7 @@ class WarehouseDashboardController extends Controller
         if (! $isPackageModule && $managedWarehouseId) {
             $otherWarehouseOrders = Order::query()
                 ->with(['customer:id,name,phone,address', 'warehouse:id,name', 'items:id,order_id,product_id,product_variant_id,quantity'])
-                ->whereNotNull('warehouse_id')
+                ->where('warehouse_id', '>', 0)
                 ->where('warehouse_id', '!=', $managedWarehouseId)
                 ->whereNull('trash_at')
                 ->forPackingDate($selectedDate)
@@ -3097,7 +3107,9 @@ class WarehouseDashboardController extends Controller
             ->whereIn('status', $queueStatuses)
             ->forPackingDate($forDate)
             ->when($warehouseId, fn ($query) => $query->where(function ($scope) use ($warehouseId) {
-                $scope->where('warehouse_id', $warehouseId)->orWhereNull('warehouse_id');
+                $scope->where('warehouse_id', $warehouseId)
+                    ->orWhereNull('warehouse_id')
+                    ->orWhere('warehouse_id', '<=', 0);
             }))
             ->whereHas('items', fn ($query) => $query->where('product_variant_id', $variant->id))
             ->orderBy('created_at')
@@ -3193,7 +3205,9 @@ class WarehouseDashboardController extends Controller
             ->whereIn('status', $queueStatuses)
             ->forPackingDate($forDate)
             ->when($warehouseId, fn ($query) => $query->where(function ($scope) use ($warehouseId) {
-                $scope->where('warehouse_id', $warehouseId)->orWhereNull('warehouse_id');
+                $scope->where('warehouse_id', $warehouseId)
+                    ->orWhereNull('warehouse_id')
+                    ->orWhere('warehouse_id', '<=', 0);
             }))
             ->orderBy('created_at', 'asc')
             ->orderBy('id', 'asc')
@@ -3230,7 +3244,9 @@ class WarehouseDashboardController extends Controller
             ->whereIn('status', self::PACKED_STATUSES)
             ->forPackingDate($forDate)
             ->when($warehouseId, fn ($query) => $query->where(fn ($scope) => $scope
-                ->where('warehouse_id', $warehouseId)->orWhereNull('warehouse_id')))
+                ->where('warehouse_id', $warehouseId)
+                ->orWhereNull('warehouse_id')
+                ->orWhere('warehouse_id', '<=', 0)))
             ->get();
         foreach ($packedOrders as $packedOrder) {
             foreach ($packedOrder->items as $item) {
@@ -3483,7 +3499,9 @@ class WarehouseDashboardController extends Controller
                 ->whereIn('status', $queueStatuses)
                 ->forPackingDate($forDate)
                 ->when($warehouseId, fn ($query) => $query->where(function ($scope) use ($warehouseId) {
-                    $scope->where('warehouse_id', $warehouseId)->orWhereNull('warehouse_id');
+                    $scope->where('warehouse_id', $warehouseId)
+                        ->orWhereNull('warehouse_id')
+                        ->orWhere('warehouse_id', '<=', 0);
                 }))
                 ->orderBy('created_at', 'asc')
                 ->orderBy('id', 'asc')
