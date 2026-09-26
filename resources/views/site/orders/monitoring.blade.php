@@ -2061,8 +2061,17 @@
                             $timelineProgressWidth = ((count($timelineSteps) - 1) / max(1, count($timelineSteps))) * $timelinePercent;
                             $defaultAddress = $order->customer?->addresses?->firstWhere('is_default', 1)
                                 ?? $order->customer?->addresses?->first();
-                            $deliveryAddress = $order->recipient_address
-                                ?: ($defaultAddress?->note ?: ($order->customer?->address ?: 'Chưa cập nhật địa chỉ'));
+                            $customerDeliveryAddress = trim((string) ($defaultAddress?->note ?: $order->customer?->address));
+                            $savedRecipientAddress = trim((string) $order->recipient_address);
+                            $savedStationAddress = trim((string) ($order->truck_station_address ?: $order->truckStation?->address));
+                            // Các đơn từng được đồng bộ theo logic cũ có thể đã lưu địa chỉ trạm vào
+                            // recipient_address. Khi hai giá trị trùng nhau, hiển thị lại địa chỉ khách.
+                            $deliveryAddress = $order->use_truck_station
+                                && $savedStationAddress !== ''
+                                && $savedRecipientAddress === $savedStationAddress
+                                    ? $customerDeliveryAddress
+                                    : ($savedRecipientAddress ?: $customerDeliveryAddress);
+                            $deliveryAddress = $deliveryAddress ?: 'Chưa cập nhật địa chỉ';
                             $deliveryArea = collect([$defaultAddress?->ward, $defaultAddress?->city])->filter()->implode(', ');
                             $deliveryTime = $order->delivery_time ?: ($order->customer?->delivery_time ?: 'Chưa cập nhật');
                             $displayCreatedAt = $order->created_at;
@@ -2089,9 +2098,7 @@
                                 && !empty($currentCustomer?->truck_station_id);
                             $currentStation = $currentUsesTruckStation ? $currentCustomer?->truckStation : null;
                             $currentStationAddress = trim((string) ($currentCustomer?->truck_station_address ?: $currentStation?->address));
-                            $currentRecipientAddress = $currentUsesTruckStation && $currentStationAddress !== ''
-                                ? $currentStationAddress
-                                : trim((string) ($defaultAddress?->note ?: $currentCustomer?->address));
+                            $currentRecipientAddress = trim((string) ($defaultAddress?->note ?: $currentCustomer?->address));
                             $normalizeDeliveryValue = static fn ($value): string => trim((string) $value);
                             $deliverySnapshotChanged = collect([
                                 [$order->recipient_name, $currentCustomer?->name],
@@ -2435,7 +2442,7 @@
                                                 </div>
                                                 <div class="is-wide">
                                                     <label for="monitorEditAddress{{ $order->id }}">Địa chỉ nhận hàng</label>
-                                                    <input class="form-control form-control-sm" id="monitorEditAddress{{ $order->id }}" name="recipient_address" value="{{ $order->recipient_address ?: ($order->customer?->address ?? '') }}" required>
+                                                    <input class="form-control form-control-sm" id="monitorEditAddress{{ $order->id }}" name="recipient_address" value="{{ $deliveryAddress === 'Chưa cập nhật địa chỉ' ? '' : $deliveryAddress }}" required>
                                                 </div>
                                                 <div class="is-wide border rounded p-3 bg-light" data-monitor-edit-truck>
                                                     <div class="form-check form-switch mb-2">
@@ -3079,9 +3086,7 @@ document.addEventListener('click', async event => {
             : '';
         document.getElementById('monitorConfirmCustomer').innerHTML = `<strong>${escapeHtml(selectedCustomer.name)}</strong>
             <div>${escapeHtml(selectedCustomer.phone || 'Chưa có SĐT')}</div>${stationDetails}`;
-        document.getElementById('monitorRecipientAddress').value = selectedCustomer.useTruckStation
-            ? (selectedCustomer.truckStationAddress || selectedCustomer.address || '')
-            : (selectedCustomer.address || '');
+        document.getElementById('monitorRecipientAddress').value = selectedCustomer.address || '';
         document.getElementById('monitorConfirmItems').innerHTML = Array.from(selectedItems.values()).map(item => `
             <div class="d-flex justify-content-between gap-2 border-bottom py-2 small">
                 <span><strong>${escapeHtml(item.name)}</strong> · ${escapeHtml(item.size || '—')} × ${item.quantity}

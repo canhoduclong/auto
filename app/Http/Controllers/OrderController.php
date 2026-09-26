@@ -917,9 +917,7 @@ class OrderController extends Controller
         $useTruckStation = (bool) $customer->use_truck_station && !empty($customer->truck_station_id);
         $station = $useTruckStation ? $customer->truckStation : null;
         $stationAddress = trim((string) ($customer->truck_station_address ?: $station?->address));
-        $recipientAddress = $useTruckStation && $stationAddress !== ''
-            ? $stationAddress
-            : trim((string) ($defaultAddress?->note ?: $customer->address));
+        $recipientAddress = trim((string) ($defaultAddress?->note ?: $customer->address));
         $statusBefore = (string) $order->status;
 
         $order->update($this->filterExistingColumns('orders', [

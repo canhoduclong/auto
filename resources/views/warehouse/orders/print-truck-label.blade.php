@@ -21,7 +21,12 @@
 @php
     $customerName = $order->recipient_name ?: $order->customer?->name ?: 'Khách hàng';
     $customerPhone = $order->recipient_phone ?: $order->customer?->phone ?: '—';
-    $customerAddress = $order->recipient_address ?: $order->customer?->address ?: '—';
+    $defaultCustomerAddress = $order->customer?->addresses?->firstWhere('is_default', 1)
+        ?? $order->customer?->addresses?->first();
+    // Địa chỉ trên nhãn là địa chỉ khách hàng. recipient_address của một số đơn cũ
+    // đã từng bị ghi nhầm bằng địa chỉ trạm xe nên không được ưu tiên tại đây.
+    $customerAddress = $defaultCustomerAddress?->note
+        ?: ($order->customer?->address ?: ($order->recipient_address ?: '—'));
     $stationName = $order->truck_station_name ?: $order->truckStation?->name ?: '—';
     $stationAddress = $order->truck_station_address ?: $order->truckStation?->address ?: '—';
     $stationPhone = $order->truck_station_phone ?: $order->truckStation?->phone ?: '—';

@@ -1313,7 +1313,7 @@ class WarehouseDashboardController extends Controller
             'status_after' => $order->status,
             'note' => 'In thông tin giao nhà xe lần '.(int) $order->truck_label_print_count.'.',
         ]);
-        $order->loadMissing(['customer', 'truckStation']);
+        $order->loadMissing(['customer.addresses', 'truckStation']);
 
         return view('warehouse.orders.print-truck-label', compact('order'));
     }
