@@ -201,6 +201,19 @@
         font-size: .68rem;
         font-weight: 800;
     }
+    .price-board-edit {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 4px 9px;
+        border-radius: 5px;
+        background: #ffc400;
+        color: #211700;
+        font-size: .68rem;
+        font-weight: 800;
+        text-decoration: none;
+    }
+    .price-board-edit:hover { background: #eeb700; color: #211700; }
     .price-board-table {
         width: 100%;
         margin: 0;
@@ -336,6 +349,9 @@
         ->first();
 @endphp
 <div class="my-dashboard">
+    @if(session('success'))
+        <div class="alert alert-success mx-auto mb-3" style="max-width:1300px">{{ session('success') }}</div>
+    @endif
     <div class="dashboard-shell">
         <aside class="dashboard-sidebar" aria-label="Điều hướng đơn hàng">
             @include('site.orders.partials.order_navigation_links', [
@@ -447,7 +463,13 @@
             <section class="price-board-card">
                 <div class="price-board-head">
                     <h2 class="price-board-title">Bảng báo giá sản phẩm</h2>
-                    <span class="price-board-badge">Mới</span>
+                    @if(auth()->user()?->hasRole(['leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale', 'admin']))
+                        <a href="{{ route('pages.my_dashboard.product_prices.edit') }}" class="price-board-edit">
+                            <i class="bi bi-pencil-square"></i> Chỉnh sửa
+                        </a>
+                    @else
+                        <span class="price-board-badge">Mới</span>
+                    @endif
                 </div>
                 @if(($productPriceBoard ?? collect())->isNotEmpty())
                     <div class="table-responsive">

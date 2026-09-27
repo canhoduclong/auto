@@ -1344,6 +1344,22 @@ class WarehouseDashboardController extends Controller
                     ? 'Không thể Undo vì đơn đã phát sinh xử lý hoặc phiếu chuyển hàng sau khi kéo.'
                     : null);
             });
+
+            $pullSort = in_array((string) $request->input('pull_sort'), ['warehouse', 'status'], true)
+                ? (string) $request->input('pull_sort')
+                : 'warehouse';
+            $pullDirection = strtolower((string) $request->input('pull_dir')) === 'desc' ? 'desc' : 'asc';
+            $sortValue = static function (Order $candidate) use ($pullSort): string {
+                if ($pullSort === 'status') {
+                    return mb_strtolower((string) $candidate->status);
+                }
+
+                return mb_strtolower((string) ($candidate->warehouse?->name ?: 'Chưa thuộc kho'));
+            };
+            $otherWarehouseOrders = ($pullDirection === 'desc'
+                ? $otherWarehouseOrders->sortByDesc($sortValue)
+                : $otherWarehouseOrders->sortBy($sortValue))
+                ->values();
         }
 
         return view('warehouse.orders.index', compact(

@@ -1318,7 +1318,36 @@
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
-                        <tr><th>STT / Đơn hàng</th><th>Khách hàng</th><th>Kho hiện tại</th><th>Trạng thái</th><th class="text-end">Thao tác</th></tr>
+                        @php
+                            $pullSort = in_array(request('pull_sort'), ['warehouse', 'status'], true) ? request('pull_sort') : 'warehouse';
+                            $pullDirection = request('pull_dir') === 'desc' ? 'desc' : 'asc';
+                            $pullSortUrl = static function (string $column) use ($selectedDate, $pullSort, $pullDirection): string {
+                                $nextDirection = $pullSort === $column && $pullDirection === 'asc' ? 'desc' : 'asc';
+                                return route('warehouse.orders', [
+                                    'date' => $selectedDate,
+                                    'tab' => 'pull',
+                                    'pull_sort' => $column,
+                                    'pull_dir' => $nextDirection,
+                                ]);
+                            };
+                        @endphp
+                        <tr>
+                            <th>STT / Đơn hàng</th>
+                            <th>Khách hàng</th>
+                            <th>
+                                <a href="{{ $pullSortUrl('warehouse') }}" class="text-decoration-none text-dark">
+                                    Kho hiện tại
+                                    <i class="bi {{ $pullSort === 'warehouse' ? ($pullDirection === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-up') : 'bi-arrow-down-up' }} ms-1"></i>
+                                </a>
+                            </th>
+                            <th>
+                                <a href="{{ $pullSortUrl('status') }}" class="text-decoration-none text-dark">
+                                    Trạng thái
+                                    <i class="bi {{ $pullSort === 'status' ? ($pullDirection === 'asc' ? 'bi-sort-alpha-down' : 'bi-sort-alpha-up') : 'bi-arrow-down-up' }} ms-1"></i>
+                                </a>
+                            </th>
+                            <th class="text-end">Thao tác</th>
+                        </tr>
                     </thead>
                     <tbody>
                     @forelse(($otherWarehouseOrders ?? collect()) as $otherOrder)

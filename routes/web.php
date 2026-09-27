@@ -197,6 +197,12 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('/my-dashboard/stats', [MyDashboardController::class, 'stats'])
         ->name('pages.my_dashboard.stats')
         ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::get('/my-dashboard/product-prices/edit', [ProductPriceManagementController::class, 'dashboardEdit'])
+        ->name('pages.my_dashboard.product_prices.edit')
+        ->middleware('role:leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::put('/my-dashboard/product-prices', [ProductPriceManagementController::class, 'dashboardUpdate'])
+        ->name('pages.my_dashboard.product_prices.update')
+        ->middleware('role:leader,leader_sale,sale_manager,manager,manager_sale,admin');
     Route::get('/my-dashboard/notifications', [MyDashboardController::class, 'notifications'])
         ->name('pages.my_dashboard.notifications')
         ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
