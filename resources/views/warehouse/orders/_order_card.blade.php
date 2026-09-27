@@ -704,7 +704,7 @@
                         </div>
                     </div>
 
-                    <div class="card-footer bg-white border-top py-2">
+                    <div class="card-footer bg-white border-top py-2 js-order-details">
                         @if($isPackedReadonly)
                             <div class="wh-section border-top-0 pt-0 mb-2">
                                 <div class="wh-logistics-title">Thông tin đơn hàng hoàn chỉnh</div>
