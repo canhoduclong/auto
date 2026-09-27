@@ -9,9 +9,9 @@
         body { margin:0; color:#111827; font:10px/1.35 Arial, sans-serif; }
         .sheet { min-height: 277mm; break-after: page; page-break-after: always; }
         .sheet:last-child { break-after:auto; page-break-after:auto; }
-        .company { display:grid; grid-template-columns:minmax(0, 72%) minmax(0, 28%); align-items:center; gap:8px; border-bottom:1px solid #111827; padding:0 2mm 6px; }
+        .company { display:grid; grid-template-columns:minmax(0, 72%) minmax(0, 28%); align-items:center; gap:8px; padding:0 2mm 6px; }
         .company-brand { display:flex; align-items:center; gap:6mm; min-width:0; }
-        .company-logo { flex:0 0 22mm; width:22mm; display:flex; align-items:center; justify-content:center; }
+        .company-logo { flex:0 0 22mm; width:22mm; display:flex; align-items:center; justify-content:center; transform:translateY(2mm); }
         .logo { display:block; width:22mm; height:22mm; object-fit:contain; }
         .company-details { min-width:0; }
         .company-name { font-size:12px; font-weight:800; text-transform:uppercase; }
