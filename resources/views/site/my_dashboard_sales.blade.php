@@ -240,6 +240,20 @@
         white-space: nowrap;
         text-align: right;
     }
+    .price-change-label {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 2px 6px;
+        border: 1px solid #b45309;
+        border-radius: 999px;
+        background: #fff4df;
+        color: #92400e;
+        font-size: .58rem;
+        font-weight: 900;
+        line-height: 1.2;
+        white-space: nowrap;
+        vertical-align: middle;
+    }
     .price-update-note {
         margin-top: 7px;
         padding-top: 2px;
@@ -484,13 +498,21 @@
                                             <tr>
                                                 <td class="price-board-variant-name">
                                                     {{ $priceVariant['size_label'] ? $priceVariant['size_label'] . ' kg' : $priceVariant['name'] }}
+                                                    @if(!empty($priceVariant['price_update_label']))
+                                                        <span class="price-change-label">{{ $priceVariant['price_update_label'] }}</span>
+                                                    @endif
                                                 </td>
                                                 <td class="price-update-price">{{ number_format((float) ($priceVariant['price'] ?? 0), 0, ',', '.') }}đ/{{ $priceVariant['price_unit'] ?? 'kg' }}</td>
                                             </tr>
                                         @endforeach
                                     @else
                                         <tr>
-                                            <td class="price-board-product-name">{{ $priceProduct['product_name'] }}</td>
+                                            <td class="price-board-product-name">
+                                                {{ $priceProduct['product_name'] }}
+                                                @if(!empty($priceProduct['price_update_label']))
+                                                    <span class="price-change-label">{{ $priceProduct['price_update_label'] }}</span>
+                                                @endif
+                                            </td>
                                             <td class="price-update-price">{{ number_format((float) ($priceProduct['representative_price'] ?? 0), 0, ',', '.') }}đ/{{ $priceProduct['representative_price_unit'] ?? 'kg' }}</td>
                                         </tr>
                                     @endif

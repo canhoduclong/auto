@@ -1177,6 +1177,17 @@ class MyDashboardController extends Controller
                         $priceUnit = $variant->effective_priced_by_kg
                             ? 'kg'
                             : strtolower((string) ($product->unit_label ?: 'cái'));
+                        $priceUpdatedAt = $rule?->created_at ?? $rule?->start_date;
+                        $priceUpdateLabel = null;
+
+                        if ($priceUpdatedAt) {
+                            $updatedDate = Carbon::parse($priceUpdatedAt)->startOfDay();
+                            if ($updatedDate->equalTo(now()->startOfDay())) {
+                                $priceUpdateLabel = 'Giá mới';
+                            } elseif ($updatedDate->equalTo(now()->subDay()->startOfDay())) {
+                                $priceUpdateLabel = 'Giá Update';
+                            }
+                        }
 
                         return [
                             'id' => $variant->id,
@@ -1188,6 +1199,8 @@ class MyDashboardController extends Controller
                             'price_unit' => $priceUnit,
                             'price_group_key' => number_format($price, 2, '.', '') . '|' . $priceUnit,
                             'start_date' => $rule?->start_date,
+                            'price_updated_at' => $priceUpdatedAt,
+                            'price_update_label' => $priceUpdateLabel,
                         ];
                     })
                     ->filter()
@@ -1205,6 +1218,10 @@ class MyDashboardController extends Controller
                     ->first();
                 $representativeVariant = $priceGroups->get($representativeKey)->first();
                 $hasMixedPrices = $priceGroups->count() > 1;
+                $latestUpdateVariant = $variants
+                    ->filter(fn (array $variant) => !empty($variant['price_update_label']))
+                    ->sortByDesc(fn (array $variant) => Carbon::parse($variant['price_updated_at'])->timestamp)
+                    ->first();
 
                 return [
                     'product_id' => $product->id,
@@ -1212,6 +1229,7 @@ class MyDashboardController extends Controller
                     'representative_price' => (float) ($representativeVariant['price'] ?? 0),
                     'representative_price_key' => $representativeKey,
                     'representative_price_unit' => $representativeVariant['price_unit'] ?? 'kg',
+                    'price_update_label' => $latestUpdateVariant['price_update_label'] ?? null,
                     'has_mixed_prices' => $hasMixedPrices,
                     'variants' => $hasMixedPrices ? $variants : collect(),
                     'applied_dates' => $variants->pluck('start_date')->filter()->unique()->values(),
