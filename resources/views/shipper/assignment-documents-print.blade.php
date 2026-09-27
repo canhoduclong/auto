@@ -9,10 +9,15 @@
         body { margin:0; color:#111827; font:10px/1.35 Arial, sans-serif; }
         .sheet { min-height: 277mm; break-after: page; page-break-after: always; }
         .sheet:last-child { break-after:auto; page-break-after:auto; }
-        .company { display:grid; grid-template-columns:60% 40%; align-items:start; border-bottom:1px solid #111827; padding-bottom:6px; }
-        .logo { max-width:34mm; max-height:16mm; object-fit:contain; }
+        .company { display:grid; grid-template-columns:minmax(0, 72%) minmax(0, 28%); align-items:center; gap:8px; border-bottom:1px solid #111827; padding:0 2mm 6px; }
+        .company-brand { display:flex; align-items:center; gap:6mm; min-width:0; }
+        .company-logo { flex:0 0 22mm; width:22mm; display:flex; align-items:center; justify-content:center; }
+        .logo { display:block; width:22mm; height:22mm; object-fit:contain; }
+        .company-details { min-width:0; }
         .company-name { font-size:12px; font-weight:800; text-transform:uppercase; }
         .company-info { font-size:8.5px; }
+        .company-meta { font-size:11px; line-height:1.55; white-space:nowrap; }
+        .company-meta strong { font-size:11.5px; }
         h1 { text-align:center; font-size:18px; color:#1f4e79; margin:4px 0 0; }
         .subtitle { text-align:center; font-size:9px; font-style:italic; color:#1f4e79; margin-bottom:6px; }
         .info { display:grid; grid-template-columns:1fr 1fr 1fr; border:1px solid #6b7280; margin-bottom:7px; }
@@ -50,13 +55,19 @@
 @endphp
 <section class="sheet">
     <div class="company">
-        <div>
-            <img class="logo" src="{{ $companyLogo }}" alt="Logo"><div class="company-name">{{ $companyName }}</div>
-            @if($companyTax)<div class="company-info">MST: {{ $companyTax }}</div>@endif
-            @if($companyAddress)<div class="company-info">Địa chỉ: {{ $companyAddress }}</div>@endif
-            @if($companyPhone)<div class="company-info">Điện thoại: {{ $companyPhone }}</div>@endif
+        <div class="company-brand">
+            <div class="company-logo"><img class="logo" src="{{ $companyLogo }}" alt="Logo"></div>
+            <div class="company-details">
+                <div class="company-name">{{ $companyName }}</div>
+                @if($companyTax)<div class="company-info">MST: {{ $companyTax }}</div>@endif
+                @if($companyAddress)<div class="company-info">Địa chỉ: {{ $companyAddress }}</div>@endif
+                @if($companyPhone)<div class="company-info">Điện thoại: {{ $companyPhone }}</div>@endif
+            </div>
         </div>
-        <div class="company-info right">Kho xuất: <strong>{{ $order->warehouse?->name ?? '—' }}</strong><br>Ngày phiếu: <strong>{{ date('d/m/Y', strtotime($selectedDate)) }}</strong></div>
+        <div class="company-meta right">
+            Kho xuất: <strong>{{ $order->warehouse?->name ?? '—' }}</strong><br>
+            Ngày phiếu: <strong>{{ date('d/m/Y', strtotime($selectedDate)) }}</strong>
+        </div>
     </div>
     <h1>PHIẾU GIAO HÀNG</h1>
     <div class="subtitle">Số chứng từ: <strong>PXK-{{ $order->code ?: $order->id }}</strong></div>
