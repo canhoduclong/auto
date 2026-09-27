@@ -143,6 +143,8 @@ class AssignmentReviewController extends Controller
                     OrderStatus::Delivering->value,
                     Order::STATUS_SHIPPING,
                     Order::STATUS_IN_DELIVERY,
+                    Order::STATUS_DELIVERED,
+                    Order::STATUS_COMPLETED,
                 ])->orWhereHas('warehouseTransfers', function ($transferQuery): void {
                     $transferQuery->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED);
                 });

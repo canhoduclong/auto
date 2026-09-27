@@ -134,6 +134,19 @@
                                             aria-controls="order-details-{{ $order->id }}">
                                         <i class="bi bi-chevron-down me-1" aria-hidden="true"></i><span>Xem chi tiết</span>
                                     </button>
+                                    @if(($orderRoutePrefix ?? 'warehouse') === 'warehouse')
+                                        <form method="POST"
+                                              action="{{ route('warehouse.assignment-review.print') }}"
+                                              target="_blank"
+                                              class="d-inline-flex">
+                                            @csrf
+                                            <input type="hidden" name="date" value="{{ optional($order->delivery_date)->toDateString() ?: $order->created_at->toDateString() }}">
+                                            <input type="hidden" name="order_ids[]" value="{{ $order->id }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-success text-nowrap" title="In phiếu giao hàng">
+                                                <i class="bi bi-printer me-1" aria-hidden="true"></i>In
+                                            </button>
+                                        </form>
+                                    @endif
                                 @endif
                             </div>
                         </div>
