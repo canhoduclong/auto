@@ -80,7 +80,7 @@
                 }
             @endphp
             <div class="col-12" id="order-card-{{ $order->id }}">
-                <div class="wh-order-card-grid {{ $hasCustomerFeedback ? 'has-feedback' : 'no-feedback' }}">
+                <div class="wh-order-card-grid {{ $hasCustomerFeedback ? 'has-feedback' : 'no-feedback' }} {{ $isPackedReadonly ? 'is-order-collapsed' : '' }}">
                 <div class="wh-order-main">
                 <div class="card wh-order-card js-order-card {{ collect($order->sale_changes_pending)->isNotEmpty() ? 'sale-change-pending' : ($order->sale_changes_confirmed ? 'sale-change-confirmed' : '') }} {{ $hasActiveCuttingBatch ? 'has-cutting-in-progress' : '' }}" data-order-id="{{ $order->id }}">
                     @if(collect($order->sale_changes_pending)->isNotEmpty())
@@ -127,11 +127,19 @@
                                     </span>
                                 @endif
                                 <span class="badge {{ $meta['class'] }} js-order-status">{{ $meta['label'] }}</span>
+                                @if($isPackedReadonly)
+                                    <button type="button"
+                                            class="btn btn-sm btn-outline-secondary js-order-details-toggle"
+                                            aria-expanded="false"
+                                            aria-controls="order-details-{{ $order->id }}">
+                                        <i class="bi bi-chevron-down me-1" aria-hidden="true"></i><span>Xem chi tiết</span>
+                                    </button>
+                                @endif
                             </div>
                         </div>
                     </div>
 
-                    <div class="card-body">
+                    <div class="card-body {{ $order->use_truck_station ? 'has-order-compact-summary' : 'no-order-compact-summary' }}">
                         @php
                             $customerPhone = $order->recipient_phone ?: $order->customer?->phone;
                             $stationName = $order->truck_station_name ?: $order->truckStation?->name;
@@ -154,6 +162,7 @@
                             </form>
                         </div>
                         @endif
+                        <div id="order-details-{{ $order->id }}" class="js-order-details">
                         @if($hasActiveCuttingBatch)
                             <div class="alert wh-cutting-progress-alert py-2 px-3 mb-2">
                                 <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
@@ -1102,6 +1111,7 @@
                                 {{ $isNotReceived ? 'Chưa tiếp nhận' : 'Đã xử lý' }}
                             </span>
                         @endif
+                        </div>
                     </div>
                 </div>
                 </div>

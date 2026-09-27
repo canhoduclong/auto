@@ -24,6 +24,17 @@
     }
     .wh-order-card.sale-change-pending, .wh-order-card.sale-change-pending > .card-header { background: #fff3cd !important; border-color: #f59e0b !important; }
     .wh-order-card.sale-change-confirmed, .wh-order-card.sale-change-confirmed > .card-header { background: #d1e7dd !important; border-color: #198754 !important; }
+    .wh-order-card-grid.is-order-collapsed .js-order-details,
+    .wh-order-card-grid.is-order-collapsed > .wh-customer-feedback-panel {
+        display: none !important;
+    }
+    .wh-order-card-grid.is-order-collapsed .card-body.no-order-compact-summary {
+        display: none;
+    }
+    .js-order-details-toggle {
+        white-space: nowrap;
+        font-weight: 600;
+    }
     .wh-order-card.has-cutting-in-progress {
         border: 2px solid #7c3aed;
         background: #f5f3ff;
@@ -1404,6 +1415,11 @@
             <span class="badge bg-danger wh-summary-pill">Sale từ chối điều chỉnh: {{ $orders->where('warehouse_adjustment_status', \App\Models\Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED)->count() }}</span>
         </div>
         <div class="d-flex gap-2 flex-wrap">
+            @if($orders->isNotEmpty())
+                <button type="button" class="btn btn-outline-secondary btn-sm js-toggle-all-order-details" aria-pressed="false">
+                    <i class="bi bi-arrows-collapse me-1" aria-hidden="true"></i><span>Thu gọn tất cả</span>
+                </button>
+            @endif
             @if($deferredComponentImportRequests->isNotEmpty())
                 <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal"
                     data-bs-target="#cuttingImportModal" aria-controls="cuttingImportModal">
@@ -1678,9 +1694,61 @@
 @endif
 @endsection
 
+@push('page_footer')
+    @include('warehouse.orders._packing_footer')
+@endpush
+
 @push('scripts')
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const allDetailsToggle = document.querySelector('.js-toggle-all-order-details');
+
+        function setOrderCardCollapsed(grid, isCollapsed) {
+            grid.classList.toggle('is-order-collapsed', isCollapsed);
+
+            const button = grid.querySelector('.js-order-details-toggle');
+            if (!button) return;
+
+            button.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true');
+            button.querySelector('i')?.classList.toggle('bi-chevron-down', isCollapsed);
+            button.querySelector('i')?.classList.toggle('bi-chevron-up', !isCollapsed);
+
+            const label = button.querySelector('span');
+            if (label) label.textContent = isCollapsed ? 'Xem chi tiết' : 'Thu gọn';
+        }
+
+        function syncAllDetailsToggle() {
+            if (!allDetailsToggle) return;
+
+            const grids = Array.from(document.querySelectorAll('.wh-order-card-grid'));
+            const areAllCollapsed = grids.length > 0 && grids.every(grid => grid.classList.contains('is-order-collapsed'));
+            allDetailsToggle.setAttribute('aria-pressed', areAllCollapsed ? 'true' : 'false');
+            allDetailsToggle.querySelector('i')?.classList.toggle('bi-arrows-expand', areAllCollapsed);
+            allDetailsToggle.querySelector('i')?.classList.toggle('bi-arrows-collapse', !areAllCollapsed);
+
+            const label = allDetailsToggle.querySelector('span');
+            if (label) label.textContent = areAllCollapsed ? 'Xem chi tiết tất cả' : 'Thu gọn tất cả';
+        }
+
+        document.querySelectorAll('.js-order-details-toggle').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const grid = button.closest('.wh-order-card-grid');
+                if (!grid) return;
+
+                setOrderCardCollapsed(grid, !grid.classList.contains('is-order-collapsed'));
+                syncAllDetailsToggle();
+            });
+        });
+
+        allDetailsToggle?.addEventListener('click', function () {
+            const grids = Array.from(document.querySelectorAll('.wh-order-card-grid'));
+            const shouldCollapse = !grids.every(grid => grid.classList.contains('is-order-collapsed'));
+            grids.forEach(grid => setOrderCardCollapsed(grid, shouldCollapse));
+            syncAllDetailsToggle();
+        });
+
+        syncAllDetailsToggle();
+
         function setPriorityState(orderId, stateClass) {
             const priorityItem = document.querySelector(`[data-priority-order-id="${orderId}"]`);
             if (!priorityItem) return;
