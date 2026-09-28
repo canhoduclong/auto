@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tính toán KD</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f6f8;font-family:Arial,sans-serif;color:#1f2937}
+.wrap{max-width:1100px;margin:30px auto;padding:0 16px}.title{font-size:30px;font-weight:800;margin-bottom:20px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.card{background:#fff;border-radius:14px;padding:20px;box-shadow:0 3px 15px #0000000d}
+h2{font-size:18px;margin:0 0 16px}.form{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+label{font-size:13px;font-weight:700;color:#4b5563}.field{margin-top:6px;display:flex;align-items:center}
+input[type=text]{width:100%;padding:11px;border:1px solid #d1d5db;border-radius:8px;font-size:15px;text-align:right;outline:none}.control{margin-top:6px}.field{margin-top:0}.slider-row{display:flex;align-items:center;gap:8px;margin-top:8px}.slider-row input[type=range]{flex:1;min-width:0;accent-color:#2563eb;cursor:pointer}.range-min,.range-max{font-size:11px;color:#9ca3af;white-space:nowrap}
+input:focus{border-color:#2563eb}.unit{padding-left:8px;min-width:55px;font-size:13px;color:#6b7280}
+.results{display:grid;grid-template-columns:1fr 1fr;gap:12px}.result{padding:15px;border-radius:10px;background:#f8fafc}.result small{display:block;color:#6b7280;margin-bottom:5px}.result b{font-size:20px}
+.profit{grid-column:1/-1;background:#ecfdf5}.profit b{font-size:28px;color:#047857}
+.actions{margin-top:18px;display:flex;gap:10px}.btn{border:0;border-radius:8px;padding:10px 16px;font-weight:700;cursor:pointer}.reset{background:#e5e7eb}.save{background:#2563eb;color:white}
+.note{font-size:12px;color:#6b7280;margin-top:12px;line-height:1.5}
+@media(max-width:700px){.grid,.form,.results{grid-template-columns:1fr}.profit{grid-column:auto}.title{font-size:25px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="title">Tính toán KD</div>
+  <div class="grid">
+    <div class="card">
+      <h2>Thông số kinh doanh</h2>
+      <div class="form">
+        <div><label>Số lượng nhập</label><div class="control"><div class="field"><input id="qty" type="text" inputmode="numeric" value="1000" min="0" max="5000" step="10"><span class="unit">con</span></div><div class="slider-row"><span class="range-min">0</span><input id="qtyRange" type="range" min="0" max="5000" step="10" value="1000"><span class="range-max">5.000</span></div></div></div>
+        <div><label>Trọng lượng bình quân</label><div class="control"><div class="field"><input id="kg" type="text" inputmode="decimal" value="3" step="0.01" min="1" max="5"><span class="unit">kg/con</span></div><div class="slider-row"><span class="range-min">1</span><input id="kgRange" type="range" min="1" max="5" step="0.01" value="3"><span class="range-max">5</span></div></div></div>
+        <div><label>Giá vịt lông</label><div class="control"><div class="field"><input id="buy" type="text" inputmode="numeric" value="75000" min="30000" max="120000" step="500"><span class="unit">đ/kg</span></div><div class="slider-row"><span class="range-min">30k</span><input id="buyRange" type="range" min="30000" max="120000" step="500" value="75000"><span class="range-max">120k</span></div></div></div>
+        <div><label>Hao hụt</label><div class="control"><div class="field"><input id="loss" type="text" inputmode="decimal" value="20" step="0.1" min="0" max="50"><span class="unit">%</span></div><div class="slider-row"><span class="range-min">0%</span><input id="lossRange" type="range" min="0" max="50" step="0.1" value="20"><span class="range-max">50%</span></div></div></div>
+        <div><label>Giá bán bình quân</label><div class="control"><div class="field"><input id="sell" type="text" inputmode="numeric" value="105000" min="50000" max="180000" step="500"><span class="unit">đ/kg</span></div><div class="slider-row"><span class="range-min">50k</span><input id="sellRange" type="range" min="50000" max="180000" step="500" value="105000"><span class="range-max">180k</span></div></div></div>
+        <div><label>Chi phí chế biến</label><div class="control"><div class="field"><input id="process" type="text" inputmode="numeric" value="5000" min="0" max="30000" step="500"><span class="unit">đ/con</span></div><div class="slider-row"><span class="range-min">0</span><input id="processRange" type="range" min="0" max="30000" step="500" value="5000"><span class="range-max">30k</span></div></div></div>
+        <div><label>Chi phí giao hàng</label><div class="control"><div class="field"><input id="delivery" type="text" inputmode="numeric" value="3000000" min="0" max="30000000" step="100000"><span class="unit">đ</span></div><div class="slider-row"><span class="range-min">0</span><input id="deliveryRange" type="range" min="0" max="30000000" step="100000" value="3000000"><span class="range-max">30tr</span></div></div></div>
+        <div><label>Chi phí khác</label><div class="control"><div class="field"><input id="other" type="text" inputmode="numeric" value="2000000" min="0" max="30000000" step="100000"><span class="unit">đ</span></div><div class="slider-row"><span class="range-min">0</span><input id="otherRange" type="range" min="0" max="30000000" step="100000" value="2000000"><span class="range-max">30tr</span></div></div></div>
+      </div>
+      <div class="actions"><button class="btn reset" onclick="resetData()">Đặt lại</button><button class="btn save" onclick="saveData()">Lưu thông số</button></div>
+      <div class="note">Mọi thông số đều có thể điều chỉnh. Kết quả được tính lại ngay khi thay đổi.</div>
+    </div>
+
+    <div class="card">
+      <h2>Kết quả</h2>
+      <div class="results">
+        <div class="result"><small>Tổng kg đầu vào</small><b id="inKg">0</b></div>
+        <div class="result"><small>Kg thành phẩm</small><b id="outKg">0</b></div>
+        <div class="result"><small>Giá vốn vịt</small><b id="costBuy">0 đ</b></div>
+        <div class="result"><small>Doanh thu</small><b id="revenue">0 đ</b></div>
+        <div class="result"><small>Tổng chi phí</small><b id="totalCost">0 đ</b></div>
+        <div class="result"><small>Lợi nhuận/con</small><b id="perHead">0 đ</b></div>
+        <div class="result profit"><small>LỢI NHUẬN</small><b id="profit">0 đ</b></div>
+        <div class="result"><small>Biên lợi nhuận</small><b id="margin">0%</b></div>
+      </div>
+      <div class="note">Công thức: kg thành phẩm = kg đầu vào × (1 − hao hụt). Lợi nhuận = doanh thu − toàn bộ chi phí.</div>
+    </div>
+  </div>
+</div>
+<script>
+const ids=["qty","kg","buy","loss","sell","process","delivery","other"];
+const decimalIds=new Set(["kg","loss"]);
+const money=n=>new Intl.NumberFormat("vi-VN").format(Math.round(n))+" đ";
+const parseVN=value=>{
+  let s=String(value??"").trim().replace(/\s/g,"");
+  if(!s)return 0;
+  if(s.includes(",")) s=s.replace(/\./g,"").replace(",",".");
+  else if(/^[-+]?\d{1,3}(\.\d{3})+$/.test(s)) s=s.replace(/\./g,"");
+  const n=parseFloat(s.replace(/[^0-9.+-]/g,""));
+  return Number.isFinite(n)?n:0;
+};
+const num=id=>parseVN(document.getElementById(id).value);
+const formatValue=(id,value)=>{
+  const n=typeof value==="number"?value:parseVN(value);
+  if(decimalIds.has(id)) return new Intl.NumberFormat("vi-VN",{maximumFractionDigits:id==="kg"?2:1}).format(n);
+  return new Intl.NumberFormat("vi-VN",{maximumFractionDigits:0}).format(Math.round(n));
+};
+function formatInput(id){const el=document.getElementById(id);el.value=formatValue(id,el.value)}
+function calc(){
+ const qty=num("qty"), kg=num("kg"), buy=num("buy"), loss=Math.min(100,Math.max(0,num("loss")));
+ const sell=num("sell"), process=num("process"), delivery=num("delivery"), other=num("other");
+ const inKg=qty*kg, outKg=inKg*(1-loss/100), costBuy=inKg*buy;
+ const revenue=outKg*sell, totalCost=costBuy+qty*process+delivery+other;
+ const profit=revenue-totalCost, margin=revenue?profit/revenue*100:0;
+ document.getElementById("inKg").textContent=inKg.toLocaleString("vi-VN",{maximumFractionDigits:2})+" kg";
+ document.getElementById("outKg").textContent=outKg.toLocaleString("vi-VN",{maximumFractionDigits:2})+" kg";
+ document.getElementById("costBuy").textContent=money(costBuy);
+ document.getElementById("revenue").textContent=money(revenue);
+ document.getElementById("totalCost").textContent=money(totalCost);
+ document.getElementById("perHead").textContent=money(qty?profit/qty:0);
+ document.getElementById("profit").textContent=money(profit);
+ document.getElementById("margin").textContent=margin.toFixed(2)+"%";
+}
+function saveData(){localStorage.setItem("tinhToanKD",JSON.stringify(Object.fromEntries(ids.map(id=>[id,num(id)]))));alert("Đã lưu thông số.");}
+function syncRanges(){ids.forEach(id=>{const r=document.getElementById(id+"Range");if(r)r.value=num(id)})}
+function setValues(values){ids.forEach((id,i)=>{document.getElementById(id).value=formatValue(id,values[i])});syncRanges();calc()}
+function resetData(){setValues([1000,3,75000,20,105000,5000,3000000,2000000]);}
+function load(){
+ let values=[1000,3,75000,20,105000,5000,3000000,2000000];
+ try{const d=JSON.parse(localStorage.getItem("tinhToanKD")||"null");if(d)values=ids.map((id,i)=>d[id]!=null?d[id]:values[i])}catch(e){}
+ setValues(values);
+}
+ids.forEach(id=>{
+ const input=document.getElementById(id),range=document.getElementById(id+"Range");
+ input.addEventListener("focus",()=>input.select());
+ input.addEventListener("input",()=>{if(range)range.value=num(id);calc()});
+ input.addEventListener("blur",()=>{formatInput(id);syncRanges();calc()});
+ input.addEventListener("keydown",e=>{if(e.key==="Enter"){input.blur()}});
+ if(range)range.addEventListener("input",()=>{input.value=formatValue(id,Number(range.value));calc()});
+});
+load();
+</script>
+</body>
+</html>
