@@ -292,6 +292,27 @@ class AdminNotificationController extends Controller
         return back()->with('success', 'Đã xóa thông báo khỏi hộp thư.');
     }
 
+    public function destroyReadNotifications(Request $request): RedirectResponse
+    {
+        abort_unless($this->canManageDepartmentNotifications($request), 403);
+
+        $viewContext = $this->resolveNotificationViewContext($request);
+        $layoutKey = $viewContext['notificationLayoutKey'] ?? null;
+        $notifications = $request->user()
+            ->notifications()
+            ->where('type', DepartmentBroadcastNotification::class)
+            ->whereNotNull('read_at')
+            ->get()
+            ->filter(fn ($notification) => $this->notificationMatchesLayout($notification->data ?? [], $layoutKey));
+
+        $count = $notifications->count();
+        $notifications->each->delete();
+
+        return back()->with('success', $count > 0
+            ? 'Đã xóa ' . $count . ' thông báo phòng ban đã đọc.'
+            : 'Không có thông báo phòng ban đã đọc để xóa.');
+    }
+
     public function markAsRead(Request $request, string $notificationId): RedirectResponse
     {
         abort_unless($this->canManageDepartmentNotifications($request), 403);

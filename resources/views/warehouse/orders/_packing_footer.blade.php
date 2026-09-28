@@ -91,7 +91,7 @@
             </div>
             <div class="packing-guide-footer__note">
                 <i class="bi bi-lightbulb me-1" aria-hidden="true"></i>
-                Màu thể hiện tiến độ: 
+                Màu thể hiện tiến độ:
             </div>
             <div class="packing-guide-footer__note">
                <span class="text-muted pl-4 ml-4"> Xám → Vàng → Xanh lá.</span>

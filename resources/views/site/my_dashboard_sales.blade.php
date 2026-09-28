@@ -150,7 +150,7 @@
         height: 245px;
     }
     .dashboard-main .dept-broadcast-card {
-        margin: 0 !important;
+        margin: 18px 0 0 !important;
         border: 0;
         border-radius: 0;
         background: #fff9e6;
@@ -262,21 +262,29 @@
         line-height: 1.5;
     }
     .manager-board { display: grid; gap: 14px; color: #1f2937; }
-    .manager-board-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 14px; }
-    .manager-board-head h1 { margin: 0; color: #17376e; font-size: 1.25rem; font-weight: 850; text-transform: uppercase; }
-    .manager-board-head p { margin: 3px 0 0; color: #64748b; font-size: .72rem; }
-    .manager-date-filter { display: flex; align-items: end; gap: 5px; padding: 6px; border: 1px solid var(--dashboard-border); border-radius: 7px; background: #fff; }
-    .manager-date-filter label span { display: block; margin-bottom: 2px; color: #64748b; font-size: .58rem; }
-    .manager-date-filter input { width: 112px; border: 0; color: #334155; font-size: .67rem; outline: 0; }
-    .manager-date-filter button { min-width: 29px; height: 29px; padding: 0 9px; border: 0; border-radius: 5px; background: #17376e; color: #fff; }
-    .manager-date-filter .manager-today-button { width: auto; white-space: nowrap; background: #087f73; font-size: .68rem; font-weight: 700; }
+    .manager-board-head { display: block; }
+    .manager-board-head > div:first-child { padding: 1px 4px 10px; border-bottom: 1px solid #e28a5c; }
+    .manager-board-head h1 { margin: 0; color: #17376e; font-size: 1.25rem; line-height: 1.25; font-weight: 850; text-transform: uppercase; }
+    .manager-board-head p { margin: 7px 0 0; color: #52708c; font-size: .72rem; line-height: 1.35; }
+    .manager-date-filter { display: flex; align-items: flex-end; gap: 9px; width: 100%; margin-top: 10px; padding: 0 4px 11px; border: 0; border-radius: 0; background: transparent; }
+    .manager-date-filter label { display: block; margin: 0; }
+    .manager-date-filter label span { display: block; margin-bottom: 4px; color: #52677c; font-size: .66rem; line-height: 1; }
+    .manager-date-filter input { width: 152px; height: 35px; padding: 5px 11px; border: 1px solid #d3dde6; border-radius: 5px; background: #fff; color: #1f2937; font-size: .75rem; outline: 0; }
+    .manager-date-filter input:focus { border-color: #4d83ad; box-shadow: 0 0 0 2px rgba(20, 99, 165, .1); }
+    .manager-date-filter button { min-width: 56px; height: 33px; padding: 0 10px; border: 1px solid #1463a5; border-radius: 5px; background: #1463a5; color: #fff; font-size: .72rem; font-weight: 700; white-space: nowrap; }
+    .manager-date-filter .manager-today-button { width: auto; min-width: 88px; border-color: #9fb0c0; background: #fff; color: #52677c; font-size: .72rem; font-weight: 600; }
+    .manager-date-filter .manager-today-button:hover { border-color: #087f73; color: #087f73; }
+    .manager-quick-days { display: flex; align-items: center; gap: 6px; height: 33px; }
+    .manager-quick-day { display: inline-flex; align-items: center; justify-content: center; min-width: 58px; height: 31px; padding: 0 9px; border: 1px dashed #d5dee7; border-radius: 16px; background: #f8fafc; color: #8a98a8; font-size: .68rem; font-weight: 700; text-decoration: none; }
+    .manager-quick-day:hover { border-color: #7192af; background: #fff; color: #17376e; }
+    .manager-quick-day.is-active { border-style: solid; border-color: #b9c9d8; background: #fff; color: #17376e; box-shadow: 0 1px 3px rgba(15, 23, 42, .08); }
     .manager-product-size-row td { color: #64748b; font-size: .66rem; background: #f8fafc; }
     .manager-product-summary { min-width: 0; }
     .manager-product-block + .manager-product-block { margin-top: 22px; padding-top: 18px; border-top: 1px solid #dbe6e8; }
     .manager-product-heading { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 10px; color:#113f43; }
     .manager-product-heading strong { font-size:.9rem; }
     .manager-product-heading span { color:#148a89; font-size:.82rem; font-weight:800; white-space:nowrap; }
-    .manager-product-table { width:100%; border-collapse:collapse; font-size:.82rem; text-align:center; }
+    .manager-product-table { width:100%; border-collapse:collapse; font-size:.78rem; text-align:center; }
     .manager-product-table th { padding:8px; color:#064e52; background:#dff3f4; border-top:1px solid #77b9bc; border-bottom:1px solid #77b9bc; font-weight:800; }
     .manager-product-table th + th, .manager-product-table td + td { border-left:1px solid #a8ccce; }
     .manager-product-table td { padding:7px 8px; border-bottom:1px solid #d5d9da; }
@@ -294,7 +302,7 @@
     .manager-summary-card .is-good { color: #14804a; } .manager-summary-card .is-bad { color: #c52b3c; } .manager-summary-card .is-neutral { color: #64748b; }
     .tone-green { color: #15803d; } .tone-blue { color: #1261a6; } .tone-purple { color: #5835a5; }
     .tone-orange { color: #df7009; } .tone-teal { color: #08717b; } .tone-red { color: #cf2237; }
-    .manager-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .manager-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
     .manager-panel { overflow: hidden; border: 1px solid var(--dashboard-border); border-radius: 8px; background: #fff; }
     .manager-panel > h2 { margin: 0; padding: 7px 11px; background: var(--panel-color, #17376e); color: #fff; font-size: .72rem; font-weight: 800; text-transform: uppercase; }
     .panel-blue { --panel-color:#1463a5; } .panel-orange { --panel-color:#e36b08; } .panel-teal { --panel-color:#08717b; }
@@ -314,8 +322,8 @@
     .manager-metric-list dd { margin:0; font-size:.72rem; font-weight:800; white-space:nowrap; }
     .manager-reasons { display:flex; flex-wrap:wrap; gap:4px 10px; padding:8px 12px; border-top:1px solid #e9eef3; font-size:.58rem; }
     .manager-reasons b { width:100%; } .manager-reasons span { color:#64748b; }
-    .manager-performance table { width:100%; border-collapse:collapse; font-size:.58rem; }
-    .manager-performance th, .manager-performance td { padding:7px 6px; border:1px solid #e5eaf0; white-space:nowrap; text-align:right; }
+    .manager-performance table { width:100%; border-collapse:collapse; font-size:.78rem; }
+    .manager-performance th, .manager-performance td { padding:9px 8px; border:1px solid #e5eaf0; white-space:nowrap; text-align:right; }
     .manager-performance th:nth-child(2), .manager-performance td:nth-child(2) { text-align:left; }
     .manager-performance thead { background:#f2f6fa; } .manager-table-empty { padding:18px!important; color:#64748b; text-align:center!important; }
     .manager-progress { display:inline-block; width:30px; height:4px; margin-right:4px; overflow:hidden; border-radius:4px; background:#e5e7eb; vertical-align:middle; }
@@ -344,9 +352,10 @@
         .dashboard-chart-head { align-items: flex-start; }
         .dashboard-chart-note { white-space: normal; text-align: right; }
         .dashboard-price-column { margin-top: 18px; }
-        .manager-board-head { display:block; } .manager-date-filter { margin-top:10px; width:100%; }
-        .manager-date-filter label { flex:1; } .manager-date-filter input { width:100%; }
-        .manager-summary-grid, .manager-detail-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+        .manager-board-head { display:block; } .manager-date-filter { flex-wrap:wrap; margin-top:10px; width:100%; }
+        .manager-date-filter label { flex:1 1 130px; } .manager-date-filter input { width:100%; }
+        .manager-summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+        .manager-detail-grid { grid-template-columns:minmax(0,1fr); }
         .manager-kpi-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
         .manager-kpi-grid > div { border-bottom:1px solid #e5eaf0; }
         .manager-size-body { flex-direction:column; align-items:flex-start; }
@@ -376,7 +385,9 @@
         </aside>
 
         <main class="dashboard-main">
-            @include('site.partials.warehouse_adjustment_requests')
+            @unless($isManagerDashboard ?? false)
+                @include('site.partials.warehouse_adjustment_requests')
+            @endunless
             @if(($pendingApprovalAdjustments ?? collect())->isNotEmpty())
                 <section class="dashboard-card dashboard-approval-queue" aria-label="Yêu cầu điều chỉnh đơn đang chờ duyệt">
                     <div class="dashboard-approval-head">
@@ -470,10 +481,13 @@
             </section>
             @endif
 
-            @include('layouts.partials.department_broadcasts', ['showEmpty' => true])
+            @include('layouts.partials.department_broadcasts')
         </main>
 
         <aside class="dashboard-price-column">
+            @if($isManagerDashboard ?? false)
+                @include('site.partials.warehouse_adjustment_requests')
+            @endif
             <section class="price-board-card">
                 <div class="price-board-head">
                     <h2 class="price-board-title">Bảng báo giá sản phẩm</h2>

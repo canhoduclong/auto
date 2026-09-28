@@ -5,6 +5,14 @@
     $orderNavigationSelectedDate = $selectedDate ?? now()->toDateString();
     $orderNavigationDateField = $selectedDateField ?? 'business_date';
     $orderNavigationCanManageAdjustments = auth()->user()?->canManageOrderAdjustments() ?? false;
+    $orderNavigationActiveRole = strtolower(trim((string) session('active_role', '')));
+    if ($orderNavigationActiveRole === '') {
+        auth()->user()?->loadMissing('defaultRole');
+        $orderNavigationActiveRole = strtolower(trim((string) (auth()->user()?->defaultRole?->name ?? '')));
+    }
+    $orderNavigationCanUseCalculator = in_array($orderNavigationActiveRole, [
+        'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale',
+    ], true);
 
     $orderNavigationItems = [
         [
@@ -47,6 +55,13 @@
             'label' => 'Khách hàng',
             'icon' => 'bi-person-check',
             'url' => route('pages.my_orders.monitoring', ['tab' => 'customers']),
+        ],
+        [
+            'key' => 'business_calculator',
+            'label' => 'Tính toán',
+            'icon' => 'bi-calculator',
+            'url' => 'https://hoanglongtnt.com/tinh-toan-kd-slider-format-nghin.html',
+            'visible' => $orderNavigationCanUseCalculator,
         ],
     ];
 @endphp

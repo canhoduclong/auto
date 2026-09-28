@@ -226,6 +226,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/department-notifications', [AdminNotificationController::class, 'index'])->name('department-notifications.index');
         Route::post('/department-notifications', [AdminNotificationController::class, 'storeDepartmentBroadcast'])->name('department-notifications.department_broadcast');
         Route::delete('/department-notifications/inbox/{notificationId}', [AdminNotificationController::class, 'destroyNotification'])->name('department-notifications.notification.destroy');
+        Route::delete('/department-notifications/inbox-read', [AdminNotificationController::class, 'destroyReadNotifications'])->name('department-notifications.read.destroy');
         Route::put('/department-notifications/{broadcastId}', [AdminNotificationController::class, 'updateDepartmentBroadcast'])->name('department-notifications.update');
         Route::delete('/department-notifications/{broadcastId}', [AdminNotificationController::class, 'destroyDepartmentBroadcast'])->name('department-notifications.destroy');
         Route::post('/department-notifications/read-all', [AdminNotificationController::class, 'markAllAsRead'])->name('department-notifications.read_all');
