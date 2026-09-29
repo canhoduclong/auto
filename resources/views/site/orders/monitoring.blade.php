@@ -174,9 +174,8 @@
         border: 1px solid var(--monitor-border);
         border-radius: 4px;
         background: #fff;
-        color: #075985;
-        font-size: .82rem;
-        font-weight: 800;
+        color: #075985; 
+        font-weight: 700;
         text-decoration: none;
         box-shadow: 0 3px 10px rgba(15, 23, 42, .04);
     }
@@ -212,11 +211,11 @@
         align-items: center;
         justify-content: space-between;
         gap: 8px;
-        padding: 9px 13px;
-        border-bottom: 1px solid #eef2f7;
-        color: #075985;
+        padding: 5px 13px 5px 0;
         font-size: .82rem;
-        font-weight: 700;
+        text-transform: uppercase;
+        border-bottom: 1px solid #eef2f7;
+        color: #075985;  
         text-decoration: none;
     }
     .monitor-filter-link:last-child { border-bottom: 0; }
@@ -523,6 +522,7 @@
     .monitor-edit-items { margin-bottom: 10px; font-size: .74rem; }
     .monitor-edit-items th { color: #64748b; font-size: .64rem; text-transform: uppercase; }
     .monitor-edit-quantity { width: 76px; min-width: 76px; }
+    .monitor-edit-weight { width: 112px; min-width: 112px; }
     .monitor-edit-price-stepper { display: inline-flex; align-items: stretch; }
     .monitor-edit-price-stepper .btn { width: 32px; border-color: #cbd5e1; border-radius: 0; color: #0f766e; font-weight: 900; }
     .monitor-edit-price-stepper .btn:first-child { border-radius: 5px 0 0 5px; }
@@ -1326,8 +1326,7 @@
                     'schedules' => 'Đơn hàng theo lịch',
                     'automatic' => 'Đơn hàng tự động',
                 ];
-            @endphp
-            <h1 class="monitor-title">{{ $monitorTabLabels[$activeTab] ?? $monitorTabLabels['today'] }}</h1>
+            @endphp 
             @if($activeTab === 'today')
             <div class="monitor-date-actions">
                 <div class="monitor-date-shortcuts" aria-label="Chọn ngày nhanh">
@@ -2484,7 +2483,7 @@
 
                                             <div class="table-responsive">
                                                 <table class="table table-sm align-middle monitor-edit-items">
-                                                    <thead><tr><th>Sản phẩm</th><th>Giá bán</th><th>Số lượng</th><th class="text-end">Thành tiền</th><th></th></tr></thead>
+                                                    <thead><tr><th>Sản phẩm</th><th>Giá bán</th><th>Số lượng</th><th>Khối lượng tạm tính (kg)<span class="d-block text-muted fw-normal">Tổng kg của dòng hàng</span></th><th class="text-end">Thành tiền</th><th></th></tr></thead>
                                                     <tbody>
                                                         @foreach($order->items as $editIndex => $item)
                                                             @php
@@ -2495,9 +2494,10 @@
                                                                 $editDiscountType = $editSellingPrice > $editBasePrice ? 'increase' : 'decrease';
                                                                 $editDiscount = abs($editSellingPrice - $editBasePrice);
                                                                 $editPricingFactor = $item->effective_priced_by_kg ? max((float) $item->effective_unit_weight, 0) : 1;
-                                                                $editLineTotal = $editSellingPrice * (float) $item->quantity * $editPricingFactor;
+                                                                $editEstimatedWeight = (float) $item->total_weight > 0 ? (float) $item->total_weight : (float) $item->quantity * $item->effective_unit_weight;
+                                                                $editLineTotal = $editSellingPrice * ($item->effective_priced_by_kg ? $editEstimatedWeight : (float) $item->quantity);
                                                             @endphp
-                                                            <tr data-monitor-edit-item data-variant-id="{{ $editVariant?->id }}" data-base-price="{{ $editBasePrice }}" data-min-price="{{ $editMinPrice }}" data-pricing-factor="{{ $editPricingFactor }}">
+                                                            <tr data-monitor-edit-item data-variant-id="{{ $editVariant?->id }}" data-base-price="{{ $editBasePrice }}" data-min-price="{{ $editMinPrice }}" data-pricing-factor="{{ $editPricingFactor }}" data-unit-weight="{{ $item->effective_unit_weight }}" data-priced-by-kg="{{ $item->effective_priced_by_kg ? 1 : 0 }}">
                                                                 <td>
                                                                     <strong>{{ $item->product?->name ?? $editVariant?->product?->name ?? 'Sản phẩm' }}</strong>
                                                                     <span class="d-block text-muted">{{ $editVariant?->size ?: ($editVariant?->sku ?: '') }}</span>
@@ -2513,6 +2513,7 @@
                                                                     </div>
                                                                 </td>
                                                                 <td><input type="number" class="form-control form-control-sm monitor-edit-quantity" name="items[{{ $editIndex }}][quantity]" min="1" max="100000" value="{{ (int) $item->quantity }}" required></td>
+                                                                <td><input type="number" class="form-control form-control-sm monitor-edit-weight" name="item_total_weight[{{ $editVariant?->id }}]" aria-label="Khối lượng tạm tính (kg)" min="0.001" max="99999999" step="0.001" value="{{ old('item_total_weight.'.$editVariant?->id, round($editEstimatedWeight, 3)) }}" required></td>
                                                                 <td class="text-end fw-semibold monitor-edit-line-total">{{ number_format($editLineTotal, 0, ',', '.') }}đ</td>
                                                                 <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger monitor-edit-remove-item" aria-label="Xóa sản phẩm"><i class="bi bi-x"></i></button></td>
                                                             </tr>
@@ -2520,6 +2521,7 @@
                                                     </tbody>
                                                 </table>
                                             </div>
+                                            <p class="small text-muted">Đổi số lượng sẽ tính lại kg theo size; bạn có thể nhập lại khối lượng tạm tính trước khi lưu.</p>
                                             <div class="collapse" id="monitorEditProducts{{ $order->id }}" data-monitor-edit-products>
                                                 <div class="monitor-edit-picker">
                                                     <div class="monitor-edit-picker-label">Thêm sản phẩm vào đơn</div>
@@ -3382,8 +3384,8 @@ document.addEventListener('click', async event => {
             const sellingPrice = discountType === 'increase' ? basePrice + discount : basePrice - discount;
             const quantityInput = row.querySelector('.monitor-edit-quantity');
             const quantity = Math.max(1, Number.parseInt(quantityInput?.value || '1', 10));
-            const pricingFactor = Math.max(0, Number(row.dataset.pricingFactor) || 0);
-            const lineTotal = sellingPrice * quantity * pricingFactor;
+            const estimatedWeight = Math.max(0, Number(row.querySelector('.monitor-edit-weight')?.value) || 0);
+            const lineTotal = sellingPrice * (row.dataset.pricedByKg === '1' ? estimatedWeight : quantity);
 
             if (quantityInput && Number(quantityInput.value) !== quantity) quantityInput.value = quantity;
             row.querySelector('.monitor-edit-price-value').textContent = money(sellingPrice);
@@ -3485,7 +3487,7 @@ document.addEventListener('click', async event => {
         const pricingFactor = button.dataset.variantIsPricedByKg === '1' ? weight : 1;
 
         form.querySelector('.monitor-edit-items tbody').insertAdjacentHTML('beforeend', `
-            <tr data-monitor-edit-item data-variant-id="${escapeHtml(variantId)}" data-base-price="${price}" data-min-price="${minPrice}" data-pricing-factor="${pricingFactor}">
+            <tr data-monitor-edit-item data-variant-id="${escapeHtml(variantId)}" data-base-price="${price}" data-min-price="${minPrice}" data-pricing-factor="${pricingFactor}" data-unit-weight="${weight}" data-priced-by-kg="${button.dataset.variantIsPricedByKg === '1' ? 1 : 0}">
                 <td>
                     <strong>${escapeHtml(name)}</strong>
                     <span class="d-block text-muted">${escapeHtml(size || sku)}</span>
@@ -3499,6 +3501,7 @@ document.addEventListener('click', async event => {
                     <button type="button" class="btn btn-sm monitor-edit-price-increase" aria-label="Tăng đơn giá 1.000 đồng">+</button>
                 </div></td>
                 <td><input type="number" class="form-control form-control-sm monitor-edit-quantity" name="items[${nextIndex}][quantity]" min="1" max="100000" value="1" required></td>
+                <td><input type="number" class="form-control form-control-sm monitor-edit-weight" name="item_total_weight[${escapeHtml(variantId)}]" aria-label="Khối lượng tạm tính (kg)" min="0.001" max="99999999" step="0.001" value="${weight}" required></td>
                 <td class="text-end fw-semibold monitor-edit-line-total">${money(price * pricingFactor)}</td>
                 <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger monitor-edit-remove-item" aria-label="Xóa sản phẩm"><i class="bi bi-x"></i></button></td>
             </tr>`);
@@ -3647,7 +3650,11 @@ document.addEventListener('click', async event => {
     });
 
     document.addEventListener('input', event => {
-        if (!event.target.matches('[data-monitor-edit-form] .monitor-edit-quantity, [data-monitor-edit-form] .monitor-edit-fee')) return;
+        if (!event.target.matches('[data-monitor-edit-form] .monitor-edit-quantity, [data-monitor-edit-form] .monitor-edit-weight, [data-monitor-edit-form] .monitor-edit-fee')) return;
+        if (event.target.matches('.monitor-edit-quantity')) {
+            const row = event.target.closest('[data-monitor-edit-item]');
+            row.querySelector('.monitor-edit-weight').value = Number((Math.max(1, Number(event.target.value) || 1) * Number(row.dataset.unitWeight)).toFixed(3));
+        }
         const form = event.target.closest('[data-monitor-edit-form]');
         if (form) updateInlineEditTotals(form);
     });

@@ -489,6 +489,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/stock-out', [WarehouseDashboardController::class, 'storeStockOut'])->name('stock-out.store');
         Route::get('/stock-out/{document}', [WarehouseDashboardController::class, 'showDocument'])->name('stock-out.show');
         Route::get('/inventory-transfers', [WarehouseDashboardController::class, 'inventoryTransfers'])->name('inventory-transfers.index');
+        Route::post('/inventory-transfers/batch', [\App\Http\Controllers\Warehouse\TransferWorkbenchController::class, 'store'])->name('inventory-transfers.batch')->block(120, 10);
         Route::post('/inventory-transfers', [WarehouseDashboardController::class, 'storeInventoryTransfer'])->name('inventory-transfers.store');
         Route::get('/inventory-transfers/incoming', [WarehouseDashboardController::class, 'incomingInventoryTransfers'])->name('inventory-transfers.incoming');
         Route::get('/inventory-transfers/{transfer}/edit', [WarehouseDashboardController::class, 'editInventoryTransfer'])->name('inventory-transfers.edit');

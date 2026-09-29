@@ -224,7 +224,7 @@
         .wh-notification-menu .wh-notification-content {
             min-width: 0;
         }
-        @media (max-width: 768px) {
+        @media (max-width: 767.98px) {
             html, body { max-width: 100%; overflow-x: hidden; }
             .wh-sidebar {
                 width: min(86vw, 320px);
@@ -360,7 +360,7 @@
             <a href="{{ route('warehouse.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.orders') ? 'active' : '' }}">
                 <i class="bi bi-box2-fill"></i><span class="wh-nav-label">Đơn cần đóng</span>
             </a>
-            <a href="{{ route('warehouse.transfers.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.transfers.index', 'warehouse.dispatch-slips.*', 'warehouse.order-transfers', 'warehouse.order-transfers.*', 'warehouse.inventory-transfers.index', 'warehouse.inventory-transfers.edit') ? 'active' : '' }}">
+            <a href="{{ route('warehouse.inventory-transfers.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.transfers.index', 'warehouse.dispatch-slips.*', 'warehouse.order-transfers', 'warehouse.order-transfers.*', 'warehouse.inventory-transfers.index', 'warehouse.inventory-transfers.edit') ? 'active' : '' }}">
                 <i class="bi bi-arrow-left-right"></i><span class="wh-nav-label">Điều chuyển</span>
             </a>
             <a href="{{ route('warehouse.stock-out.orders') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-out.orders') ? 'active' : '' }}">

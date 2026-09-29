@@ -5817,7 +5817,7 @@ class WarehouseDashboardController extends Controller
                     'variant_sku' => $variant->sku ?? '',
                     'label' => $product->name.' - '.($variant->name ?? 'Biến thể'),
                     'unit_label' => $product->unit_label ?? 'Cái',
-                    'weight_per_unit' => round((float) ($variant->effective_kg ?? 1), 3),
+                    'weight_per_unit' => round((float) ($variant->order_unit_weight ?? 1), 3),
                     'available' => $available,
                     'product_id' => $product->id,
                     'product_name' => $product->name,
@@ -5875,6 +5875,15 @@ class WarehouseDashboardController extends Controller
             ->where('status', WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE)
             ->count();
 
+        if (! $editingTransfer) {
+            $pageData = app(\App\Http\Controllers\Warehouse\TransferWorkbenchController::class)
+                ->pageData(request(), $managedWarehouseId);
+
+            return view('warehouse.transfers.workbench', $pageData + compact(
+                'sourceWarehouse', 'targetWarehouses', 'availableVariants', 'incomingPendingCount', 'outgoingTransfers'
+            ));
+        }
+
         return view('warehouse.transfers.inventory', compact(
             'sourceWarehouse',
             'targetWarehouses',
@@ -5913,107 +5922,8 @@ class WarehouseDashboardController extends Controller
             ])->withInput();
         }
 
-        $normalizedItems = collect($validated['items'])
-            ->map(function (array $row) {
-                return [
-                    'product_variant_id' => (int) $row['product_variant_id'],
-                    'quantity' => (int) $row['quantity'],
-                    'weight_kg' => round((float) $row['weight_kg'], 3),
-                    'unit_cost' => (float) ($row['unit_cost'] ?? 0),
-                ];
-            })
-            ->groupBy('product_variant_id')
-            ->map(function (Collection $rows, int $variantId) {
-                return [
-                    'product_variant_id' => $variantId,
-                    'quantity' => (int) $rows->sum('quantity'),
-                    'weight_kg' => round((float) $rows->sum('weight_kg'), 3),
-                    'unit_cost' => (float) $rows->last()['unit_cost'],
-                ];
-            })
-            ->values();
-
         try {
-            DB::transaction(function () use ($normalizedItems, $managedWarehouseId, $targetWarehouseId, $validated): void {
-                $targetWarehouse = Warehouse::query()->find($targetWarehouseId);
-
-                $transfer = WarehouseInventoryTransfer::create([
-                    'source_warehouse_id' => $managedWarehouseId,
-                    'target_warehouse_id' => $targetWarehouseId,
-                    'requested_by' => Auth::id(),
-                    'status' => WarehouseInventoryTransfer::STATUS_PENDING_RECEIVE,
-                    'note' => trim((string) ($validated['note'] ?? '')) ?: null,
-                    'requested_at' => now(),
-                ]);
-
-                $exportDocument = InventoryDocument::create([
-                    'type' => 'export',
-                    'document_date' => now()->toDateString(),
-                    'warehouse_id' => $managedWarehouseId,
-                    'supplier_id' => null,
-                    'shipping_fee' => 0,
-                    'notes' => 'Điều chuyển kho #'.($transfer->transfer_code ?? $transfer->id)
-                        .' sang '.($targetWarehouse?->name ?? ('Kho #'.$targetWarehouseId)),
-                    'user_id' => Auth::id(),
-                ]);
-
-                foreach ($normalizedItems as $item) {
-                    $variantId = (int) $item['product_variant_id'];
-                    $qty = (int) $item['quantity'];
-                    $unitCost = (float) $item['unit_cost'];
-
-                    $inventory = Inventory::query()->where([
-                        'warehouse_id' => $managedWarehouseId,
-                        'product_variant_id' => $variantId,
-                    ])->lockForUpdate()->first();
-
-                    $available = $inventory
-                        ? max(0, (float) $inventory->quantity - (float) $inventory->reservations()->sum('quantity'))
-                        : 0;
-
-                    if ($available < $qty) {
-                        $variant = ProductVariant::query()->find($variantId);
-                        throw new \RuntimeException(
-                            'Không đủ tồn để điều chuyển cho '.($variant?->name ?? ('biến thể #'.$variantId))
-                            .'. Tồn khả dụng: '.$available.', yêu cầu: '.$qty.'.'
-                        );
-                    }
-
-                    WarehouseInventoryTransferItem::create([
-                        'transfer_id' => $transfer->id,
-                        'product_variant_id' => $variantId,
-                        'quantity' => $qty,
-                        'weight_kg' => (float) $item['weight_kg'],
-                        'unit_cost' => $unitCost,
-                    ]);
-
-                    $exportDocument->items()->create([
-                        'product_variant_id' => $variantId,
-                        'quantity' => $qty,
-                        'unit_cost' => $unitCost,
-                    ]);
-
-                    InventoryMovement::create([
-                        'inventory_id' => $inventory->id,
-                        'quantity' => -$qty,
-                        'type' => 'transfer_out',
-                        'reference_id' => $transfer->id,
-                        'reference_type' => WarehouseInventoryTransfer::class,
-                        'user_id' => Auth::id(),
-                    ]);
-
-                    $inventory->decrement('quantity', $qty);
-
-                    $totalStock = (int) Inventory::query()
-                        ->where('product_variant_id', $variantId)
-                        ->sum('quantity');
-                    ProductVariant::query()->where('id', $variantId)->update(['stock' => $totalStock]);
-                }
-
-                $transfer->update([
-                    'export_document_id' => $exportDocument->id,
-                ]);
-            });
+            app(\App\Services\WarehouseTransferCreationService::class)->createInventory($managedWarehouseId, $targetWarehouseId, $validated);
         } catch (\RuntimeException $e) {
             return back()->withErrors([
                 'items' => $e->getMessage(),

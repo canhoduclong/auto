@@ -62,7 +62,7 @@ class WarehouseSaleChangeService
     public function itemSummary(Order $order): string
     {
         return $order->items()->with('variant')->get()->map(fn ($item) =>
-            ($item->variant?->name ?: '#'.$item->product_variant_id).' × '.$item->quantity.'; giá '.number_format((float) $item->price).'đ'
+            ($item->variant?->name ?: '#'.$item->product_variant_id).' × '.$item->quantity.'; giá '.number_format((float) $item->price).'đ; KL tạm tính '.format_kg($item->total_weight ?? ($item->quantity * $item->effective_unit_weight))
         )->sort()->implode(' | ');
     }
 

@@ -115,6 +115,10 @@ class OrderItem extends Model
 
     public function getDisplayTotalValueAttribute(): float
     {
+        if ($this->effective_priced_by_kg && (float) $this->total_weight > 0) {
+            return round(max(0, (float) $this->total_weight), 3);
+        }
+
         $quantity = (float) ($this->quantity ?? 0);
         $factor = $this->effective_priced_by_kg ? $this->effective_unit_weight : 1;
 

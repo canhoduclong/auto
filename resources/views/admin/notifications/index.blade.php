@@ -10,7 +10,7 @@
         'danger' => ['Khẩn cấp', 'danger', 'ph-siren'],
     ];
 @endphp
-<div class="container-fluid py-3 notification-admin">
+<div class="container py-3 notification-admin">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
             <h3 class="mb-1">{{ $isAdminCenter ? 'Quản trị thông báo' : 'Thông báo phòng ban' }}</h3>
@@ -137,7 +137,7 @@
                 </a>
                 <form action="{{ route($notificationDeleteRouteName ?? 'admin.notifications.notification.destroy', ['notificationId'=>$notification->id,'layout'=>$notificationLayoutKey ?? null]) }}" method="POST" class="pe-3" onsubmit="return confirm('Bạn có chắc muốn xóa thông báo này khỏi hộp thư?')">
                     @csrf @method('DELETE')
-                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Xóa thông báo" aria-label="Xóa thông báo"><i class="ph-trash"></i></button>
+                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Xóa thông báo" aria-label="Xóa thông báo"><i class="bi-trash"></i></button>
                 </form>
             </div>
         @empty<div class="text-center text-muted py-5">Chưa có thông báo nào trong hộp thư.</div>@endforelse

@@ -15,7 +15,7 @@
     $senderDepartment = $sender?->department?->name ?: ($senderRoles->isNotEmpty() ? $senderRoles->join(', ') : 'Hệ thống');
 @endphp
 
-<div class="container-fluid">
+<div class="container">
     <div class="mb-3">
         <a href="{{ route($notificationIndexRouteName ?? 'admin.notifications.index', ['layout' => $notificationLayoutKey ?? null]) }}" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i>Quay lại danh sách

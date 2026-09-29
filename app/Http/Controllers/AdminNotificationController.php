@@ -15,6 +15,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use App\Models\Setting;
 
 class AdminNotificationController extends Controller
 {
@@ -86,6 +87,7 @@ class AdminNotificationController extends Controller
 
     public function index(Request $request): View
     {
+         $settings = Setting::all()->keyBy('key');
         abort_unless($this->canManageDepartmentNotifications($request), 403);
 
         $viewContext = $this->resolveNotificationViewContext($request);
@@ -151,7 +153,8 @@ class AdminNotificationController extends Controller
                 'sentBroadcasts',
                 'broadcastMetrics',
                 'notificationUsers',
-                'isAdminNotificationCenter'
+                'isAdminNotificationCenter',
+                'settings',
             ),
             $viewContext
         ));
@@ -338,6 +341,7 @@ class AdminNotificationController extends Controller
 
     public function show(Request $request, string $notificationId): View
     {
+        $settings = Setting::all()->keyBy('key');
         abort_unless($this->canManageDepartmentNotifications($request), 403);
 
         $notification = $request->user()
@@ -355,7 +359,7 @@ class AdminNotificationController extends Controller
         }
 
         return view('admin.notifications.show', array_merge(
-            compact('notification'),
+            compact('notification', 'settings'),
             $viewContext
         ));
     }

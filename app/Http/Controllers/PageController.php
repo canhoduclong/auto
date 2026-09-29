@@ -5394,6 +5394,8 @@ public function apiTruckRoutes(Request $request)
             'item_discount.*' => ['nullable', 'numeric', 'min:0'],
             'item_discount_type' => ['nullable', 'array'],
             'item_discount_type.*' => ['nullable', 'in:decrease,increase'],
+            'item_total_weight' => ['sometimes', 'array'],
+            'item_total_weight.*' => ['required', 'numeric', 'min:0.001', 'max:99999999'],
             'item_weight' => ['nullable', 'array'],
             'item_weight.*' => ['nullable', 'numeric', 'min:0'],
             'items' => ['required', 'array', 'min:1'],
@@ -5449,6 +5451,7 @@ public function apiTruckRoutes(Request $request)
             $trackSaleItems = $saleChangeService->shouldTrack($order);
             $beforeSaleItems = $trackSaleItems ? $saleChangeService->itemSummary($order) : null;
             $previousDeliveryDate = $order->delivery_date?->toDateString();
+            $previousItems = $order->items()->get()->keyBy('product_variant_id');
             $order->items()->delete();
 
             $resolveKg = static fn ($variant): float => $variant->order_unit_weight;
@@ -5461,6 +5464,7 @@ public function apiTruckRoutes(Request $request)
                 return (bool) ($variant->product?->is_priced_by_kg ?? true);
             };
 
+            $estimatedOrderWeight = 0;
             $subtotalAmount = 0;
             $itemDiscountTotal = 0;
             $totalBeforeOrderDiscount = 0;
@@ -5489,14 +5493,19 @@ public function apiTruckRoutes(Request $request)
 
                 $unitWeight = round(max(0.01, $resolveKg($variant)), 3);
                 $isPricedByKg = $resolvePricedByKg($variant);
-                $pricingFactor = $isPricedByKg ? $unitWeight : 1;
-                $totalWeight = round($unitWeight * $quantity, 3);
-                $lineSubtotal = round($price * $quantity * $pricingFactor, 2);
-                $lineAdjustment = round(($unitDiscountType === 'increase' ? -1 : 1) * $unitDiscount * $quantity * $pricingFactor, 2);
-                $finalUnitPrice = $unitDiscountType === 'increase'
-                    ? ($price + $unitDiscount)
-                    : ($price - $unitDiscount);
-                $lineTotal = max(round($finalUnitPrice * $quantity * $pricingFactor, 2), 0);
+                $previousItem = $previousItems->get($variant->id);
+                $requestedTotalWeight = $validated['item_total_weight'][$variant->id] ?? null;
+                if ($requestedTotalWeight === null && $previousItem && (int) $previousItem->quantity === $quantity) {
+                    $requestedTotalWeight = (float) $previousItem->total_weight > 0 ? $previousItem->total_weight : null;
+                }
+                $totalWeight = round((float) ($requestedTotalWeight ?? ($unitWeight * $quantity)), 3);
+                $amounts = \App\Support\OrderEstimatedLine::amounts(
+                    $quantity, $totalWeight, $isPricedByKg, $price, $unitDiscount, $unitDiscountType
+                );
+                $lineSubtotal = $amounts['subtotal'];
+                $lineAdjustment = $amounts['discount_total'];
+                $finalUnitPrice = $amounts['price'];
+                $lineTotal = $amounts['total'];
 
                 $order->items()->create([
                     'product_id' => $variant->product_id,
@@ -5513,6 +5522,7 @@ public function apiTruckRoutes(Request $request)
                     'total' => $lineTotal,
                 ]);
 
+                $estimatedOrderWeight += $totalWeight;
                 $subtotalAmount += $lineSubtotal;
                 $itemDiscountTotal += $lineAdjustment;
                 $totalBeforeOrderDiscount += $lineTotal;
@@ -5562,6 +5572,7 @@ public function apiTruckRoutes(Request $request)
                 'delivery_time_note' => $validated['delivery_time_note'] ?? null,
                 'note' => $validated['note'] ?? null,
                 'shipper_note' => $validated['shipper_note'] ?? null,
+                'total_weight' => round($estimatedOrderWeight, 3),
                 'subtotal_amount' => $subtotalAmount,
                 'item_discount_total' => $itemDiscountTotal,
                 'extra_discount_total' => $orderAdjustment,

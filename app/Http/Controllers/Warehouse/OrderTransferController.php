@@ -318,56 +318,8 @@ class OrderTransferController extends Controller
             return back()->withErrors(['warehouse_id' => 'Kho nhận phải khác kho đang quản lý.']);
         }
 
-        $orderTransfer = DB::transaction(function () use ($data, $orderIds, $sourceWarehouseId) {
-            $orders = $this->transferableOrders($sourceWarehouseId)
-                ->whereIn('id', $orderIds)
-                ->lockForUpdate()
-                ->get();
-
-            if ($orders->count() !== count($orderIds)) {
-                $invalidIds = array_diff($orderIds, $orders->modelKeys());
-                $visibleOrders = Order::query()->whereIn('id', $invalidIds)
-                    ->when($sourceWarehouseId, fn ($query) => $query->where('warehouse_id', $sourceWarehouseId))
-                    ->get()->keyBy('id');
-                $reasons = collect($invalidIds)->map(function ($id) use ($visibleOrders) {
-                    $order = $visibleOrders->get($id);
-                    if (!$order) {
-                        return 'Đơn #'.$id.': không tồn tại hoặc chưa được gán cho kho đang quản lý';
-                    }
-                    $reason = $order->order_transfer_id
-                        ? 'đã thuộc phiếu điều chuyển #'.$order->order_transfer_id
-                        : (!$order->warehouse_id ? 'chưa được gán kho' : 'trạng thái hiện tại không cho phép điều chuyển');
-                    return 'Đơn '.($order->code ?: '#'.$id).': '.$reason;
-                });
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'order_ids' => $reasons->implode('; ').'. Vui lòng tải lại danh sách và chọn lại đơn.',
-                ]);
-            }
-
-            // Each explicit creation is a new group. Never append today's
-            // selection to an existing transfer or change an earlier manifest.
-            $orderTransfer = OrderTransfer::create([
-                'shipper_id' => $data['shipper_id'],
-                'warehouse_id' => $data['warehouse_id'],
-                'notes' => null,
-                'created_by' => auth()->id(),
-            ]);
-
-            foreach ($orders as $order) {
-                $order->order_transfer_id = $orderTransfer->id;
-                $order->save();
-                WarehouseTransfer::create([
-                    'order_id' => $order->id,
-                    'source_warehouse_id' => $order->warehouse_id,
-                    'target_warehouse_id' => $data['warehouse_id'],
-                    'shipper_id' => $data['shipper_id'],
-                    'status' => \App\Models\WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
-                    'packed_total_weight' => $order->transferBaselineWeight(),
-                ]);
-            }
-
-            return $orderTransfer;
-        });
+        $orderTransfer = app(\App\Services\WarehouseTransferCreationService::class)
+            ->createOrders($sourceWarehouseId, $data, $orderIds);
 
         return redirect()->route('warehouse.order-transfers')
             ->with('success', 'Đã tạo phiếu điều chuyển mới #' . $orderTransfer->id . '.');
@@ -375,14 +327,7 @@ class OrderTransferController extends Controller
 
     private function transferableOrders(?int $warehouseId): \Illuminate\Database\Eloquent\Builder
     {
-        return Order::query()
-            ->whereNull('order_transfer_id')
-            ->whereIn('status', ['ready_to_ship', 'packed', 'packed_waiting_pickup'])
-            ->whereNotNull('warehouse_id')
-            // Điều chuyển kho và lộ trình đi giao là hai nghiệp vụ độc lập.
-            // Một đơn đã có lịch giao vẫn phải xuất hiện để tạo điều chuyển;
-            // sau khi kho đích tiếp nhận, đơn tiếp tục lộ trình giao hiện có.
-            ->when($warehouseId, fn ($query) => $query->where('warehouse_id', $warehouseId));
+        return app(\App\Services\WarehouseTransferCreationService::class)->transferableOrders($warehouseId);
     }
 
     private function transferStatusLabel($statuses): string

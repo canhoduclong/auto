@@ -48,7 +48,8 @@ h6 {
 	margin: 0;
 	color: #111111;
 	font-weight: 400;
-	font-family: "Lato", sans-serif;
+	/*font-family: "Lato", sans-serif;
+	font-family: Arial, Helvetica, sans-serif;*/
 }
 
 h1 {
@@ -76,9 +77,9 @@ h6 {
 }
 
 p {
-	font-size: 15px; 
+	/*font-size: 15px; */
 	color: #000000;
-	font-weight: 600;
+	/*font-weight: 600;*/
 	line-height: 25px;
 	margin: 0 0 15px 0;
 }

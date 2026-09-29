@@ -22,9 +22,8 @@
         border: 1px solid var(--monitor-border);
         border-radius: 4px;
         background: #fff;
-        color: #075985;
-        font-size: .82rem;
-        font-weight: 800;
+        color: #075985; 
+        font-weight: 700;
         text-decoration: none;
         box-shadow: 0 3px 10px rgba(15, 23, 42, .04);
     }
