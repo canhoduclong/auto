@@ -211,7 +211,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 8px;
-        padding: 5px 13px 5px 0;
+        padding: 5px 11px 5px 12px;
         font-size: .82rem;
         text-transform: uppercase;
         border-bottom: 1px solid #eef2f7;
