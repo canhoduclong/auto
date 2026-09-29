@@ -144,8 +144,8 @@
                                     <input type="number" min="1" max="{{ max(1, $variant['available']) }}" name="items[{{ $index }}][quantity]" class="form-control text-center qty-input" value="{{ $item['quantity'] ?? 1 }}" required>
                                 </td>
                                 <td>
-                                    <input type="number" min="0.001" step="0.001" name="items[{{ $index }}][weight_kg]" class="form-control text-end weight-input" value="{{ isset($item['weight_kg']) && $item['weight_kg'] !== '' ? number_format((float) $item['weight_kg'], 3, '.', '') : '' }}" placeholder="Nhập kg thực tế" required>
-                                    <div class="small text-muted text-end">Chuẩn: {{ number_format($variant['weight_per_unit'], 3, ',', '.') }} kg/đv</div>
+                                    <input type="number" min="0.001" step="0.001" name="items[{{ $index }}][weight_kg]" class="form-control text-end weight-input" value="{{ isset($item['weight_kg']) && $item['weight_kg'] !== '' ? rtrim(rtrim(number_format((float) $item['weight_kg'], 3, '.', ''), '0'), '.') : '' }}" placeholder="Nhập kg thực tế" required>
+                                    <div class="small text-muted text-end">Chuẩn: {{ format_kg($variant['weight_per_unit']) }}/đv</div>
                                 </td>
                                 <td>
                                     <input type="number" min="0" step="1000" name="items[{{ $index }}][unit_cost]" class="form-control text-end" value="{{ $item['unit_cost'] ?? 0 }}">
@@ -162,7 +162,7 @@
             </div>
 
             <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap">
-                <div class="fw-semibold text-primary">Tổng khối lượng xuất: <span id="transferTotalWeight">0,000</span> kg</div>
+                <div class="fw-semibold text-primary">Tổng khối lượng xuất: <span id="transferTotalWeight">0</span> kg</div>
                 <div class="d-flex justify-content-end gap-2">
                 @if($editingTransfer)
                     <a href="{{ route('warehouse.inventory-transfers.index') }}" class="btn btn-outline-secondary">Hủy sửa</a>
@@ -224,10 +224,10 @@
                                 @foreach($transfer->items as $item)
                                     <div class="small">
                                         {{ $item->variant?->product?->name ?? 'Sản phẩm' }} - {{ $item->variant?->name ?? 'Biến thể' }}
-                                        <span class="text-muted">x {{ number_format((int) $item->quantity) }} · {{ number_format((float) $item->weight_kg, 3, ',', '.') }} kg</span>
+                                        <span class="text-muted">x {{ number_format((int) $item->quantity) }} · {{ format_kg($item->weight_kg) }}</span>
                                     </div>
                                 @endforeach
-                                <div class="small fw-semibold text-primary mt-1">Tổng: {{ number_format((float) $transfer->items->sum('weight_kg'), 3, ',', '.') }} kg</div>
+                                <div class="small fw-semibold text-primary mt-1">Tổng: {{ format_kg($transfer->items->sum('weight_kg')) }}</div>
                             </td>
                             <td>{{ $transfer->requester?->name ?? '—' }}</td>
                             <td>{{ optional($transfer->requested_at ?? $transfer->created_at)->format('d/m/Y H:i') }}</td>
@@ -343,7 +343,7 @@
         const total = Array.from(tableBody.querySelectorAll('.weight-input')).reduce(function (sum, input) {
             return sum + (parseFloat(input.value || '0') || 0);
         }, 0);
-        if (totalWeight) totalWeight.textContent = total.toLocaleString('vi-VN', {minimumFractionDigits: 3, maximumFractionDigits: 3});
+        if (totalWeight) totalWeight.textContent = String(Number(total.toFixed(3)));
     }
 
     function attachRowHandlers(row) {
@@ -409,7 +409,7 @@
                 </td>
                 <td>
                     <input type="number" min="0.001" step="0.001" name="items[${rowIndex}][weight_kg]" class="form-control text-end weight-input" value="" placeholder="Nhập kg thực tế" required>
-                    <div class="small text-muted text-end">Chuẩn: ${unitWeight.toLocaleString('vi-VN', {minimumFractionDigits: 3, maximumFractionDigits: 3})} kg/đv</div>
+                    <div class="small text-muted text-end">Chuẩn: ${Number(unitWeight.toFixed(3))}kg/đv</div>
                 </td>
                 <td>
                     <input type="number" min="0" step="1000" name="items[${rowIndex}][unit_cost]" class="form-control text-end" value="0">

@@ -89,14 +89,14 @@
                                                 @endif
                                             </td>
                                             <td class="text-center fw-semibold">{{ number_format((int) $item->quantity) }}</td>
-                                            <td class="text-end fw-semibold">{{ number_format((float) $item->weight_kg, 3, ',', '.') }} kg</td>
+                                            <td class="text-end fw-semibold">{{ format_kg($item->weight_kg) }}</td>
                                         </tr>
                                     @endforeach
                                 </tbody>
                                 <tfoot>
                                     <tr class="table-light">
                                         <th colspan="2" class="text-end">Tổng khối lượng nhận</th>
-                                        <th class="text-end text-primary">{{ number_format((float) $transfer->items->sum('weight_kg'), 3, ',', '.') }} kg</th>
+                                        <th class="text-end text-primary">{{ format_kg($transfer->items->sum('weight_kg')) }}</th>
                                     </tr>
                                 </tfoot>
                             </table>

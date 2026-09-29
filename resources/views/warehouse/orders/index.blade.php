@@ -157,10 +157,13 @@
         .wh-orders-print-sheet * {
             visibility: visible !important;
         }
+        .wh-sidebar, .mobile-drawer-overlay, .wh-main > :not(.wh-content),
+        .wh-content > :not(.wh-orders-print-sheet) { display: none !important; }
+        .wh-main { margin: 0 !important; width: 100% !important; min-height: 0 !important; display: block !important; }
+        .wh-content { padding: 0 !important; }
         .wh-orders-print-sheet {
             display: block !important;
-            position: absolute;
-            inset: 0;
+            position: static;
             width: 100%;
             color: #000;
             background: #fff;
@@ -168,13 +171,17 @@
         .wh-orders-print-table {
             width: 100%;
             border-collapse: collapse;
-            font-size: 12pt;
+            font-size: 10pt;
         }
         .wh-orders-print-table th,
         .wh-orders-print-table td {
             border: 1px solid #000;
             padding: 7px 9px;
         }
+        .wh-orders-print-table thead { display: table-header-group; }
+        .wh-orders-print-table tr { break-inside: avoid; }
+        .wh-orders-print-table .wh-print-customer { break-after: avoid; }
+        .wh-orders-print-table .wh-print-customer th { text-align: left; background: #eee !important; }
         .wh-orders-print-table th {
             text-align: center;
             font-weight: 700;
@@ -1570,24 +1577,51 @@
     <table class="wh-orders-print-table">
         <thead>
             <tr>
-                <th style="width: 110px;">Số thứ tự</th>
-                <th>Tên khách hàng</th>
-                <th style="width: 180px;">Ngày</th>
+                <th style="width: 8%;">STT</th>
+                <th>Sản phẩm</th>
+                <th style="width: 18%;">Số lượng</th>
+                <th style="width: 18%;">Giá bán</th>
+                <th style="width: 20%;">Thành tiền</th>
             </tr>
         </thead>
-        <tbody>
-            @forelse($printOrders as $order)
-                <tr>
-                    <td class="text-center">{{ $order->daily_sequence ?? $loop->iteration }}</td>
-                    <td>{{ $order->customer?->name ?? 'Khách hàng' }}</td>
-                    <td class="text-center">{{ optional($order->created_at)->format('d/m/Y') ?: '—' }}</td>
+        @forelse($printOrders as $order)
+            <tbody class="wh-print-order">
+                <tr class="wh-print-customer">
+                    <th colspan="5">
+                        {{ $order->daily_sequence ?? $loop->iteration }}. {{ $order->customer?->name ?? 'Khách hàng' }}
+                        <div class="fw-normal small">{{ $order->code }} · Ngày {{ optional($order->created_at)->format('d/m/Y') ?: '—' }}</div>
+                    </th>
                 </tr>
-            @empty
-                <tr>
-                    <td colspan="3" class="text-center">Không có đơn hàng.</td>
-                </tr>
-            @endforelse
-        </tbody>
+                @forelse($order->items as $item)
+                    @php
+                        $printPrice = (float) ($item->price ?? 0);
+                        $printQty = (float) $item->quantity;
+                        $printByKg = (bool) $item->effective_priced_by_kg;
+                        $printWeight = $item->warehouse_packed_weight;
+                        $printTotal = $printByKg
+                            ? ($printWeight !== null ? (float) $printWeight * $printPrice : null)
+                            : $printQty * $printPrice;
+                        $printUnit = $printByKg ? 'kg' : ($item->variant?->product?->unit_label ?: $item->product?->unit_label ?: 'đơn vị');
+                    @endphp
+                    <tr>
+                        <td class="text-center">{{ $loop->iteration }}</td>
+                        <td>{{ $item->variant?->name ?: $item->product?->name ?: 'Sản phẩm' }}</td>
+                        <td class="text-end">
+                            {{ rtrim(rtrim(number_format($printQty, 3, ',', '.'), '0'), ',') }}
+                            @if($printByKg)
+                                <div class="small">{{ $printWeight !== null ? number_format((float) $printWeight, 3, ',', '.') . ' kg' : 'Chưa cân' }}</div>
+                            @endif
+                        </td>
+                        <td class="text-end">{{ number_format($printPrice, 0, ',', '.') }}đ/{{ $printUnit }}</td>
+                        <td class="text-end">{{ $printTotal !== null ? number_format($printTotal, 0, ',', '.') . 'đ' : 'Chưa cân' }}</td>
+                    </tr>
+                @empty
+                    <tr><td colspan="5">Đơn hàng chưa có sản phẩm.</td></tr>
+                @endforelse
+            </tbody>
+        @empty
+            <tbody><tr><td colspan="5" class="text-center">Không có đơn hàng.</td></tr></tbody>
+        @endforelse
     </table>
 </div>
 

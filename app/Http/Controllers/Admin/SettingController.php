@@ -412,7 +412,7 @@ class SettingController extends Controller
             return back()->with('error', 'Sai key push code.')->withInput();
         }
 
-        $repoPath = '/var/www/auto.com';
+        $repoPath = '/var/www/app.com';
         $repoPathArg = escapeshellarg($repoPath);
         $gitCmdPrefix = 'git -c safe.directory=' . escapeshellarg($repoPath);
         $branch = 'hoanglong';

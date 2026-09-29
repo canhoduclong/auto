@@ -342,7 +342,10 @@
                 transform: translateX(0);
             }
             .acc-kpi { grid-template-columns: 1fr; }
-            .acc-topbar { padding: .65rem .85rem; }
+            .acc-topbar { padding: .65rem .85rem; flex-wrap: wrap; gap: 10px; position: static; }
+            .acc-topbar > * { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+            .acc-topbar .text-nowrap, .acc-topbar span[style] { white-space: normal !important; }
+            .acc-topbar .dropdown-menu { max-width: calc(100vw - 24px); }
             .acc-content { padding: .9rem; }
             .acc-sidebar-collapse { display: none; }
         }

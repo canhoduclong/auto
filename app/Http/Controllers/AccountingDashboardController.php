@@ -1149,7 +1149,37 @@ class AccountingDashboardController extends Controller
             }
         }
 
+        $shortcutToday = now()->startOfDay();
+        $shortcutDateExpression = "DATE(CASE
+            WHEN EXISTS (SELECT 1 FROM order_histories WHERE order_histories.order_id = orders.id AND order_histories.action = 'restore_cancelled_order') THEN orders.delivered_at
+            WHEN orders.accounting_sales_import_batch_id IS NOT NULL THEN orders.delivery_date
+            ELSE orders.created_at END)";
+        $shortcutOrders = Order::query()
+            ->when($hasExclusionTable, fn ($query) => $query->whereNotExists(fn ($excluded) => $excluded
+                ->selectRaw('1')->from('accounting_reconciliation_exclusions')
+                ->whereColumn('accounting_reconciliation_exclusions.order_id', 'orders.id')))
+            ->selectRaw($shortcutDateExpression.' AS business_day');
+        $shortcutCounts = DB::query()->fromSub($shortcutOrders, 'business_orders')
+            ->whereBetween('business_day', [
+                $shortcutToday->copy()->subDays(6)->toDateString(), $shortcutToday->toDateString(),
+            ])
+            ->selectRaw('business_day, COUNT(*) AS order_count')
+            ->groupBy('business_day')
+            ->pluck('order_count', 'business_day');
+        $businessDateShortcuts = collect(range(0, 6))->map(function (int $offset) use ($shortcutToday, $shortcutCounts, $businessDateFrom, $businessDateTo): array {
+            $day = $shortcutToday->copy()->subDays($offset);
+            $date = $day->toDateString();
+
+            return [
+                'date' => $date,
+                'label' => $offset === 0 ? 'Hôm nay' : $day->format('d/m'),
+                'count' => (int) ($shortcutCounts[$date] ?? 0),
+                'active' => $businessDateFrom === $date && $businessDateTo === $date,
+            ];
+        });
+
         return view('accounting.reconciliation', [
+            'businessDateShortcuts' => $businessDateShortcuts,
             'orders' => $orders,
             'stats' => $stats,
             'selectedDate' => $selectedDate,

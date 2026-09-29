@@ -205,6 +205,53 @@
         .recon-detail-layout { grid-template-columns:1fr; }
         .recon-detail-flow { position:static; }
     }
+
+    .recon-panel { min-width: 0; }
+    .recon-detail-totals { width: 360px; max-width: 100%; }
+    .recon-mobile-tools { display: none; }
+    @media (max-width: 992px) {
+        .recon-grid, .recon-grid.filter-collapsed { grid-template-columns: minmax(0, 1fr); }
+        .recon-filter-panel, .recon-filter-panel.is-collapsed { position: static; width: 100%; min-width: 0; }
+        .recon-filter-panel.is-collapsed .js-filter-title { display: block; }
+        .recon-filter-panel.is-collapsed .panel-head { justify-content: space-between !important; }
+        .recon-filter-panel #reconFilterPin { display: none; }
+    }
+    @media (max-width: 992px) {
+        .recon-panel .panel-body, .recon-panel .panel-head { padding: 12px; }
+        .recon-mobile-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+        .recon-mobile-tools details { width: 100%; }
+        .recon-mobile-tools details a { display: inline-block; padding: 10px; }
+        .recon-bulk-toolbar { flex-direction: column; align-items: stretch; }
+        .recon-bulk-toolbar .btn { flex: 1 1 140px; white-space: normal; }
+        .recon-orders-table, .recon-orders-table > tbody { display: block; width: 100%; min-width: 0 !important; }
+        .recon-orders-table > thead { display: none; }
+        .recon-orders-table > tbody > tr:not(.d-none) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 12px; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
+        .recon-orders-table > tbody > tr > td { display: block; min-width: 0; padding: 10px; overflow-wrap: anywhere; text-align: left !important; }
+        .recon-orders-table td[data-label]::before { content: attr(data-label); display: block; font-size: .75rem; color: #475569; font-weight: 600; margin-bottom: 4px; }
+        .recon-orders-table td:nth-child(3), .recon-orders-table td:last-child, .recon-orders-table td[colspan] { grid-column: 1 / -1; }
+        .recon-orders-table td:last-child > .d-flex { flex-wrap: wrap; gap: 8px !important; }
+        .recon-orders-table .btn { min-height: 44px; white-space: normal; }
+        .recon-orders-table .badge { white-space: normal; text-align: left; line-height: 1.5; }
+        .recon-orders-table .form-check-input { width: 22px; height: 22px; }
+        .recon-detail-layout, .recon-info-grid { grid-template-columns: minmax(0, 1fr); }
+        .recon-kv { grid-template-columns: minmax(0, 1fr); }
+        .recon-mini-row { flex-wrap: wrap; }
+        .recon-detail-toolbar { flex-wrap: wrap; }
+        .recon-stat { flex-wrap: wrap; }
+        .recon-panel input, .recon-panel select { max-width: 100%; min-width: 0; font-size: 16px; }
+        .recon-panel .pagination { flex-wrap: wrap; }
+    }
+    @media (max-width: 360px) {
+        .recon-orders-table > tbody > tr:not(.d-none) { grid-template-columns: minmax(0, 1fr); }
+        .recon-filter-panel .row > [class*="col-"] { width: 100%; }
+    }
+    .recon-date-shortcuts { display: flex; gap: 6px; overflow-x: auto; max-width: 100%; padding: 10px; border-bottom: 1px solid #e2e8f0; scrollbar-width: thin; }
+    .recon-date-shortcut { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; min-height: 38px; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 999px; text-decoration: none; color: #334155; background: #fff; font-size: .78rem; font-weight: 600; }
+    .recon-date-shortcut:hover, .recon-date-shortcut:focus-visible { background: #eff6ff; border-color: #2563eb; color: #1d4ed8; }
+    .recon-date-shortcut.is-active { color: #1d4ed8; background: #eff6ff; border-color: #2563eb; }
+    .recon-date-count { padding: 2px 5px; border-radius: 999px; background: #e2e8f0; font-size: .7rem; }
+    .recon-date-shortcut.is-active .recon-date-count { background: #2563eb; color: white; }
+    @media (max-width: 992px) { .recon-date-shortcut { min-height: 44px; } }
 </style>
 @endpush
 
@@ -219,6 +266,17 @@
                 <button type="button" class="btn btn-sm btn-outline-primary recon-icon-button" id="reconFilterPin" title="Neo bộ lọc"><i class="bi bi-pin-angle"></i></button>
             </span>
         </div>
+        <nav class="recon-date-shortcuts js-filter-body" aria-label="Chọn nhanh ngày nghiệp vụ">
+            @foreach($businessDateShortcuts as $shortcut)
+                <a class="recon-date-shortcut {{ $shortcut['active'] ? 'is-active' : '' }}"
+                   href="{{ request()->fullUrlWithQuery(['business_date_from' => $shortcut['date'], 'business_date_to' => $shortcut['date'], 'business_date' => null, 'date' => null, 'date_field' => null, 'page' => null]) }}"
+                   @if($shortcut['active']) aria-current="date" @endif
+                   title="Ngày {{ $shortcut['date'] }}: {{ $shortcut['count'] }} đơn hiện có, chưa áp dụng các bộ lọc khác">
+                    <span>{{ $shortcut['label'] }}</span>
+                    <span class="recon-date-count">{{ $shortcut['count'] }}</span>
+                </a>
+            @endforeach
+        </nav>
         <div class="panel-body js-filter-body">
             <form method="GET" class="row g-2 mb-3">
                 <input type="hidden" name="sort" value="{{ $sort }}">
@@ -316,8 +374,17 @@
                 </div>
             </div>
             <div class="alert d-none" id="reconBulkResult" role="alert"></div>
+            <div class="recon-mobile-tools">
+                <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('selectAllReconciliation').click()">Chọn / bỏ chọn tất cả</button>
+                <details>
+                    <summary>Sắp xếp danh sách</summary>
+                    @foreach(['customer' => 'Khách hàng', 'status' => 'Giao hàng', 'paid' => 'Đã thu', 'due' => 'Còn thiếu', 'sale' => 'Sale', 'shipper' => 'Shipper', 'shipping_fee' => 'Phí giao hàng', 'accounting_status' => 'Kế toán', 'date' => 'Ngày giao'] as $column => $label)
+                        <a href="{{ $sortLink($column) }}">{{ $label }} <i class="bi {{ $sortIcon($column) }}"></i></a>
+                    @endforeach
+                </details>
+            </div>
             <div class="table-responsive">
-                <table class="table table-hover align-middle">
+                <table class="table table-hover align-middle recon-orders-table">
                     <thead>
                         <tr>
                             <th style="width: 38px">
@@ -349,23 +416,23 @@
                             }
                         @endphp
                         <tr class="table-danger">
-                            <td><input class="form-check-input" type="checkbox" disabled title="Đơn gốc đã bị xóa"></td>
-                            <td class="text-center text-muted">{{ $loop->iteration }}</td>
-                            <td class="fw-bold">
+                            <td data-label="Chọn"><input class="form-check-input" type="checkbox" disabled title="Đơn gốc đã bị xóa"></td>
+                            <td data-label="STT" class="text-center text-muted">{{ $loop->iteration }}</td>
+                            <td data-label="Khách hàng" class="fw-bold">
                                 {{ $missingOrder->customer_name }}
                                 <span class="small text-muted fw-normal d-block mt-1">{{ $missingOrder->code }}, Ngày {{ $missingCreatedDate }}</span>
                                 <span class="badge text-bg-dark d-block mt-1">Không còn dữ liệu đơn thực tế</span>
                                 <span class="small text-danger d-block mt-1">Admin xóa: {{ $missingOrder->admin_delete_reason }}</span>
                             </td>
-                            <td><span class="badge text-bg-secondary">Đã xóa</span></td>
-                            <td class="text-success fw-semibold">{{ $money($missingOrder->paid_amount) }}</td>
-                            <td class="{{ $missingDue > 0 ? 'text-danger' : 'text-success' }} fw-semibold">{{ $money($missingDue) }}</td>
-                            <td>{{ $missingOrder->sale_name }}</td>
-                            <td>{{ $missingOrder->shipper_name }}</td>
-                            <td>{{ $money($missingOrder->shipping_fee) }}</td>
-                            <td><span class="badge text-bg-danger">Không thể đối soát</span></td>
-                            <td>{{ $missingOrder->delivered_at ? \Carbon\Carbon::parse($missingOrder->delivered_at)->format('d/m/Y H:i') : '-' }}</td>
-                            <td>
+                            <td data-label="Giao hàng"><span class="badge text-bg-secondary">Đã xóa</span></td>
+                            <td data-label="Đã thu" class="text-success fw-semibold">{{ $money($missingOrder->paid_amount) }}</td>
+                            <td data-label="Còn thiếu" class="{{ $missingDue > 0 ? 'text-danger' : 'text-success' }} fw-semibold">{{ $money($missingDue) }}</td>
+                            <td data-label="Sale">{{ $missingOrder->sale_name }}</td>
+                            <td data-label="Shipper">{{ $missingOrder->shipper_name }}</td>
+                            <td data-label="Phí giao hàng thu khách">{{ $money($missingOrder->shipping_fee) }}</td>
+                            <td data-label="Kế toán"><span class="badge text-bg-danger">Không thể đối soát</span></td>
+                            <td data-label="Ngày giao">{{ $missingOrder->delivered_at ? \Carbon\Carbon::parse($missingOrder->delivered_at)->format('d/m/Y H:i') : '-' }}</td>
+                            <td data-label="Thao tác">
                                 @if($canExcludeMissingOrders ?? false)
                                 <form method="POST" action="{{ route('accounting.reconciliation.exclude-missing', $missingOrder->deleted_record_id) }}" class="js-exclude-invalid-order-form">
                                     @csrf
@@ -398,7 +465,7 @@
                             $dueAmount = (float) ($order->reconciliation_due_amount ?? $order->amount_due ?? 0);
                         @endphp
                         <tr class="recon-order-row {{ $isInvalidOrder ? 'table-danger' : '' }}" data-order-id="{{ $order->id }}" data-can-confirm="{{ $canConfirm ? '1' : '0' }}" data-can-cancel="{{ $canCancel ? '1' : '0' }}" data-cancel-allowed="{{ $order->accounting_sales_import_batch_id ? '0' : '1' }}" data-detail-url="{{ route('accounting.reconciliation.detail', $order) }}" data-confirm-url="{{ route('accounting.reconciliation.confirm', $order) }}" data-cancel-url="{{ route('accounting.reconciliation.cancel', $order) }}">
-                            <td>
+                            <td data-label="Chọn">
                                 <input
                                     class="form-check-input js-recon-select"
                                     type="checkbox"
@@ -408,8 +475,8 @@
                                     {{ $canSelect ? '' : 'disabled' }}
                                 >
                             </td>
-                            <td class="text-center text-muted">{{ ($orders->firstItem() ?? 1) + $loop->index + ($missingOrders ?? collect())->count() }}</td>
-                            <td class="fw-bold">
+                            <td data-label="STT" class="text-center text-muted">{{ ($orders->firstItem() ?? 1) + $loop->index + ($missingOrders ?? collect())->count() }}</td>
+                            <td data-label="Khách hàng" class="fw-bold">
                                 {{ $order->customer?->name ?? '-' }}
                                 <span class="small text-muted fw-normal d-block mt-1">{{ $order->code }}, Ngày {{ optional($order->created_at)->format('d/m/Y') ?: '-' }}</span>
                                 @if($isMissingOrder)
@@ -419,19 +486,19 @@
                                 @endif
                             </td>
                             @php($orderStatusMeta = $deliveryStatusMeta[$order->status] ?? [$order->status, 'text-bg-secondary'])
-                            <td><span class="badge {{ $orderStatusMeta[1] }}">{{ $orderStatusMeta[0] }}</span></td>
-                            <td class="text-success fw-semibold">{{ $money($paidAmount) }}</td>
-                            <td class="{{ $dueAmount > 0 ? 'text-danger' : 'text-success' }} fw-semibold">{{ $money($dueAmount) }}</td>
-                            <td>{{ $order->user?->short_name ?: ($order->user?->name ?? '-') }}</td>
-                            <td>{{ $order->shipper?->name ?? '-' }}</td>
-                            <td>{{ $money(($order->collect_customer_shipping_fee ?? false) ? $order->customer_shipping_fee : 0) }}</td>
-                            <td class="js-accounting-status">
+                            <td data-label="Giao hàng"><span class="badge {{ $orderStatusMeta[1] }}">{{ $orderStatusMeta[0] }}</span></td>
+                            <td data-label="Đã thu" class="text-success fw-semibold">{{ $money($paidAmount) }}</td>
+                            <td data-label="Còn thiếu" class="{{ $dueAmount > 0 ? 'text-danger' : 'text-success' }} fw-semibold">{{ $money($dueAmount) }}</td>
+                            <td data-label="Sale">{{ $order->user?->short_name ?: ($order->user?->name ?? '-') }}</td>
+                            <td data-label="Shipper">{{ $order->shipper?->name ?? '-' }}</td>
+                            <td data-label="Phí giao hàng thu khách">{{ $money(($order->collect_customer_shipping_fee ?? false) ? $order->customer_shipping_fee : 0) }}</td>
+                            <td data-label="Kế toán" class="js-accounting-status">
                                 <span class="badge {{ $isConfirmed ? 'text-bg-success' : 'text-bg-warning' }}">
                                     {{ $isConfirmed ? 'Đã xác nhận' : 'Chưa xác nhận' }}
                                 </span>
                             </td>
-                            <td>{{ optional($order->delivered_at)->format('d/m/Y H:i') ?: '-' }}</td>
-                            <td>
+                            <td data-label="Ngày giao">{{ optional($order->delivered_at)->format('d/m/Y H:i') ?: '-' }}</td>
+                            <td data-label="Thao tác">
                                 <div class="d-flex gap-1">
                                     <button class="btn btn-sm btn-outline-primary js-recon-toggle" type="button">Xem</button>
                                     <button
@@ -500,6 +567,8 @@ document.addEventListener('DOMContentLoaded', function () {
             filterPin.querySelector('i').className = filterPinned ? 'bi bi-pin-angle-fill' : 'bi bi-pin-angle';
         }
         if (filterToggle) {
+            filterToggle.setAttribute('aria-expanded', String(!collapsed));
+            filterToggle.setAttribute('aria-label', collapsed ? 'Mở bộ lọc' : 'Thu gọn bộ lọc');
             filterToggle.title = collapsed ? 'Mở bộ lọc' : 'Thu gọn bộ lọc; rê chuột vào biểu tượng để mở';
             filterToggle.querySelector('i').className = collapsed ? 'bi bi-layout-sidebar' : 'bi bi-layout-sidebar-inset';
         }
@@ -512,10 +581,10 @@ document.addEventListener('DOMContentLoaded', function () {
         paintFilterPanel();
     });
     filterToggle?.addEventListener('mouseenter', function () {
-        if (filterCollapsed && !filterPinned) paintFilterPanel(true);
+        if (window.matchMedia('(hover: hover) and (min-width: 993px)').matches && filterCollapsed && !filterPinned) paintFilterPanel(true);
     });
     filterPanel?.addEventListener('mouseleave', function () {
-        if (filterCollapsed && !filterPinned) paintFilterPanel(false);
+        if (window.matchMedia('(hover: hover) and (min-width: 993px)').matches && filterCollapsed && !filterPinned) paintFilterPanel(false);
     });
     filterPin?.addEventListener('click', function () {
         filterPinned = !filterPinned;
@@ -745,7 +814,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 <tbody>${items || '<tr><td colspan="7" class="text-muted text-center">Không có sản phẩm.</td></tr>'}</tbody>
                             </table>
                         </div>
-                        <div class="d-flex justify-content-end"><div style="min-width:360px">
+                        <div class="d-flex justify-content-end"><div class="recon-detail-totals">
                             <div class="recon-mini-row"><span>Tổng&nbsp;&nbsp; Tiền hàng theo giá áp dụng ngày lên đơn</span><span>${money(order.current_goods_total)}</span></div>
                             <div class="recon-mini-row text-danger"><span>Tổng&nbsp;&nbsp; Giảm giá sản phẩm</span><span>-${money(order.current_item_discount_total)}</span></div>
                             ${Number(order.current_item_increase_total || 0) > 0 ? `<div class="recon-mini-row text-primary"><span>Điều chỉnh tăng sản phẩm</span><span>+${money(order.current_item_increase_total)}</span></div>` : ''}
