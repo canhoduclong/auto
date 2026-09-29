@@ -2483,7 +2483,7 @@
 
                                             <div class="table-responsive">
                                                 <table class="table table-sm align-middle monitor-edit-items">
-                                                    <thead><tr><th>Sản phẩm</th><th>Giá bán</th><th>Số lượng</th><th>Khối lượng tạm tính (kg)<span class="d-block text-muted fw-normal">Tổng kg của dòng hàng</span></th><th class="text-end">Thành tiền</th><th></th></tr></thead>
+                                                    <thead><tr><th>Sản phẩm</th><th>Giá bán</th><th>Số lượng</th><th>Khối lượng (kg)</th><th class="text-end">Thành tiền</th><th></th></tr></thead>
                                                     <tbody>
                                                         @foreach($order->items as $editIndex => $item)
                                                             @php
