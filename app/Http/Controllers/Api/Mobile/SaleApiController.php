@@ -339,7 +339,7 @@ class SaleApiController extends BaseApiController
             'min_price' => (float) ($variant->latestPriceRule?->min_price ?? 0),
             'available_stock' => (int) ($variant->available_stock ?? 0),
             'is_priced_by_kg' => (bool) ($variant->effective_priced_by_kg ?? false),
-            'kg' => (float) ($variant->effective_kg ?? 0),
+            'kg' => (float) ($variant->order_unit_weight ?? 0),
             'is_pinned' => (bool) ($variant->is_pinned ?? false),
             'user_sort_order' => $variant->user_sort_order !== null ? (int) $variant->user_sort_order : null,
             'sort_order' => (int) ($variant->sort_order ?? 0),
@@ -399,7 +399,7 @@ class SaleApiController extends BaseApiController
                     'min_price' => (float) ($variant->latestPriceRule?->min_price ?? 0),
                     'available_stock' => (int) ($variant->available_stock ?? 0),
                     'is_priced_by_kg' => (bool) ($variant->effective_priced_by_kg ?? false),
-                    'kg' => (float) ($variant->effective_kg ?? 0),
+                    'kg' => (float) ($variant->order_unit_weight ?? 0),
                 ];
             })->values();
 
@@ -461,7 +461,7 @@ class SaleApiController extends BaseApiController
                 'sale:id,name',
                 'order:id,code',
                 'automatedSchedules' => fn ($query) => $query
-                    ->select(['id', 'text_order_draft_id', 'schedule_date', 'generated_order_id'])
+                    ->select(['id', 'text_order_draft_id', 'schedule_date', 'generated_order_id'])->with('generatedOrder')
                     ->whereDate('schedule_date', $draftDate),
             ])
             ->where('draft_scope', TextOrderDraft::SCOPE_SALE_PRIVATE)
@@ -518,7 +518,7 @@ class SaleApiController extends BaseApiController
             ->where('sale_id', $saleId)
             ->whereDoesntHave('automatedSchedules', fn ($query) => $query
                 ->whereDate('schedule_date', $deliveryDate)
-                ->whereNotNull('generated_order_id'))
+                ->withActiveGeneratedOrder())
             ->pluck('id')
             ->all();
 
@@ -985,7 +985,15 @@ class SaleApiController extends BaseApiController
             'customer_feedback_at' => optional($order->customer_feedback_at)->toIso8601String(),
         ];
         if ($details) {
-            $payload['items'] = $order->items;
+            $payload['items'] = $order->items->map(function ($item): array {
+                $row = $item->toArray();
+                // JSON numbers in kg, never database decimal strings such as "2.500".
+                foreach (['unit_weight', 'total_weight', 'packed_weight', 'actual_weight'] as $field) {
+                    $row[$field] = $item->{$field} === null ? null : (float) $item->{$field};
+                }
+
+                return $row;
+            });
             $productIds = $order->items->pluck('product_id')->filter()->unique()->values();
             $payload['warehouse_variant_options'] = ProductVariant::query()
                 ->whereIn('product_id', $productIds)
@@ -1073,7 +1081,7 @@ class SaleApiController extends BaseApiController
             'warehouse_product_permissions' => null,
             'generated_for_selected_date' => $selectedDate !== null
                 && $draft->automatedSchedules->contains(
-                    fn ($schedule) => $schedule->generated_order_id !== null
+                    fn ($schedule) => $schedule->hasActiveGeneratedOrder()
                         && optional($schedule->schedule_date)->toDateString() === $selectedDate
                 ),
             'created_at' => optional($draft->created_at)->toIso8601String(),

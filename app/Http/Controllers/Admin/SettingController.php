@@ -30,7 +30,9 @@ class SettingController extends Controller
         $pushHistory = $this->readPushHistory();
         $showPushFeature = !$this->isRestrictedPushDomain(request()->getHost());
 
-        return view('admin.settings.index', compact('settings', 'pushHistory', 'showPushFeature'));
+        $pushPublicKey = app(\App\Services\GitPushService::class)->publicKey();
+
+        return view('admin.settings.index', compact('settings', 'pushHistory', 'showPushFeature', 'pushPublicKey'));
     }
 
     public function resetDataIndex()
@@ -412,137 +414,51 @@ class SettingController extends Controller
             return back()->with('error', 'Sai key push code.')->withInput();
         }
 
-        $repoPath = '/var/www/app.com';
-        $repoPathArg = escapeshellarg($repoPath);
-        $gitCmdPrefix = 'git -c safe.directory=' . escapeshellarg($repoPath);
-        $branch = 'hoanglong';
-        $commitMessage = trim((string) $validated['commit_message']);
-        $logs = [];
+        return $this->runGitPushAction($request, false, trim((string) $validated['commit_message']));
+    }
 
-        $logs[] = 'Push path: ' . $repoPath;
-        $logs[] = 'Push branch: ' . $branch;
-        $logs[] = 'Commit message: ' . $commitMessage;
-        $logs[] = '';
-        $logs[] = 'Git safe.directory: ' . $repoPath;
-        $logs[] = '';
+    public function checkPush(Request $request)
+    {
+        abort_unless($request->user()?->hasRole('admin'), 403);
+        abort_if($this->isRestrictedPushDomain($request->getHost()), 403);
 
-        $logs[] = 'Local changed files:';
-        [$statusCode, $statusOutput] = $this->runDeployCommand("cd {$repoPathArg} && {$gitCmdPrefix} status --short");
-        $changedFiles = [];
-        if ($statusCode === 0) {
-            if (count($statusOutput) === 1 && trim((string) $statusOutput[0]) === '(No output)') {
-                $logs[] = '(No local changes)';
+        return $this->runGitPushAction($request, true);
+    }
+
+    private function runGitPushAction(Request $request, bool $checkOnly, string $message = '')
+    {
+        $lock = Cache::lock('admin-git-push', 180);
+        if (! $lock->get()) {
+            return back()->with('error', 'Đang có thao tác Git chạy. Vui lòng chờ rồi thử lại.');
+        }
+        $service = app(\App\Services\GitPushService::class);
+        $status = 'success';
+        try {
+            if ($checkOnly) {
+                $service->checkConnection();
             } else {
-                $logs = array_merge($logs, $statusOutput);
-                foreach ($statusOutput as $line) {
-                    $line = trim((string) $line);
-                    if ($line === '') {
-                        continue;
-                    }
-
-                    $parts = preg_split('/\s+/', $line, 2);
-                    $changedFiles[] = trim((string) ($parts[1] ?? $parts[0] ?? ''));
-                }
+                $service->push($message);
             }
-        } else {
-            $logs = array_merge($logs, $statusOutput);
+            $notice = $checkOnly ? 'Kết nối GitHub hợp lệ. Chưa commit hoặc push code.' : 'Push code thành công lên nhánh '.$service->branch.'.';
+        } catch (\Throwable $exception) {
+            $status = 'error';
+            $notice = $exception->getMessage();
+            $service->logs[] = $notice;
+        } finally {
+            $lock->release();
         }
-        $logs[] = '';
-
-        $logs[] = 'Staging files...';
-        [$addCode, $addOutput] = $this->runDeployCommand("cd {$repoPathArg} && {$gitCmdPrefix} add .");
-        $logs = array_merge($logs, $addOutput);
-        $logs[] = '';
-
-        if ($addCode !== 0) {
-            $logs[] = 'Push failed at step: git add';
-
-            $this->appendPushHistory([
-                'time' => now()->toDateTimeString(),
-                'user' => $user->email ?? $user->name,
-                'branch' => $branch,
-                'commit_message' => $commitMessage,
-                'status' => 'error',
-                'changed_files' => $changedFiles,
-                'output' => $logs,
-            ]);
-
-            return back()
-                ->with('error', 'Push thất bại ở bước git add.')
-                ->with('push_output', implode("\n", $logs))
-                ->with('push_status', 'error');
-        }
-
-        $logs[] = 'Committing...';
-        [$commitCode, $commitOutput] = $this->runDeployCommand("cd {$repoPathArg} && {$gitCmdPrefix} commit -m " . escapeshellarg($commitMessage));
-        $logs = array_merge($logs, $commitOutput);
-        $logs[] = '';
-
-        if ($commitCode !== 0) {
-            $commitText = strtolower(implode("\n", $commitOutput));
-            if (str_contains($commitText, 'nothing to commit') || str_contains($commitText, 'no changes added to commit')) {
-                $logs[] = 'No new commit created (nothing to commit).';
-                $logs[] = '';
-            } else {
-                $logs[] = 'Push failed at step: git commit';
-
-                $this->appendPushHistory([
-                    'time' => now()->toDateTimeString(),
-                    'user' => $user->email ?? $user->name,
-                    'branch' => $branch,
-                    'commit_message' => $commitMessage,
-                    'status' => 'error',
-                    'changed_files' => $changedFiles,
-                    'output' => $logs,
-                ]);
-
-                return back()
-                    ->with('error', 'Push thất bại ở bước commit.')
-                    ->with('push_output', implode("\n", $logs))
-                    ->with('push_status', 'error');
-            }
-        }
-
-        $logs[] = 'Pushing to origin/' . $branch . '...';
-        [$pushCode, $pushOutput] = $this->runDeployCommand("cd {$repoPathArg} && {$gitCmdPrefix} push origin {$branch}");
-        $logs = array_merge($logs, $pushOutput);
-        $logs[] = '';
-
-        if ($pushCode !== 0) {
-            $logs[] = 'Push failed at step: git push';
-
-            $this->appendPushHistory([
-                'time' => now()->toDateTimeString(),
-                'user' => $user->email ?? $user->name,
-                'branch' => $branch,
-                'commit_message' => $commitMessage,
-                'status' => 'error',
-                'changed_files' => $changedFiles,
-                'output' => $logs,
-            ]);
-
-            return back()
-                ->with('error', 'Push thất bại ở bước git push.')
-                ->with('push_output', implode("\n", $logs))
-                ->with('push_status', 'error');
-        }
-
-        $logs[] = 'Push success.';
-
         $this->appendPushHistory([
             'time' => now()->toDateTimeString(),
-            'user' => $user->email ?? $user->name,
-            'branch' => $branch,
-            'commit_message' => $commitMessage,
-            'status' => 'success',
-            'changed_files' => $changedFiles,
-            'output' => $logs,
+            'user' => $request->user()->email,
+            'branch' => $service->branch,
+            'commit_message' => $checkOnly ? '[Kiểm tra kết nối]' : $message,
+            'status' => $status,
+            'changed_files' => $service->changedFiles,
+            'output' => $service->logs,
         ]);
 
-        return back()
-            ->with('success', 'Push code thành công.')
-            ->with('push_output', implode("\n", $logs))
-            ->with('push_status', 'success');
+        return back()->with($status, $notice)
+            ->with('push_output', implode("\n", $service->logs))->with('push_status', $status);
     }
 
     private function runDeployCommand(string $command): array

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WarehouseDispatchSlip;
+use App\Services\WarehouseDispatchFinalizationService;
 use App\Services\WarehouseTransferCreationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -47,7 +48,8 @@ class TransferWorkbenchController extends Controller
         });
         $shippers = User::whereHas('roles', fn ($q) => $q->whereIn('name', ['shipper', 'manager_shipper']))->orderBy('name')->get(['id', 'name']);
         $dispatchSlips = WarehouseDispatchSlip::where('source_warehouse_id', $warehouseId)
-            ->whereDate('business_date', $businessDate)
+            ->where(fn ($query) => $query->whereDate('business_date', $businessDate)
+                ->orWhere('status', WarehouseDispatchSlip::STATUS_DRAFT))
             ->with(['targetWarehouse', 'shipper', 'entries.inventoryTransfer.items', 'entries.orderTransfer.orders'])
             ->latest('id')->paginate(10, ['*'], 'slips_page')->withQueryString();
 
@@ -122,6 +124,7 @@ class TransferWorkbenchController extends Controller
                             $transfer = $service->createInventory($warehouseId, $targetId, $group + ['business_date' => $data['business_date']]);
                             $slip->entries()->create(['inventory_transfer_id' => $transfer->id]);
                         }
+                        app(WarehouseDispatchFinalizationService::class)->finalize($slip, (int) auth()->id());
                         $codes[] = $slip->code;
                     }
 
@@ -136,6 +139,6 @@ class TransferWorkbenchController extends Controller
         }
 
         return redirect()->route('warehouse.inventory-transfers.index', ['date' => $data['business_date']])
-            ->with('success', 'Đã tạo điều chuyển và phiếu tổng: '.implode(', ', $codes).'. Bạn có thể in và chốt bàn giao ở danh sách bên dưới.');
+            ->with('success', 'Đã chốt điều chuyển và xuất phiếu tổng: '.implode(', ', $codes).'. Shipper có thể nhận hàng; bạn có thể in phiếu ở danh sách bên dưới.');
     }
 }

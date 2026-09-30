@@ -280,7 +280,7 @@
     .manager-product-summary { min-width: 0; }
     .manager-product-block + .manager-product-block { padding-top: 9px; border-top: 1px solid #dbe6e8; }
     .manager-product-heading { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 10px; color:#113f43; padding: 7px;}
-    .manager-product-heading strong {   }
+    .manager-product-heading strong {  }
     .manager-product-heading span { color:#148a89; font-size:.82rem; font-weight:800; white-space:nowrap; }
     .manager-product-table { width:100%; border-collapse:collapse; text-align:center; }
     .manager-product-table th { padding:8px; color:#064e52; background:#dff3f4; border-top:1px solid #77b9bc; border-bottom:1px solid #77b9bc; font-weight:800; }

@@ -552,24 +552,7 @@ class WarehouseDispatchSlipController extends Controller
     public function finalize(WarehouseDispatchSlip $dispatchSlip)
     {
         $this->authorizeSource($dispatchSlip);
-        if ($dispatchSlip->status !== WarehouseDispatchSlip::STATUS_DRAFT) {
-            return back()->with('error', 'Phiếu đã được chốt hoặc hủy.');
-        }
-        if (! $dispatchSlip->entries()->exists()) {
-            return back()->with('error', 'Không thể chốt phiếu chưa có nội dung.');
-        }
-
-        $this->loadSlip($dispatchSlip);
-        DB::transaction(function () use ($dispatchSlip): void {
-            foreach ($dispatchSlip->entries as $entry) {
-                $entry->update(['snapshot' => $this->entrySnapshot($entry)]);
-            }
-            $dispatchSlip->update([
-                'status' => WarehouseDispatchSlip::STATUS_FINALIZED,
-                'finalized_by' => Auth::id(),
-                'finalized_at' => now(),
-            ]);
-        });
+        app(\App\Services\WarehouseDispatchFinalizationService::class)->finalize($dispatchSlip, (int) Auth::id());
 
         return back()->with('success', 'Đã chốt phiếu. Danh sách bàn giao đã được khóa.');
     }
@@ -986,103 +969,6 @@ class WarehouseDispatchSlipController extends Controller
         }
 
         return $sizes->unique()->values()->join(', ') ?: '—';
-    }
-
-    private function entrySnapshot($entry): array
-    {
-        if ($entry->orderTransfer) {
-            return [
-                'type' => 'order_transfer',
-                'order_transfer_id' => $entry->orderTransfer->id,
-                'orders' => $entry->orderTransfer->orders->map(function (Order $order): array {
-                    $movement = $order->warehouseTransfers->first();
-
-                    return [
-                        'id' => $order->id,
-                        'code' => $order->code ?: '#'.$order->id,
-                        'customer_name' => $order->customer?->name,
-                        'sale_name' => $order->user?->short_name ?: $order->user?->name,
-                        'note' => $order->note,
-                        'package_count' => $order->package_count,
-                        'packing_specification' => $order->packing_specification,
-                        'foam_box_fee' => (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0),
-                        'shipping_fee' => $this->billableShippingFee($order),
-                        'discount' => (float) ($order->total_discount ?? 0),
-                        'item_quantity' => (int) $order->items->sum('quantity'),
-                        'packed_weight' => (float) ($movement?->packed_total_weight ?? 0),
-                        'items' => $order->items->filter(fn ($item) => $item->product_variant_id)->map(fn ($item) => [
-                            'id' => $item->id,
-                            'product_variant_id' => (int) $item->product_variant_id,
-                            'product_name' => $item->variant?->product?->name ?? $item->variant?->name ?? 'Sản phẩm',
-                            'sku' => $item->variant?->sku,
-                            'size' => $item->variant?->size,
-                            'unit' => $item->variant?->product?->unit,
-                            'quantity' => (int) $item->quantity,
-                            'weight' => (float) ($item->packed_weight ?? $item->total_weight ?? 0),
-                            'price' => (float) ($item->price ?? 0),
-                            'is_priced_by_kg' => (bool) $item->effective_priced_by_kg,
-                        ])->values()->all(),
-                    ];
-                })->values()->all(),
-            ];
-        }
-
-        if ($entry->warehouseTransfer?->order) {
-            $movement = $entry->warehouseTransfer;
-            $order = $movement->order;
-
-            return [
-                'type' => 'warehouse_transfer',
-                'warehouse_transfer_id' => $movement->id,
-                'order' => [
-                    'id' => $order->id,
-                    'code' => $order->code ?: '#'.$order->id,
-                    'customer_name' => $order->customer?->name,
-                    'sale_name' => $order->user?->short_name ?: $order->user?->name,
-                    'note' => $order->note,
-                    'package_count' => $order->package_count,
-                    'packing_specification' => $order->packing_specification,
-                    'foam_box_fee' => (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0),
-                    'shipping_fee' => $this->billableShippingFee($order),
-                    'discount' => (float) ($order->total_discount ?? 0),
-                    'item_quantity' => (int) $order->items->sum('quantity'),
-                    'packed_weight' => (float) ($movement->packed_total_weight ?? 0),
-                    'items' => $order->items->filter(fn ($item) => $item->product_variant_id)->map(fn ($item) => [
-                        'id' => $item->id,
-                        'product_variant_id' => (int) $item->product_variant_id,
-                        'product_name' => $item->variant?->product?->name ?? $item->variant?->name ?? 'Sản phẩm',
-                        'sku' => $item->variant?->sku,
-                        'size' => $item->variant?->size,
-                        'unit' => $item->variant?->product?->unit,
-                        'quantity' => (int) $item->quantity,
-                        'weight' => (float) ($item->packed_weight ?? $item->actual_weight ?? $item->total_weight ?? 0),
-                        'price' => (float) ($item->price ?? 0),
-                        'is_priced_by_kg' => (bool) $item->effective_priced_by_kg,
-                    ])->values()->all(),
-                ],
-            ];
-        }
-
-        $transfer = $entry->inventoryTransfer;
-
-        return [
-            'type' => 'inventory_transfer',
-            'inventory_transfer' => [
-                'id' => $transfer?->id,
-                'code' => $transfer?->transfer_code ?: '#'.$transfer?->id,
-                'note' => $transfer?->note,
-                'items' => $transfer?->items->map(fn ($item) => [
-                    'product_variant_id' => (int) $item->product_variant_id,
-                    'product_name' => $item->variant?->product?->name ?? $item->variant?->name ?? 'Sản phẩm',
-                    'sku' => $item->variant?->sku,
-                    'size' => $item->variant?->size,
-                    'unit' => $item->variant?->product?->unit,
-                    'quantity' => (int) $item->quantity,
-                    'weight_kg' => (float) $item->weight_kg,
-                    'unit_cost' => (float) $item->unit_cost,
-                ])->values()->all() ?? [],
-            ],
-        ];
     }
 
     private function billableShippingFee(Order $order): float

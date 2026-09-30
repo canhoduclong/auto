@@ -33,3 +33,7 @@ readme.txt
 !/tests/Feature/TransferWorkbenchTest.php
 !/tests/Feature/OrderEstimatedWeightTest.php
 *:Zone.Identifier
+
+!/tests/Feature/GitPushServiceTest.php
+
+!/tests/Feature/DraftOrderRecreationTest.php

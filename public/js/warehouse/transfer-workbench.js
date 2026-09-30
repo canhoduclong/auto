@@ -112,7 +112,7 @@
             const payload=el('tw-payload');payload.replaceChildren();
             const input=(name,value)=>{const field=document.createElement('input');field.type='hidden';field.name=name;field.value=value;payload.append(field);};
             targets.forEach((target,index)=>{const group=groups.get(target),prefix=`groups[${index}]`;if(!group.shipper)throw new Error('Hãy chọn tài xế cho từng kho nhận.');input(`${prefix}[target_warehouse_id]`,target);input(`${prefix}[shipper_id]`,group.shipper);input(`${prefix}[note]`,group.note);selectedOrders.filter(o=>o.target===target).forEach((o,i)=>input(`${prefix}[order_ids][${i}]`,o.id));assigned.filter(r=>r.target===target).forEach((r,i)=>{input(`${prefix}[items][${i}][product_variant_id]`,r.variant);input(`${prefix}[items][${i}][quantity]`,r.quantity);input(`${prefix}[items][${i}][weight_kg]`,r.weight);});});
-            submitting=true;el('tw-execute').disabled=true;el('tw-execute').textContent='Đang tạo điều chuyển…';event.target.submit();
+            submitting=true;el('tw-execute').disabled=true;el('tw-execute').textContent='Đang chốt & xuất phiếu…';event.target.submit();
         }catch(e){error(e.message);}
     });
     window.addEventListener('beforeunload', event => {if(dirty&&!submitting){event.preventDefault();event.returnValue='';}});

@@ -68,9 +68,20 @@
             <div class="card border-0 shadow-sm mb-3">
                 <div class="card-header bg-white border-0 pt-3 pb-0">
                     <h5 class="mb-1">Push code lên GitHub</h5>
-                    <p class="text-muted small mb-0">Commit message lấy từ ô nhập liệu bên dưới, source local: /var/www/auto.com.</p>
+                    <p class="text-muted small mb-0">Source: {{ base_path() }}. Push lên nhánh đang checkout; kiểm tra kết nối trước khi commit.</p>
                 </div>
                 <div class="card-body">
+                    <form method="POST" action="{{ route('admin.settings.push-check') }}" class="mb-3">
+                        @csrf
+                        <button class="btn btn-outline-primary btn-sm" type="submit">Kiểm tra kết nối GitHub</button>
+                    </form>
+                    @if(!empty($pushPublicKey))
+                        <details class="mb-3">
+                            <summary>SSH public key của web</summary>
+                            <p class="small mt-2">Thêm key này vào repository GitHub → Settings → Deploy keys → Add deploy key, bật <strong>Allow write access</strong>, sau đó kiểm tra kết nối lại.</p>
+                            <textarea class="form-control small" rows="3" readonly aria-label="SSH public key">{{ $pushPublicKey }}</textarea>
+                        </details>
+                    @endif
                     <form method="POST" action="{{ route('admin.settings.push') }}" onsubmit="return confirm('Xác nhận commit và push code lên GitHub?');">
                         @csrf
                         <input type="hidden" name="key" value="huy2024">

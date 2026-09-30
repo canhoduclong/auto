@@ -7,6 +7,7 @@ use App\Http\Controllers\Warehouse\WarehouseDispatchSlipController;
 use App\Models\Order;
 use App\Models\User;
 use App\Models\WarehouseDispatchSlip;
+use App\Services\WarehouseDispatchFinalizationService;
 use App\Services\WarehouseTransferCreationService;
 use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Database\Schema\Blueprint;
@@ -52,7 +53,7 @@ class TransferWorkbenchTest extends TestCase
             'inventory_documents' => 'type,document_number,document_date,warehouse_id,supplier_id,shipping_fee,notes,user_id',
             'inventory_document_items' => 'inventory_document_id,product_variant_id,quantity,unit_cost',
             'inventory_movements' => 'inventory_id,quantity,type,reference_id,reference_type,user_id',
-            'warehouse_dispatch_slips' => 'code,business_date,source_warehouse_id,target_warehouse_id,shipper_id,status,notes,created_by',
+            'warehouse_dispatch_slips' => 'code,business_date,source_warehouse_id,target_warehouse_id,shipper_id,status,notes,created_by,finalized_by,finalized_at',
             'warehouse_dispatch_slip_entries' => 'warehouse_dispatch_slip_id,order_transfer_id,inventory_transfer_id,warehouse_transfer_id,snapshot',
         ];
         foreach ($tables as $table => $columns) {
@@ -119,7 +120,9 @@ class TransferWorkbenchTest extends TestCase
         self::assertEquals(13.5, DB::table('warehouse_inventory_transfer_items')->sum('weight_kg'));
         self::assertEquals(5.4, DB::table('warehouse_transfers')->value('packed_total_weight'));
         self::assertEquals('2026-09-28', substr(DB::table('inventory_documents')->value('document_date'), 0, 10));
-        self::assertEquals('draft', DB::table('warehouse_dispatch_slips')->value('status'));
+        self::assertEquals('finalized', DB::table('warehouse_dispatch_slips')->value('status'));
+        self::assertEquals(1, DB::table('warehouse_dispatch_slips')->value('finalized_by'));
+        self::assertNotNull(DB::table('warehouse_dispatch_slip_entries')->value('snapshot'));
     }
 
     public function test_rolls_back_all_destinations_and_order_assignments_when_stock_runs_out(): void
@@ -213,5 +216,30 @@ class TransferWorkbenchTest extends TestCase
         self::assertStringContainsString('13,5 kg', $html);
         self::assertStringContainsString('540.000đ', $html);
         self::assertStringContainsString('window.print()', $html);
+    }
+
+    public function test_finalizing_existing_open_slip_does_not_deduct_stock_twice(): void
+    {
+        $this->submit([$this->group()]);
+        DB::table('warehouse_dispatch_slips')->update(['status' => 'draft', 'finalized_by' => null, 'finalized_at' => null]);
+        DB::table('warehouse_dispatch_slip_entries')->update(['snapshot' => null]);
+        $slip = WarehouseDispatchSlip::firstOrFail();
+        $service = new WarehouseDispatchFinalizationService;
+        $service->finalize($slip, 1);
+        $snapshot = DB::table('warehouse_dispatch_slip_entries')->value('snapshot');
+        $service->finalize($slip, 1);
+        self::assertEquals('finalized', $slip->fresh()->status);
+        self::assertNotNull($snapshot);
+        self::assertSame($snapshot, DB::table('warehouse_dispatch_slip_entries')->value('snapshot'));
+        self::assertEquals(7, DB::table('inventories')->value('quantity'));
+        self::assertEquals(1, DB::table('inventory_movements')->count());
+    }
+
+    public function test_cancelled_slip_cannot_be_finalized(): void
+    {
+        $this->submit([$this->group()]);
+        DB::table('warehouse_dispatch_slips')->update(['status' => 'cancelled']);
+        $this->expectException(ValidationException::class);
+        (new WarehouseDispatchFinalizationService)->finalize(WarehouseDispatchSlip::firstOrFail(), 1);
     }
 }

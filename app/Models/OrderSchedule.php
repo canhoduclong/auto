@@ -54,6 +54,23 @@ class OrderSchedule extends Model
         return $this->hasMany(OrderScheduleItem::class);
     }
 
+    public function hasActiveGeneratedOrder(): bool
+    {
+        $order = $this->generatedOrder;
+
+        return $order !== null && $order->status !== 'cancelled' && $order->trash_at === null;
+    }
+
+    public function scopeWithActiveGeneratedOrder($query)
+    {
+        return $query->whereHas('generatedOrder', function ($orders): void {
+            $orders->where('status', '!=', 'cancelled');
+            if (\Illuminate\Support\Facades\Schema::hasColumn('orders', 'trash_at')) {
+                $orders->whereNull('trash_at');
+            }
+        });
+    }
+
     public function generatedOrder()
     {
         return $this->belongsTo(Order::class, 'generated_order_id');

@@ -284,7 +284,7 @@ class TextOrderImportController extends Controller
                 'order:id,code,created_at',
                 'automatedSchedules' => fn ($query) => $query
                     ->whereDate('schedule_date', $selectedDraftDate)
-                    ->with('generatedOrder:id,code'),
+                    ->with('generatedOrder'),
             ])
             ->where('draft_scope', $saleId ? TextOrderDraft::SCOPE_SALE_PRIVATE : TextOrderDraft::SCOPE_ADMIN_IMPORT)
             ->when($saleId, fn ($query) => $query->where('sale_id', $saleId))
@@ -760,6 +760,7 @@ class TextOrderImportController extends Controller
         }
 
         return DB::transaction(function () use ($draft, $customer, $draftItems, $truckStation, $approvalService, $deliveryDate) {
+            $draft = TextOrderDraft::query()->lockForUpdate()->findOrFail($draft->id);
             $schedule = null;
             if ($draft->draft_scope === TextOrderDraft::SCOPE_SALE_PRIVATE) {
                 $schedule = OrderSchedule::query()
@@ -768,7 +769,7 @@ class TextOrderImportController extends Controller
                     ->lockForUpdate()
                     ->first();
 
-                if ($schedule?->generated_order_id) {
+                if ($schedule?->hasActiveGeneratedOrder()) {
                     throw ValidationException::withMessages([
                         'delivery_date' => 'Đơn mẫu này đã được lên đơn trong ngày '.Carbon::parse($deliveryDate)->format('d/m/Y').'.',
                     ]);

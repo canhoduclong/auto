@@ -313,7 +313,7 @@
                     $draftShipping = $draft->collect_customer_shipping_fee ? (float) $draft->customer_shipping_fee : 0;
                     $draftTotal += $draftVat + $draftShipping;
                     $selectedSchedule = $draft->automatedSchedules->first();
-                    $hasOrderForSelectedDate = (bool) $selectedSchedule?->generated_order_id;
+                    $hasOrderForSelectedDate = (bool) $selectedSchedule?->hasActiveGeneratedOrder();
                     $statusText = $hasOrderForSelectedDate
                         ? 'Đã lên đơn '.\Carbon\Carbon::parse($selectedDraftDate)->format('d/m/Y')
                         : ($draft->status === 'error' ? 'Có lỗi' : 'Chưa lên ngày '.\Carbon\Carbon::parse($selectedDraftDate)->format('d/m/Y'));

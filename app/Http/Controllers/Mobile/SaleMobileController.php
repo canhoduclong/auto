@@ -175,7 +175,7 @@ class SaleMobileController extends Controller
                     'name' => trim(($variant->product?->name ? $variant->product->name . ' - ' : '') . ($variant->name ?: $variant->sku ?: ('SKU #' . $variant->id))),
                     'sku' => (string) ($variant->sku ?? ''),
                     'price' => (float) $variant->final_price,
-                    'kg' => (float) $variant->effective_kg,
+                    'kg' => (float) $variant->order_unit_weight,
                     'is_priced_by_kg' => (bool) $variant->effective_priced_by_kg,
                     'available_stock' => (int) $variant->available_stock,
                     'is_pinned' => (bool) ($variant->is_pinned ?? false),
@@ -245,7 +245,7 @@ class SaleMobileController extends Controller
                     throw new \RuntimeException('Không tìm thấy sản phẩm.');
                 }
                 $quantity = max(1, (int) $item['quantity']);
-                $unitWeight = max(0.01, (float) $variant->effective_kg);
+                $unitWeight = max(0.01, (float) $variant->order_unit_weight);
                 $isPricedByKg = (bool) $variant->effective_priced_by_kg;
                 $price = (float) $variant->final_price;
                 $lineTotal = $price * $quantity * ($isPricedByKg ? $unitWeight : 1);
