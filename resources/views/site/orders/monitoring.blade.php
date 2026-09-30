@@ -2158,8 +2158,8 @@
                             $zaloProductLines = $order->items
                                 ->groupBy(fn ($item) => (string) ($item->product_id ?: $item->display_name))
                                 ->values()
-                                ->pipe(function ($groups) use ($formatQuantity, $formatZaloSize) {
-                                    return $groups->flatMap(function ($items, $index) use ($groups, $formatQuantity, $formatZaloSize) {
+                                ->pipe(function ($groups) use ($formatQuantity, $formatZaloSize, $order) {
+                                    return $groups->flatMap(function ($items, $index) use ($groups, $formatQuantity, $formatZaloSize, $order) {
                                     $first = $items->first();
                                     $productName = $first->product?->name ?: $first->display_name ?: 'Sản phẩm';
                                     $sizes = $items->map(fn ($item) => $formatZaloSize($item->variant?->size ?? ''))->filter()->unique()->values();
@@ -2168,6 +2168,9 @@
                                         ($index + 1).'. '.$productName,
                                         $sizes->isNotEmpty() ? '- Size '.$sizes->implode(' - ') : null,
                                         '- Số Lượng: '.$formatQuantity($items->sum(fn ($item) => $item->packed_quantity ?? $item->quantity)),
+                                        '- Khối lượng: '.$formatQuantity($items->sum(fn ($item) => $item->effective_priced_by_kg
+                                            ? $item->displayValueForStage((string) $order->status)
+                                            : (float) ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight ?? 0))).' kg',
                                         $index < $groups->count() - 1 ? '' : null,
                                     ])->filter(fn ($line) => $line !== null);
                                     });
