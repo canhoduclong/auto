@@ -278,9 +278,9 @@
     .manager-quick-day.is-active { border-style: solid; border-color: #b9c9d8; background: #fff; color: #17376e; box-shadow: 0 1px 3px rgba(15, 23, 42, .08); }
     .manager-product-size-row td { color: #64748b; font-size: .66rem; background: #f8fafc; }
     .manager-product-summary { min-width: 0; }
-    .manager-product-block + .manager-product-block { margin-top: 22px; padding-top: 18px; border-top: 1px solid #dbe6e8; }
+    .manager-product-block + .manager-product-block { padding-top: 9px; border-top: 1px solid #dbe6e8; }
     .manager-product-heading { display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin:0 0 10px; color:#113f43; padding: 7px;}
-    .manager-product-heading strong { font-size:.9rem; }
+    .manager-product-heading strong {   }
     .manager-product-heading span { color:#148a89; font-size:.82rem; font-weight:800; white-space:nowrap; }
     .manager-product-table { width:100%; border-collapse:collapse; text-align:center; }
     .manager-product-table th { padding:8px; color:#064e52; background:#dff3f4; border-top:1px solid #77b9bc; border-bottom:1px solid #77b9bc; font-weight:800; }
@@ -301,7 +301,7 @@
     .tone-green { color: #15803d; } .tone-blue { color: #1261a6; } .tone-purple { color: #5835a5; }
     .tone-orange { color: #df7009; } .tone-teal { color: #08717b; } .tone-red { color: #cf2237; }
     .manager-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
-    .manager-panel { overflow: hidden; border: 1px solid var(--dashboard-border); border-radius: 8px; background: #fff; }
+    .manager-panel { overflow: hidden; border: 1px solid var(--dashboard-border);  background: #fff; }
     .manager-panel > h2 { margin: 0; padding: 7px 11px; background: var(--panel-color, #17376e); color: #fff; font-size: .82rem; font-weight: 800; text-transform: uppercase; }
     .panel-blue { --panel-color:#1463a5; } .panel-orange { --panel-color:#e36b08; } .panel-teal { --panel-color:#08717b; }
     .panel-red { --panel-color:#cf2237; } .panel-navy { --panel-color:#17376e; } .panel-purple { --panel-color:#55309b; }

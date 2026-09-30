@@ -32,3 +32,4 @@ readme.txt
 /tests/Feature/*
 !/tests/Feature/TransferWorkbenchTest.php
 !/tests/Feature/OrderEstimatedWeightTest.php
+*:Zone.Identifier
