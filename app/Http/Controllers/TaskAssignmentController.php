@@ -205,6 +205,7 @@ class TaskAssignmentController extends Controller
             'parent:id,code,title',
             'subTasks.creator:id,name',
             'subTasks.assignees.user:id,name',
+            'subTasks.statusLogs.changedBy:id,name',
             'approvalSteps.step',
             'approvalSteps.approver:id,name',
             'assignees.user:id,name',
@@ -227,6 +228,22 @@ class TaskAssignmentController extends Controller
         $subTaskAssignees = $this->allowedAssigneesFor($user);
 
         return view('task_assignments.show', compact('task', 'canAct', 'current', 'myAssignee', 'layout', 'indexRoute', 'showRoute', 'createRoute', 'subTaskAssignees'));
+    }
+
+    public function evaluateAssignee(Request $request, TaskAssignment $taskAssignment, TaskAssignee $assignee)
+    {
+        abort_unless((int) $taskAssignment->created_by === (int) $request->user()->id, 403, 'Chỉ người giao công việc được đánh giá.');
+        abort_unless((int) $assignee->task_id === (int) $taskAssignment->id, 404);
+        $data = $request->validate(['evaluation_score' => ['required', 'integer', 'between:0,100']]);
+        DB::transaction(function () use ($taskAssignment, $assignee, $request, $data) {
+            $task = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $task->created_by === (int) $request->user()->id, 403);
+            $record = TaskAssignee::whereKey($assignee->id)->where('task_id', $task->id)->lockForUpdate()->firstOrFail();
+            $previous = $record->evaluation_score;
+            $record->update(['evaluation_score' => $data['evaluation_score'], 'evaluated_by' => $request->user()->id, 'evaluated_at' => now()]);
+            TaskStatusLog::log($task, $task->status, $request->user(), 'Đánh giá '.($record->user?->name ?? '#'.$record->user_id).': '.($previous === null ? 'Chưa chấm' : $previous.'/100').' → '.$data['evaluation_score'].'/100.');
+        });
+        return back()->with('success', 'Đã lưu đánh giá thành viên.');
     }
 
     public function storeSubTask(Request $request, TaskAssignment $taskAssignment)
@@ -519,7 +536,7 @@ class TaskAssignmentController extends Controller
             $taskAssignment,
             $taskAssignment->status,
             auth()->user(),
-            $assigneeStatus === TaskAssignment::STATUS_PROCESSING ? 'Đã nhận việc' : 'Không thể thực hiện: '.($request->note ?: 'Không có ghi chú')
+            $assigneeStatus === TaskAssignment::STATUS_PROCESSING ? 'Đã nhận việc'.($request->note ? ': '.$request->note : '') : 'Không thể thực hiện: '.($request->note ?: 'Không có ghi chú')
         );
 
         // If ALL assignees are done, mark overall task completed

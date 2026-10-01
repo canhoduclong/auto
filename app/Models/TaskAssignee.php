@@ -13,10 +13,15 @@ class TaskAssignee extends Model
         'status',
         'note',
         'completed_at',
+        'evaluation_score',
+        'evaluated_by',
+        'evaluated_at',
     ];
 
     protected $casts = [
         'completed_at' => 'datetime',
+        'evaluation_score' => 'integer',
+        'evaluated_at' => 'datetime',
     ];
 
     public function task(): BelongsTo

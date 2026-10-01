@@ -45,3 +45,5 @@ readme.txt
 !/tests/Feature/SharedPackingQueueTest.php
 
 !/tests/Feature/RouteRecallTest.php
+
+!/tests/Feature/TaskEvaluationTest.php

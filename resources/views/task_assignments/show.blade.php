@@ -57,6 +57,7 @@
 
 <div class="content-body pb-4">
     @if(session('success'))<div class="alert alert-success alert-dismissible fade show">{{ session('success') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>@endif
+    @error('evaluation_score')<div class="alert alert-danger">{{ $message }}</div>@enderror
     @if(session('error'))<div class="alert alert-danger alert-dismissible fade show">{{ session('error') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>@endif
 
     <div class="row g-4">
@@ -141,23 +142,40 @@
                 <div class="card-header fw-semibold">Tiến độ công việc · {{ $task->code }}</div>
                 <div class="card-body timeline ms-3">
                     <div class="tl-item"><span class="tl-dot approved"></span><strong>{{ $task->title }}</strong><div class="small text-muted">Tạo {{ $task->created_at?->format('d/m/Y H:i') }} · Hạn: {{ $task->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</div></div>
-                    @foreach($task->subTasks->sortBy('due_date') as $sub)
-                    <div class="tl-item">
-                        <span class="tl-dot {{ $sub->status === 'done' ? 'approved' : 'pending' }}"></span>
-                        <div class="d-flex gap-2 align-items-start flex-wrap">
-                            <input type="checkbox" disabled @checked(in_array($sub->status, ['completed', 'done'], true)) aria-label="Đã báo hoàn thành {{ $sub->title }}">
-                            <div class="flex-grow-1"><a href="{{ route('tasks.show', $sub) }}" class="fw-semibold">{{ $sub->title }}</a>
-                                <div class="small text-muted">Người tạo / giao: {{ $sub->creator?->name ?? 'Không xác định' }}</div><div class="small text-muted">Người thực hiện: {{ $sub->assignees->map(fn ($assignment) => $assignment->user?->name)->filter()->join(', ') ?: 'Chưa có' }}</div>
-                                <div class="small {{ $sub->isOverdue() ? 'text-danger' : 'text-muted' }}">Hạn: {{ $sub->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</div>
-                                <span class="badge bg-{{ $sub->statusColor() }}">{{ \App\Models\TaskAssignment::STATUS_LABELS[$sub->status] ?? $sub->status }}</span>
-                                @if($sub->completion_content)<div class="small mt-2" style="white-space:pre-wrap">{{ $sub->completion_content }}</div>@endif
-                            </div>
-                            @if($sub->assignees->contains('user_id', auth()->id()) && in_array($sub->status, ['pending', 'processing', 'rejected'], true))
-                                <a class="btn btn-sm btn-outline-success" href="{{ route('tasks.complete-form', $sub) }}">Báo hoàn thành / tài liệu</a>
-                            @endif
-                        </div>
-                    </div>
-                    @endforeach
+                    @forelse($task->subTasks->sortBy('due_date')->groupBy('created_by') as $children)
+                        <section class="mb-4">
+                            <h6 class="text-muted mb-3">Người giao: {{ $children->first()->creator?->name ?? 'Không xác định' }}</h6>
+                            @foreach($children as $sub)
+                                <div class="tl-item ms-3" style="overflow-wrap:anywhere">
+                                    <span class="tl-dot {{ $sub->status === 'done' ? 'approved' : 'pending' }}"></span>
+                                    <div class="d-flex gap-2 align-items-start flex-wrap">
+                                        <span class="small text-muted">{{ $sub->assignees->map(fn ($assignment) => $assignment->user?->name)->filter()->join(', ') ?: 'Chưa giao' }}</span>
+                                        <a href="{{ route('tasks.show', $sub) }}" class="fw-semibold flex-grow-1">{{ $sub->title }}</a>
+                                        <span class="badge bg-{{ $sub->statusColor() }}">{{ \App\Models\TaskAssignment::STATUS_LABELS[$sub->status] ?? $sub->status }}</span>
+                                    </div>
+                                    <div class="small text-muted d-flex flex-wrap gap-3 mt-1">
+                                        <span>Tạo: {{ $sub->created_at?->format('d/m/Y') }}</span>
+                                        <span>Hạn: {{ $sub->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</span>
+                                        @if($sub->due_date && !in_array($sub->status, ['completed', 'done', 'cancelled'], true))
+                                            <span class="{{ $sub->isOverdue() ? 'text-danger' : 'text-muted' }}">{{ $sub->isOverdue() ? 'Quá hạn' : 'Còn hạn' }} · {{ $sub->due_date->diffForHumans() }}</span>
+                                        @endif
+                                    </div>
+                                    @foreach($sub->statusLogs->sortBy('created_at') as $activity)
+                                        <div class="small mt-1"><span class="text-muted">{{ $activity->created_at?->format('d/m/Y H:i') }} · {{ $activity->changedBy?->name ?? 'Hệ thống' }}</span> — {{ $activity->reason ?: (\App\Models\TaskAssignment::STATUS_LABELS[$activity->to_status] ?? $activity->to_status) }}</div>
+                                    @endforeach
+                                    @if($sub->completion_content)<div class="small mt-2" style="white-space:pre-wrap">{{ $sub->completion_content }}</div>@endif
+                                    @foreach($sub->assignees as $recipientAssignment)
+                                        @include('task_assignments.partials.evaluation', ['ratedTask' => $sub, 'ratedAssignment' => $recipientAssignment])
+                                    @endforeach
+                                    @if($sub->assignees->contains('user_id', auth()->id()) && in_array($sub->status, ['pending', 'processing', 'rejected'], true))
+                                        <a class="btn btn-sm btn-outline-success mt-2" href="{{ route('tasks.complete-form', $sub) }}">Báo hoàn thành / tài liệu</a>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </section>
+                    @empty
+                        <p class="small text-muted">Chưa có công việc con.</p>
+                    @endforelse
                     <div class="tl-item"><span class="tl-dot {{ $task->status === 'done' ? 'approved' : 'pending' }}"></span>{{ $task->status === 'done' ? 'Đã hoàn thành công việc chính' : 'Tổng hợp kết quả và xác nhận công việc chính' }}</div>
                 </div>
                 <div class="card-footer small text-muted">{{ $task->subTasks->whereIn('status', ['completed', 'done'])->count() }}/{{ $task->subTasks->count() }} việc con đã báo hoàn thành. Kết quả và tài liệu được lưu trong từng việc con.</div>
@@ -254,6 +272,7 @@
                                 <li class="list-group-item d-flex justify-content-between align-items-start py-2">
                                     <div>
                                         <div class="fw-semibold small">{{ $ta->user?->name }}</div>
+                                        @include('task_assignments.partials.evaluation', ['ratedTask' => $task, 'ratedAssignment' => $ta])
                                         @if($ta->note)
                                             <div class="text-muted" style="font-size:11px">{{ \Str::limit($ta->note, 50) }}</div>
                                         @endif
@@ -270,6 +289,40 @@
                     </div>
                 </div>
             @endif
+
+            @php
+                $secondaryMembers = $task->subTasks->sortBy('due_date')->flatMap(function ($child) {
+                    return $child->assignees->map(fn ($assignment) => ['task' => $child, 'assignment' => $assignment]);
+                })->groupBy(fn ($entry) => $entry['assignment']->user_id);
+                $secondaryStatusLabels = ['pending' => 'Chờ thực hiện', 'in_progress' => 'Đang thực hiện', 'processing' => 'Đang thực hiện', 'completed' => 'Đã báo hoàn thành', 'done' => 'Đã hoàn thành', 'rejected' => 'Không thể thực hiện'];
+            @endphp
+            <div class="card shadow-sm mb-3">
+                <div class="card-header py-2 fw-semibold small text-uppercase text-muted">
+                    <i class="ph-users-three me-1"></i>Thành viên nhận việc thứ cấp ({{ $secondaryMembers->count() }})
+                </div>
+                <div class="list-group list-group-flush">
+                    @forelse($secondaryMembers as $entries)
+                        <div class="list-group-item py-3">
+                            <div class="d-flex justify-content-between gap-2 mb-2">
+                                <strong class="small">{{ $entries->first()['assignment']->user?->name ?? 'Người dùng không còn tồn tại' }}</strong>
+                                <span class="badge bg-light text-dark">{{ $entries->count() }} việc con</span>
+                            </div>
+                            @foreach($entries as $entry)
+                                @php $child = $entry['task']; $assignment = $entry['assignment']; @endphp
+                                <div class="border-start ps-2 mt-2 small" style="overflow-wrap:anywhere">
+                                    <a href="{{ route('tasks.show', $child) }}" class="text-decoration-none fw-semibold">{{ $child->title }}</a>
+                                    <div class="text-muted">Người giao: {{ $child->creator?->name ?? 'Không xác định' }}</div>
+                                    <div class="{{ $child->isOverdue() && !$assignment->completed_at ? 'text-danger' : 'text-muted' }}">Hạn: {{ $child->due_date?->format('d/m/Y') ?? 'Chưa đặt' }}</div>
+                                    <span class="badge bg-{{ $child->status === 'cancelled' ? 'secondary' : $assignment->statusColor() }}">{{ $child->status === 'cancelled' ? 'Đã hủy' : ($secondaryStatusLabels[$assignment->status] ?? $assignment->status) }}</span>
+                                    @if($assignment->completed_at)<div class="text-success mt-1">Báo hoàn thành: {{ $assignment->completed_at->format('d/m/Y H:i') }}</div>@endif
+                                </div>
+                            @endforeach
+                        </div>
+                    @empty
+                        <div class="list-group-item small text-muted py-3">Chưa có thành viên được giao công việc con.</div>
+                    @endforelse
+                </div>
+            </div>
 
             {{-- Action card (for current workflow step actor) --}}
             @if($canAct && $current)
