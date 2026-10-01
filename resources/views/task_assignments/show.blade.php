@@ -132,39 +132,46 @@
                 </div>
             </div>
 
-            {{-- Sub-tasks --}}
-            @if($task->subTasks->isNotEmpty())
-                <div class="card shadow-sm mb-3">
-                    <div class="card-header py-2 fw-semibold small text-uppercase text-muted">
-                        <i class="ph-tree-structure me-1"></i>Cong viec con ({{ $task->subTasks->count() }})
+            <div class="card shadow-sm mb-3">
+                <div class="card-header fw-semibold">Tiến độ công việc · {{ $task->code }}</div>
+                <div class="card-body timeline ms-3">
+                    <div class="tl-item"><span class="tl-dot approved"></span><strong>{{ $task->title }}</strong><div class="small text-muted">Tạo {{ $task->created_at?->format('d/m/Y H:i') }} · Hạn: {{ $task->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</div></div>
+                    @foreach($task->subTasks->sortBy('due_date') as $sub)
+                    <div class="tl-item">
+                        <span class="tl-dot {{ $sub->status === 'done' ? 'approved' : 'pending' }}"></span>
+                        <div class="d-flex gap-2 align-items-start flex-wrap">
+                            <input type="checkbox" disabled @checked(in_array($sub->status, ['completed', 'done'], true)) aria-label="Đã báo hoàn thành {{ $sub->title }}">
+                            <div class="flex-grow-1"><a href="{{ route('tasks.show', $sub) }}" class="fw-semibold">{{ $sub->title }}</a>
+                                <div class="small {{ $sub->isOverdue() ? 'text-danger' : 'text-muted' }}">Hạn: {{ $sub->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</div>
+                                <span class="badge bg-{{ $sub->statusColor() }}">{{ \App\Models\TaskAssignment::STATUS_LABELS[$sub->status] ?? $sub->status }}</span>
+                                @if($sub->completion_content)<div class="small mt-2" style="white-space:pre-wrap">{{ $sub->completion_content }}</div>@endif
+                            </div>
+                            @if($sub->assignees->contains('user_id', auth()->id()) && in_array($sub->status, ['pending', 'processing', 'rejected'], true))
+                                <a class="btn btn-sm btn-outline-success" href="{{ route('tasks.complete-form', $sub) }}">Báo hoàn thành / tài liệu</a>
+                            @endif
+                        </div>
                     </div>
-                    <div class="card-body p-0">
-                        <ul class="list-group list-group-flush">
-                            @foreach($task->subTasks as $sub)
-                                <li class="list-group-item d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <a href="{{ route($showRoute ?? 'task-assignments.show', $sub) }}" class="fw-semibold text-decoration-none">
-                                            {{ $sub->title }}
-                                        </a>
-                                        <div class="small text-muted">{{ $sub->code }} &bull; {{ $sub->creator?->name }}</div>
-                                    </div>
-                                    <span class="badge bg-{{ $sub->statusColor() }}">
-                                        {{ \App\Models\TaskAssignment::STATUS_LABELS[$sub->status] ?? $sub->status }}
-                                    </span>
-                                </li>
-                            @endforeach
-                        </ul>
-                    </div>
+                    @endforeach
+                    <div class="tl-item"><span class="tl-dot {{ $task->status === 'done' ? 'approved' : 'pending' }}"></span>{{ $task->status === 'done' ? 'Đã hoàn thành công việc chính' : 'Tổng hợp kết quả và xác nhận công việc chính' }}</div>
                 </div>
+                <div class="card-footer small text-muted">{{ $task->subTasks->whereIn('status', ['completed', 'done'])->count() }}/{{ $task->subTasks->count() }} việc con đã báo hoàn thành. Kết quả và tài liệu được lưu trong từng việc con.</div>
+            </div>
+            @if(!in_array($task->status, ['done', 'cancelled'], true) && (auth()->user()->hasRole('admin') || (int) $task->created_by === (int) auth()->id() || $myAssignee))
+                <form class="card card-body shadow-sm" action="{{ route('tasks.subtasks.store', $task) }}" method="POST">
+                    @csrf
+                    <h6>Thêm công việc con</h6>
+                    <p class="small text-muted">Bạn là người thực hiện việc con này; dùng kết quả để bổ sung hồ sơ hoàn thành công việc chính.</p>
+                    @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
+                    <label class="form-label" for="child-title">Nội dung việc con</label>
+                    <input id="child-title" class="form-control mb-2" name="title" value="{{ old('title') }}" maxlength="255" required>
+                    <label class="form-label" for="child-due">Hạn hoàn thành</label>
+                    <input id="child-due" class="form-control mb-2" type="datetime-local" name="due_date" value="{{ old('due_date') }}" required>
+                    <label class="form-label" for="child-description">Mô tả / yêu cầu tài liệu</label>
+                    <textarea id="child-description" class="form-control mb-3" name="description" maxlength="5000">{{ old('description') }}</textarea>
+                    <button class="btn btn-primary align-self-start" type="submit">Thêm việc con</button>
+                </form>
             @endif
 
-            {{-- Create sub-task shortcut --}}
-            @if(in_array($task->status, [\App\Models\TaskAssignment::STATUS_PENDING, \App\Models\TaskAssignment::STATUS_IN_PROGRESS]))
-                <a href="{{ route($createRoute ?? 'task-assignments.create', ['parent_id' => $task->id]) }}"
-                   class="btn btn-sm btn-outline-primary">
-                    <i class="ph-plus me-1"></i>Tao cong viec con
-                </a>
-            @endif
         </div>
 
         {{-- ── RIGHT: approval chain + actions ── --}}

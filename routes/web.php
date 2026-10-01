@@ -907,6 +907,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('/tasks/awaiting-verification', [\App\Http\Controllers\TaskAssignmentController::class, 'awaitingVerification'])->name('tasks.awaiting-verification');
     Route::get('/tasks/verify', [\App\Http\Controllers\TaskAssignmentController::class, 'verifyList'])->name('tasks.verify');
     Route::get('/tasks/rejected', [\App\Http\Controllers\TaskAssignmentController::class, 'history'])->name('tasks.rejected');
+    Route::post('/tasks/{taskAssignment}/subtasks', [\App\Http\Controllers\TaskAssignmentController::class, 'storeSubTask'])->name('tasks.subtasks.store');
     Route::get('/tasks/{taskAssignment}', [\App\Http\Controllers\TaskAssignmentController::class, 'show'])->name('tasks.show');
     Route::post('/tasks/{taskAssignment}/complete', [\App\Http\Controllers\TaskAssignmentController::class, 'completeWithContent'])->name('tasks.complete');
     Route::get('/tasks/{taskAssignment}/complete', [\App\Http\Controllers\TaskAssignmentController::class, 'completeForm'])->name('tasks.complete-form');

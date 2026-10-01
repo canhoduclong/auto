@@ -204,6 +204,7 @@ class TaskAssignmentController extends Controller
             'workflow.steps',
             'parent:id,code,title',
             'subTasks.creator:id,name',
+            'subTasks.assignees',
             'approvalSteps.step',
             'approvalSteps.approver:id,name',
             'assignees.user:id,name',
@@ -224,6 +225,32 @@ class TaskAssignmentController extends Controller
         $createRoute = $isFrontRoles ? 'tasks.create' : 'task-assignments.create';
 
         return view('task_assignments.show', compact('task', 'canAct', 'current', 'myAssignee', 'layout', 'indexRoute', 'showRoute', 'createRoute'));
+    }
+
+    public function storeSubTask(Request $request, TaskAssignment $taskAssignment)
+    {
+        $user = $request->user();
+        abort_unless($this->canViewTask($taskAssignment, $user) && (
+            $user->hasRole('admin') || (int) $taskAssignment->created_by === (int) $user->id
+            || $taskAssignment->assignees()->where('user_id', $user->id)->exists()
+        ), 403);
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'description' => ['nullable', 'string', 'max:5000'],
+            'due_date' => ['required', 'date_format:Y-m-d\TH:i', 'after_or_equal:now'],
+        ]);
+        DB::transaction(function () use ($taskAssignment, $user, $data) {
+            $parent = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
+            abort_if(in_array($parent->status, [TaskAssignment::STATUS_DONE, TaskAssignment::STATUS_CANCELLED], true), 422, 'Công việc đã hoàn thành hoặc bị hủy.');
+            $child = TaskAssignment::create([
+                'code' => TaskAssignment::generateCode(), 'title' => $data['title'],
+                'description' => $data['description'] ?? null, 'priority' => $parent->priority,
+                'parent_id' => $parent->id, 'due_date' => Carbon::createFromFormat('Y-m-d\TH:i', $data['due_date']),
+                'created_by' => $user->id, 'status' => TaskAssignment::STATUS_PENDING,
+            ]);
+            TaskAssignee::create(['task_id' => $child->id, 'user_id' => $user->id, 'status' => 'pending']);
+        });
+        return redirect()->route('tasks.show', $taskAssignment)->with('success', 'Đã thêm công việc con và hạn hoàn thành.');
     }
 
     // ── Edit ──────────────────────────────────────────────────────────
@@ -903,6 +930,9 @@ class TaskAssignmentController extends Controller
         }
 
         return (int) $task->created_by === (int) $user->id
+            || ($task->parent_id && $task->parent()->where(function ($parent) use ($user) {
+                $parent->where('created_by', $user->id)->orWhereHas('assignees', fn ($assignees) => $assignees->where('user_id', $user->id));
+            })->exists())
             || $task->assignees()->where('user_id', $user->id)->exists()
             || $task->approvalSteps()->where('approved_by', $user->id)->exists()
             || $task->approvalSteps()->whereHas('step', fn ($query) => $query->whereIn('role_slug', $user->roles->pluck('name')))->exists();
