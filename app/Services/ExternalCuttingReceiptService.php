@@ -31,7 +31,7 @@ class ExternalCuttingReceiptService
     }
 
     // Caller holds the warehouse and order locks and owns the packing transaction.
-    public function receive(Order $order, ProductVariant $variant, Product $recipe, int $quantity, float $weight, int $warehouseId, int $userId): InventoryDocument
+    public function receive(Order $order, ProductVariant $variant, Product $recipe, int $quantity, float $weight, int $warehouseId, int $userId, ?string $businessDate = null): InventoryDocument
     {
         try {
             $rates = $recipe->cuttingPercentagesForTarget((int) $variant->product_id);
@@ -48,7 +48,7 @@ class ExternalCuttingReceiptService
             $components[] = ['variant_id' => $component->id, 'quantity' => $kg];
         }
         $document = InventoryDocument::create([
-            'type' => 'import', 'warehouse_id' => $warehouseId, 'document_date' => today()->toDateString(),
+            'type' => 'import', 'warehouse_id' => $warehouseId, 'document_date' => $businessDate ?? today()->toDateString(),
             'notes' => 'Đóng hàng bù từ bên ngoài cho đơn '.$order->code.'; '.$weight.' kg. Không xuất nguyên liệu.',
             'shipping_fee' => 0, 'user_id' => $userId,
         ]);
@@ -69,7 +69,7 @@ class ExternalCuttingReceiptService
             'note' => 'Nhập bù từ bên ngoài; định mức '.$recipe->name.' (#'.$recipe->id.'). Khối lượng nguyên liệu quy đổi, không trừ tồn.',
         ]);
         if ($components) {
-            app(ProductCuttingService::class)->appendDeferredComponentImportRequest($warehouseId, $components, $batch, $userId, $order->id);
+            app(ProductCuttingService::class)->appendDeferredComponentImportRequest($warehouseId, $components, $batch, $userId, $order->id, $businessDate);
         }
 
         return $document;

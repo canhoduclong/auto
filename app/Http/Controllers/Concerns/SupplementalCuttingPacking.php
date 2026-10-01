@@ -103,7 +103,7 @@ trait SupplementalCuttingPacking
                 if ($weight + 0.000001 < $item->required_packing_weight) {
                     throw ValidationException::withMessages(['lines' => 'Khối lượng nhập bù phải đủ kg theo bill của '.$item->product->name.'.']);
                 }
-                app(ExternalCuttingReceiptService::class)->receive($order, $variant, $recipe, $quantity, $weight, $warehouseId, (int) $request->user()->id);
+                app(ExternalCuttingReceiptService::class)->receive($order, $variant, $recipe, $quantity, $weight, $warehouseId, (int) $request->user()->id, $data['packing_date']);
                 OrderHistory::create(['order_id' => $order->id, 'action' => 'supplemental_cutting_packing', 'user_id' => $request->user()->id, 'role' => 'warehouse', 'status_before' => $order->status, 'status_after' => $order->status, 'note' => $item->product->name.': nhập bù bên ngoài '.$quantity.' sản phẩm, '.$weight.' kg; số lượng bill trước đóng '.$item->quantity.'; size xác nhận '.$variant->size.'.']);
                 $item->update(['quantity' => $quantity, 'packed_quantity' => $quantity, 'actual_weight' => $weight, 'packed_weight' => $weight]);
                 $item->packingSizeAllocations()->delete();

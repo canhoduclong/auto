@@ -25,6 +25,7 @@ class ExternalCuttingReceiptTest extends TestCase
         config(['database.default' => 'sqlite', 'database.connections.sqlite.database' => ':memory:', 'cache.default' => 'array', 'session.driver' => 'array']);
         DB::purge('sqlite');
         $tables = [
+            'google_sheet_inventory_syncs' => 'inventory_date',
             'products' => 'name,product_type,cutting_product_targets,cutting_percentage',
             'product_variants' => 'name,product_id,status,sort_order,stock',
             'orders' => 'code',
@@ -115,4 +116,25 @@ class ExternalCuttingReceiptTest extends TestCase
             self::assertSame(1, DB::table('inventories')->count());
         }
     }
+    public function test_previous_day_receipt_is_available_to_packing_snapshot_before_completion(): void
+    {
+        \Illuminate\Support\Carbon::setTestNow('2026-10-01 09:00:00');
+        try {
+            DB::transaction(function () {
+                $document = app(ExternalCuttingReceiptService::class)->receive(Order::findOrFail(1), ProductVariant::findOrFail(2), Product::findOrFail(1), 43, 87.5, 1, 1, '2026-09-30');
+                self::assertSame('2026-09-30', $document->document_date->toDateString());
+                self::assertSame('2026-10-01', $document->created_at->toDateString());
+                $controller = app(\App\Http\Controllers\WarehouseDashboardController::class);
+                $snapshot = new \ReflectionMethod($controller, 'getStockAtDate');
+                $stock = $snapshot->invoke($controller, collect([2]), 1, '2026-09-30');
+                self::assertSame(43.0, $stock[2]);
+                self::assertEquals(0.0, $snapshot->invoke($controller, collect([2]), 1, '2026-09-29')[2]);
+                self::assertStringStartsWith('2026-09-30', DB::table('cutting_component_import_requests')->value('request_date'));
+                self::assertSame(0, DB::table('inventory_documents')->where('type', 'export')->count());
+            });
+        } finally {
+            \Illuminate\Support\Carbon::setTestNow();
+        }
+    }
+
 }
