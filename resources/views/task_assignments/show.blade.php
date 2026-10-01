@@ -9,6 +9,24 @@
 .child-recipient-label:hover { border-color:#34d399; }
 .child-recipient-label:focus-visible { outline:2px solid #087f5b; outline-offset:2px; }
 
+.member-evaluation-row, .member-evaluation-heading { display:grid; grid-template-columns:minmax(0,1fr) 65px 85px; align-items:center; gap:6px; }
+.member-evaluation-row .evaluation-compact, .evaluation-compact .evaluation-picker { display:contents; }
+.evaluation-compact summary, .evaluation-compact .evaluation-readonly { grid-column:2; grid-row:1; text-align:center; }
+.member-evaluation-status { grid-column:3; grid-row:1; justify-self:end; }
+.member-evaluation-info { grid-column:1; grid-row:1; min-width:0; overflow-wrap:anywhere; }
+.evaluation-picker summary { cursor:pointer; list-style:none; color:#123550; }
+.evaluation-picker summary::-webkit-details-marker { display:none; }
+.evaluation-value { display:inline-block; padding:3px 8px; border:1px solid transparent; }
+.evaluation-picker[open] .evaluation-value { border-color:#c5cbd1; background:#fff; }
+.evaluation-options { margin:6px 0 0; }
+.evaluation-compact .evaluation-options { grid-column:1 / -1; grid-row:2; }
+.evaluation-nodes { display:flex; width:100%; max-width:380px; }
+.evaluation-node { flex:1; min-width:0; padding:4px 0; border:0; background:transparent; color:#64748b; font-size:11px; cursor:pointer; }
+.evaluation-node span { display:block; height:2px; background:#cbd5e1; margin-top:8px; position:relative; }
+.evaluation-node span::after { content:''; position:absolute; width:8px; height:8px; border-radius:50%; background:#cbd5e1; left:50%; top:50%; transform:translate(-50%,-50%); }
+.evaluation-node:hover, .evaluation-node.is-selected { color:#d96310; font-weight:700; }
+.evaluation-node:hover span::after, .evaluation-node.is-selected span::after { background:#f58220; width:12px; height:12px; }
+.evaluation-node:focus-visible, .evaluation-picker summary:focus-visible { outline:2px solid #087f5b; outline-offset:2px; }
 .timeline { position: relative; padding-left: 28px; }
 .timeline::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 2px; background: #e2e8f0; }
 .tl-item { position: relative; margin-bottom: 20px; }
@@ -264,15 +282,14 @@
             @if($task->assignees->isNotEmpty())
                 <div class="card shadow-sm mb-3">
                     <div class="card-header py-2 fw-semibold small text-uppercase text-muted">
-                        <i class="ph-users me-1"></i>Thanh vien nhan viec ({{ $task->assignees->count() }})
+                        <div class="member-evaluation-heading"><span>Thành viên nhận việc ({{ $task->assignees->count() }})</span><span class="text-center text-lowercase">Đánh giá</span><span></span></div>
                     </div>
                     <div class="card-body p-0">
                         <ul class="list-group list-group-flush">
                             @foreach($task->assignees as $ta)
-                                <li class="list-group-item d-flex justify-content-between align-items-start py-2">
-                                    <div>
+                                <li class="list-group-item member-evaluation-row py-2">
+                                    <div class="member-evaluation-info">
                                         <div class="fw-semibold small">{{ $ta->user?->name }}</div>
-                                        @include('task_assignments.partials.evaluation', ['ratedTask' => $task, 'ratedAssignment' => $ta])
                                         @if($ta->note)
                                             <div class="text-muted" style="font-size:11px">{{ \Str::limit($ta->note, 50) }}</div>
                                         @endif
@@ -282,7 +299,8 @@
                                             </div>
                                         @endif
                                     </div>
-                                    <span class="badge bg-{{ $ta->statusColor() }}">{{ $ta->status }}</span>
+                                    @include('task_assignments.partials.evaluation', ['ratedTask' => $task, 'ratedAssignment' => $ta, 'compactEvaluation' => true])
+                                    <span class="member-evaluation-status badge bg-{{ $ta->statusColor() }}">{{ $ta->status }}</span>
                                 </li>
                             @endforeach
                         </ul>
