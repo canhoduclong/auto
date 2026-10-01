@@ -241,7 +241,7 @@ class TaskAssignmentController extends Controller
             'assignee_ids.*' => ['required', 'integer', 'distinct', 'exists:users,id'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
-            'due_date' => ['required', 'date_format:Y-m-d\TH:i', 'after_or_equal:now'],
+            'due_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
         ]);
         $allowedIds = $this->allowedAssigneesFor($user)->pluck('id')->map(fn ($id) => (int) $id)->all();
         foreach ($data['assignee_ids'] as $id) {
@@ -255,7 +255,7 @@ class TaskAssignmentController extends Controller
             $child = TaskAssignment::create([
                 'code' => TaskAssignment::generateCode(), 'title' => $data['title'],
                 'description' => $data['description'] ?? null, 'priority' => $parent->priority,
-                'parent_id' => $parent->id, 'due_date' => Carbon::createFromFormat('Y-m-d\TH:i', $data['due_date']),
+                'parent_id' => $parent->id, 'due_date' => Carbon::createFromFormat('!Y-m-d', $data['due_date'])->endOfDay(),
                 'created_by' => $user->id, 'status' => TaskAssignment::STATUS_PENDING,
             ]);
             foreach ($data['assignee_ids'] as $id) {
