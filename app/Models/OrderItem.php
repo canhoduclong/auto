@@ -121,6 +121,13 @@ class OrderItem extends Model
         return $weight === null ? null : max(0, (float) $weight);
     }
 
+    public function getRequiredPackingWeightAttribute(): float
+    {
+        $weight = (float) $this->total_weight;
+
+        return round($weight > 0 ? $weight : (float) $this->quantity * $this->effective_unit_weight, 3);
+    }
+
     public function getDisplayTotalValueAttribute(): float
     {
         if ($this->effective_priced_by_kg && (float) $this->total_weight > 0) {

@@ -4197,7 +4197,7 @@ class WarehouseDashboardController extends Controller
                     if (! $isCutProduct && ! $order->allowsWarehouseQuantityChange((int) $item->product_id)) {
                         throw \Illuminate\Validation\ValidationException::withMessages(['item_packed_quantity' => 'Sale chưa cho phép cập nhật số lượng đóng thực tế.']);
                     }
-                    $requiredWeight = round((float) $item->quantity * (float) $item->effective_unit_weight, 3);
+                    $requiredWeight = $item->required_packing_weight;
                     if ($newWeight < $requiredWeight - 0.000001) {
                         throw \Illuminate\Validation\ValidationException::withMessages(['item_actual_weight' => 'Hàng pha lóc phải đủ '.$requiredWeight.' kg theo bill khi cập nhật số lượng đóng thực tế.']);
                     }

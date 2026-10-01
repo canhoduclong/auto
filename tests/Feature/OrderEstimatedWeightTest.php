@@ -71,4 +71,14 @@ class OrderEstimatedWeightTest extends TestCase
         self::assertTrue($item->effective_priced_by_kg);
     }
 
+    public function test_packing_uses_bill_weight_instead_of_recalculating_size_times_quantity(): void
+    {
+        $item = new OrderItem(['quantity' => 43, 'unit_weight' => 2.2, 'total_weight' => 87.5]);
+        self::assertSame(87.5, $item->required_packing_weight);
+        $item->actual_weight = 90;
+        self::assertSame(87.5, $item->required_packing_weight);
+        $item->total_weight = null;
+        self::assertSame(94.6, $item->required_packing_weight);
+    }
+
 }

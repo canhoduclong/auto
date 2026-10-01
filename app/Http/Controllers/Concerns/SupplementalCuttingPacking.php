@@ -78,7 +78,6 @@ trait SupplementalCuttingPacking
             'lines.*.quantity' => ['required', 'integer', 'min:1', 'max:100000'],
             'lines.*.weight' => ['required', 'numeric', 'min:0.001', 'max:1000000'],
             'lines.*.variant_id' => ['nullable', 'integer'], 'lines.*.recipe_id' => ['nullable', 'integer'],
-            'lines.*.confirmed' => ['nullable', 'accepted'],
         ]);
         DB::transaction(function () use ($request, $order, $data) {
             $warehouseId = (int) ($request->user()->warehouse_id ?: $order->warehouse_id);
@@ -95,13 +94,13 @@ trait SupplementalCuttingPacking
                 $line = $context['lines'][$id] ?? null;
                 $variant = $line ? $line['variants']->firstWhere('id', $row['variant_id'] ?? 0) : null;
                 $recipe = $line ? $line['recipes']->firstWhere('id', $row['recipe_id'] ?? 0) : null;
-                if (! $variant || ! $recipe || empty($row['confirmed'])) {
-                    throw ValidationException::withMessages(['lines' => 'Vui lòng xác nhận size được phép và định mức pha lóc cho từng sản phẩm nhập bù.']);
+                if (! $variant || ! $recipe) {
+                    throw ValidationException::withMessages(['lines' => 'Vui lòng chọn size được phép và định mức pha lóc cho từng sản phẩm nhập bù.']);
                 }
                 $item = $line['item'];
                 $weight = round((float) $row['weight'], 3);
                 $quantity = (int) $row['quantity'];
-                if ($weight + 0.000001 < round($item->quantity * $item->effective_unit_weight, 3)) {
+                if ($weight + 0.000001 < $item->required_packing_weight) {
                     throw ValidationException::withMessages(['lines' => 'Khối lượng nhập bù phải đủ kg theo bill của '.$item->product->name.'.']);
                 }
                 app(ExternalCuttingReceiptService::class)->receive($order, $variant, $recipe, $quantity, $weight, $warehouseId, (int) $request->user()->id);

@@ -20,8 +20,8 @@ $imagePath = $item->variant?->avatar?->media?->file_path ?? $item->product?->ava
 <td><label class="fw-bold"><input class="line-enabled" type="checkbox" name="lines[{{ $id }}][enabled]" value="1" checked> {{ $item->product->name }}</label><small class="d-block text-muted">{{ $item->variant?->sku }}</small>
 <select aria-label="Định mức pha lóc" class="form-select form-select-sm line-recipe mt-1" name="lines[{{ $id }}][recipe_id]">@foreach($line['recipes'] as $recipe)<option value="{{ $recipe->id }}">{{ $recipe->name }}</option>@endforeach</select></td>
 <td><div class="measure"><input aria-label="Số lượng đóng" class="form-control form-control-sm line-quantity" name="lines[{{ $id }}][quantity]" type="number" min="1" max="100000" step="1" required value="{{ $item->packed_quantity ?? $item->quantity }}"><button class="btn btn-primary btn-sm save-line" type="button">Lưu</button></div></td>
-<td><div class="measure"><input aria-label="Khối lượng kg" class="form-control form-control-sm line-weight" name="lines[{{ $id }}][weight]" type="number" min="0.001" max="1000000" step="0.001" required value="{{ $item->packed_weight ?? round($item->quantity * $item->effective_unit_weight, 3) }}"><button class="btn btn-primary btn-sm save-line" type="button">Lưu</button></div></td>
-<td><select aria-label="Size xác nhận" class="form-select form-select-sm line-variant" name="lines[{{ $id }}][variant_id]">@foreach($line['variants'] as $variant)<option value="{{ $variant->id }}" data-size="{{ $variant->order_unit_weight }}">{{ $variant->size }}</option>@endforeach</select><small class="average d-block mt-1"></small><label class="d-block mt-1"><input type="checkbox" class="line-confirmed" name="lines[{{ $id }}][confirmed]" value="1"> Xác nhận size</label></td>
+<td><div class="measure"><input aria-label="Khối lượng kg" class="form-control form-control-sm line-weight" name="lines[{{ $id }}][weight]" type="number" min="0.001" max="1000000" step="0.001" required value="{{ $item->packed_weight ?? $item->required_packing_weight }}"><button class="btn btn-primary btn-sm save-line" type="button">Lưu</button></div></td>
+<td><select aria-label="Size xác nhận" class="form-select form-select-sm line-variant" name="lines[{{ $id }}][variant_id]">@foreach($line['variants'] as $variant)<option value="{{ $variant->id }}" data-size="{{ $variant->order_unit_weight }}">{{ $variant->size }}</option>@endforeach</select><small class="average d-block mt-1"></small></td>
 <td class="line-total text-nowrap">—</td>
 </tr>
 @endforeach
@@ -56,9 +56,9 @@ function renderPreview() {
     components.forEach((kg,name)=>add(name, Math.round(kg*1000)/1000, 'Kg', Math.round(kg*1000)/1000, true));
 }
 rows.forEach(row=>{
-    const quantity=row.querySelector('.line-quantity'), weight=row.querySelector('.line-weight'), variant=row.querySelector('.line-variant'), confirmed=row.querySelector('.line-confirmed'), recipe=row.querySelector('.line-recipe');
+    const quantity=row.querySelector('.line-quantity'), weight=row.querySelector('.line-weight'), variant=row.querySelector('.line-variant'), recipe=row.querySelector('.line-recipe');
     function dirty(suggest) {
-        confirmed.checked=false; states.delete(row);
+        states.delete(row);
         row.querySelectorAll('.save-line').forEach(button=>button.textContent='Lưu');
         const average=Number(weight.value)/Number(quantity.value);
         if(suggest && Number.isFinite(average)) {
@@ -80,7 +80,7 @@ rows.forEach(row=>{
 document.getElementById('supplement-form').addEventListener('submit',async function(event){
     event.preventDefault(); const error=document.getElementById('supplement-errors');error.hidden=true;
     const selected=rows.filter(row=>row.querySelector('.line-enabled').checked);
-    if(!selected.length || selected.some(row=>!states.has(row)||!row.querySelector('.line-confirmed').checked)){error.textContent='Vui lòng Lưu số liệu và xác nhận size cho từng sản phẩm nhập bù.';error.hidden=false;error.scrollIntoView();return;}
+    if(!selected.length || selected.some(row=>!states.has(row))){error.textContent='Vui lòng Lưu số liệu cho từng sản phẩm nhập bù.';error.hidden=false;error.scrollIntoView();return;}
     const button=this.querySelector('[type=submit]');button.disabled=true;
     try {
         const response=await fetch(this.action,{method:'POST',headers:{Accept:'application/json'},body:new FormData(this)});
