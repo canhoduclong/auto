@@ -4,6 +4,11 @@
 
 @push('styles')
 <style>
+.child-recipient-label { padding:6px 10px; border:1px solid #d9e2ec; border-radius:5px; background:#fff; color:#526b82; font-size:12px; font-weight:600; }
+.child-recipient-label[aria-pressed="true"] { border-color:#34d399; background:#ecfdf5; color:#087f5b; }
+.child-recipient-label:hover { border-color:#34d399; }
+.child-recipient-label:focus-visible { outline:2px solid #087f5b; outline-offset:2px; }
+
 .timeline { position: relative; padding-left: 28px; }
 .timeline::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 2px; background: #e2e8f0; }
 .tl-item { position: relative; margin-bottom: 20px; }
@@ -175,17 +180,18 @@
                     </div>
                     <p class="small text-muted">Chọn người thực hiện việc con; kết quả được dùng để bổ sung hồ sơ hoàn thành công việc chính.</p>
                     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
-                    <div class="mb-3" id="child-recipients">
-                        <label class="form-label" for="child-recipient-picker">Giao cho <span class="text-danger">*</span></label>
-                        <div class="d-flex flex-wrap gap-2 mb-2" data-recipient-tags></div>
-                        <select id="child-recipient-picker" class="form-select" aria-label="Chọn thêm người nhận">
-                            <option value="">Bấm chọn người nhận…</option>
+                    <fieldset class="mb-3" id="child-recipients">
+                        <legend class="form-label fs-6">Giao cho <span class="text-danger">*</span></legend>
+                        <div class="d-flex flex-wrap gap-2">
                             @foreach($subTaskAssignees as $recipient)
-                                <option value="{{ $recipient->id }}" data-selected="{{ in_array((string) $recipient->id, array_map('strval', (array) old('assignee_ids', [])), true) ? '1' : '0' }}">{{ $recipient->name }}</option>
+                                @php $selectedRecipient = in_array((string) $recipient->id, array_map('strval', (array) old('assignee_ids', [])), true); @endphp
+                                <button type="button" class="child-recipient-label" data-recipient-id="{{ $recipient->id }}" aria-pressed="{{ $selectedRecipient ? 'true' : 'false' }}">{{ $recipient->name }}</button>
                             @endforeach
-                        </select>
-                        <small class="text-muted">Có thể chọn nhiều người. Bấm × để bỏ người đã chọn.</small>
-                    </div>
+                        </div>
+                        <div data-recipient-inputs></div>
+                        <small class="text-muted d-block mt-2">Bấm tên để chọn nhiều người; bấm lại để bỏ chọn.</small>
+                        <div class="text-danger small mt-1" data-recipient-error role="alert" hidden>Vui lòng chọn ít nhất một người nhận việc.</div>
+                    </fieldset>
                     @if($subTaskAssignees->isEmpty())<div class="alert alert-warning">Chưa có người nhận được phép. Vui lòng nhờ admin cấu hình quyền giao việc.</div>@endif
                     <label class="form-label" for="child-title">Nội dung việc con</label>
                     <input id="child-title" class="form-control mb-2" name="title" value="{{ old('title') }}" maxlength="255" required>
@@ -378,24 +384,28 @@
 (() => {
     const root = document.getElementById('child-recipients');
     if (!root) return;
-    const picker = root.querySelector('select'), tags = root.querySelector('[data-recipient-tags]');
-    const selected = new Map();
-    function render() {
-        tags.replaceChildren();
-        selected.forEach((name, id) => {
-            const tag = document.createElement('span'); tag.className = 'badge bg-primary d-inline-flex align-items-center gap-2 p-2';
-            const label = document.createElement('span'); label.textContent = name;
-            const input = document.createElement('input'); input.type = 'hidden'; input.name = 'assignee_ids[]'; input.value = id;
-            const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'btn-close btn-close-white'; remove.setAttribute('aria-label', 'Bỏ ' + name);
-            remove.addEventListener('click', () => { selected.delete(id); render(); });
-            tag.append(label, input, remove); tags.append(tag);
+    const buttons = Array.from(root.querySelectorAll('[data-recipient-id]'));
+    const inputs = root.querySelector('[data-recipient-inputs]');
+    const error = root.querySelector('[data-recipient-error]');
+    function sync() {
+        inputs.replaceChildren();
+        buttons.filter(button => button.getAttribute('aria-pressed') === 'true').forEach(button => {
+            const input = document.createElement('input');
+            input.type = 'hidden'; input.name = 'assignee_ids[]'; input.value = button.dataset.recipientId;
+            inputs.append(input);
         });
-        Array.from(picker.options).forEach(option => { if (option.value) option.hidden = option.disabled = selected.has(option.value); });
-        picker.value = ''; picker.required = selected.size === 0;
+        if (inputs.children.length) error.hidden = true;
     }
-    Array.from(picker.options).filter(option => option.dataset.selected === '1').forEach(option => selected.set(option.value, option.textContent));
-    picker.addEventListener('change', () => { if (picker.value) selected.set(picker.value, picker.selectedOptions[0].textContent); render(); });
-    render();
+    buttons.forEach(button => button.addEventListener('click', () => {
+        button.setAttribute('aria-pressed', button.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+        sync();
+    }));
+    root.closest('form').addEventListener('submit', event => {
+        if (!inputs.children.length) {
+            event.preventDefault(); error.hidden = false; buttons[0]?.focus();
+        }
+    });
+    sync();
 })();
 </script>
 @endpush
