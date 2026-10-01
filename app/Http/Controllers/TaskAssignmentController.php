@@ -237,13 +237,17 @@ class TaskAssignmentController extends Controller
             || $taskAssignment->assignees()->where('user_id', $user->id)->exists()
         ), 403);
         $data = $request->validate([
-            'assignee_id' => ['required', 'integer', 'exists:users,id'],
+            'assignee_ids' => ['required', 'array', 'min:1'],
+            'assignee_ids.*' => ['required', 'integer', 'distinct', 'exists:users,id'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
             'due_date' => ['required', 'date_format:Y-m-d\TH:i', 'after_or_equal:now'],
         ]);
-        if (! $this->allowedAssigneesFor($user)->contains(fn ($assignee) => (int) $assignee->id === (int) $data['assignee_id'])) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['assignee_id' => 'Người nhận không thuộc danh sách bạn được phép giao việc.']);
+        $allowedIds = $this->allowedAssigneesFor($user)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        foreach ($data['assignee_ids'] as $id) {
+            if (! in_array((int) $id, $allowedIds, true)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['assignee_ids' => 'Có người nhận bị ẩn hoặc bạn không được phép giao việc. Vui lòng tải lại danh sách.']);
+            }
         }
         DB::transaction(function () use ($taskAssignment, $user, $data) {
             $parent = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
@@ -254,7 +258,9 @@ class TaskAssignmentController extends Controller
                 'parent_id' => $parent->id, 'due_date' => Carbon::createFromFormat('Y-m-d\TH:i', $data['due_date']),
                 'created_by' => $user->id, 'status' => TaskAssignment::STATUS_PENDING,
             ]);
-            TaskAssignee::create(['task_id' => $child->id, 'user_id' => (int) $data['assignee_id'], 'status' => 'pending']);
+            foreach ($data['assignee_ids'] as $id) {
+                TaskAssignee::create(['task_id' => $child->id, 'user_id' => (int) $id, 'status' => 'pending']);
+            }
         });
         return redirect()->route('tasks.show', $taskAssignment)->with('success', 'Đã thêm công việc con và hạn hoàn thành.');
     }
@@ -917,7 +923,7 @@ class TaskAssignmentController extends Controller
             || $user->hasRole('CEO')
             || $user->hasRole('manager');
 
-        if ($isPrivileged || (TaskMenuService::canAssignTasks($user) && $delegated->isEmpty())) {
+        if ($isPrivileged || (TaskMenuService::canAssignTasks($user) && ! TaskDelegateConfig::where('assigner_id', $user->id)->exists())) {
             return User::query()
                 ->whereKeyNot($user->id)
                 ->whereNotIn('id', User::hiddenTaskAssigneeIds())

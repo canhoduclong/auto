@@ -93,8 +93,9 @@ class User extends Authenticatable
     // có một vai trò (hỗ trợ string hoặc array)
     public static function hiddenTaskAssigneeIds(): array
     {
-        return Setting::query()->where('key', 'like', 'task_assignee_hidden_%')->where('value', '1')
-            ->pluck('key')->map(fn ($key) => (int) substr($key, strlen('task_assignee_hidden_')))->filter()->values()->all();
+        return Setting::query()->where('key', 'like', 'task_assignee_hidden_%')
+            ->get(['key', 'value'])->filter(fn ($setting) => preg_match('/^task_assignee_hidden_[0-9]+$/D', $setting->key) && in_array(strtolower(trim((string) $setting->value)), ['1', 'true', 'on', 'yes'], true))
+            ->map(fn ($setting) => (int) substr($setting->key, strlen('task_assignee_hidden_')))->filter()->values()->all();
     }
 
     public function hasRole($role)

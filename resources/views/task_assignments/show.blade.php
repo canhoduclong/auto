@@ -175,13 +175,18 @@
                     </div>
                     <p class="small text-muted">Chọn người thực hiện việc con; kết quả được dùng để bổ sung hồ sơ hoàn thành công việc chính.</p>
                     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
-                    <label class="form-label" for="child-assignee">Giao cho <span class="text-danger">*</span></label>
-                    <select id="child-assignee" name="assignee_id" class="form-select mb-3" required>
-                        <option value="">Chọn người nhận việc</option>
-                        @foreach($subTaskAssignees as $recipient)
-                            <option value="{{ $recipient->id }}" @selected((string) old('assignee_id') === (string) $recipient->id)>{{ $recipient->name }}</option>
-                        @endforeach
-                    </select>
+                    <fieldset class="mb-3">
+                        <legend class="form-label fs-6">Giao cho <span class="text-danger">*</span></legend>
+                        <div class="small text-muted mb-2">Tích chọn một hoặc nhiều người cùng thực hiện.</div>
+                        <div class="border rounded p-2" style="max-height:240px;overflow:auto">
+                            @foreach($subTaskAssignees as $recipient)
+                                <label class="d-flex align-items-center gap-2 p-2 border-bottom">
+                                    <input type="checkbox" name="assignee_ids[]" value="{{ $recipient->id }}" @checked(in_array((string) $recipient->id, array_map('strval', (array) old('assignee_ids', [])), true))>
+                                    <span>{{ $recipient->name }}</span>
+                                </label>
+                            @endforeach
+                        </div>
+                    </fieldset>
                     @if($subTaskAssignees->isEmpty())<div class="alert alert-warning">Chưa có người nhận được phép. Vui lòng nhờ admin cấu hình quyền giao việc.</div>@endif
                     <label class="form-label" for="child-title">Nội dung việc con</label>
                     <input id="child-title" class="form-control mb-2" name="title" value="{{ old('title') }}" maxlength="255" required>
