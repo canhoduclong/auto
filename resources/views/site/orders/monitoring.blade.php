@@ -2162,15 +2162,16 @@
                                     return $groups->flatMap(function ($items, $index) use ($groups, $formatQuantity, $formatZaloSize, $order) {
                                     $first = $items->first();
                                     $productName = $first->product?->name ?: $first->display_name ?: 'Sản phẩm';
+                                    $kgItems = $items->filter(fn ($item) => (bool) $item->effective_priced_by_kg);
                                     $sizes = $items->map(fn ($item) => $formatZaloSize($item->variant?->size ?? ''))->filter()->unique()->values();
 
                                     return collect([
                                         ($index + 1).'. '.$productName,
                                         $sizes->isNotEmpty() ? '- Size '.$sizes->implode(' - ') : null,
                                         '- Số Lượng: '.$formatQuantity($items->sum(fn ($item) => $item->packed_quantity ?? $item->quantity)),
-                                        '- Khối lượng: '.$formatQuantity($items->sum(fn ($item) => $item->effective_priced_by_kg
-                                            ? $item->displayValueForStage((string) $order->status)
-                                            : (float) ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight ?? 0))).' kg',
+                                        $kgItems->isNotEmpty()
+                                            ? '- Khối lượng: '.$formatQuantity($kgItems->sum(fn ($item) => $item->displayValueForStage((string) $order->status))).' kg'
+                                            : null,
                                         $index < $groups->count() - 1 ? '' : null,
                                     ])->filter(fn ($line) => $line !== null);
                                     });
