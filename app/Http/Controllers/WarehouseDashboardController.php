@@ -997,10 +997,7 @@ class WarehouseDashboardController extends Controller
 
         $status = $request->input('status');
         $today = Carbon::today();
-        $startDate = $today->copy()->subDays(6)->toDateString();
 
-        $packingDateSql = 'CASE WHEN accounting_sales_import_batch_id IS NOT NULL '
-            .'THEN DATE(delivery_date) ELSE DATE(created_at) END';
         $dailyCountsQuery = Order::query()
             ->whereIn('status', self::PACKING_PAGE_STATUSES)
             ->whereNull('trash_at')

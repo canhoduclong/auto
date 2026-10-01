@@ -33,14 +33,30 @@ class SharedPackingQueueTest extends TestCase
     {
         DB::disconnect('sqlite'); $this->app->flush(); restore_error_handler(); restore_exception_handler(); parent::tearDown();
     }
-    public function test_unassigned_backlog_visible_in_both_warehouses_but_not_cancelled_packed_or_future(): void
+    private function queue(int $warehouse, string $date)
     {
-        foreach ([1,2] as $warehouse) {
-            $ids=Order::query()->forPackingDate('2026-10-01')->where(fn($q)=>$q->where('warehouse_id',$warehouse)->orWhereNull('warehouse_id')->orWhere('warehouse_id',0))->pluck('id')->all();
-            self::assertSame([1,2],$ids);
+        return Order::query()->forPackingDate($date)->whereIn('status', ['approved', 'ready_to_pack', 'packing'])
+            ->where(fn ($q) => $q->where('warehouse_id', $warehouse)->orWhereNull('warehouse_id')->orWhere('warehouse_id', 0));
+    }
+
+    public function test_shared_orders_stay_on_original_day_for_all_warehouses(): void
+    {
+        self::assertSame([1, 2, 3], $this->queue(1, '2026-09-30')->pluck('id')->all());
+        self::assertSame([1, 2, 4], $this->queue(2, '2026-09-30')->pluck('id')->all());
+        foreach ([1, 2] as $warehouse) {
+            self::assertSame(0, $this->queue($warehouse, '2026-10-01')->count());
+            self::assertSame(0, $this->queue($warehouse, '2026-09-29')->count());
         }
-        DB::table('orders')->where('id',1)->update(['warehouse_id'=>1]);
-        self::assertSame([2],Order::query()->forPackingDate('2026-10-01')->pluck('id')->all());
-        self::assertSame(0,Order::query()->forPackingDate('2026-09-29')->count());
+        DB::table('orders')->where('id', 1)->update(['warehouse_id' => 1, 'status' => 'packing']);
+        self::assertSame([1, 2, 3], $this->queue(1, '2026-09-30')->pluck('id')->all());
+        self::assertSame([2, 4], $this->queue(2, '2026-09-30')->pluck('id')->all());
+        self::assertSame(0, $this->queue(1, '2026-10-01')->count());
+    }
+
+    public function test_accounting_import_keeps_its_business_date(): void
+    {
+        DB::table('orders')->insert(['warehouse_id' => null, 'status' => 'approved', 'created_at' => '2026-10-01 08:00:00', 'delivery_date' => '2026-09-30', 'accounting_sales_import_batch_id' => 1]);
+        self::assertSame(4, $this->queue(1, '2026-09-30')->count());
+        self::assertSame(0, $this->queue(1, '2026-10-01')->count());
     }
 }
