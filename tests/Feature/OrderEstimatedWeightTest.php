@@ -52,4 +52,23 @@ class OrderEstimatedWeightTest extends TestCase
         self::assertSame(405.0, $item->displayValueForStage('packed'));
         self::assertSame(404.0, $item->displayValueForStage('delivered'));
     }
+    public function test_piece_units_ignore_legacy_kg_flag_and_price_by_count(): void
+    {
+        foreach (['cai', 'cái', 'bo', 'banh'] as $unit) {
+            $item = new OrderItem(['quantity' => 3, 'unit_weight' => 2, 'total_weight' => 6, 'is_priced_by_kg' => true]);
+            $item->setRelation('product', new \App\Models\Product(['unit' => $unit]));
+            self::assertFalse($item->effective_priced_by_kg);
+            self::assertSame(3.0, $item->display_total_value);
+        }
+    }
+
+    public function test_explicit_quantity_pricing_and_kg_pricing_remain_distinct(): void
+    {
+        $item = new OrderItem(['is_priced_by_kg' => false]);
+        $item->setRelation('product', new \App\Models\Product(['unit' => 'con']));
+        self::assertFalse($item->effective_priced_by_kg);
+        $item->is_priced_by_kg = true;
+        self::assertTrue($item->effective_priced_by_kg);
+    }
+
 }

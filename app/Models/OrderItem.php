@@ -63,6 +63,14 @@ class OrderItem extends Model
 
     public function getEffectivePricedByKgAttribute(): bool
     {
+        // Discrete-unit legacy rows can carry the old kg=true default.
+        $product = ($this->relationLoaded('product') || $this->product_id) ? $this->product : null;
+        $variant = ($this->relationLoaded('variant') || $this->product_variant_id) ? $this->variant : null;
+        $unit = mb_strtolower(trim((string) ($product?->unit ?? $variant?->product?->unit ?? '')));
+        if (in_array($unit, ['cai', 'cái', 'bo', 'bộ', 'banh', 'bánh'], true)) {
+            return false;
+        }
+
         if ($this->is_priced_by_kg !== null) {
             return (bool) $this->is_priced_by_kg;
         }

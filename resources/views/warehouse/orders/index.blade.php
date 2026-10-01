@@ -1143,6 +1143,7 @@
     };
     $fifoRemainingStock = $fifoRemainingStock ?? [];
     $statusMeta = [
+        'overdue_delivery' => ['label' => 'Giao trễ', 'class' => 'bg-danger'],
         'approved' => ['label' => 'Chờ đóng gói', 'class' => 'bg-primary'],
         'ready_to_pack' => ['label' => 'Chờ đóng gói', 'class' => 'bg-primary'],
         'packing' => ['label' => 'Đang đóng', 'class' => 'bg-warning text-dark'],
@@ -1269,6 +1270,7 @@
                         <option value="">Tất cả trạng thái</option>
                         <option value="approved" {{ ($status ?? '') === 'approved' ? 'selected' : '' }}>Đã duyệt</option>
                         <option value="ready_to_pack" {{ ($status ?? '') === 'ready_to_pack' ? 'selected' : '' }}>Chờ đóng gói</option>
+                        <option value="overdue_delivery" {{ ($status ?? '') === 'overdue_delivery' ? 'selected' : '' }}>Giao trễ</option>
                         <option value="packing" {{ ($status ?? '') === 'packing' ? 'selected' : '' }}>Đang đóng gói</option>
                         <option value="packed" {{ ($status ?? '') === 'packed' ? 'selected' : '' }}>Đã đóng gói</option>
                         <option value="packed_waiting_pickup" {{ ($status ?? '') === 'packed_waiting_pickup' ? 'selected' : '' }}>Chờ shipper nhận</option>

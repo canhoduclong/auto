@@ -26,11 +26,10 @@
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
 @if(session('error'))<div class="alert alert-danger">{{ session('error') }}</div>@endif
 @if($errors->any())<div class="alert alert-danger" role="alert"><strong>Chưa tạo điều chuyển.</strong><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
-<form method="get" class="tw-panel" id="tw-filters">
-<div class="tw-toolbar"><label>Ngày nghiệp vụ<input class="form-control" name="date" type="date" value="{{ $businessDate }}" required></label><label>Trạng thái đơn<select name="status" class="form-select"><option value="">Tất cả trạng thái</option>@foreach(['ready_to_ship'=>'Sẵn sàng giao','packed'=>'Đã đóng gói','packed_waiting_pickup'=>'Chờ lấy hàng'] as $value=>$label)<option value="{{ $value }}" @selected($status===$value)>{{ $label }}</option>@endforeach</select></label><button class="btn btn-primary align-self-end">Lọc</button></div>
-<div class="tw-days" aria-label="Chọn nhanh ngày nghiệp vụ">@foreach($quickDays as $day)<a @class(['active'=>$businessDate===$day['date']]) href="{{ route('warehouse.inventory-transfers.index', ['date'=>$day['date'],'status'=>$status]) }}">{{ $day['label'] }} <b>{{ $day['count'] }}</b></a>@endforeach</div>
-<div class="tw-help mt-2">Đơn theo ngày lên đơn, ngày nhập lịch sử hoặc ngày hoàn tất đóng gói. Phiếu tổng bên dưới theo ngày nghiệp vụ.</div>
-</form>
+<div class="tw-panel" id="tw-filters">
+<div class="tw-days" aria-label="Chọn nhanh ngày nghiệp vụ">@foreach($quickDays as $day)<a @class(['active'=>$businessDate===$day['date']]) href="{{ route('warehouse.inventory-transfers.index', ['date'=>$day['date']]) }}">{{ $day['label'] }} <b>{{ $day['count'] }}</b></a>@endforeach</div>
+<div class="tw-help mt-2">Đơn thuộc ngày lên đơn gốc; đơn nhập lịch sử theo ngày nghiệp vụ. Đóng hàng sang ngày mới không đổi ngày của đơn.</div>
+</div>
 <form action="{{ route('warehouse.inventory-transfers.batch') }}" method="post" id="tw-submit-form">
 @csrf
 <input type="hidden" name="submission_token" value="{{ old('submission_token', (string) \Illuminate\Support\Str::uuid()) }}">

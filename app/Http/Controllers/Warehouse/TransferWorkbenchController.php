@@ -21,23 +21,16 @@ class TransferWorkbenchController extends Controller
     {
         $data = $request->validate([
             'date' => ['nullable', 'date_format:Y-m-d'],
-            'status' => ['nullable', Rule::in(['ready_to_ship', 'packed', 'packed_waiting_pickup'])],
         ]);
         $businessDate = $data['date'] ?? now()->toDateString();
-        $status = $data['status'] ?? '';
         $service = app(WarehouseTransferCreationService::class);
-        // Match the existing order-transfer screen: creation, imported business day,
-        // or the day the warehouse finished packing.
+        // Use the original business date, even when packing finishes the next day.
         $onDay = static function ($query, string $day): void {
-            $query->where(function ($query) use ($day): void {
-                $query->whereDate('created_at', $day)
-                    ->orWhere(fn ($q) => $q->whereNotNull('accounting_sales_import_batch_id')->whereDate('delivery_date', $day))
-                    ->orWhereHas('histories', fn ($q) => $q->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])->whereDate('created_at', $day));
-            });
+            $query->forPackingDate($day);
         };
         $ordersQuery = $service->transferableOrders($warehouseId);
         $onDay($ordersQuery, $businessDate);
-        $orders = $ordersQuery->when($status, fn ($q) => $q->where('status', $status))
+        $orders = $ordersQuery
             ->with(['customer', 'items.variant.product', 'truckStation'])->orderBy('daily_sequence')->orderBy('id')->get();
         $quickDays = collect(range(0, 6))->map(function ($offset) use ($service, $warehouseId, $onDay) {
             $day = now()->subDays($offset)->toDateString();
@@ -53,7 +46,7 @@ class TransferWorkbenchController extends Controller
             ->with(['targetWarehouse', 'shipper', 'entries.inventoryTransfer.items', 'entries.orderTransfer.orders'])
             ->latest('id')->paginate(10, ['*'], 'slips_page')->withQueryString();
 
-        return compact('orders', 'quickDays', 'businessDate', 'status', 'shippers', 'dispatchSlips');
+        return compact('orders', 'quickDays', 'businessDate', 'shippers', 'dispatchSlips');
     }
 
     public function store(Request $request, WarehouseTransferCreationService $service)

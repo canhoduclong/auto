@@ -267,6 +267,7 @@ class WarehouseDashboardController extends Controller
 
     /** Statuses that still belong on the warehouse packing timeline. */
     private const PACKING_PAGE_STATUSES = [
+        Order::STATUS_OVERDUE_DELIVERY,
         'approved',
         Order::STATUS_READY_TO_PACK,
         Order::STATUS_PACKING,
@@ -989,7 +990,7 @@ class WarehouseDashboardController extends Controller
 
         $currentUser = Auth::user();
         $managedWarehouseId = $currentUser?->warehouse_id ? (int) $currentUser->warehouse_id : null;
-        $sharedQueueStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]);
+        $sharedQueueStatuses = array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING, Order::STATUS_OVERDUE_DELIVERY]);
 
         $selectedDate = $request->filled('date')
             ? Carbon::parse($request->input('date'))->toDateString()

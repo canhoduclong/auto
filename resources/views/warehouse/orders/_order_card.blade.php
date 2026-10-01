@@ -621,7 +621,7 @@
                                             </div>
                                              <div class="js-weight-error text-danger text-center px-1" style="font-size:.72rem;display:none;"></div>
                                              @php $packingSizeOptions = collect($packingSizeOptionsByItem[$item->id] ?? []); @endphp
-                                             @if($packingSizeOptions->isNotEmpty() && !$isPackedReadonly && $canProcessThisOrder)
+                                             @if($pricedByKg && $packingSizeOptions->isNotEmpty() && !$isPackedReadonly && $canProcessThisOrder)
                                                 <div class="mx-2 mb-2 mt-1 rounded border border-warning-subtle bg-warning-subtle p-2">
                                                     <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
                                                         <div>
@@ -1118,9 +1118,13 @@
                                     'pending_warehouse_approval',
                                 ], true);
                             @endphp
+                            @if($order->status === \App\Models\Order::STATUS_OVERDUE_DELIVERY)
+                                <span class="badge bg-danger">Đã quá giờ giao hàng</span>
+                            @else
                             <span class="badge {{ $isNotReceived ? 'bg-secondary' : 'bg-success' }}">
                                 {{ $isNotReceived ? 'Chưa tiếp nhận' : 'Đã xử lý' }}
                             </span>
+                            @endif
                         @endif
                         </div>
                     </div>
