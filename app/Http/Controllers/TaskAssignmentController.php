@@ -204,7 +204,7 @@ class TaskAssignmentController extends Controller
             'workflow.steps',
             'parent:id,code,title',
             'subTasks.creator:id,name',
-            'subTasks.assignees',
+            'subTasks.assignees.user:id,name',
             'approvalSteps.step',
             'approvalSteps.approver:id,name',
             'assignees.user:id,name',
@@ -224,7 +224,9 @@ class TaskAssignmentController extends Controller
         $showRoute = $isFrontRoles ? 'tasks.show' : 'task-assignments.show';
         $createRoute = $isFrontRoles ? 'tasks.create' : 'task-assignments.create';
 
-        return view('task_assignments.show', compact('task', 'canAct', 'current', 'myAssignee', 'layout', 'indexRoute', 'showRoute', 'createRoute'));
+        $subTaskAssignees = $this->allowedAssigneesFor($user);
+
+        return view('task_assignments.show', compact('task', 'canAct', 'current', 'myAssignee', 'layout', 'indexRoute', 'showRoute', 'createRoute', 'subTaskAssignees'));
     }
 
     public function storeSubTask(Request $request, TaskAssignment $taskAssignment)
@@ -235,10 +237,14 @@ class TaskAssignmentController extends Controller
             || $taskAssignment->assignees()->where('user_id', $user->id)->exists()
         ), 403);
         $data = $request->validate([
+            'assignee_id' => ['required', 'integer', 'exists:users,id'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:5000'],
             'due_date' => ['required', 'date_format:Y-m-d\TH:i', 'after_or_equal:now'],
         ]);
+        if (! $this->allowedAssigneesFor($user)->contains(fn ($assignee) => (int) $assignee->id === (int) $data['assignee_id'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['assignee_id' => 'Người nhận không thuộc danh sách bạn được phép giao việc.']);
+        }
         DB::transaction(function () use ($taskAssignment, $user, $data) {
             $parent = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
             abort_if(in_array($parent->status, [TaskAssignment::STATUS_DONE, TaskAssignment::STATUS_CANCELLED], true), 422, 'Công việc đã hoàn thành hoặc bị hủy.');
@@ -248,7 +254,7 @@ class TaskAssignmentController extends Controller
                 'parent_id' => $parent->id, 'due_date' => Carbon::createFromFormat('Y-m-d\TH:i', $data['due_date']),
                 'created_by' => $user->id, 'status' => TaskAssignment::STATUS_PENDING,
             ]);
-            TaskAssignee::create(['task_id' => $child->id, 'user_id' => $user->id, 'status' => 'pending']);
+            TaskAssignee::create(['task_id' => $child->id, 'user_id' => (int) $data['assignee_id'], 'status' => 'pending']);
         });
         return redirect()->route('tasks.show', $taskAssignment)->with('success', 'Đã thêm công việc con và hạn hoàn thành.');
     }

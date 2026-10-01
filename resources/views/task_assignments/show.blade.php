@@ -142,7 +142,7 @@
                         <div class="d-flex gap-2 align-items-start flex-wrap">
                             <input type="checkbox" disabled @checked(in_array($sub->status, ['completed', 'done'], true)) aria-label="Đã báo hoàn thành {{ $sub->title }}">
                             <div class="flex-grow-1"><a href="{{ route('tasks.show', $sub) }}" class="fw-semibold">{{ $sub->title }}</a>
-                                <div class="small text-muted">Người tạo / giao: {{ $sub->creator?->name ?? 'Không xác định' }}</div>
+                                <div class="small text-muted">Người tạo / giao: {{ $sub->creator?->name ?? 'Không xác định' }}</div><div class="small text-muted">Người thực hiện: {{ $sub->assignees->map(fn ($assignment) => $assignment->user?->name)->filter()->join(', ') ?: 'Chưa có' }}</div>
                                 <div class="small {{ $sub->isOverdue() ? 'text-danger' : 'text-muted' }}">Hạn: {{ $sub->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</div>
                                 <span class="badge bg-{{ $sub->statusColor() }}">{{ \App\Models\TaskAssignment::STATUS_LABELS[$sub->status] ?? $sub->status }}</span>
                                 @if($sub->completion_content)<div class="small mt-2" style="white-space:pre-wrap">{{ $sub->completion_content }}</div>@endif
@@ -169,19 +169,27 @@
                             @if(auth()->user()->email)
                                 <div class="small text-muted" style="overflow-wrap:anywhere">{{ auth()->user()->email }}</div>
                             @endif
-                            <div class="small mt-1">Người thực hiện: <strong>{{ auth()->user()->name }}</strong></div>
+
                             <div class="small text-muted mt-1">Người giao công việc chính: {{ $task->creator?->name ?? 'Không xác định' }}</div>
                         </div>
                     </div>
-                    <p class="small text-muted">Bạn là người thực hiện việc con này; dùng kết quả để bổ sung hồ sơ hoàn thành công việc chính.</p>
+                    <p class="small text-muted">Chọn người thực hiện việc con; kết quả được dùng để bổ sung hồ sơ hoàn thành công việc chính.</p>
                     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
+                    <label class="form-label" for="child-assignee">Giao cho <span class="text-danger">*</span></label>
+                    <select id="child-assignee" name="assignee_id" class="form-select mb-3" required>
+                        <option value="">Chọn người nhận việc</option>
+                        @foreach($subTaskAssignees as $recipient)
+                            <option value="{{ $recipient->id }}" @selected((string) old('assignee_id') === (string) $recipient->id)>{{ $recipient->name }}</option>
+                        @endforeach
+                    </select>
+                    @if($subTaskAssignees->isEmpty())<div class="alert alert-warning">Chưa có người nhận được phép. Vui lòng nhờ admin cấu hình quyền giao việc.</div>@endif
                     <label class="form-label" for="child-title">Nội dung việc con</label>
                     <input id="child-title" class="form-control mb-2" name="title" value="{{ old('title') }}" maxlength="255" required>
                     <label class="form-label" for="child-due">Hạn hoàn thành</label>
                     <input id="child-due" class="form-control mb-2" type="datetime-local" name="due_date" value="{{ old('due_date') }}" required>
                     <label class="form-label" for="child-description">Mô tả / yêu cầu tài liệu</label>
                     <textarea id="child-description" class="form-control mb-3" name="description" maxlength="5000">{{ old('description') }}</textarea>
-                    <button class="btn btn-primary align-self-start" type="submit">Thêm việc con</button>
+                    <button class="btn btn-primary align-self-start" type="submit" @disabled($subTaskAssignees->isEmpty())>Giao việc con</button>
                 </form>
             @endif
 
