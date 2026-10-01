@@ -43,3 +43,5 @@ readme.txt
 !/tests/Feature/PackingGracePeriodTest.php
 
 !/tests/Feature/SharedPackingQueueTest.php
+
+!/tests/Feature/RouteRecallTest.php

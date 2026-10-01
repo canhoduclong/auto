@@ -342,10 +342,8 @@ class ShipperDashboardController extends Controller
 
         $today = Carbon::today();
         $startDate = $today->copy()->subDays(6)->toDateString();
-        $plannedExceptionOrderIds = $this->archivedPlannedOrderIdsForShipperOnDate((int) Auth::id(), $selectedDate);
 
-        $dailyCounts = Order::query()
-            ->selectRaw('DATE(created_at) as day_key, COUNT(*) as total')
+        $dailyCountsQuery = Order::query()
             ->where(function ($query) {
                 $query->where(function ($readyQuery) {
                     $this->constrainAvailableReadyOrder($readyQuery);
@@ -358,10 +356,11 @@ class ShipperDashboardController extends Controller
                         ->where('shipper_id', Auth::id());
                 });
             })
-            ->whereDate('created_at', '>=', $startDate)
-            ->whereDate('created_at', '<=', $today->toDateString())
-            ->groupBy('day_key')
-            ->pluck('total', 'day_key');
+            ;
+        $dailyCounts = collect(range(0, 6))->mapWithKeys(function ($offset) use ($today, $dailyCountsQuery) {
+            $date = $today->copy()->subDays($offset)->toDateString();
+            return [$date => (clone $dailyCountsQuery)->forPackingDate($date)->count()];
+        });
 
         $quickDates = collect(range(0, 6))->map(function ($offset) use ($today, $dailyCounts, $selectedDate) {
             $date = $today->copy()->subDays($offset);
@@ -390,15 +389,7 @@ class ShipperDashboardController extends Controller
                         ->where('shipper_id', Auth::id());
                 });
             })
-            ->where(function ($dateQuery) use ($selectedDate, $plannedExceptionOrderIds): void {
-                $dateQuery->forWorkflowDate($selectedDate);
-                $dateQuery->orWhereDate('delivered_at', $selectedDate);
-                if ($plannedExceptionOrderIds !== []) {
-                    $dateQuery->orWhere(function ($exceptionQuery) use ($plannedExceptionOrderIds): void {
-                        $exceptionQuery->whereIn('id', $plannedExceptionOrderIds);
-                    });
-                }
-            })
+            ->forPackingDate($selectedDate)
             ->orderByRaw("CASE WHEN status = 'delivered' THEN 1 ELSE 0 END")
             ->orderBy('created_at', 'asc')
             ->get();
@@ -2441,6 +2432,7 @@ class ShipperDashboardController extends Controller
         $historyCount = ShipperDispatchHistory::query()
             ->whereDate('schedule_date', $selectedDate)
             ->count();
+        $activeDispatch = $this->latestDispatchForDate($selectedDate);
         $view = $request->routeIs('accounting.*')
             ? 'accounting.ship.manage-assignments'
             : 'shipper.manage-assignments';
@@ -2458,7 +2450,8 @@ class ShipperDashboardController extends Controller
             'shipperScheduleChanges',
             'hasUnpublishedSchedules',
             'warehouses',
-            'historyCount'
+            'historyCount',
+            'activeDispatch'
         ));
     }
 
@@ -2632,26 +2625,42 @@ class ShipperDashboardController extends Controller
     {
         $this->authorizeManagerShipper();
 
-        abort_if($dispatch->revoked_at !== null, 422, 'Lộ trình này đã được thu hồi trước đó.');
-        $latestActive = ShipperDispatchHistory::query()
-            ->whereDate('schedule_date', $dispatch->schedule_date)
-            ->whereNull('revoked_at')
-            ->orderByDesc('version')->orderByDesc('id')->first();
-        abort_unless($latestActive?->is($dispatch), 422, 'Chỉ có thể thu hồi lộ trình đang được gửi cho shipper.');
+        DB::transaction(function () use ($dispatch): void {
+            $dispatches = ShipperDispatchHistory::query()->whereDate('schedule_date', $dispatch->schedule_date)->orderByDesc('version')->orderByDesc('id')->lockForUpdate()->get();
+            $dispatch = $dispatches->firstWhere('id', $dispatch->id);
+            abort_unless($dispatch, 404);
+            abort_if($dispatch->revoked_at !== null, 422, 'Lộ trình này đã được thu hồi trước đó.');
+            $latestActive = $dispatches->first(fn ($history) => $history->revoked_at === null);
+            abort_unless($latestActive?->is($dispatch), 422, 'Chỉ có thể thu hồi lộ trình đang được gửi cho shipper.');
 
-        $orderIds = $this->dispatchOrderIds($dispatch);
-        $orders = Order::query()->whereIn('id', $orderIds)->get();
-        $completed = Order::query()->whereIn('id', $orderIds)
-            ->where(function ($query): void {
-                $query->whereIn('status', [
-                    Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_RETURNED_COMPLETED,
-                ])->orWhereHas('histories', fn ($history) => $history->whereIn('action', $this->customerDeliveryCompletionActions()));
-            })->count();
-        abort_if($orders->isNotEmpty() && $completed === $orders->count(), 422, 'Lộ trình đã hoàn tất nên không thể thu hồi.');
+            $orderIds = $this->dispatchOrderIds($dispatch);
+            $orders = Order::query()->whereIn('id', $orderIds)->orderBy('id')->lockForUpdate()->get();
+            $protectedIds = Order::query()->whereIn('id', $orderIds)
+                ->where(function ($query): void {
+                    $query->whereIn('status', array_merge($this->activeDeliveryStatuses(), [
+                        Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_RETURNED_COMPLETED,
+                    ]))->orWhereHas('histories', fn ($history) => $history->whereIn('action', $this->customerDeliveryCompletionActions()));
+                })->pluck('id')->map(fn ($id) => (int) $id)->all();
+            $recallable = $orders->reject(fn ($order) => in_array((int) $order->id, $protectedIds, true));
+            abort_if($recallable->isEmpty(), 422, 'Không còn đơn có thể thu hồi. Các đơn đang giao hoặc hoàn tất được giữ nguyên.');
 
-        DB::transaction(function () use ($dispatch, $orders): void {
-            $dispatch->update(['revoked_at' => now(), 'revoked_by' => Auth::id()]);
-            foreach ($orders as $order) {
+            // Invalidate earlier published versions too, so clients cannot fall back to an old route.
+            ShipperDispatchHistory::query()->whereIn('id', $dispatches->pluck('id'))->whereNull('revoked_at')
+                ->update(['revoked_at' => now(), 'revoked_by' => Auth::id()]);
+            // Preserve a live snapshot containing only stops already in delivery/completed.
+            if ($protectedIds !== []) {
+                $preservedPlan = collect($dispatch->route_plan ?? [])->map(function ($plan) use ($protectedIds) {
+                    $plan['routes'] = collect($plan['routes'] ?? [])->map(function ($route) use ($protectedIds) {
+                        $route['orders'] = collect($route['orders'] ?? [])->filter(fn ($row) => in_array((int) ($row['order_id'] ?? 0), $protectedIds, true))->values()->all();
+                        return $route;
+                    })->filter(fn ($route) => count($route['orders']) > 0)->values()->all();
+                    return $plan;
+                })->filter(fn ($plan) => count($plan['routes']) > 0)->values()->all();
+                $preserved = $dispatch->replicate();
+                $preserved->forceFill(['version' => (int) $dispatches->max('version') + 1, 'route_plan' => $preservedPlan, 'revoked_at' => null, 'revoked_by' => null]);
+                $preserved->save();
+            }
+            foreach ($recallable as $order) {
                 OrderHistory::create([
                     'order_id' => $order->id,
                     'action' => 'schedule_revoked',
@@ -2664,8 +2673,8 @@ class ShipperDashboardController extends Controller
             }
         });
 
-        return redirect()->route('shipper.manage-assignments.history', ['date' => $dispatch->schedule_date->toDateString()])
-            ->with('success', 'Đã thu hồi lộ trình. Shipper sẽ không còn thấy yêu cầu xác nhận này.');
+        return redirect()->route('shipper.manage-assignments', ['date' => $dispatch->schedule_date->toDateString()])
+            ->with('success', 'Đã thu hồi các đơn chưa giao; giữ nguyên đơn đang giao và hoàn tất. Bạn có thể sắp xếp lại và bấm Xem lại & Gửi xác nhận để gửi lại cho shipper.');
     }
 
     public function destroyAssignmentHistory(ShipperDispatchHistory $dispatch)
@@ -2683,6 +2692,36 @@ class ShipperDashboardController extends Controller
 
         return redirect()->route('shipper.manage-assignments.history', ['date' => $date])
             ->with('success', 'Đã xóa lộ trình cũ khỏi lịch sử.');
+    }
+
+    public function autoCompleteShipperRoute(ShipperDispatchHistory $dispatch, User $shipper)
+    {
+        $this->authorizeManagerShipper();
+        abort_unless($shipper->hasRole(['shipper', 'manager_shipper']) && \App\Models\Setting::enabled('shipper_auto_complete_'.$shipper->id), 403, 'Shipper chưa được Admin bật tính năng hoàn thành tự động.');
+        DB::transaction(function () use ($dispatch, $shipper) {
+            $active = ShipperDispatchHistory::whereDate('schedule_date', $dispatch->schedule_date)->whereNull('revoked_at')->orderByDesc('version')->orderByDesc('id')->lockForUpdate()->first();
+            abort_unless($active && $active->id === $dispatch->id, 422, 'Lộ trình đã thay đổi hoặc bị thu hồi. Vui lòng tải lại.');
+            $plan = collect($active->route_plan ?? [])->first(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === (int) $shipper->id);
+            $ids = collect($plan['routes'] ?? [])->flatMap(fn ($route) => $route['orders'] ?? [])->pluck('order_id')->unique();
+            abort_if($ids->isEmpty(), 422, 'Chưa có lộ trình đã gửi cho shipper này.');
+            $orders = Order::whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get();
+            abort_unless($orders->count() === $ids->count(), 422, 'Có đơn không còn tồn tại.');
+            foreach ($orders as $order) {
+                abort_unless((int) $order->shipper_id === (int) $shipper->id, 422, 'Có đơn đã được chuyển sang shipper khác.');
+                if (in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_RETURNED_COMPLETED], true)
+                    || $order->histories()->whereIn('action', $this->customerDeliveryCompletionActions())->exists()) {
+                    continue;
+                }
+                abort_unless(in_array($order->status, array_merge(['packed', Order::STATUS_READY_TO_SHIP], $this->activeDeliveryStatuses()), true), 422, 'Chỉ hoàn thành đơn đã đóng hàng hoặc đang giao.');
+                abort_if(\App\Models\WarehouseTransfer::where('order_id', $order->id)->whereNotIn('status', ['received_completed', 'cancelled', 'rejected'])->exists(), 422, 'Đơn còn điều chuyển kho chưa hoàn thành.');
+                $before = $order->status;
+                $order->forceFill(['status' => Order::STATUS_DELIVERED, 'delivered_at' => $order->delivered_at ?? now()])->save();
+                foreach (['schedule_confirmed', 'manager_route_completed'] as $action) {
+                    OrderHistory::create(['order_id' => $order->id, 'action' => $action, 'user_id' => Auth::id(), 'role' => 'manager_shipper', 'status_before' => $before, 'status_after' => Order::STATUS_DELIVERED, 'note' => 'Điều phối xác nhận và hoàn thành thay shipper được Admin cấu hình; lộ trình phiên bản '.$active->version.'.']);
+                }
+            }
+        });
+        return redirect()->route('shipper.manage-assignments', ['date' => $dispatch->schedule_date->toDateString()])->with('success', 'Đã xác nhận và hoàn thành các đơn trong lộ trình của shipper.');
     }
 
     public function completeAssignmentHistory(ShipperDispatchHistory $dispatch)
@@ -3162,7 +3201,11 @@ class ShipperDashboardController extends Controller
             ->pluck('action', 'order_id');
 
         return $routes->map(function (array $route) use ($latestActions) {
-            $actions = $route['orders']->map(fn (Order $order) => $latestActions->get($order->id));
+            $actions = $route['orders']->map(function (Order $order) use ($latestActions) {
+                $alreadyDelivering = in_array($order->status, array_merge($this->activeDeliveryStatuses(), [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_RETURNED_COMPLETED]), true);
+                $completed = $order->histories?->contains(fn ($history) => in_array($history->action, $this->customerDeliveryCompletionActions(), true));
+                return ($alreadyDelivering || $completed) ? 'schedule_confirmed' : $latestActions->get($order->id);
+            });
             $route['status'] = $actions->isNotEmpty() && $actions->every(fn ($action) => $action === 'schedule_confirmed')
                 ? 'confirmed'
                 : ($actions->isNotEmpty() && $actions->every(fn ($action) => $action === 'schedule_rejected') ? 'rejected' : 'waiting');
@@ -3170,7 +3213,7 @@ class ShipperDashboardController extends Controller
             $route['total_fee'] = $route['orders']->sum(fn (Order $order) => ($order->charge_shipping_fee ?? true) ? (float) ($order->shipping_fee ?? 0) : 0
             );
             $route['completed_orders'] = $route['orders']->filter(fn (Order $order) => in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED, Order::STATUS_RETURNED_COMPLETED], true)
-                || $order->histories?->isNotEmpty()
+                || $order->histories?->contains(fn ($history) => in_array($history->action, $this->customerDeliveryCompletionActions(), true))
             )->count();
             $route['completion_status'] = $route['completed_orders'] === $route['orders']->count()
                 ? 'completed'

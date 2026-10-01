@@ -107,8 +107,8 @@
             <div>
                 @foreach($deliveryRoutes as $routeIndex => $deliveryRoute)
                     @php
-                        $routeStatusLabel = match ($deliveryRoute['status']) { 'confirmed' => 'Đã xác nhận', 'rejected' => 'Đã từ chối', default => 'Chờ xác nhận' };
-                        $routeStatusClass = match ($deliveryRoute['status']) { 'confirmed' => 'bg-success', 'rejected' => 'bg-danger', default => 'bg-warning text-dark' };
+                        $routeStatusLabel = $deliveryRoute['completion_status'] === 'completed' ? 'Đã hoàn tất' : match ($deliveryRoute['status']) { 'confirmed' => 'Đã xác nhận', 'rejected' => 'Đã từ chối', default => 'Chờ xác nhận' };
+                        $routeStatusClass = $deliveryRoute['completion_status'] === 'completed' ? 'bg-success' : match ($deliveryRoute['status']) { 'confirmed' => 'bg-success', 'rejected' => 'bg-danger', default => 'bg-warning text-dark' };
                     @endphp
                     <button type="button" class="ds-route-option {{ $deliveryRoute['key'] === $initialRouteKey ? 'active' : '' }}" data-route-select="{{ $deliveryRoute['key'] }}" aria-controls="{{ $deliveryRoute['key'] }}-panel" aria-selected="{{ $deliveryRoute['key'] === $initialRouteKey ? 'true' : 'false' }}">
                         <span class="d-flex gap-2 align-items-start">

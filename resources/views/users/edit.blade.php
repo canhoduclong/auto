@@ -80,6 +80,13 @@
         </div>
 
         <div class="form-check mb-3">
+            @if(auth()->user()?->hasRole('admin'))
+                <div class="mb-3">
+                    <input type="hidden" name="shipper_auto_complete" value="0">
+                    <label><input type="checkbox" name="shipper_auto_complete" value="1" @checked(old('shipper_auto_complete', \App\Models\Setting::enabled('shipper_auto_complete_'.$user->id)))> Cho phép điều phối xác nhận và hoàn thành giao hàng thay shipper</label>
+                    <div class="small text-muted">Áp dụng cho các lộ trình đã gửi của shipper này.</div>
+                </div>
+            @endif
             <input type="hidden" name="show_in_shipper_assignment" value="0">
             <input class="form-check-input" type="checkbox" name="show_in_shipper_assignment" value="1" id="show_in_shipper_assignment" @checked(old('show_in_shipper_assignment', $user->show_in_shipper_assignment ?? true))>
             <label class="form-check-label" for="show_in_shipper_assignment">Hiển thị trong popup chọn shipper</label>

@@ -450,6 +450,10 @@ class UserController extends Controller
         $user->roles()->sync($request->roles ?? []);
         $user->managedAccounts()->sync($managedAccountPayload);
 
+        if ($request->user()?->hasRole('admin')) {
+            Setting::set('shipper_auto_complete_'.$user->id, $request->boolean('shipper_auto_complete') ? '1' : '0');
+        }
+
         return redirect()->route('users.index')->with('success', __('users.messages.updated'));
     }
 

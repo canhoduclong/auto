@@ -572,6 +572,14 @@
         </div>
     </div>
     <div class="col col-md-6 d-flex justify-content-end align-items-center">
+        @if($activeDispatch ?? null)
+            <form method="POST" action="{{ route('shipper.manage-assignments.history.revoke', $activeDispatch) }}" class="me-2"
+                  onsubmit="return confirm('Thu hồi các đơn chưa bắt đầu giao để sắp xếp và gửi lại? Đơn đang giao và hoàn tất sẽ không bị thu hồi.');">
+                @csrf
+                <button type="submit" class="btn btn-sm btn-outline-warning text-nowrap"><i class="bi bi-arrow-counterclockwise me-1"></i>Thu hồi để sắp xếp lại</button>
+            </form>
+        @endif
+
         <form method="POST" action="{{ route('shipper.manage-assignments.review') }}" class="d-flex gap-2 align-items-center ms-auto js-route-review-form">
             @csrf
             <input type="hidden" name="date" value="{{ $selectedDate }}">
@@ -876,6 +884,12 @@
                                                     <i class="bi bi-send me-1"></i>Gửi Ship Xác Nhận
                                                 </button>
                                             </form>
+                                            @if(($activeDispatch ?? null) && $shipper && \App\Models\Setting::enabled('shipper_auto_complete_'.$shipper->id) && !in_array($scheduleStatus, ['completed', 'changed', 'none'], true) && collect($activeDispatch->route_plan ?? [])->contains(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === (int) $shipper->id))
+                                                <form method="POST" action="{{ route('shipper.manage-assignments.auto-complete', ['dispatch' => $activeDispatch, 'shipper' => $shipper]) }}" onsubmit="return confirm('Thực hiện thay shipper: xác nhận lộ trình và hoàn thành giao hàng cho toàn bộ đơn chưa hoàn tất trong lộ trình đã gửi?');">
+                                                    @csrf
+                                                    <button type="submit" class="btn btn-sm btn-success" title="Điều phối xác nhận và hoàn thành thay shipper đã được cho phép"><i class="bi bi-check2-all me-1"></i>Xác nhận và Hoàn thành giao hàng</button>
+                                                </form>
+                                            @endif
                                             <form method="POST" action="{{ route('shipper.bulk-transfer-assignments') }}" class="d-flex gap-1" style="width: 220px;">
                                                 @csrf
                                                 <input type="hidden" name="date" value="{{ $selectedDate }}">
