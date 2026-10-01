@@ -142,6 +142,7 @@
                         <div class="d-flex gap-2 align-items-start flex-wrap">
                             <input type="checkbox" disabled @checked(in_array($sub->status, ['completed', 'done'], true)) aria-label="Đã báo hoàn thành {{ $sub->title }}">
                             <div class="flex-grow-1"><a href="{{ route('tasks.show', $sub) }}" class="fw-semibold">{{ $sub->title }}</a>
+                                <div class="small text-muted">Người tạo / giao: {{ $sub->creator?->name ?? 'Không xác định' }}</div>
                                 <div class="small {{ $sub->isOverdue() ? 'text-danger' : 'text-muted' }}">Hạn: {{ $sub->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</div>
                                 <span class="badge bg-{{ $sub->statusColor() }}">{{ \App\Models\TaskAssignment::STATUS_LABELS[$sub->status] ?? $sub->status }}</span>
                                 @if($sub->completion_content)<div class="small mt-2" style="white-space:pre-wrap">{{ $sub->completion_content }}</div>@endif
@@ -160,6 +161,18 @@
                 <form class="card card-body shadow-sm" action="{{ route('tasks.subtasks.store', $task) }}" method="POST">
                     @csrf
                     <h6>Thêm công việc con</h6>
+                    <div class="border rounded p-3 mb-3 bg-light d-flex align-items-start gap-2">
+                        <i class="ph ph-user-circle fs-4 text-primary" aria-hidden="true"></i>
+                        <div style="min-width:0">
+                            <div class="small text-muted">Người tạo / giao việc con</div>
+                            <div class="fw-semibold">{{ auth()->user()->name }}</div>
+                            @if(auth()->user()->email)
+                                <div class="small text-muted" style="overflow-wrap:anywhere">{{ auth()->user()->email }}</div>
+                            @endif
+                            <div class="small mt-1">Người thực hiện: <strong>{{ auth()->user()->name }}</strong></div>
+                            <div class="small text-muted mt-1">Người giao công việc chính: {{ $task->creator?->name ?? 'Không xác định' }}</div>
+                        </div>
+                    </div>
                     <p class="small text-muted">Bạn là người thực hiện việc con này; dùng kết quả để bổ sung hồ sơ hoàn thành công việc chính.</p>
                     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
                     <label class="form-label" for="child-title">Nội dung việc con</label>
