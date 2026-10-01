@@ -543,10 +543,14 @@ class ProductCuttingService
         });
     }
 
-    private function appendDeferredComponentImportRequest(int $warehouseId, array $componentRows, ProductCuttingBatch $batch, int $userId, ?int $orderId = null, ?string $documentDate = null): void
+    public function appendDeferredComponentImportRequest(int $warehouseId, array $componentRows, ProductCuttingBatch $batch, int $userId, ?int $orderId = null, ?string $documentDate = null): void
     {
         $order = $orderId ? Order::query()->find($orderId) : null;
-        $request = CuttingComponentImportRequest::query()->firstOrCreate(
+        $request = CuttingComponentImportRequest::query()
+            ->where('warehouse_id', $warehouseId)
+            ->whereDate('request_date', $documentDate ?? now()->toDateString())
+            ->where('status', CuttingComponentImportRequest::STATUS_OPEN)
+            ->lockForUpdate()->first() ?? CuttingComponentImportRequest::query()->firstOrCreate(
             [
                 'warehouse_id' => $warehouseId,
                 'request_date' => $documentDate ?? now()->toDateString(),

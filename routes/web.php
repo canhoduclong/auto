@@ -443,6 +443,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/{order}/confirm-sale-changes', [WarehouseDashboardController::class, 'confirmSaleChanges'])->name('orders.confirm-sale-changes');
         Route::post('/orders/{order}/packing-size-allocation', [WarehouseDashboardController::class, 'updatePackingSizeAllocation'])->name('orders.packing-size-allocation');
         Route::post('/orders/{order}/start-packing', [WarehouseDashboardController::class, 'startPacking'])->name('orders.start-packing');
+        Route::get('/orders/{order}/supplemental-packing', [WarehouseDashboardController::class, 'supplementalPackingForm'])->name('orders.supplemental-packing');
+        Route::post('/orders/{order}/supplemental-packing', [WarehouseDashboardController::class, 'supplementalPackingStore'])->name('orders.supplemental-packing.store');
         Route::post('/orders/{order}/complete-packing', [WarehouseDashboardController::class, 'completePacking'])->name('orders.complete-packing');
         Route::post('/orders/{order}/request-adjustment', [WarehouseDashboardController::class, 'requestAdjustment'])->name('orders.request-adjustment');
         Route::post('/orders/{order}/transfer-request', [WarehouseDashboardController::class, 'createTransferRequest'])->name('orders.transfer-request');

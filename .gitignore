@@ -37,3 +37,7 @@ readme.txt
 !/tests/Feature/GitPushServiceTest.php
 
 !/tests/Feature/DraftOrderRecreationTest.php
+
+!/tests/Feature/ExternalCuttingReceiptTest.php
+
+!/tests/Feature/PackingGracePeriodTest.php

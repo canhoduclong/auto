@@ -291,6 +291,18 @@ class Order extends Model
      * Việc Sale gửi và các cấp duyệt thay đổi sau ngày nghiệp vụ thể hiện đơn
      * vẫn còn hiệu lực, không phải một đơn quá hạn bị bỏ quên.
      */
+    public function canProcessPackingOnCurrentRun(): bool
+    {
+        $now = now('Asia/Bangkok');
+        $created = $this->created_at?->copy()->timezone('Asia/Bangkok');
+
+        return $this->accounting_sales_import_batch_id !== null
+            || $this->status === self::STATUS_PACKING
+            || (bool) $this->skip_auto_cancel
+            || ($created && $created->lte($now) && $now->lte($created->copy()->startOfDay()->addDay()->addHours(12)))
+            || $this->hasCompletedAdjustment();
+    }
+
     public function hasCompletedAdjustment(): bool
     {
         if ($this->relationLoaded('adjustments')) {

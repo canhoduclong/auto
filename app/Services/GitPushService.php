@@ -60,13 +60,23 @@ class GitPushService
         if (! is_dir($directory) && ! mkdir($directory, 0700, true) && ! is_dir($directory)) {
             throw new \RuntimeException('Không tạo được thư mục SSH riêng cho tài khoản chạy web.');
         }
-        chmod($directory, 0700);
+        if (! @chmod($directory, 0700)) {
+            throw new \RuntimeException('Không đặt được quyền 0700 cho thư mục SSH. Kiểm tra chủ sở hữu thư mục của tài khoản chạy web.');
+        }
         $identity = $directory.'/id_ed25519';
         if (! is_file($identity)) {
             $process = new Process(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-C', 'app.com-web-push', '-f', $identity]);
             $process->setTimeout(15)->mustRun();
             chmod($identity, 0600);
             $this->logs[] = 'Đã tạo SSH key riêng. Thêm public key hiển thị trong cài đặt vào Deploy keys của repository và bật Allow write access.';
+        }
+        // Repair existing keys too: deployment tools may have widened their permissions.
+        if (! @chmod($identity, 0600)) {
+            throw new \RuntimeException('Không đặt được quyền 0600 cho private key SSH. Kiểm tra chủ sở hữu file của tài khoản chạy web.');
+        }
+        clearstatcache(true, $identity);
+        if ((fileperms($identity) & 0777) !== 0600 || ! is_readable($identity)) {
+            throw new \RuntimeException('Private key SSH phải có quyền 0600 và tài khoản chạy web phải đọc được.');
         }
         $knownHosts = $directory.'/known_hosts';
         if (! is_file($knownHosts)) {
@@ -96,11 +106,13 @@ class GitPushService
             $this->logs[] = $output;
         }
         if (! $process->isSuccessful()) {
-            $hint = str_contains($output, 'Permission denied (publickey)')
+            $hint = str_contains($output, 'UNPROTECTED PRIVATE KEY FILE') || str_contains($output, 'bad permissions')
+                ? 'Quyền private key SSH không hợp lệ. File cần quyền 0600 và thuộc tài khoản chạy web.'
+                : (str_contains($output, 'Permission denied (publickey)')
                 ? 'SSH key của web chưa được GitHub cho phép. Thêm public key bên dưới vào Deploy keys và bật Allow write access.'
                 : (str_contains($output, 'Host key verification failed')
                     ? 'Xác minh host key GitHub thất bại. Cần kiểm tra known_hosts của tài khoản chạy web.'
-                    : 'Git thất bại ở bước '.$arguments[0].'. Xem nhật ký bên dưới.');
+                    : 'Git thất bại ở bước '.$arguments[0].'. Xem nhật ký bên dưới.'));
             throw new \RuntimeException($hint);
         }
 

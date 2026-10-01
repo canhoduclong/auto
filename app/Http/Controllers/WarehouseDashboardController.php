@@ -42,6 +42,8 @@ use Illuminate\Support\Facades\Schema;
 
 class WarehouseDashboardController extends Controller
 {
+    use \App\Http\Controllers\Concerns\SupplementalCuttingPacking;
+
     public function updatePackingSizeBoundsSetting(Request $request)
     {
         $validated = $request->validate([
@@ -2754,7 +2756,7 @@ class WarehouseDashboardController extends Controller
         }
 
         if (! $this->canProcessOrderOnCurrentRun($order)) {
-            $message = 'Chỉ được xử lý đơn có ngày hôm nay.';
+            $message = 'Đã quá 12 giờ trưa ngày sau ngày lên đơn. Vui lòng nhờ Admin cho phép tiếp tục đóng hàng.';
 
             if ($request->expectsJson()) {
                 return response()->json([
@@ -3860,7 +3862,7 @@ class WarehouseDashboardController extends Controller
         $this->authorizePackingOrderAccess($order);
 
         if (! $this->canProcessOrderOnCurrentRun($order)) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Chỉ được bổ sung cơ cấu size cho đơn của ngày hôm nay.']);
+            throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Đơn đã quá thời hạn bắt đầu đóng hàng (12 giờ trưa ngày kế tiếp).']);
         }
         if (! in_array($order->status, array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]), true)) {
             throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => 'Chỉ được bổ sung size khi đơn đang chờ hoặc đang đóng hàng.']);
@@ -4011,7 +4013,7 @@ class WarehouseDashboardController extends Controller
         $expectsJson = $request->expectsJson();
 
         if (! $this->canProcessOrderOnCurrentRun($order)) {
-            $message = 'Chỉ được xử lý đơn có ngày hôm nay.';
+            $message = 'Đã quá 12 giờ trưa ngày sau ngày lên đơn. Vui lòng nhờ Admin cho phép tiếp tục đóng hàng.';
 
             if ($expectsJson) {
                 return response()->json([
@@ -4332,10 +4334,10 @@ class WarehouseDashboardController extends Controller
 
         if (! $this->canProcessOrderOnCurrentRun($order)) {
             if ($request->expectsJson()) {
-                return response()->json(['ok' => false, 'message' => 'Chỉ được điều chỉnh đơn có ngày hôm nay.'], 422);
+                return response()->json(['ok' => false, 'message' => 'Đơn đã quá thời hạn xử lý đóng hàng (12 giờ trưa ngày kế tiếp).'], 422);
             }
 
-            return back()->with('error', 'Chỉ được điều chỉnh đơn có ngày hôm nay.');
+            return back()->with('error', 'Đơn đã quá thời hạn xử lý đóng hàng (12 giờ trưa ngày kế tiếp).');
         }
 
         if (in_array($order->status, self::PACKED_STATUSES, true)) {
@@ -4570,10 +4572,10 @@ class WarehouseDashboardController extends Controller
 
         if (! $this->canProcessOrderOnCurrentRun($order)) {
             if ($request->expectsJson()) {
-                return response()->json(['ok' => false, 'message' => 'Chỉ được xử lý đơn có ngày hôm nay.'], 422);
+                return response()->json(['ok' => false, 'message' => 'Đã quá 12 giờ trưa ngày sau ngày lên đơn. Vui lòng nhờ Admin cho phép tiếp tục đóng hàng.'], 422);
             }
 
-            return back()->with('error', 'Chỉ được xử lý đơn có ngày hôm nay.');
+            return back()->with('error', 'Đã quá 12 giờ trưa ngày sau ngày lên đơn. Vui lòng nhờ Admin cho phép tiếp tục đóng hàng.');
         }
 
         if ($order->status !== Order::STATUS_PACKING) {
@@ -4679,10 +4681,10 @@ class WarehouseDashboardController extends Controller
 
         if (! $this->canProcessOrderOnCurrentRun($order)) {
             if ($request->expectsJson()) {
-                return response()->json(['ok' => false, 'message' => 'Chỉ được xử lý đơn có ngày hôm nay.'], 422);
+                return response()->json(['ok' => false, 'message' => 'Đã quá 12 giờ trưa ngày sau ngày lên đơn. Vui lòng nhờ Admin cho phép tiếp tục đóng hàng.'], 422);
             }
 
-            return back()->with('error', 'Chỉ được xử lý đơn có ngày hôm nay.');
+            return back()->with('error', 'Đã quá 12 giờ trưa ngày sau ngày lên đơn. Vui lòng nhờ Admin cho phép tiếp tục đóng hàng.');
         }
 
         if ($order->status !== Order::STATUS_PACKING) {
@@ -4912,7 +4914,7 @@ class WarehouseDashboardController extends Controller
         abort_unless($user?->hasRole('admin'), 403);
 
         if (! $this->canProcessOrderOnCurrentRun($order)) {
-            return back()->with('error', 'Chỉ được xử lý đơn có ngày hôm nay.');
+            return back()->with('error', 'Đã quá 12 giờ trưa ngày sau ngày lên đơn. Vui lòng nhờ Admin cho phép tiếp tục đóng hàng.');
         }
 
         if (! in_array($order->status, self::PACKED_STATUSES, true)) {
@@ -7034,11 +7036,7 @@ class WarehouseDashboardController extends Controller
 
     private function canProcessOrderOnCurrentRun(Order $order): bool
     {
-        return $order->accounting_sales_import_batch_id !== null
-            || $order->status === Order::STATUS_PACKING
-            || (bool) $order->skip_auto_cancel
-            || $order->hasCompletedAdjustment()
-            || ($order->created_at && $order->created_at->isToday());
+        return $order->canProcessPackingOnCurrentRun();
     }
 
     private function packingActorRole(): string

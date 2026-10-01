@@ -1,13 +1,7 @@
             @php
                 $orderCardReadonly = (bool) ($orderCardReadonly ?? false);
                 $isTodaySelected = \Illuminate\Support\Carbon::parse($selectedDate ?? now()->toDateString())->isToday();
-                $canProcessThisOrder = !$orderCardReadonly && (
-                    $order->accounting_sales_import_batch_id !== null
-                    || $order->status === \App\Models\Order::STATUS_PACKING
-                    || (bool) $order->skip_auto_cancel
-                    || $order->hasCompletedAdjustment()
-                    || ($isTodaySelected && $order->created_at->isToday())
-                );
+                $canProcessThisOrder = !$orderCardReadonly && $order->canProcessPackingOnCurrentRun();
                 $meta = $statusMeta[$order->status] ?? ['label' => $order->status, 'class' => 'bg-secondary'];
                 $isReadyToPack = in_array($order->status, ['approved', 'ready_to_pack'], true);
                 $isPacking = $order->status === 'packing';
@@ -1001,6 +995,10 @@
                                     @endforeach
                                 @endif
 
+                                @if(($orderRoutePrefix ?? 'warehouse') === 'warehouse' && !$orderCardReadonly && $canProcessThisOrder && ($isReadyToPack || $isPacking) && !$isPendingSaleConfirmation && !$isRejectedBySale && !$hasActiveCuttingBatch && $order->items->contains(fn ($item) => $item->product?->product_type === \App\Models\Product::TYPE_CUT))
+                                    <a class="btn btn-outline-primary btn-sm js-supplement-popup" href="{{ route('warehouse.orders.supplemental-packing', ['order' => $order, 'packing_date' => $selectedDate ?? today()->toDateString()]) }}">Đóng hàng bù</a>
+                                @endif
+
                                 @if(($isReadyToPack || $isPacking) && !$isPendingSaleConfirmation && $stockShortages->isNotEmpty())
                                     <a class="btn btn-outline-danger btn-sm wh-inventory-action-btn" href="{{ route($packingInventoryRoute ?? 'warehouse.stock-in') }}">
                                         <i class="bi bi-box-arrow-in-down me-1"></i>Nhập kho
@@ -1053,7 +1051,7 @@
                                     @elseif(!$canProcessThisOrder)
                                         <div class="alert alert-warning py-2 px-3 mb-0 d-flex align-items-center gap-2 flex-wrap" role="alert">
                                             <i class="bi bi-calendar-x-fill"></i>
-                                            <span><strong>Không thể đóng hàng:</strong> Đơn qua ngày, đang chờ Admin cho phép tiếp tục đóng hàng.</span>
+                                            <span><strong>Không thể đóng hàng:</strong> Đã quá 12 giờ trưa ngày sau ngày lên đơn, đang chờ Admin cho phép tiếp tục đóng hàng.</span>
                                             @if(auth()->user()?->hasRole('admin') && ($orderRoutePrefix ?? 'warehouse') === 'warehouse')
                                                 <form method="POST" action="{{ route('warehouse.orders.allow-historical-packing', $order) }}" class="ms-1"
                                                       onsubmit="return confirm('Cho phép kho tiếp tục đóng đơn {{ addslashes($order->code ?: '#'.$order->id) }} tại ngày nghiệp vụ gốc?');">

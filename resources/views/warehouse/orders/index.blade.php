@@ -1308,13 +1308,20 @@
     </div>
 
     @php $activeOrdersTab = request('tab') === 'pull' && ($orderRoutePrefix ?? 'warehouse') === 'warehouse' ? 'pull' : 'orders'; @endphp
+    @php
+        $cuttingOnly = request('tab') === 'cutting' && ($orderRoutePrefix ?? 'warehouse') === 'warehouse';
+        if ($cuttingOnly) {
+            $orders = $orders->filter(fn ($order) => $order->items->contains(fn ($item) => $item->product?->product_type === \App\Models\Product::TYPE_CUT));
+        }
+    @endphp
     <ul class="nav nav-tabs mb-3">
         <li class="nav-item">
-            <a class="nav-link {{ $activeOrdersTab === 'orders' ? 'active' : '' }}" href="{{ route(($orderRoutePrefix ?? 'warehouse').'.orders', array_filter(['date' => $selectedDate, 'status' => $status ?: null])) }}">
+            <a class="nav-link {{ $activeOrdersTab === 'orders' && !$cuttingOnly ? 'active' : '' }}" href="{{ route(($orderRoutePrefix ?? 'warehouse').'.orders', array_filter(['date' => $selectedDate, 'status' => $status ?: null])) }}">
                 <i class="bi bi-box-seam me-1"></i>Đơn cần đóng <span class="badge bg-secondary ms-1">{{ $orders->count() }}</span>
             </a>
         </li>
         @if(($orderRoutePrefix ?? 'warehouse') === 'warehouse')
+            <li class="nav-item"><a class="nav-link {{ $cuttingOnly ? 'active' : '' }}" href="{{ route('warehouse.orders', ['date' => $selectedDate, 'tab' => 'cutting']) }}">Đóng hàng Pha Lóc</a></li>
             <li class="nav-item">
                 <a class="nav-link {{ $activeOrdersTab === 'pull' ? 'active' : '' }}" href="{{ route('warehouse.orders', array_filter(['date' => $selectedDate, 'tab' => 'pull'])) }}">
                     <i class="bi bi-box-arrow-in-left me-1"></i>Kéo đơn hàng
@@ -2535,5 +2542,28 @@
             });
         });
     });
+</script>
+@endpush
+@push('scripts')
+<script>
+document.addEventListener('click', function(event) {
+    const link = event.target.closest('.js-supplement-popup');
+    if (!link) return;
+    event.preventDefault();
+    let modal = document.getElementById('supplement-packing-popup');
+    if (!modal) {
+        modal = document.createElement('div'); modal.id = 'supplement-packing-popup'; modal.className = 'modal fade'; modal.tabIndex = -1;
+        modal.innerHTML = '<div class="modal-dialog modal-xl modal-dialog-centered modal-fullscreen-sm-down"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Đóng hàng bù</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button></div><div class="modal-body p-0"><iframe title="Đóng hàng bù" style="width:100%;height:78vh;border:0"></iframe></div></div></div>';
+        document.body.appendChild(modal);
+        modal.addEventListener('hidden.bs.modal', () => modal.querySelector('iframe').src = 'about:blank');
+    }
+    const url = new URL(link.href); url.searchParams.set('popup', '1');
+    modal.querySelector('iframe').src = url.toString();
+    bootstrap.Modal.getOrCreateInstance(modal).show();
+});
+window.addEventListener('message', function(event) {
+    const frame = document.querySelector('#supplement-packing-popup iframe');
+    if (event.origin === location.origin && event.source === frame?.contentWindow && event.data?.type === 'supplement-packing-completed') location.reload();
+});
 </script>
 @endpush
