@@ -41,3 +41,5 @@ readme.txt
 !/tests/Feature/ExternalCuttingReceiptTest.php
 
 !/tests/Feature/PackingGracePeriodTest.php
+
+!/tests/Feature/SharedPackingQueueTest.php

@@ -1002,15 +1002,12 @@ class WarehouseDashboardController extends Controller
         $packingDateSql = 'CASE WHEN accounting_sales_import_batch_id IS NOT NULL '
             .'THEN DATE(delivery_date) ELSE DATE(created_at) END';
         $dailyCountsQuery = Order::query()
-            ->selectRaw($packingDateSql.' as day_key, COUNT(*) as total')
             ->whereIn('status', self::PACKING_PAGE_STATUSES)
             ->whereNull('trash_at')
             ->where(function ($query) {
                 $query->whereNull('is_return_order')
                     ->orWhere('is_return_order', false);
-            })
-            ->whereRaw($packingDateSql.' >= ?', [$startDate])
-            ->whereRaw($packingDateSql.' <= ?', [$today->toDateString()]);
+            });
 
         if ($managedWarehouseId && ($currentUser?->hasRole('warehouse') || $currentUser?->hasRole('package'))) {
             $dailyCountsQuery->where(function ($warehouseScope) use ($managedWarehouseId, $sharedQueueStatuses) {
@@ -1028,9 +1025,10 @@ class WarehouseDashboardController extends Controller
             $dailyCountsQuery->where('status', $status);
         }
 
-        $dailyCounts = $dailyCountsQuery
-            ->groupBy('day_key')
-            ->pluck('total', 'day_key');
+        $dailyCounts = collect(range(0, 6))->mapWithKeys(function ($offset) use ($today, $dailyCountsQuery) {
+            $date = $today->copy()->subDays($offset)->toDateString();
+            return [$date => (clone $dailyCountsQuery)->forPackingDate($date)->count()];
+        });
 
         $quickDates = collect(range(0, 6))->map(function ($offset) use ($today, $dailyCounts, $selectedDate) {
             $date = $today->copy()->subDays($offset);

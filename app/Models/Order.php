@@ -231,6 +231,16 @@ class Order extends Model
             })->orWhere(function ($importedOrder) use ($date, $deliveryDate, $importBatchId): void {
                 $importedOrder->whereNotNull($importBatchId)
                     ->whereDate($deliveryDate, $date);
+            })->orWhere(function ($sharedQueue) use ($date, $createdAt, $deliveryDate, $importBatchId): void {
+                // Unclaimed packing work remains visible to every warehouse on later days.
+                $sharedQueue->where(fn ($unassigned) => $unassigned
+                    ->whereNull($this->qualifyColumn('warehouse_id'))
+                    ->orWhere($this->qualifyColumn('warehouse_id'), '<=', 0))
+                    ->whereIn($this->qualifyColumn('status'), [self::STATUS_APPROVED, self::STATUS_READY_TO_PACK, self::STATUS_PACKING])
+                    ->where(function ($businessDate) use ($date, $createdAt, $deliveryDate, $importBatchId) {
+                        $businessDate->where(fn ($regular) => $regular->whereNull($importBatchId)->whereDate($createdAt, '<=', $date))
+                            ->orWhere(fn ($imported) => $imported->whereNotNull($importBatchId)->whereDate($deliveryDate, '<=', $date));
+                    });
             });
         });
     }
