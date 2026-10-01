@@ -226,6 +226,7 @@
         <div class="card border-0 shadow-sm">
             <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
+                    @php $hiddenTaskAssigneeIds = \App\Models\User::hiddenTaskAssigneeIds(); @endphp
                     <thead class="table-light">
                         <tr>
                             <th style="width:36px;">
@@ -235,6 +236,7 @@
                             <th>Team / Kho</th>
                             <th>Quyền</th>
                             <th>Popup ship</th>
+                            @if(auth()->user()?->hasRole('admin'))<th>Giao việc</th>@endif
                             <th>Trạng thái</th>
                             <th>Lần cuối online</th>
                             <th style="width:150px;">Hành động</th>
@@ -301,6 +303,15 @@
                                     <span class="text-muted">—</span>
                                 @endif
                             </td>
+                            @if(auth()->user()?->hasRole('admin'))
+                            <td>
+                                @php $hiddenFromTasks = in_array((int) $user->id, $hiddenTaskAssigneeIds, true); @endphp
+                                <form method="POST" action="{{ route('users.toggle-task-assignment-visibility', $user) }}">
+                                    @csrf
+                                    <button type="submit" class="btn btn-sm {{ $hiddenFromTasks ? 'btn-outline-secondary' : 'btn-success' }}" aria-label="Đổi hiển thị giao việc của {{ $user->name }}" aria-pressed="{{ $hiddenFromTasks ? 'false' : 'true' }}">{{ $hiddenFromTasks ? 'Ẩn' : 'Hiện' }}</button>
+                                </form>
+                            </td>
+                            @endif
                             <td>
                                 @if($isOnline)
                                     <span class="badge rounded-pill d-inline-flex align-items-center gap-1" style="background:rgba(34,197,94,.12);color:#16a34a;font-size:.75rem;">

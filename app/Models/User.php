@@ -91,6 +91,12 @@ class User extends Authenticatable
         return $this->hasMany(MobileApiToken::class);
     }
     // có một vai trò (hỗ trợ string hoặc array)
+    public static function hiddenTaskAssigneeIds(): array
+    {
+        return Setting::query()->where('key', 'like', 'task_assignee_hidden_%')->where('value', '1')
+            ->pluck('key')->map(fn ($key) => (int) substr($key, strlen('task_assignee_hidden_')))->filter()->values()->all();
+    }
+
     public function hasRole($role)
     {
         // Nếu $role là array, kiểm tra user có bất kỳ role nào không

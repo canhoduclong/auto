@@ -887,11 +887,13 @@ class TaskAssignmentController extends Controller
         if ($isPrivileged || (TaskMenuService::canAssignTasks($user) && $delegated->isEmpty())) {
             return User::query()
                 ->whereKeyNot($user->id)
+                ->whereNotIn('id', User::hiddenTaskAssigneeIds())
                 ->orderBy('name')
                 ->get(['id', 'name']);
         }
 
-        return $delegated;
+        $hiddenIds = User::hiddenTaskAssigneeIds();
+        return $delegated->reject(fn ($assignee) => in_array((int) $assignee->id, $hiddenIds, true))->values();
     }
 
     private function canViewTask(TaskAssignment $task, User $user): bool

@@ -457,6 +457,15 @@ class UserController extends Controller
         return redirect()->route('users.index')->with('success', __('users.messages.updated'));
     }
 
+    public function toggleTaskAssignmentVisibility(User $user)
+    {
+        abort_unless(auth()->user()?->hasRole('admin'), 403);
+        $hidden = Setting::enabled('task_assignee_hidden_'.$user->id);
+        Setting::set('task_assignee_hidden_'.$user->id, $hidden ? '0' : '1');
+
+        return back()->with('success', $hidden ? 'Đã hiển thị người dùng trong danh sách giao việc.' : 'Đã ẩn người dùng khỏi danh sách giao việc mới.');
+    }
+
     public function toggleShipperAssignmentVisibility(User $user)
     {
         abort_unless($user->roles()->whereIn('name', ['shipper', 'manager_shipper'])->exists(), 422, 'Người dùng này không có vai trò shipper.');
