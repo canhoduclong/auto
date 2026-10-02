@@ -113,13 +113,14 @@ class TaskAssignmentController extends Controller
         $parentId = $request->query('parent_id');
 
         $users = User::orderBy('name')->get(['id', 'name']);
+        $debtCustomers = \App\Models\Customer::visibleTo($user)->orderBy('name')->get(['id', 'name']);
 
         $useFrontend = $isFrontRoles && $isFrontendRoute;
         $layout = $useFrontend ? 'layouts.site' : 'layouts.admin';
         $indexRoute = $useFrontend ? 'tasks.index' : 'task-assignments.index';
         $storeRoute = $useFrontend ? 'tasks.store' : 'task-assignments.store';
 
-        return view('task_assignments.create', compact('workflows', 'users', 'allowedAssignees', 'parentId', 'layout', 'indexRoute', 'storeRoute'));
+        return view('task_assignments.create', compact('debtCustomers', 'workflows', 'users', 'allowedAssignees', 'parentId', 'layout', 'indexRoute', 'storeRoute'));
     }
 
     // ── Store ─────────────────────────────────────────────────────────
@@ -130,19 +131,24 @@ class TaskAssignmentController extends Controller
         abort_unless(TaskMenuService::canAssignTasks($user) || TaskDelegateConfig::canAssignTasks($user), 403);
 
         $data = $request->validate([
+            'task_type' => 'nullable|in:default,debt_collection',
+            'debt_items' => 'required_if:task_type,debt_collection|array|max:100',
+            'debt_items.*.customer_id' => 'required|integer|exists:customers,id',
+            'debt_items.*.sale_id' => 'required|integer|exists:users,id',
+            'debt_items.*.target' => 'required|numeric|min:1|max:999999999999',
             'title'            => 'required|string|max:255',
             'description'      => 'nullable|string|max:5000',
             'priority'         => 'required|in:low,medium,high,urgent',
             'approval_flow_id' => 'nullable|exists:approval_flows,id',
             'parent_id'        => 'nullable|exists:task_assignments,id',
-            'due_date'         => 'nullable|date_format:Y-m-d\TH:i|after_or_equal:now',
+            'due_date'         => 'nullable|date_format:Y-m-d|after_or_equal:today',
             'attachments.*'    => 'nullable|file|max:10240|mimes:jpg,jpeg,png,pdf,doc,docx,xlsx,zip',
             'assignee_ids'     => 'required|array|min:1',
             'assignee_ids.*'   => 'required|integer|distinct|exists:users,id',
         ]);
 
         if (!empty($data['due_date'])) {
-            $data['due_date'] = Carbon::createFromFormat('Y-m-d\TH:i', $data['due_date'])->format('Y-m-d H:i:s');
+            $data['due_date'] = Carbon::createFromFormat('!Y-m-d', $data['due_date'])->endOfDay()->format('Y-m-d H:i:s');
         }
 
         // Validate that chosen assignees are actually allowed for this user
@@ -155,6 +161,18 @@ class TaskAssignmentController extends Controller
             }
         }
 
+        $debtItems = [];
+        if (($data['task_type'] ?? 'default') === 'debt_collection') {
+            $customers = \App\Models\Customer::visibleTo($user)->whereIn('id', array_column($data['debt_items'], 'customer_id'))->get()->keyBy('id');
+            $sales = $this->allowedAssigneesFor($user)->keyBy('id');
+            foreach ($data['debt_items'] as $item) {
+                if (!$customers->has($item['customer_id']) || !$sales->has($item['sale_id']) || !in_array((int) $item['sale_id'], array_map('intval', $data['assignee_ids']), true)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['debt_items' => 'Khách hàng phải thuộc quyền truy cập; sale phụ trách phải nằm trong danh sách người nhận việc đã chọn.']);
+                }
+                $debtItems[] = ['customer_id' => (int) $item['customer_id'], 'customer_name' => $customers[$item['customer_id']]->name, 'sale_id' => (int) $item['sale_id'], 'sale_name' => $sales[$item['sale_id']]->name, 'target' => round((float) $item['target'], 2), 'collected' => 0];
+            }
+        }
+
         // Handle file uploads
         $paths = [];
         if ($request->hasFile('attachments')) {
@@ -164,6 +182,8 @@ class TaskAssignmentController extends Controller
         }
 
         $task = TaskAssignment::create([
+            'task_type' => $data['task_type'] ?? 'default',
+            'debt_items' => $debtItems ?: null,
             'code'             => TaskAssignment::generateCode(),
             'title'            => $data['title'],
             'description'      => $data['description'] ?? null,
@@ -206,6 +226,9 @@ class TaskAssignmentController extends Controller
             'subTasks.creator:id,name',
             'subTasks.assignees.user:id,name',
             'subTasks.statusLogs.changedBy:id,name',
+            'statusLogs.changedBy:id,name',
+            'completionImages',
+            'subTasks.completionImages',
             'approvalSteps.step',
             'approvalSteps.approver:id,name',
             'assignees.user:id,name',
@@ -228,6 +251,27 @@ class TaskAssignmentController extends Controller
         $subTaskAssignees = $this->allowedAssigneesFor($user);
 
         return view('task_assignments.show', compact('task', 'canAct', 'current', 'myAssignee', 'layout', 'indexRoute', 'showRoute', 'createRoute', 'subTaskAssignees'));
+    }
+
+    public function updateDebtProgress(Request $request, TaskAssignment $taskAssignment, int $item)
+    {
+        $data = $request->validate(['collected' => 'required|numeric|min:0|max:999999999999', 'note' => 'required|string|max:1000']);
+        DB::transaction(function () use ($request, $taskAssignment, $item, $data) {
+            $task = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
+            abort_unless($task->task_type === 'debt_collection' && isset($task->debt_items[$item]), 404);
+            abort_if(in_array($task->status, ['done', 'cancelled', 'completed'], true), 422, 'Công việc đã kết thúc hoặc chờ xác nhận.');
+            $items = $task->debt_items;
+            abort_unless((int) $task->created_by === (int) $request->user()->id || ((int) $items[$item]['sale_id'] === (int) $request->user()->id && $task->assignees()->where('user_id', $request->user()->id)->exists()), 403);
+            if ((float) $data['collected'] > (float) $items[$item]['target']) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['collected' => 'Số tiền báo thu không được vượt mục tiêu.']);
+            }
+            $previous = $items[$item]['collected'];
+            $items[$item]['collected'] = round((float) $data['collected'], 2);
+            $items[$item]['updated_at'] = now()->toIso8601String();
+            $task->update(['debt_items' => $items]);
+            TaskStatusLog::log($task, $task->status, $request->user(), 'Báo cáo thu nợ '.$items[$item]['customer_name'].': '.$previous.' → '.$items[$item]['collected'].'đ. '.$data['note']);
+        });
+        return back()->with('success', 'Đã cập nhật tiến độ thu nợ.');
     }
 
     public function evaluateAssignee(Request $request, TaskAssignment $taskAssignment, TaskAssignee $assignee)
@@ -361,14 +405,14 @@ class TaskAssignmentController extends Controller
             'priority'         => 'required|in:low,medium,high,urgent',
             'approval_flow_id' => 'nullable|exists:approval_flows,id',
             'parent_id'        => 'nullable|exists:task_assignments,id',
-            'due_date'         => 'nullable|date_format:Y-m-d\TH:i',
+            'due_date'         => 'nullable|date_format:Y-m-d',
             'attachments.*'    => 'nullable|file|max:10240|mimes:jpg,jpeg,png,pdf,doc,docx,xlsx,zip',
             'assignee_ids'     => 'required|array|min:1',
             'assignee_ids.*'   => 'required|integer|distinct|exists:users,id',
         ]);
 
         if (!empty($data['due_date'])) {
-            $data['due_date'] = Carbon::createFromFormat('Y-m-d\TH:i', $data['due_date'])->format('Y-m-d H:i:s');
+            $data['due_date'] = Carbon::createFromFormat('!Y-m-d', $data['due_date'])->endOfDay()->format('Y-m-d H:i:s');
         }
 
         // Validate that chosen assignees are actually allowed for this user

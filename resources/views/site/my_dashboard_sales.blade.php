@@ -383,6 +383,7 @@
         </aside>
 
         <main class="dashboard-main">
+@include('task_assignments.partials.dashboard-reminders')
             @unless($isManagerDashboard ?? false)
                 @include('site.partials.warehouse_adjustment_requests')
             @endunless

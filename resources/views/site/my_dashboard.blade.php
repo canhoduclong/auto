@@ -518,6 +518,7 @@
 @endpush
 
 @section('content')
+@include('task_assignments.partials.dashboard-reminders')
 <section class="profile-page">
     <div class="container profile-shell">
         <div class="profile-hero">

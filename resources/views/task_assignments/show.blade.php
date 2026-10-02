@@ -38,17 +38,50 @@
 .info-grid .ig-label { color: #94a3b8; }
 .info-grid .ig-val { font-weight: 600; }
 .attachment-thumb { max-width: 80px; max-height: 60px; border-radius: 6px; border: 1px solid #dee2e6; object-fit: cover; }
+.task-person { border-bottom:1px solid #e2e8f0; padding:16px 0; }
+.task-person-head { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
+.task-person-head > strong { flex:1; min-width:150px; }
+.task-person details > summary { cursor:pointer; color:#087f80; }
+.task-activity { margin:8px 0; padding-left:14px; border-left:2px solid #dce9e7; font-size:13px; overflow-wrap:anywhere; }
+.task-milestones { display:flex; overflow-x:auto; padding:16px 0 24px; }
+.task-milestone { flex:1; min-width:120px; position:relative; padding:28px 6px 0; font-size:12px; text-align:center; }
+.task-milestone::before { content:''; position:absolute; height:2px; background:#b9d2cc; top:9px; left:0; right:0; }
+.task-milestone:first-child::before { left:50%; }
+.task-milestone:last-child::before { right:50%; }
+.task-milestone-dot { position:absolute; left:50%; top:2px; transform:translateX(-50%); width:16px; height:16px; border:2px solid currentColor; background:#fff; border-radius:50%; z-index:1; }
+.task-person-columns { display:grid; grid-template-columns:minmax(0,1fr) 100px 150px; gap:12px; align-items:center; }
+.task-person-columns > :nth-child(2), .task-person-columns > :nth-child(3) { text-align:center; justify-self:center; }
+.task-person-columns > strong { min-width:0; }
+.evaluation-widget { position:relative; }
+.evaluation-options { position:absolute; width:280px; max-width:calc(100vw - 48px); right:0; top:100%; padding:14px; background:#fff; border:1px solid #cbd5e1; border-radius:8px; box-shadow:0 6px 20px #0002; z-index:10; text-align:left; }
+.evaluation-options input { width:100%; accent-color:#0d827a; }
+@media(max-width:575px) { .task-person-columns { grid-template-columns:minmax(0,1fr) 65px 105px; gap:4px; font-size:12px; } .task-person-columns .badge { white-space:normal; } .evaluation-options { right:-80px; } }
+.task-document { display:flex; gap:12px; padding:16px 0; border-bottom:1px solid #e2e8f0; overflow-wrap:anywhere; }
+.task-document img { width:85px; height:70px; object-fit:cover; }
+.task-document > div { min-width:0; }
+@media(max-width:575px) { .content-wrapper.container { padding:0 12px; } .task-person-head { gap:8px; } }
+.evaluation-toggle { border:0; background:transparent; padding:2px; color:#075985; cursor:pointer; }
+.evaluation-options[hidden] { display:none !important; }
+.evaluation-options { width:380px; }
+.evaluation-options output { border:1px solid #cbd5e1; }
+.evaluation-scale { position:relative; padding-bottom:8px; }
+.evaluation-ticks { display:flex; justify-content:space-between; }
+.evaluation-ticks button { position:relative; padding:0 0 22px; width:24px; border:0; background:none; color:#526b82; font-size:10px; cursor:pointer; }
+.evaluation-ticks button span { position:absolute; bottom:4px; left:50%; transform:translateX(-50%); width:7px; height:7px; border-radius:50%; background:#cbd5e1; }
+.evaluation-ticks button.selected { color:#ea7617; font-weight:bold; }
+.evaluation-ticks button.selected span { background:#ea7617; }
+.evaluation-options .evaluation-range { position:absolute; left:6px; bottom:9px; width:calc(100% - 12px); height:12px; margin:0; accent-color:#f58220; cursor:pointer; }
 </style>
 @endpush
 
 @section('content')
 <div class="content-wrapper container">
-<div class="content-header d-flex align-items-center py-3 gap-3">
+<div class="content-header d-flex align-items-center flex-wrap py-3 gap-3">
     <a href="{{ route($indexRoute ?? 'task-assignments.index') }}" class="btn btn-sm btn-outline-secondary">
         <i class="ph ph-arrow-left"></i>
     </a>
     <div class="flex-grow-1">
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center flex-wrap gap-2">
             <h4 class="mb-0">{{ $task->title }}</h4>
             <span class="badge bg-{{ $task->statusColor() }} ms-1">
                 {{ \App\Models\TaskAssignment::STATUS_LABELS[$task->status] ?? $task->status }}
@@ -57,7 +90,7 @@
                 {{ \App\Models\TaskAssignment::PRIORITY_LABELS[$task->priority] }}
             </span>
         </div>
-        <small class="text-muted">{{ $task->code }} &bull; Tao boi {{ $task->creator?->name }} &bull; {{ $task->created_at?->format('d/m/Y H:i') }}</small>
+        <small class="text-muted">{{ $task->code }} &bull; Tạo bởi {{ $task->creator?->name }} &bull; {{ $task->created_at?->format('d/m/Y H:i') }} · Hạn chót: <strong class="{{ $task->isOverdue() ? 'text-danger' : '' }}">{{ $task->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</strong></small>
     </div>
     @if($task->canBeEditedBy(auth()->user()))
             <a href="{{ route('task-assignments.edit', $task) }}" class="btn btn-sm btn-outline-primary">
@@ -75,6 +108,7 @@
 
 <div class="content-body pb-4">
     @if(session('success'))<div class="alert alert-success alert-dismissible fade show">{{ session('success') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>@endif
+    @if($errors->has('collected') || $errors->has('note'))<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
     @error('evaluation_score')<div class="alert alert-danger">{{ $message }}</div>@enderror
     @if(session('error'))<div class="alert alert-danger alert-dismissible fade show">{{ session('error') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>@endif
 
@@ -85,47 +119,13 @@
             {{-- Description --}}
             <div class="card shadow-sm mb-3">
                 <div class="card-header py-2 fw-semibold small text-uppercase text-muted">
-                    <i class="ph-file-text me-1"></i>Noi dung cong viec
+                    <i class="ph-file-text me-1"></i>Nội dung công việc
                 </div>
                 <div class="card-body">
-                    <div class="info-grid mb-3">
-                        <span class="ig-label">Ma cong viec</span>
-                        <span class="ig-val">{{ $task->code }}</span>
-
-                        <span class="ig-label">Nguoi tao</span>
-                        <span class="ig-val">{{ $task->creator?->name ?? '-' }}</span>
-
-                        <span class="ig-label">Quy trinh</span>
-                        <span class="ig-val">{{ $task->workflow?->name ?? 'Khong co' }}</span>
-
-                        @if($task->parent)
-                            <span class="ig-label">Cong viec cha</span>
-                            <span class="ig-val">
-                                <a href="{{ route($showRoute ?? 'task-assignments.show', $task->parent) }}">
-                                    {{ $task->parent->code }} — {{ $task->parent->title }}
-                                </a>
-                            </span>
-                        @endif
-
-                        @if($task->due_date)
-                            <span class="ig-label">Han chot</span>
-                            <span class="ig-val {{ $task->isOverdue() ? 'text-danger' : '' }}">
-                                {{ $task->due_date->format('d/m/Y H:i') }}
-                                @if($task->isOverdue()) <span class="badge bg-danger">Tre han</span> @endif
-                            </span>
-                        @endif
-
-                        @if($task->completed_at)
-                            <span class="ig-label">Hoan thanh luc</span>
-                            <span class="ig-val text-success">{{ $task->completed_at->format('d/m/Y H:i') }}</span>
-                        @endif
-
-                        @if($task->reject_reason)
-                            <span class="ig-label">Ly do tu choi</span>
-                            <span class="ig-val text-danger">{{ $task->reject_reason }}</span>
-                        @endif
-                    </div>
-
+                    @if($task->parent)
+                        <a class="small d-block mb-2" href="{{ route('tasks.show', $task->parent) }}">Công việc chính: {{ $task->parent->title }}</a>
+                    @endif
+                    @if($task->reject_reason)<div class="alert alert-warning">{{ $task->reject_reason }}</div>@endif
                     @if($task->description)
                         <div class="border-top pt-3">
                             <div class="small fw-semibold text-muted mb-1">Mo ta:</div>
@@ -133,72 +133,14 @@
                         </div>
                     @endif
 
-                    {{-- Attachments --}}
-                    @if($task->attachments && count($task->attachments) > 0)
-                        <div class="border-top pt-3 mt-3">
-                            <div class="small fw-semibold text-muted mb-2">Dinh kem:</div>
-                            <div class="d-flex gap-2 flex-wrap">
-                                @foreach($task->attachments as $att)
-                                    @php $ext = pathinfo($att, PATHINFO_EXTENSION); @endphp
-                                    @if(in_array(strtolower($ext), ['jpg','jpeg','png','gif','webp']))
-                                        <a href="{{ Storage::url($att) }}" target="_blank">
-                                            <img src="{{ Storage::url($att) }}" class="attachment-thumb" alt="Dinh kem">
-                                        </a>
-                                    @else
-                                        <a href="{{ Storage::url($att) }}" target="_blank" class="btn btn-sm btn-outline-secondary">
-                                            <i class="ph-file-arrow-down me-1"></i>{{ basename($att) }}
-                                        </a>
-                                    @endif
-                                @endforeach
-                            </div>
-                        </div>
-                    @endif
                 </div>
             </div>
 
-            <div class="card shadow-sm mb-3">
-                <div class="card-header fw-semibold">Tiến độ công việc · {{ $task->code }}</div>
-                <div class="card-body timeline ms-3">
-                    <div class="tl-item"><span class="tl-dot approved"></span><strong>{{ $task->title }}</strong><div class="small text-muted">Tạo {{ $task->created_at?->format('d/m/Y H:i') }} · Hạn: {{ $task->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</div></div>
-                    @forelse($task->subTasks->sortBy('due_date')->groupBy('created_by') as $children)
-                        <section class="mb-4">
-                            <h6 class="text-muted mb-3">Người giao: {{ $children->first()->creator?->name ?? 'Không xác định' }}</h6>
-                            @foreach($children as $sub)
-                                <div class="tl-item ms-3" style="overflow-wrap:anywhere">
-                                    <span class="tl-dot {{ $sub->status === 'done' ? 'approved' : 'pending' }}"></span>
-                                    <div class="d-flex gap-2 align-items-start flex-wrap">
-                                        <span class="small text-muted">{{ $sub->assignees->map(fn ($assignment) => $assignment->user?->name)->filter()->join(', ') ?: 'Chưa giao' }}</span>
-                                        <a href="{{ route('tasks.show', $sub) }}" class="fw-semibold flex-grow-1">{{ $sub->title }}</a>
-                                        <span class="badge bg-{{ $sub->statusColor() }}">{{ \App\Models\TaskAssignment::STATUS_LABELS[$sub->status] ?? $sub->status }}</span>
-                                    </div>
-                                    <div class="small text-muted d-flex flex-wrap gap-3 mt-1">
-                                        <span>Tạo: {{ $sub->created_at?->format('d/m/Y') }}</span>
-                                        <span>Hạn: {{ $sub->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</span>
-                                        @if($sub->due_date && !in_array($sub->status, ['completed', 'done', 'cancelled'], true))
-                                            <span class="{{ $sub->isOverdue() ? 'text-danger' : 'text-muted' }}">{{ $sub->isOverdue() ? 'Quá hạn' : 'Còn hạn' }} · {{ $sub->due_date->diffForHumans() }}</span>
-                                        @endif
-                                    </div>
-                                    @foreach($sub->statusLogs->sortBy('created_at') as $activity)
-                                        <div class="small mt-1"><span class="text-muted">{{ $activity->created_at?->format('d/m/Y H:i') }} · {{ $activity->changedBy?->name ?? 'Hệ thống' }}</span> — {{ $activity->reason ?: (\App\Models\TaskAssignment::STATUS_LABELS[$activity->to_status] ?? $activity->to_status) }}</div>
-                                    @endforeach
-                                    @if($sub->completion_content)<div class="small mt-2" style="white-space:pre-wrap">{{ $sub->completion_content }}</div>@endif
-                                    @foreach($sub->assignees as $recipientAssignment)
-                                        @include('task_assignments.partials.evaluation', ['ratedTask' => $sub, 'ratedAssignment' => $recipientAssignment])
-                                    @endforeach
-                                    @if($sub->assignees->contains('user_id', auth()->id()) && in_array($sub->status, ['pending', 'processing', 'rejected'], true))
-                                        <a class="btn btn-sm btn-outline-success mt-2" href="{{ route('tasks.complete-form', $sub) }}">Báo hoàn thành / tài liệu</a>
-                                    @endif
-                                </div>
-                            @endforeach
-                        </section>
-                    @empty
-                        <p class="small text-muted">Chưa có công việc con.</p>
-                    @endforelse
-                    <div class="tl-item"><span class="tl-dot {{ $task->status === 'done' ? 'approved' : 'pending' }}"></span>{{ $task->status === 'done' ? 'Đã hoàn thành công việc chính' : 'Tổng hợp kết quả và xác nhận công việc chính' }}</div>
-                </div>
-                <div class="card-footer small text-muted">{{ $task->subTasks->whereIn('status', ['completed', 'done'])->count() }}/{{ $task->subTasks->count() }} việc con đã báo hoàn thành. Kết quả và tài liệu được lưu trong từng việc con.</div>
-            </div>
+            @include('task_assignments.partials.debt-progress')
+            @include('task_assignments.partials.progress')
             @if(!in_array($task->status, ['done', 'cancelled'], true) && (auth()->user()->hasRole('admin') || (int) $task->created_by === (int) auth()->id() || $myAssignee))
+                <details class="mb-3" @if($errors->any() && !$errors->has('evaluation_score')) open @endif>
+                <summary class="btn btn-primary mb-2">Giao việc con</summary>
                 <form class="card card-body shadow-sm" action="{{ route('tasks.subtasks.store', $task) }}" method="POST">
                     @csrf
                     <h6>Thêm công việc con</h6>
@@ -238,6 +180,39 @@
                     <textarea id="child-description" class="form-control mb-3" name="description" maxlength="5000">{{ old('description') }}</textarea>
                     <button class="btn btn-primary align-self-start" type="submit" @disabled($subTaskAssignees->isEmpty())>Giao việc con</button>
                 </form>
+                </details>
+            @endif
+            {{-- My assignee action card --}}
+            @if($myAssignee && in_array($myAssignee->status, ['pending', 'in_progress', 'processing']))
+                <div class="card border-primary shadow-sm mb-3">
+                    <div class="card-header bg-primary bg-opacity-10 py-2">
+                        <span class="fw-semibold text-primary"><i class="ph-clipboard-text me-1"></i>Cập nhật công việc của bạn</span>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-3">
+                            Trạng thái hiện tại: <span class="badge bg-{{ $myAssignee->statusColor() }}">{{ $myAssignee->status }}</span>
+                        </p>
+                        <form action="{{ route('task-assignments.assignee-update', $task) }}" method="POST">
+                            @csrf
+                            <div class="mb-2">
+                                <select name="status" class="form-select form-select-sm">
+                                    <option value="in_progress" {{ in_array($myAssignee->status, ['in_progress', 'processing']) ? 'selected' : '' }}>Đang thực hiện</option>
+                                    <option value="rejected">Không thể thực hiện</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <textarea name="note" class="form-control form-control-sm" rows="2"
+                                          placeholder="Nội dung đã thực hiện / kết quả...">{{ $myAssignee->note }}</textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-sm w-100">
+                                <i class="ph-check me-1"></i>Cập nhật trạng thái
+                            </button>
+                        </form>
+                        <a href="{{ route('task-assignments.complete-form', $task) }}" class="btn btn-success btn-sm w-100 mt-2">
+                            <i class="ph-check-circle me-1"></i>Hoàn thành công việc
+                        </a>
+                    </div>
+                </div>
             @endif
 
         </div>
@@ -245,102 +220,7 @@
         {{-- ── RIGHT: approval chain + actions ── --}}
         <div class="col-lg-4">
 
-            {{-- My assignee action card --}}
-            @if($myAssignee && in_array($myAssignee->status, ['pending', 'in_progress', 'processing']))
-                <div class="card border-primary shadow-sm mb-3">
-                    <div class="card-header bg-primary bg-opacity-10 py-2">
-                        <span class="fw-semibold text-primary"><i class="ph-clipboard-text me-1"></i>Viec duoc giao cho ban</span>
-                    </div>
-                    <div class="card-body">
-                        <p class="small text-muted mb-3">
-                            Trang thai hien tai: <span class="badge bg-{{ $myAssignee->statusColor() }}">{{ $myAssignee->status }}</span>
-                        </p>
-                        <form action="{{ route('task-assignments.assignee-update', $task) }}" method="POST">
-                            @csrf
-                            <div class="mb-2">
-                                <select name="status" class="form-select form-select-sm">
-                                    <option value="in_progress" {{ in_array($myAssignee->status, ['in_progress', 'processing']) ? 'selected' : '' }}>Dang thuc hien</option>
-                                    <option value="rejected">Khong the thuc hien</option>
-                                </select>
-                            </div>
-                            <div class="mb-2">
-                                <textarea name="note" class="form-control form-control-sm" rows="2"
-                                          placeholder="Ghi chu ket qua (tuy chon)...">{{ $myAssignee->note }}</textarea>
-                            </div>
-                            <button type="submit" class="btn btn-primary btn-sm w-100">
-                                <i class="ph-check me-1"></i>Cap nhat trang thai
-                            </button>
-                        </form>
-                        <a href="{{ route('task-assignments.complete-form', $task) }}" class="btn btn-success btn-sm w-100 mt-2">
-                            <i class="ph-check-circle me-1"></i>Hoan thanh cong viec
-                        </a>
-                    </div>
-                </div>
-            @endif
-
-            {{-- Assignees list --}}
-            @if($task->assignees->isNotEmpty())
-                <div class="card shadow-sm mb-3">
-                    <div class="card-header py-2 fw-semibold small text-uppercase text-muted">
-                        <div class="member-evaluation-heading"><span>Thành viên nhận việc ({{ $task->assignees->count() }})</span><span class="text-center text-lowercase">Đánh giá</span><span></span></div>
-                    </div>
-                    <div class="card-body p-0">
-                        <ul class="list-group list-group-flush">
-                            @foreach($task->assignees as $ta)
-                                <li class="list-group-item member-evaluation-row py-2">
-                                    <div class="member-evaluation-info">
-                                        <div class="fw-semibold small">{{ $ta->user?->name }}</div>
-                                        @if($ta->note)
-                                            <div class="text-muted" style="font-size:11px">{{ \Str::limit($ta->note, 50) }}</div>
-                                        @endif
-                                        @if($ta->completed_at)
-                                            <div class="text-success" style="font-size:11px">
-                                                Xong: {{ $ta->completed_at->format('d/m H:i') }}
-                                            </div>
-                                        @endif
-                                    </div>
-                                    @include('task_assignments.partials.evaluation', ['ratedTask' => $task, 'ratedAssignment' => $ta, 'compactEvaluation' => true])
-                                    <span class="member-evaluation-status badge bg-{{ $ta->statusColor() }}">{{ $ta->status }}</span>
-                                </li>
-                            @endforeach
-                        </ul>
-                    </div>
-                </div>
-            @endif
-
-            @php
-                $secondaryMembers = $task->subTasks->sortBy('due_date')->flatMap(function ($child) {
-                    return $child->assignees->map(fn ($assignment) => ['task' => $child, 'assignment' => $assignment]);
-                })->groupBy(fn ($entry) => $entry['assignment']->user_id);
-                $secondaryStatusLabels = ['pending' => 'Chờ thực hiện', 'in_progress' => 'Đang thực hiện', 'processing' => 'Đang thực hiện', 'completed' => 'Đã báo hoàn thành', 'done' => 'Đã hoàn thành', 'rejected' => 'Không thể thực hiện'];
-            @endphp
-            <div class="card shadow-sm mb-3">
-                <div class="card-header py-2 fw-semibold small text-uppercase text-muted">
-                    <i class="ph-users-three me-1"></i>Thành viên nhận việc thứ cấp ({{ $secondaryMembers->count() }})
-                </div>
-                <div class="list-group list-group-flush">
-                    @forelse($secondaryMembers as $entries)
-                        <div class="list-group-item py-3">
-                            <div class="d-flex justify-content-between gap-2 mb-2">
-                                <strong class="small">{{ $entries->first()['assignment']->user?->name ?? 'Người dùng không còn tồn tại' }}</strong>
-                                <span class="badge bg-light text-dark">{{ $entries->count() }} việc con</span>
-                            </div>
-                            @foreach($entries as $entry)
-                                @php $child = $entry['task']; $assignment = $entry['assignment']; @endphp
-                                <div class="border-start ps-2 mt-2 small" style="overflow-wrap:anywhere">
-                                    <a href="{{ route('tasks.show', $child) }}" class="text-decoration-none fw-semibold">{{ $child->title }}</a>
-                                    <div class="text-muted">Người giao: {{ $child->creator?->name ?? 'Không xác định' }}</div>
-                                    <div class="{{ $child->isOverdue() && !$assignment->completed_at ? 'text-danger' : 'text-muted' }}">Hạn: {{ $child->due_date?->format('d/m/Y') ?? 'Chưa đặt' }}</div>
-                                    <span class="badge bg-{{ $child->status === 'cancelled' ? 'secondary' : $assignment->statusColor() }}">{{ $child->status === 'cancelled' ? 'Đã hủy' : ($secondaryStatusLabels[$assignment->status] ?? $assignment->status) }}</span>
-                                    @if($assignment->completed_at)<div class="text-success mt-1">Báo hoàn thành: {{ $assignment->completed_at->format('d/m/Y H:i') }}</div>@endif
-                                </div>
-                            @endforeach
-                        </div>
-                    @empty
-                        <div class="list-group-item small text-muted py-3">Chưa có thành viên được giao công việc con.</div>
-                    @endforelse
-                </div>
-            </div>
+            @include('task_assignments.partials.documents')
 
             {{-- Action card (for current workflow step actor) --}}
             @if($canAct && $current)

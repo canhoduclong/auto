@@ -1,0 +1,1 @@
+<div class="task-activity"><span class="text-muted">{{ $activity->created_at?->format('d/m/Y H:i') }} · {{ $activity->changedBy?->name ?? 'Hệ thống' }}</span> — {{ $activity->reason ?: (\App\Models\TaskAssignment::STATUS_LABELS[$activity->to_status] ?? $activity->to_status) }}</div>

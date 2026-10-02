@@ -69,6 +69,7 @@ class TaskAssignment extends Model
     ];
 
     protected $fillable = [
+        'task_type', 'debt_items',
         'code', 'title', 'description', 'priority', 'status',
         'created_by', 'approval_flow_id', 'parent_id',
         'due_date', 'completed_at', 'attachments', 'reject_reason',
@@ -77,6 +78,7 @@ class TaskAssignment extends Model
     ];
 
     protected $casts = [
+        'debt_items' => 'array',
         'due_date'                  => 'datetime',
         'completed_at'              => 'datetime',
         'completion_verified_at'    => 'datetime',

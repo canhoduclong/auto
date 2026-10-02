@@ -67,9 +67,9 @@
                             </div>
                             <div class="col-sm-6">
                                 <label class="form-label fw-semibold">Hạn chót</label>
-                                <input type="datetime-local" name="due_date" id="due_date_input" class="form-control"
-                                       value="{{ old('due_date') ? \Carbon\Carbon::parse(old('due_date'))->format('Y-m-d\\TH:i') : '' }}"
-                                       step="60">
+                                <input type="date" name="due_date" id="due_date_input" class="form-control"
+                                       value="{{ old('due_date') ? \Carbon\Carbon::parse(old('due_date'))->format('Y-m-d') : '' }}"
+                                       >
                                 <small id="due_date_preview" class="text-muted d-block mt-1"></small>
                             </div>
                         </div>
@@ -89,6 +89,7 @@
                             </select>
                         </div>
 
+                        @include('task_assignments.partials.debt-create')
                         {{-- Multiple assignees allowed according to the current user's permissions. --}}
                         @if($allowedAssignees->isNotEmpty())
                         <div class="mb-3">
@@ -194,14 +195,8 @@ function formatDueDateForDisplay(value) {
         return '';
     }
 
-    // Input format from datetime-local: YYYY-MM-DDTHH:mm
-    const [datePart, timePart] = value.split('T');
-    if (!datePart || !timePart) {
-        return value;
-    }
-
-    const [year, month, day] = datePart.split('-');
-    return `${day}/${month}/${year} ${timePart}`;
+    const [year, month, day] = value.split('-');
+    return `${day}/${month}/${year} (cuối ngày · 24:00)`;
 }
 
 function initDueDatePreview() {
@@ -213,11 +208,11 @@ function initDueDatePreview() {
 
     const render = () => {
         if (!input.value) {
-            preview.textContent = 'Chua chon han chot';
+            preview.textContent = 'Chưa chọn hạn chót';
             return;
         }
 
-        preview.textContent = `Hien thi: ${formatDueDateForDisplay(input.value)}`;
+        preview.textContent = `Hạn chót: ${formatDueDateForDisplay(input.value)}`;
     };
 
     input.addEventListener('input', render);

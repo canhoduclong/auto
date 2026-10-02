@@ -17,7 +17,7 @@ class TaskEvaluationTest extends TestCase
         $this->app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
         config(['database.default'=>'sqlite', 'database.connections.sqlite.database'=>':memory:', 'cache.default'=>'array', 'session.driver'=>'array']);
         DB::purge('sqlite');
-        foreach (['users'=>'name', 'settings'=>'key,value', 'task_assignments'=>'created_by,status', 'task_assignees'=>'task_id,user_id,status,evaluation_score,evaluated_by,evaluated_at', 'task_status_logs'=>'task_id,from_status,to_status,changed_by,reason'] as $name=>$columns) {
+        foreach (['users'=>'name', 'settings'=>'key,value', 'task_assignments'=>'created_by,status,task_type,debt_items', 'task_assignees'=>'task_id,user_id,status,evaluation_score,evaluated_by,evaluated_at', 'task_status_logs'=>'task_id,from_status,to_status,changed_by,reason'] as $name=>$columns) {
             Schema::create($name, function (Blueprint $table) use ($columns) {
                 $table->id();
                 foreach (explode(',', $columns) as $column) $table->string($column)->nullable();
@@ -59,6 +59,24 @@ class TaskEvaluationTest extends TestCase
         $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
         $this->score(90);
     }
+    public function test_debt_progress_is_restricted_and_audited(): void
+    {
+        $task = TaskAssignment::findOrFail(1);
+        $task->update(['task_type'=>'debt_collection', 'debt_items'=>[['customer_name'=>'Customer', 'sale_id'=>2, 'target'=>1000, 'collected'=>0]]]);
+        $request = Request::create('/tasks/1/debt-progress/0', 'POST', ['collected'=>500, 'note'=>'Partial collection']);
+        $request->setUserResolver(fn () => User::findOrFail(2));
+        app(TaskAssignmentController::class)->updateDebtProgress($request, $task, 0);
+        self::assertEquals(500, $task->fresh()->debt_items[0]['collected']);
+        self::assertSame(1, DB::table('task_status_logs')->count());
+        $request->merge(['collected'=>1001]);
+        try { app(TaskAssignmentController::class)->updateDebtProgress($request, $task, 0); self::fail('Exceeded target'); }
+        catch (\Illuminate\Validation\ValidationException $e) { self::assertEquals(500, $task->fresh()->debt_items[0]['collected']); }
+        DB::table('task_assignees')->delete();
+        $this->expectException(\Symfony\Component\HttpKernel\Exception\HttpException::class);
+        $request->merge(['collected'=>600]);
+        app(TaskAssignmentController::class)->updateDebtProgress($request, $task, 0);
+    }
+
     public function test_invalid_scores_are_rejected(): void
     {
         foreach ([-1, 101, 4.5, 'invalid', ''] as $score) {
