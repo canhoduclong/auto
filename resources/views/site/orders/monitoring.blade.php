@@ -2188,7 +2188,10 @@
                                 ...$zaloProductLines->all(),
                                 '',
                                 trim((string) $order->note) !== '' ? 'Ghi chú: '.trim((string) $order->note) : null,
-                                trim((string) $order->delivery_time) !== '' ? "\nGiờ giao: ".trim((string) $order->delivery_time) : null,
+                                "\nGiờ giao: ".$deliveryTime,
+                                trim((string) ($order->delivery_time_note ?: $order->customer?->delivery_time_note)) !== ''
+                                    ? 'Ghi chú giờ giao: '.trim((string) ($order->delivery_time_note ?: $order->customer?->delivery_time_note))
+                                    : null,
                                 $order->use_truck_station && $truckStationName !== '' ? "\nGửi hàng nhà xe: ".$truckStationName.'.' : null,
                                 $order->use_truck_station && $truckStationAddress !== '' ? 'Đ/C: '.$truckStationAddress : null,
                             ])->filter(fn ($line) => $line !== null)->implode("\n");

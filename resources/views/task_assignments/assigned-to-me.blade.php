@@ -93,6 +93,7 @@
 @section('content')
 <div class="container-fluid task-list-container">
     <div class="container">
+        @include('task_assignments.partials.list-tabs', ['activeTaskTab' => 'received'])
         <div class="mb-4">
             <h2>
                 <i class="bi bi-list-task"></i> Công việc được giao cho tôi

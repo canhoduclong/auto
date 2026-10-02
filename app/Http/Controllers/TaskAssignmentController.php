@@ -834,9 +834,9 @@ class TaskAssignmentController extends Controller
         $layout = $isWarehouse
             ? 'layouts.warehouse'
             : (($isFrontRoles && $isFrontendRoute) ? 'layouts.site' : 'layouts.app');
-        $filterRoute = $isWarehouse
-            ? 'tasks.my-tasks'
-            : (($isFrontRoles && $isFrontendRoute) ? 'my-tasks' : 'task-assignments.assigned-to-me');
+        $filterRoute = $isFrontendRoute
+            ? 'my-tasks'
+            : ($isWarehouse ? 'tasks.my-tasks' : 'task-assignments.assigned-to-me');
 
         return view('task_assignments.assigned-to-me', compact('tasks', 'layout', 'filterRoute'));
     }

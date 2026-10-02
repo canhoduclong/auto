@@ -99,6 +99,7 @@
 @section('content')
 <div class="container-fluid task-list-container">
     <div class="container">
+        @include('task_assignments.partials.list-tabs', ['activeTaskTab' => 'assigned'])
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h2>

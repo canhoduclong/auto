@@ -362,6 +362,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/accounts/{account}/deposit', [\App\Http\Controllers\AccountController::class, 'deposit'])->name('accounts.deposit');
         Route::post('/accounts/{account}/withdraw', [\App\Http\Controllers\AccountController::class, 'withdraw'])->name('accounts.withdraw');
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'accountingIndex'])->name('finance-requests.index');
+        Route::get('/requests/create', [DepartmentFinanceRequestController::class, 'accountingCreate'])->name('finance-requests.create');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'accountingStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'accountingPrint'])->name('finance-requests.print');
     });

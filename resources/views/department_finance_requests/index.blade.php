@@ -1,7 +1,7 @@
 @extends($config['layout'])
 
 @section('title', 'Phiếu tài chính')
-@section('subtitle', $source === 'manager' && !($showCreateForm ?? false) ? 'Danh sách phiếu yêu cầu đã gửi' : 'Tạo phiếu yêu cầu thu/chi hoặc phiếu đề nghị thanh toán')
+@section('subtitle', in_array($source, ['manager', 'accounting'], true) && !($showCreateForm ?? false) ? 'Danh sách phiếu yêu cầu đã gửi' : 'Tạo phiếu yêu cầu thu/chi hoặc phiếu đề nghị thanh toán')
 
 @section('content')
 @php
@@ -14,6 +14,7 @@
     $editingRequest = $editingRequest ?? null;
     $showCreateForm = $showCreateForm ?? false;
     $isManagerPage = $source === 'manager';
+    $separateCreatePage = in_array($source, ['manager', 'accounting'], true);
     $selectedFormType = old('request_form_type', $editingRequest?->request_form_type ?? \App\Models\Transaction::REQUEST_FORM_CASH);
     $oldItems = old('items', $editingRequest?->request_items ?? [['content' => '', 'unit' => '', 'quantity' => 1, 'unit_price' => 0]]);
     $selectedMethod = old('method', $editingRequest?->method ?? 'cash');
@@ -252,7 +253,7 @@
     }
 </style>
 
-<div class="finance-request-page {{ $isManagerPage && $showCreateForm ? 'manager-create-page' : '' }}">
+<div class="finance-request-page {{ $separateCreatePage && $showCreateForm ? 'manager-create-page' : '' }}">
     @if($errors->any())
         <div class="alert alert-danger border-0 shadow-sm">
             @foreach($errors->all() as $error)
@@ -262,8 +263,8 @@
     @endif
 
     <div class="row g-3 align-items-start">
-        @if(!$isManagerPage || $showCreateForm)
-        <div class="{{ $isManagerPage ? 'col-12' : 'col-lg-5' }}">
+        @if(!$separateCreatePage || $showCreateForm)
+        <div class="{{ $separateCreatePage ? 'col-12' : 'col-lg-5' }}">
     <div class="fr-panel">
         <div class="fr-panel-head">
             <div>
@@ -489,8 +490,8 @@
                 </div>
 
                 <div class="fr-actions">
-                    @if($isManagerPage)
-                        <a href="{{ route('manager.finance-requests.index') }}" class="btn btn-outline-secondary px-4">Hủy</a>
+                    @if($separateCreatePage)
+                        <a href="{{ route($config['route_prefix'] . '.index') }}" class="btn btn-outline-secondary px-4">Hủy</a>
                     @endif
                     @if($editingRequest && !$isManagerPage)
                         <a href="{{ route('leader.finance-requests.index') }}" class="btn btn-outline-secondary px-4">Hủy sửa</a>
@@ -505,8 +506,8 @@
         </div>
         @endif
 
-        @if(!$isManagerPage || !$showCreateForm)
-        <div class="{{ $isManagerPage ? 'col-12' : 'col-lg-7' }}">
+        @if(!$separateCreatePage || !$showCreateForm)
+        <div class="{{ $separateCreatePage ? 'col-12' : 'col-lg-7' }}">
     <div class="fr-panel">
         <div class="fr-panel-head">
             <div>
@@ -514,8 +515,8 @@
                 <div class="fr-subtitle">Theo dõi trạng thái duyệt và xác nhận chuyển tiền</div>
             </div>
             <div class="d-flex gap-2 align-items-end flex-wrap justify-content-end">
-            @if($isManagerPage)
-                <a href="{{ route('manager.finance-requests.create') }}" class="btn btn-primary btn-sm align-self-end">
+            @if($separateCreatePage)
+                <a href="{{ route($config['route_prefix'] . '.create') }}" class="btn btn-primary btn-sm align-self-end">
                     <i class="bi bi-plus-lg me-1"></i>Tạo mới
                 </a>
             @endif

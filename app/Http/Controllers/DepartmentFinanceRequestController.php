@@ -105,6 +105,7 @@ class DepartmentFinanceRequestController extends Controller
     public function packagePrint(Transaction $transaction) { return $this->printRequest($transaction, 'package'); }
 
     public function accountingIndex(Request $request) { return $this->index($request, 'accounting'); }
+    public function accountingCreate(Request $request) { return $this->index($request, 'accounting', null, true); }
     public function accountingStore(Request $request) { return $this->store($request, 'accounting'); }
     public function accountingPrint(Transaction $transaction) { return $this->printRequest($transaction, 'accounting'); }
 
