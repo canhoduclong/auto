@@ -5,6 +5,12 @@
 
 @section('accounting_content')
 @include('layouts.partials.department_broadcasts')
+@if(request()->routeIs('accounting.*'))
+<div class="d-flex justify-content-end flex-wrap gap-2 mb-3">
+    <a href="{{ route('accounting.finance-requests.index') }}" class="btn btn-outline-primary">Phiếu yêu cầu đã gửi</a>
+    <a href="{{ route('accounting.finance-requests.create') }}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Tạo phiếu yêu cầu</a>
+</div>
+@endif
 
 <div class="acc-card mb-3">
     <div class="card-body">

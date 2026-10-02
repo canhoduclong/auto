@@ -3,7 +3,7 @@
 @section('title', 'Phiếu tài chính')
 @section('subtitle', in_array($source, ['manager', 'accounting'], true) && !($showCreateForm ?? false) ? 'Danh sách phiếu yêu cầu đã gửi' : 'Tạo phiếu yêu cầu thu/chi hoặc phiếu đề nghị thanh toán')
 
-@section('content')
+@section($source === 'accounting' ? 'accounting_content' : 'content')
 @php
     $statusLabels = [
         \App\Models\Transaction::STATUS_PENDING_APPROVAL => ['label' => 'Chờ duyệt', 'class' => 'warning text-dark'],
