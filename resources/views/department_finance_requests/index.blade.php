@@ -369,10 +369,10 @@
                         <label class="form-label fw-semibold">Nội dung/Lý do <span class="text-danger">*</span></label>
                         <textarea name="note" class="form-control" rows="5" maxlength="1000" placeholder="Mô tả rõ lý do thu/chi, nhà cung cấp, vật tư, ghi chú kế toán...">{{ old('note', $editingRequest?->note) }}</textarea>
                     </div>
-                    @if($isManagerPage)
+                    @if($isManagerPage || $source === 'accounting')
                         <div>
                             <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
-                                <label class="form-label fw-semibold mb-0">Chứng từ đính kèm</label>
+                                <label class="form-label fw-semibold mb-0">{{ $source === 'accounting' ? 'Upload chứng từ' : 'Chứng từ đính kèm' }}</label>
                                 <button type="button" class="btn btn-outline-primary btn-sm" id="addRequestAttachment" title="Thêm chứng từ">
                                     <i class="bi bi-plus-lg me-1"></i>Thêm chứng từ
                                 </button>
@@ -719,7 +719,11 @@ document.addEventListener('DOMContentLoaded', function () {
         });
         attachmentsContainer.querySelectorAll('.request-attachment-row').forEach(bindAttachmentRow);
         addAttachmentButton?.addEventListener('click', function () {
-            if (attachmentsContainer.querySelectorAll('.request-attachment-row').length >= 10) return;
+            const existingCount = attachmentsContainer.querySelectorAll('.fr-existing-attachment:not(.d-none)').length;
+            if (existingCount + attachmentsContainer.querySelectorAll('.request-attachment-row').length >= 10) {
+                window.alert('Mỗi phiếu chỉ được lưu tối đa 10 chứng từ.');
+                return;
+            }
             const row = attachmentsContainer.querySelector('.request-attachment-row').cloneNode(true);
             row.querySelector('input[type="file"]').value = '';
             attachmentsContainer.appendChild(row);

@@ -161,9 +161,24 @@
                     </div>
 
                     <div class="mb-4">
-                        <label class="form-label fw-semibold">Anh bien lai / chung tu <span class="text-muted small">(tuy chon)</span></label>
-                        <input type="file" name="receipt_image" id="receiptFile" class="form-control" accept="image/*">
+                        <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                            <label class="form-label fw-semibold mb-0">Upload chứng từ <span class="text-muted small">(tùy chọn)</span></label>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="addTransactionAttachment"><i class="bi bi-plus-lg me-1"></i>Thêm chứng từ</button>
+                        </div>
+                        @foreach($editingTransaction?->request_attachments ?? [] as $attachment)
+                            <a class="d-block mb-2" href="{{ Storage::disk('public')->url($attachment['path']) }}" target="_blank" rel="noopener">{{ $attachment['name'] ?? 'Chứng từ đã lưu' }}</a>
+                        @endforeach
+                        @if($editingTransaction?->receipt_image_path)
+                            <a class="d-block mb-2" href="{{ Storage::disk('public')->url($editingTransaction->receipt_image_path) }}" target="_blank" rel="noopener">Chứng từ đã lưu</a>
+                        @endif
+                        <div id="transactionAttachments" class="d-grid gap-2" data-existing-count="{{ count($editingTransaction?->request_attachments ?? []) + (int) (bool) $editingTransaction?->receipt_image_path }}">
+                            <div class="input-group transaction-attachment-row">
+                                <input type="file" name="attachments[]" id="receiptFile" class="form-control" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx">
+                                <button type="button" class="btn btn-outline-danger remove-transaction-attachment" title="Bỏ chứng từ"><i class="bi bi-x-lg"></i></button>
+                            </div>
+                        </div>
                         <div id="receiptPreview" class="mt-2"></div>
+                        <div class="form-text">Tối đa 10 chứng từ, mỗi tệp 20 MB. Hỗ trợ ảnh, PDF, Word và Excel.</div>
                     </div>
 
                     <div class="d-flex gap-2">
@@ -385,7 +400,7 @@
 document.getElementById('receiptFile').addEventListener('change', function () {
     const p = document.getElementById('receiptPreview');
     p.innerHTML = '';
-    if (this.files[0]) {
+    if (this.files[0] && this.files[0].type.startsWith('image/')) {
         const r = new FileReader();
         r.onload = e => {
             const img = document.createElement('img');
@@ -394,6 +409,32 @@ document.getElementById('receiptFile').addEventListener('change', function () {
             p.appendChild(img);
         };
         r.readAsDataURL(this.files[0]);
+    }
+});
+
+const attachmentList = document.getElementById('transactionAttachments');
+document.getElementById('addTransactionAttachment').addEventListener('click', () => {
+    if (Number(attachmentList.dataset.existingCount) + attachmentList.children.length >= 10) {
+        window.alert('Mỗi giao dịch chỉ được lưu tối đa 10 chứng từ.');
+        return;
+    }
+    const row = attachmentList.querySelector('.transaction-attachment-row').cloneNode(true);
+    const input = row.querySelector('input');
+    input.removeAttribute('id');
+    input.value = '';
+    attachmentList.appendChild(row);
+    input.click();
+});
+attachmentList.addEventListener('click', event => {
+    const button = event.target.closest('.remove-transaction-attachment');
+    if (!button) return;
+    const row = button.closest('.transaction-attachment-row');
+    const input = row.querySelector('input');
+    if (input.id === 'receiptFile') document.getElementById('receiptPreview').innerHTML = '';
+    if (attachmentList.children.length === 1) {
+        input.value = '';
+    } else {
+        row.remove();
     }
 });
 

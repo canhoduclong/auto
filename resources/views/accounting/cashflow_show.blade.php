@@ -160,7 +160,7 @@
                     </div>
                     @if(!empty($transaction->request_attachments))
                         <div class="col-12">
-                            <div class="text-muted small">Chứng từ yêu cầu đính kèm</div>
+                            <div class="text-muted small">Chứng từ đính kèm</div>
                             <div class="d-flex flex-wrap gap-2 mt-1">
                                 @foreach($transaction->request_attachments as $attachment)
                                     <a class="btn btn-sm btn-outline-secondary" href="{{ Storage::disk('public')->url($attachment['path']) }}" target="_blank" rel="noopener">

@@ -2468,6 +2468,8 @@ class AccountingDashboardController extends Controller
             'account_id' => 'nullable|exists:accounts,id',
             'note' => 'nullable|string|max:1000',
             'receipt_image' => 'nullable|image|max:5120',
+            'attachments' => ['nullable', 'array', 'max:10'],
+            'attachments.*' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx', 'max:20480'],
         ]);
 
         // Infer 'type' from transaction category's flow_direction
@@ -2478,7 +2480,11 @@ class AccountingDashboardController extends Controller
         if ($request->hasFile('receipt_image')) {
             $data['receipt_image_path'] = $request->file('receipt_image')->store('transactions/receipts', 'public');
         }
-        unset($data['receipt_image']);
+        if ($request->hasFile('attachments')) {
+            $data['request_attachments'] = app(\App\Services\TransactionAttachmentService::class)
+                ->store($request->file('attachments', []), [], isset($data['receipt_image_path']));
+        }
+        unset($data['receipt_image'], $data['attachments']);
 
         $data['submitted_by'] = auth()->id();
         $data['status'] = Transaction::STATUS_PENDING_APPROVAL;
@@ -2525,6 +2531,8 @@ class AccountingDashboardController extends Controller
             'account_id' => 'nullable|exists:accounts,id',
             'note' => 'nullable|string|max:1000',
             'receipt_image' => 'nullable|image|max:5120',
+            'attachments' => ['nullable', 'array', 'max:10'],
+            'attachments.*' => ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,pdf,doc,docx,xls,xlsx', 'max:20480'],
         ]);
 
         $category = \App\Models\TransactionCategory::find($data['transaction_category_id']);
@@ -2534,7 +2542,12 @@ class AccountingDashboardController extends Controller
         if ($request->hasFile('receipt_image')) {
             $data['receipt_image_path'] = $request->file('receipt_image')->store('transactions/receipts', 'public');
         }
-        unset($data['receipt_image']);
+        if ($request->hasFile('attachments')) {
+            $data['request_attachments'] = app(\App\Services\TransactionAttachmentService::class)
+                ->store($request->file('attachments', []), $transaction->request_attachments ?: [],
+                    (bool) ($data['receipt_image_path'] ?? $transaction->receipt_image_path));
+        }
+        unset($data['receipt_image'], $data['attachments']);
 
         $transaction->update($data);
 
