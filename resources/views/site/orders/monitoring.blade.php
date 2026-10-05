@@ -2376,7 +2376,7 @@
                                                     </div>
                                                     <div class="monitor-sent-adjustment-actions">
                                                         <button type="button" class="btn btn-sm btn-outline-success monitor-sent-adjustment-link js-copy-zalo-order"
-                                                                data-zalo-text="{{ app(\App\Services\OrderAdjustmentZaloService::class)->text($adjustment, $order, route('site.order-adjustments.show', $adjustment)) }}"><i class="bi bi-clipboard me-1"></i>Chép Zalo</button>
+                                                                data-zalo-text="{{ app(\App\Services\OrderAdjustmentZaloService::class)->text($adjustment, $order) }}"><i class="bi bi-clipboard me-1"></i>Chép Zalo</button>
                                                         <a href="{{ route('site.order-adjustments.show', $adjustment) }}" class="btn btn-sm btn-outline-primary monitor-sent-adjustment-link">Xem tiến trình</a>
                                                         @if($canDeleteAdjustment)
                                                             <form method="POST" action="{{ route('site.order-adjustments.destroy', $adjustment) }}" onsubmit="return confirm('Xóa yêu cầu điều chỉnh #{{ $adjustment->id }}? Thao tác này không thể hoàn tác.');">

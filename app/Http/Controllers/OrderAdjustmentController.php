@@ -348,7 +348,7 @@ class OrderAdjustmentController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => $message,
-                'zalo_text' => app(\App\Services\OrderAdjustmentZaloService::class)->text($adjustment, $order, route('site.order-adjustments.show', $adjustment)),
+                'zalo_text' => app(\App\Services\OrderAdjustmentZaloService::class)->text($adjustment, $order),
                 'adjustment_id' => $adjustment->id,
                 'url' => route('site.order-adjustments.show', $adjustment),
                 'status_label' => $adjustment->progressLabel(),
