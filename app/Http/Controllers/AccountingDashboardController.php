@@ -1998,7 +1998,7 @@ class AccountingDashboardController extends Controller
             $perPage = 20;
         }
 
-        $sales = User::query()->orderBy('name')->select('id', 'name')->get();
+        $sales = User::query()->orderBy('name')->select('id', 'name', 'short_name')->get();
         $customers = Customer::query()->orderBy('name')->select('id', 'name', 'customer_code')->get();
 
         // Hiển thị hồ sơ theo ngày nghiệp vụ của đơn, không theo ngày sale gửi
@@ -2103,6 +2103,8 @@ class AccountingDashboardController extends Controller
                     THEN COALESCE(orders.delivery_date, orders.created_at)
                 ELSE orders.created_at
             END as order_date'),
+            'orders.created_at as created_date',
+            'orders.delivery_date',
             'orders.code as order_code',
             'orders.daily_sequence',
             'products.name as product_name',
@@ -2111,7 +2113,7 @@ class AccountingDashboardController extends Controller
             DB::raw("COALESCE(product_variants.name, '') as variant_name"),
             'customers.name as customer_name',
             DB::raw("COALESCE(customers.customer_code, '') as customer_code"),
-            'users.name as sale_name',
+            DB::raw("COALESCE(NULLIF(TRIM(users.short_name), ''), users.name) as sale_name"),
             'order_items.quantity',
             'order_items.price',
             'order_items.discount_total',

@@ -35,8 +35,8 @@
 .ds-table thead th { font-size:.7rem; text-transform:uppercase; color:#64748b; letter-spacing:.03em; white-space:nowrap; }
 .ds-table td { vertical-align:middle; white-space:nowrap; }
 .ds-adj-badge { font-size:9px; padding:1px 4px; border-radius:4px; background:#fef3c7; color:#92400e; border:1px solid #fcd34d; vertical-align:middle; }
-.ds-customer { font-weight:600; color:#1e293b; }
-.ds-customer-code { font-size:10px; color:#94a3b8; }
+.ds-customer { font-weight:700; color:#000; }
+.ds-customer-code { font-size:10px; font-weight:400; color:#64748b; }
 .sort-link { color:inherit; text-decoration:none; white-space:nowrap; }
 .sort-link:hover { color:#3b82f6; }
 .sort-link .bi { font-size:.65rem; opacity:.5; }
@@ -79,6 +79,13 @@
 {{-- ── Filter ─────────────────────────────────────────────────────── --}}
 <div class="acc-card mb-3">
     <div class="card-body">
+        @if($tab === 'overview')
+            <div class="small text-muted mb-3">
+                <strong class="text-dark">Thống kê theo ngày tạo đơn.</strong>
+                Riêng đơn nhập từ dữ liệu kế toán: dùng ngày giao; nếu chưa có ngày giao thì dùng ngày tạo đơn.
+                Khoảng ngày lọc và sắp xếp theo ngày áp dụng quy tắc này.
+            </div>
+        @endif
         <form method="GET" id="filterForm">
             <input type="hidden" name="tab" value="{{ $tab }}">
             <div class="ds-filter">
@@ -97,7 +104,7 @@
                     <select class="form-select form-select-sm" name="sale_id">
                         <option value="0">Tất cả sale</option>
                         @foreach($sales as $s)
-                            <option value="{{ $s->id }}" {{ $saleId === $s->id ? 'selected' : '' }}>{{ $s->name }}</option>
+                            <option value="{{ $s->id }}" {{ $saleId === $s->id ? 'selected' : '' }}>{{ $s->short_name ?: $s->name }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -414,11 +421,11 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         <th>
                             <a href="{{ request()->fullUrlWithQuery(['sort' => $sort === 'date_asc' ? 'date_desc' : 'date_asc', 'page' => 1]) }}"
                                class="sort-link {{ in_array($sort, ['date_asc','date_desc']) ? 'active' : '' }}">
-                                Ngày
+                                Ngày tạo
                                 <i class="bi bi-{{ $sort === 'date_asc' ? 'sort-up' : ($sort === 'date_desc' ? 'sort-down' : 'sort') }}"></i>
                             </a>
                         </th>
-                       
+                        <th>Ngày giao</th>
                         <th>Sale</th>
                         <th>Khách hàng</th>
                         <th>
@@ -473,13 +480,6 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         $showWeight = $effWeight > 0 ? $fmtN($effWeight) : '—';
                         $showQty    = $fmtN($effQty);
 
-                        // Short customer name: use customer_code if exists, else first 2 words of name
-                        $custShort = trim($row->customer_code ?? '');
-                        if (!$custShort && $row->customer_name) {
-                            $parts = explode(' ', trim($row->customer_name));
-                            $custShort = implode(' ', array_slice($parts, -2)); // last 2 words
-                        }
-
                         // Variant label: size + name
                         $variantLabel = trim(($row->variant_size ?? '') . ' ' . ($row->variant_name ?? ''));
                     @endphp
@@ -492,16 +492,17 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         </td>
                         <td>
                             <a href="{{ route('orders.show', $row->order_id_val) }}" class="text-decoration-none small" target="_blank">
-                                {{ \Carbon\Carbon::parse($row->order_date)->format('d/m') }}
+                                {{ \Carbon\Carbon::parse($row->created_date)->format('d/m/Y') }}
                             </a>
                              
                         </td>
                         
+                        <td>{{ $row->delivery_date ? \Carbon\Carbon::parse($row->delivery_date)->format('d/m/Y') : '—' }}</td>
                         <td class="text-muted">{{ $row->sale_name ?? '—' }}</td>
                         <td>
-                            <div class="ds-customer" title="{{ $row->customer_name }}">{{ $custShort }}</div>
-                            @if($row->customer_code && $row->customer_name !== $custShort)
-                                <div class="ds-customer-code">{{ $row->customer_name }}</div>
+                            <div class="ds-customer" title="{{ $row->customer_name }}">{{ $row->customer_name ?: '—' }}</div>
+                            @if($row->customer_code)
+                                <div class="ds-customer-code">{{ $row->customer_code }}</div>
                             @endif
                         </td>
                         <td>
@@ -535,7 +536,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="14" class="text-center text-muted py-4">
+                        <td colspan="15" class="text-center text-muted py-4">
                             <i class="bi bi-inbox fs-4 d-block mb-2"></i>
                             Không có dữ liệu cho bộ lọc này.
                         </td>
@@ -545,7 +546,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                 @if($items->isNotEmpty())
                 <tfoot class="table-light fw-semibold">
                     <tr>
-                        <td colspan="7" class="text-end text-muted small">Tổng trang này:</td>
+                        <td colspan="8" class="text-end text-muted small">Tổng trang này:</td>
                         <td class="text-end">
                             {{ $fmtN((float)$items->sum('eff_qty')) }}
                         </td>
