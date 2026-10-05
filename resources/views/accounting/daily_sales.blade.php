@@ -322,7 +322,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
     <div class="ds-kpi-item">
         <div class="lbl">Tổng thành tiền</div>
         <div class="val text-success">{{ number_format((float)($summary->grand_total ?? 0), 0, ',', '.') }}đ</div>
-        <div class="sub">Đã áp dụng điều chỉnh được duyệt</div>
+        <div class="sub">Gồm phí thu khách; đã loại chi phí ship nội bộ</div>
     </div>
     <div class="ds-kpi-item">
         <div class="lbl">Tổng khối lượng</div>

@@ -2194,14 +2194,20 @@ class AccountingDashboardController extends Controller
             SUM({$effTotalExpr})                                                                     as grand_total
         ")->first();
 
-        // Tổng đơn phải gồm cả phí/chiết khấu đã áp dụng, không chỉ cộng các
-        // dòng sản phẩm. order.total đã được cập nhật khi hồ sơ hoàn tất.
+        // orders.total includes internal shipping costs as well as customer charges.
+        // Match reconciliation revenue: exclude internal shipping, retaining customer
+        // delivery fees, VAT and other applied fees already present in the order total.
+        $reportedOrderTotalExpr = 'GREATEST(COALESCE(orders.total, 0) - CASE
+            WHEN orders.charge_shipping_fee = 1
+                THEN GREATEST(COALESCE(orders.shipping_fee, 0), 0)
+            ELSE 0 END, 0)';
         $summary->grand_total = (float) DB::table('orders')
             ->whereNotIn('orders.status', ['rejected', 'cancelled'])
             ->whereRaw("{$businessDateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
             ->when($saleId > 0, fn ($query) => $query->where('orders.user_id', $saleId))
             ->when($customerId > 0, fn ($query) => $query->where('orders.customer_id', $customerId))
-            ->sum('orders.total');
+            ->selectRaw("COALESCE(SUM({$reportedOrderTotalExpr}), 0) as reported_total")
+            ->first()->reported_total;
 
         $orderCostSummary = DB::table('orders')
             ->whereNotIn('orders.status', ['rejected', 'cancelled'])
