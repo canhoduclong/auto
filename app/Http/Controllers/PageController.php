@@ -1947,7 +1947,10 @@ class PageController extends Controller
             'manager',
             'manager_sale',
         ])) {
-            return $query->whereHas('user.roles', fn ($roles) => $roles->whereRaw('LOWER(name) = ?', ['sale']));
+            return $query->whereHas('user.roles', fn ($roles) => $roles->whereIn(
+                DB::raw('LOWER(name)'),
+                ['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']
+            ));
         }
 
         return $query->where('user_id', $user->id);
