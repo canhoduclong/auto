@@ -40,7 +40,7 @@
                         <td><div class="adjustment-product">{{ $orderItem->product?->name ?: $orderItem->variant?->product?->name ?: $orderItem->imported_name ?: 'Sản phẩm' }}</div><div class="small text-muted">{{ $orderItem->variant?->name }} @if($orderItem->variant?->sku) · {{ $orderItem->variant->sku }} @endif</div></td>
                         <td>{{ $orderItem->product?->unit_label ?: $orderItem->variant?->product?->unit_label ?: '—' }}</td>
                         <td class="text-end">{{ $compactNumber($orderItem->quantity) }}</td>
-                        <td class="text-end">{{ $compactNumber($orderItem->actual_weight ?? $orderItem->total_weight ?? 0) }}</td>
+                        <td class="text-end">{{ $orderItem->effective_priced_by_kg ? $compactNumber((float) $orderItem->quantity > 0 ? ($orderItem->actual_weight ?? $orderItem->total_weight ?? 0) : 0) : '—' }}</td>
                         <td class="text-end">{{ $money($orderItem->price) }} / {{ $orderItem->effective_priced_by_kg ? 'kg' : ($orderItem->product?->unit_label ?: 'đơn vị') }}</td>
                         <td class="text-end">{{ $money($orderItem->total) }}</td>
                     </tr>

@@ -163,6 +163,10 @@ class OrderItem extends Model
      */
     public function displayValueForStage(string $status): float
     {
+        if ((float) ($this->quantity ?? 0) <= 0) {
+            return 0.0;
+        }
+
         if (! $this->effective_priced_by_kg) {
             return max(0, (float) ($this->quantity ?? 0));
         }
@@ -216,15 +220,15 @@ class OrderItem extends Model
 
     public function lineTotalForStage(string $status): float
     {
+        if ((float) ($this->quantity ?? 0) <= 0) {
+            return 0.0;
+        }
+
         if ($this->effective_priced_by_kg) {
             return round($this->displayValueForStage($status) * (float) ($this->price ?? 0), 2);
         }
 
-        $lineTotal = (float) ($this->total ?? 0);
-
-        return $lineTotal > 0
-            ? $lineTotal
-            : round((float) ($this->quantity ?? 0) * (float) ($this->price ?? 0), 2);
+        return round((float) ($this->quantity ?? 0) * (float) ($this->price ?? 0), 2);
     }
 
     private function warehouseMeasuredStatuses(): array

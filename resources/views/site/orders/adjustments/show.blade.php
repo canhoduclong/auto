@@ -194,7 +194,9 @@
                                     <td class="text-center">@if($quantityChanged || $isNewItem)<span class="adjustment-change">{{ (int) $item->original_quantity }} <i class="bi bi-arrow-right"></i> {{ (int) $item->adjusted_quantity }}</span>@else{{ (int) $item->adjusted_quantity }}@endif</td>
                                     <td class="text-end">@if($priceChanged || $isNewItem)<div class="small text-muted text-decoration-line-through">{{ $money($item->original_price) }}</div><div class="adjustment-change">{{ $money($item->adjusted_price) }}</div>@else{{ $money($item->adjusted_price) }}@endif</td>
                                     <td class="text-end">
-                                        @if($weightChanged || $isNewItem)
+                                        @if(! ($item->variant?->effective_priced_by_kg ?? $item->orderItem?->effective_priced_by_kg ?? true))
+                                            —
+                                        @elseif($weightChanged || $isNewItem)
                                             <span class="adjustment-change">{{ $compactNumber($item->original_weight) }} <i class="bi bi-arrow-right"></i> {{ $compactNumber($item->adjusted_weight) }} kg</span>
                                         @else
                                             {{ $compactNumber($item->adjusted_weight) }} kg

@@ -25,7 +25,9 @@ class RepairZeroQuantityOrder extends Command
             $completedItemIds = $order->adjustments()->where('status', OrderAdjustment::STATUS_COMPLETED)
                 ->with('items')->get()->flatMap->items->where('adjusted_quantity', 0)->pluck('order_item_id');
             $items = $order->items->filter(fn ($item) => (int) $item->quantity === 0
-                && (float) $item->total > 0 && $completedItemIds->contains($item->id));
+                && ((float) $item->total > 0 || (float) $item->total_weight > 0
+                    || (float) $item->actual_weight > 0 || (float) $item->packed_weight > 0)
+                && $completedItemIds->contains($item->id));
             if ($items->isEmpty()) {
                 $this->info('Không có dòng lỗi cần sửa.');
                 return self::SUCCESS;
