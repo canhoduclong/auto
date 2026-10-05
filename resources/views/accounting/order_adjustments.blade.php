@@ -56,6 +56,10 @@
                     <div class="text-muted small">
                         {{ $adjustment->order?->customer?->name ?? 'Khách hàng' }} · Sale: {{ $adjustment->order?->user?->name ?? '—' }} · Gửi bởi: {{ $adjustment->requester?->name ?? '—' }}
                     </div>
+                    <div class="d-flex flex-wrap gap-3 small mt-2">
+                        <span><i class="bi bi-calendar-plus me-1"></i><strong>Ngày tạo đơn:</strong> {{ $adjustment->order?->created_at?->format('d/m/Y H:i') ?? '—' }}</span>
+                        <span><i class="bi bi-truck me-1"></i><strong>Ngày giao:</strong> {{ $adjustment->order?->delivery_date?->format('d/m/Y') ?? 'Chưa có ngày giao' }} @if($adjustment->order?->delivery_time) · {{ $adjustment->order->delivery_time }} @endif</span>
+                    </div>
                 </div>
                 <div class="text-end">
                     @if($isPendingAccounting)

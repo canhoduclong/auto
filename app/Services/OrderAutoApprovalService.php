@@ -159,6 +159,13 @@ class OrderAutoApprovalService
 
         $normalizedRole = strtolower(trim($roleSlug));
 
+        // Kế toán phải đối chiếu và duyệt thủ công mọi đơn điều chỉnh,
+        // kể cả khi tài khoản đã có cấu hình tự động duyệt từ trước.
+        if ($type === OrderAutoApprovalRule::TYPE_ORDER_ADJUSTMENT
+            && in_array($normalizedRole, ['account', 'accountant', 'accounting'], true)) {
+            return null;
+        }
+
         return OrderAutoApprovalRule::query()
             ->where('order_type', $type)
             ->where('enabled', true)
