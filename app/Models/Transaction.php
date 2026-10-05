@@ -8,6 +8,9 @@ class Transaction extends Model
 {
     use HasFactory;
 
+    // Merchandise credit already applied to the invoice, not a cash refund.
+    public const TYPE_RETURN_CREDIT = 'return_credit';
+
     public const STATUS_PENDING_APPROVAL = 'pending_approval';
     public const STATUS_APPROVED_PENDING_COMPLETION = 'approved_pending_completion';
     public const STATUS_APPROVED = 'approved';

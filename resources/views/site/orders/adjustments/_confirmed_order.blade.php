@@ -58,7 +58,7 @@
             @if($order->charge_foam_box_fee)<div class="adjustment-meta-row"><span>Phí thùng xốp</span><span>{{ $money($order->foam_box_price) }}</span></div>@endif
             @foreach($order->additionalFees as $fee)<div class="adjustment-meta-row"><span>{{ $fee->fee_name }}</span><span>{{ $fee->direction === 'discount' ? '-' : '+' }}{{ $money($fee->amount) }}</span></div>@endforeach
             <div class="adjustment-meta-row"><span>Tổng đơn hàng</span><span>{{ $money($order->total) }}</span></div>
-            <div class="adjustment-meta-row"><span>Đã thanh toán</span><span>{{ $money($order->amount_paid) }}</span></div>
+            <div class="adjustment-meta-row"><span>Đã thanh toán</span><span>{{ $money(max(0, (float) $order->amount_paid, (float) ($order->collected_amount ?? 0))) }}</span></div>
             <div class="adjustment-meta-row"><span>Còn phải thu</span><span>{{ $money($order->amount_due) }}</span></div>
             <div class="adjustment-meta-row"><span>Thanh toán</span><span>{{ ['paid' => 'Đã thanh toán', 'partial' => 'Thanh toán một phần', 'partially_paid' => 'Thanh toán một phần', 'unpaid' => 'Chưa thanh toán'][$order->payment_status] ?? $order->payment_status }}</span></div>
         </div>

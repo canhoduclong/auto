@@ -24,6 +24,7 @@ return [
         'select_customer' => 'Select customer',
     ],
     'types' => [
+        'return_credit' => 'Merchandise return credit',
         'payment' => 'Payment',
         'refund' => 'Refund',
         'fee' => 'Fee',

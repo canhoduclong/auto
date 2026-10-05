@@ -968,53 +968,20 @@ class OrderAdjustmentController extends Controller
             $customFeeNet = $feeService->syncCustomFees($order, $feeChanges, $productTotal, $adjustment->id);
             $newTotal = max(0, $productTotal + $vatAmount + $customerShippingFee + $assignedShippingFee + $foamBoxFee + $customFeeNet);
 
-            $amountPaid = (float) $order->transactions()->where('type', 'payment')->sum('amount')
-                - (float) $order->transactions()->where('type', 'refund')->sum('amount');
-
             $order->update([
                 'subtotal_amount' => round($subtotal, 2),
                 'item_discount_total' => 0,
                 'total_discount' => round($extraDiscount, 2),
                 'vat_amount' => $vatAmount,
                 'total' => round($newTotal, 2),
-                'amount_paid' => round($amountPaid, 2),
-                'amount_due' => round(max($newTotal - $amountPaid, 0), 2),
-                'payment_status' => $amountPaid >= $newTotal
-                    ? 'paid'
-                    : ($amountPaid > 0 ? 'partially_paid' : 'unpaid'),
             ]);
-
-            $reconciliation = $order->accountingReconciliation()->first();
-            if ($reconciliation?->status === \App\Models\AccountingReconciliation::STATUS_CONFIRMED) {
-                $returnAmount = (float) $order->returnRecords()
-                    ->whereIn('status', ['warehouse_confirmed', 'completed'])
-                    ->sum('refund_amount');
-                $recognizedRevenue = max(0, $newTotal - $returnAmount);
-                $effectivePaid = max($amountPaid, (float) ($order->collected_amount ?? 0));
-
-                $reconciliation->update([
-                    'total_amount' => round($newTotal, 2),
-                    'paid_amount' => round($effectivePaid, 2),
-                    'shipping_fee' => round((float) ($order->shipping_fee ?? 0), 2),
-                    'return_amount' => round($returnAmount, 2),
-                    'recognized_revenue' => round($recognizedRevenue, 2),
-                ]);
-                $order->forceFill([
-                    'amount_due' => round(max($recognizedRevenue - $effectivePaid, 0), 2),
-                    'payment_status' => match (true) {
-                        $effectivePaid >= $recognizedRevenue => 'paid',
-                        $effectivePaid > 0 => 'partially_paid',
-                        default => 'unpaid',
-                    },
-                ])->save();
-                app(\App\Services\AccountingSalesLedgerService::class)->syncOrder($order->fresh());
-            }
 
             $adjustment->update([
                 'status' => OrderAdjustment::STATUS_COMPLETED,
                 'completed_by' => $actor->id,
                 'completed_at' => now(),
             ]);
+            app(\App\Services\OrderAdjustmentSettlementService::class)->sync($order);
         });
     }
 }

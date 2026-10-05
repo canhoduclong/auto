@@ -948,7 +948,8 @@ class AccountingDashboardController extends Controller
                 'customer:id,name,phone,address',
                 'user:id,name,short_name',
                 'shipper:id,name',
-                'returnRecords:id,order_id,status,refund_amount',
+                'returnRecords:id,order_id,order_adjustment_id,status,refund_amount',
+                'returnRecords.adjustment:id,status',
                 'accountingReconciliation.confirmer:id,name',
             ])
             ->withSum('items as total_item_quantity', 'quantity')
@@ -3616,8 +3617,11 @@ class AccountingDashboardController extends Controller
             $order->load('returnRecords');
         }
 
+        $order->loadMissing('returnRecords.adjustment:id,status');
+
         return (float) $order->returnRecords
-            ->whereIn('status', ['warehouse_confirmed', 'completed'])
+            ->whereIn('status', ['warehouse_received', 'warehouse_confirmed', 'completed'])
+            ->reject(fn ($return) => $return->adjustment?->status === OrderAdjustment::STATUS_COMPLETED)
             ->sum(fn ($return) => (float) ($return->refund_amount ?? 0));
     }
 

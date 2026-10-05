@@ -471,7 +471,7 @@ class OrderReturnController extends Controller
                 'order_return_id' => $orderReturn->id,
                 'customer_id' => $orderReturn->customer_id,
                 'amount' => $refundAmount,
-                'type' => 'refund',
+                'type' => $orderReturn->order_adjustment_id ? Transaction::TYPE_RETURN_CREDIT : 'refund',
                 'method' => 'return_refund',
                 'note' => 'Refund tu don tra hang #'.$orderReturn->id,
             ]);
@@ -499,6 +499,7 @@ class OrderReturnController extends Controller
             if ($order) {
                 $netPaid = (float) $order->transactions()->where('type', 'payment')->sum('amount')
                     - (float) $order->transactions()->where('type', 'refund')->sum('amount');
+                $netPaid = max(0, $netPaid);
                 $order->amount_paid = $netPaid;
                 $order->payment_status = $netPaid >= (float) $order->total ? 'paid' : ($netPaid > 0 ? 'partially_paid' : 'unpaid');
                 $order->status = $isFullReturn

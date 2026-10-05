@@ -24,6 +24,7 @@ return [
         'select_customer' => 'Chon khach hang',
     ],
     'types' => [
+        'return_credit' => 'Giảm giá trị đơn do trả hàng',
         'payment' => 'Thanh toan',
         'refund' => 'Hoan tra',
         'fee' => 'Chi phi',
