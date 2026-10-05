@@ -1,10 +1,16 @@
-<section class="adjustment-card" id="confirmed-order">
+@php
+    $beforeAdjustment = $beforeAdjustment ?? false;
+    $businessDate = $order->accounting_sales_import_batch_id ? $order->delivery_date : $order->created_at;
+@endphp
+<section class="adjustment-card" id="{{ $beforeAdjustment ? 'original-order' : 'confirmed-order' }}">
     <div class="adjustment-card-head">
-        <h2 class="adjustment-card-title"><i class="bi bi-receipt"></i>{{ $adjustment->status === 'completed' ? 'Đơn hàng sau xác nhận' : 'Đơn hàng hiện tại' }}</h2>
+        <h2 class="adjustment-card-title"><i class="bi bi-receipt"></i>{{ $beforeAdjustment ? 'Đơn trước khi sửa' : ($adjustment->status === 'completed' ? 'Đơn hàng sau xác nhận' : 'Đơn hàng hiện tại') }}</h2>
         <a href="{{ route('site.orders.show', $order) }}" class="btn btn-outline-primary btn-sm">{{ $order->code }}</a>
     </div>
     <div class="adjustment-card-body">
-        @if($adjustment->status === 'approved')
+        @if($beforeAdjustment)
+            <p class="text-muted small">Toàn bộ đơn hàng hiện tại để đối chiếu với nội dung đề nghị thay đổi bên dưới. Yêu cầu điều chỉnh này chưa được áp dụng.</p>
+        @elseif($adjustment->status === 'approved')
             <div class="alert alert-warning">Yêu cầu đã được duyệt, đang chờ Kho xác nhận. Các thay đổi chưa được áp dụng vào đơn hàng bên dưới.</div>
         @else
             <p class="text-muted small">Điều chỉnh đã được áp dụng. Dưới đây là thông tin hiện tại của toàn bộ đơn hàng.</p>
@@ -13,6 +19,8 @@
             $address = $order->customer?->addresses?->firstWhere('is_default', 1) ?? $order->customer?->addresses?->first();
         @endphp
         <div class="row g-3">
+            <div class="col-md-6"><strong>Ngày nghiệp vụ của đơn:</strong> {{ optional($businessDate)->format('d/m/Y') ?: '—' }}</div>
+            <div class="col-md-6"><strong>Ngày tạo đơn:</strong> {{ optional($order->created_at)->format('d/m/Y H:i') ?: '—' }}</div>
             <div class="col-md-6"><strong>Khách hàng:</strong> {{ $order->customer?->name ?: '—' }}</div>
             <div class="col-md-6"><strong>Nhân viên:</strong> {{ $order->user?->name ?: '—' }}</div>
             <div class="col-md-6"><strong>Người nhận:</strong> {{ $order->recipient_name ?: $order->customer?->name ?: '—' }}</div>

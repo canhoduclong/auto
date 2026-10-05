@@ -144,8 +144,8 @@
 
         <div class="adjustment-layout">
             <main class="adjustment-main">
-                @if($order && in_array($adjustment->status, ['approved', 'completed'], true))
-                    @include('site.orders.adjustments._confirmed_order')
+                @if($order)
+                    @include('site.orders.adjustments._confirmed_order', ['beforeAdjustment' => $adjustment->status !== 'completed'])
                 @endif
                 <section class="adjustment-card">
                     <div class="adjustment-card-head"><h2 class="adjustment-card-title"><i class="bi bi-chat-left-text"></i>Nội dung yêu cầu</h2></div>
