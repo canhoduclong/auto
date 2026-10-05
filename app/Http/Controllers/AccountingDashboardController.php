@@ -2084,12 +2084,12 @@ class AccountingDashboardController extends Controller
         // not today's catalogue price or a cached discount from before weighing.
         $companyPriceExpr = 'COALESCE(order_items.company_price_at_order, order_items.base_price, order_items.price, 0)';
         $effectivePriceExpr = 'COALESCE(adj.adjusted_price, order_items.price, 0)';
-        $effectiveWeightExpr = "COALESCE(adj.adjusted_weight, CASE
+        $effectiveWeightExpr = "CASE WHEN COALESCE(adj.adjusted_quantity, order_items.quantity, 0) = 0 THEN 0 ELSE COALESCE(adj.adjusted_weight, CASE
             WHEN orders.status IN ('delivered', 'completed', 'returning', 'returned', 'returned_completed')
                 THEN COALESCE(order_items.actual_weight, order_items.packed_weight, order_items.total_weight)
             WHEN orders.status IN ('packing', 'packed', 'packed_waiting_pickup', 'delivering', 'in_delivery', 'shipping', 'picked_up')
                 THEN COALESCE(order_items.packed_weight, order_items.actual_weight, order_items.total_weight)
-            ELSE order_items.total_weight END, 0)";
+            ELSE order_items.total_weight END, 0) END";
         $pricingQuantityExpr = "CASE WHEN order_items.is_priced_by_kg = 1 THEN {$effectiveWeightExpr}
             ELSE COALESCE(adj.adjusted_quantity, order_items.quantity, 0) END";
         $priceAdjustmentExpr = "ROUND(({$effectivePriceExpr} - {$companyPriceExpr}) * ({$pricingQuantityExpr}), 2)";
@@ -2139,9 +2139,9 @@ class AccountingDashboardController extends Controller
             DB::raw('COALESCE(adj.adjusted_quantity, order_items.quantity) as eff_qty'),
             DB::raw('COALESCE(adj.adjusted_price,    order_items.price)    as eff_price'),
             DB::raw("{$effectiveWeightExpr} as eff_weight"),
-            DB::raw('CASE WHEN adj.id IS NOT NULL THEN 1 ELSE 0 END as has_adj'),
+            DB::raw('CASE WHEN COALESCE(adj.adjusted_quantity, order_items.quantity, 0) = 0 THEN 0 WHEN adj.id IS NOT NULL THEN 1 ELSE 0 END as has_adj'),
             'adj.order_adjustment_id as adjustment_id',
-            DB::raw('CASE WHEN adj.id IS NOT NULL THEN
+            DB::raw('CASE WHEN COALESCE(adj.adjusted_quantity, order_items.quantity, 0) = 0 THEN 0 WHEN adj.id IS NOT NULL THEN
                         CASE WHEN order_items.is_priced_by_kg = 1
                             THEN COALESCE(adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price)
                             ELSE COALESCE(adj.adjusted_quantity, order_items.quantity)   * COALESCE(adj.adjusted_price, order_items.price)
@@ -2176,7 +2176,7 @@ class AccountingDashboardController extends Controller
         $items = $listQ->paginate($perPage)->appends($request->query());
 
         // ── Grand summary (all pages) ──────────────────────────────────
-        $effTotalExpr = 'CASE WHEN adj.id IS NOT NULL THEN
+        $effTotalExpr = 'CASE WHEN COALESCE(adj.adjusted_quantity, order_items.quantity, 0) = 0 THEN 0 WHEN adj.id IS NOT NULL THEN
             CASE WHEN order_items.is_priced_by_kg = 1
                 THEN COALESCE(adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price)
                 ELSE COALESCE(adj.adjusted_quantity, order_items.quantity)   * COALESCE(adj.adjusted_price, order_items.price)

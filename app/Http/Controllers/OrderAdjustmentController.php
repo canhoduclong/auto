@@ -286,7 +286,7 @@ class OrderAdjustmentController extends Controller
                 'original_price' => (float) ($orderItem->price ?? 0),
                 'adjusted_price' => (float) $itemData['adjusted_price'],
                 'original_weight' => $originalWeight,
-                'adjusted_weight' => isset($itemData['adjusted_weight']) ? (float) $itemData['adjusted_weight'] : $originalWeight,
+                'adjusted_weight' => (int) $itemData['adjusted_quantity'] === 0 ? 0 : (isset($itemData['adjusted_weight']) ? (float) $itemData['adjusted_weight'] : $originalWeight),
                 'note' => $itemData['note'] ?? null,
             ];
         }
@@ -905,6 +905,13 @@ class OrderAdjustmentController extends Controller
 
                 $finalPrice = (float) $adjItem->adjusted_price;
                 $finalWeight = (float) ($adjItem->adjusted_weight ?? $adjItem->original_weight ?? 0);
+                if ($expectedDecrease > 0 && $finalQty > $adjustedQty) {
+                    // Charge the goods actually kept when the warehouse accepts only
+                    // part of a return, including requests to remove the whole line.
+                    $originalWeight = max(0, (float) ($adjItem->original_weight ?? 0));
+                    $remainingRatio = ($finalQty - $adjustedQty) / $expectedDecrease;
+                    $finalWeight += ($originalWeight - $finalWeight) * $remainingRatio;
+                }
                 $targetVariant = $adjItem->variant;
                 $isPricedByKg = $targetVariant
                     ? (bool) ($targetVariant->effective_priced_by_kg ?? true)
@@ -913,9 +920,9 @@ class OrderAdjustmentController extends Controller
                     ? (float) ($targetVariant->effective_kg ?? $orderItem->unit_weight ?? 1)
                     : (float) ($orderItem->unit_weight ?? 1);
 
-                $lineTotal = $isPricedByKg
-                    ? ($finalPrice * max($finalWeight, 0))
-                    : ($finalPrice * max($finalQty, 0));
+                $lineAmounts = \App\Support\OrderAdjustmentLine::amounts($finalQty, $finalWeight, $finalPrice, $isPricedByKg);
+                $finalWeight = $lineAmounts['weight'];
+                $lineTotal = $lineAmounts['total'];
 
                 $orderItem->update([
                     'product_id' => $adjItem->product_id ?: $orderItem->product_id,
@@ -924,8 +931,9 @@ class OrderAdjustmentController extends Controller
                     'price' => $finalPrice,
                     'unit_weight' => $unitWeight,
                     'is_priced_by_kg' => $isPricedByKg,
-                    'actual_weight' => $finalWeight > 0 ? $finalWeight : $orderItem->actual_weight,
-                    'total_weight' => $finalWeight > 0 ? $finalWeight : $orderItem->total_weight,
+                    'actual_weight' => $finalQty === 0 ? 0 : ($finalWeight > 0 ? $finalWeight : $orderItem->actual_weight),
+                    'total_weight' => $finalQty === 0 ? 0 : ($finalWeight > 0 ? $finalWeight : $orderItem->total_weight),
+                    'packed_weight' => $finalQty === 0 ? 0 : $orderItem->packed_weight,
                     'total' => round($lineTotal, 2),
                 ]);
             }

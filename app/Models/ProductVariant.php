@@ -196,6 +196,11 @@ class ProductVariant extends Model
 
     public function getEffectivePricedByKgAttribute(): bool
     {
+        $unit = mb_strtolower(trim((string) ($this->product?->unit ?? '')));
+        if (in_array($unit, ['cai', 'cái', 'bo', 'bộ', 'banh', 'bánh'], true)) {
+            return false;
+        }
+
         if ($this->is_priced_by_kg !== null) {
             return (bool) $this->is_priced_by_kg;
         }
