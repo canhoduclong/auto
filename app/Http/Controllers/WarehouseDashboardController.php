@@ -2676,8 +2676,9 @@ class WarehouseDashboardController extends Controller
     {
         $this->authorizePackingOrderAccess($order);
 
-        if (! empty($order->warehouse_allowed_sizes) || $order->warehouse_product_permissions !== null) {
-            $order->loadMissing('items.variant.product', 'items.packingSizeAllocations.variant');
+        $order->loadMissing('items.variant.product', 'items.packingSizeAllocations.variant');
+        if (! empty($order->warehouse_allowed_sizes) || $order->warehouse_product_permissions !== null
+            || $order->items->contains(fn ($item) => $this->packingBaseSizesForItem($order, $item) !== null)) {
             $packingWarehouseId = (int) ($request->user()?->warehouse_id ?: $order->warehouse_id ?: 0);
             $expandPackingSizeBounds = $packingWarehouseId > 0
                 && (bool) Warehouse::query()->whereKey($packingWarehouseId)->value('expand_packing_size_bounds');
@@ -2696,6 +2697,11 @@ class WarehouseDashboardController extends Controller
                         $permittedVariantIds,
                         true
                     ));
+                if ((int) $item->quantity > 0 && $mix->isNotEmpty() && ! $hasValidMix) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'allocations' => 'Cơ cấu đóng không phù hợp với chặn size riêng của dòng hàng. Vui lòng lưu lại cơ cấu trước khi bắt đầu đóng.',
+                    ]);
+                }
                 if (! empty($order->packingSizesForProduct((int) $item->product_id)) && (float) $item->variant?->size > 0 && ! $order->allowsPackingSize((float) $item->variant->size, (int) $item->product_id) && ! $hasValidMix) {
                     throw \Illuminate\Validation\ValidationException::withMessages([
                         'allocations' => 'Vui lòng lưu cơ cấu theo size Sale cho phép trước khi bắt đầu đóng hàng.',
@@ -3045,7 +3051,7 @@ class WarehouseDashboardController extends Controller
 
                 return ($item->variant?->product?->allow_adjacent_packing_sizes ?? true)
                     && (float) ($item->variant?->size ?? 0) > 0
-                    && ($order->packingSizesForProduct((int) $item->product_id) !== null || $shortItemIds->contains((int) $item->id) || $item->packingSizeAllocations->isNotEmpty());
+                    && ($this->packingBaseSizesForItem($order, $item) !== null || $shortItemIds->contains((int) $item->id) || $item->packingSizeAllocations->isNotEmpty());
             });
         })->values();
 
@@ -3102,10 +3108,8 @@ class WarehouseDashboardController extends Controller
                         'variant_id' => (int) $variant->id,
                         'size' => (float) $variant->size,
                         'name' => (string) ($variant->name ?: $variant->sku),
-                        'is_boundary_extension' => ! $item->order->allowsPackingSize(
-                            (float) $variant->size,
-                            (int) $item->product_id
-                        ),
+                        'is_boundary_extension' => ($baseSizes = $this->packingBaseSizesForItem($item->order, $item)) !== null
+                            && ! collect($baseSizes)->contains(fn ($size) => abs((float) $size - (float) $variant->size) < 0.0001),
                         'available' => min($available, (int) ($fifoAvailable[$variant->id] ?? 0)),
                         'quantity' => (int) ($saved[$variant->id] ?? ((int) $variant->id === (int) $item->product_variant_id ? $item->quantity : 0)),
                     ];
@@ -3145,6 +3149,24 @@ class WarehouseDashboardController extends Controller
         })->all();
     }
 
+    private function packingBaseSizesForItem(Order $order, $item): ?array
+    {
+        $saleSizes = $order->packingSizesForProduct((int) $item->product_id);
+        $lineSizes = $order->items
+            ->filter(fn ($line) => (int) $line->product_id === (int) $item->product_id
+                && (int) $line->quantity > 0 && (float) $line->variant?->size > 0)
+            ->map(fn ($line) => round((float) $line->variant->size, 4))->unique();
+        if ($lineSizes->count() > 1) {
+            $mainSize = (float) $item->variant?->size;
+            // Each ordered size has its own boundary pair, rather than sharing
+            // the first/last boundary of all sizes on the order.
+            return $saleSizes === null || collect($saleSizes)->contains(fn ($size) => abs((float) $size - $mainSize) < 0.0001)
+                ? [$mainSize] : [];
+        }
+
+        return $saleSizes;
+    }
+
     /**
      * Resolve the Sale-approved variants and optionally open one ordered
      * variant immediately before and after that approved range.
@@ -3161,7 +3183,7 @@ class WarehouseDashboardController extends Controller
                 (int) ($variant->sort_order ?? 0),
                 (int) $variant->id,
             ])->values();
-        $saleSizes = $order->packingSizesForProduct((int) $item->product_id);
+        $saleSizes = $this->packingBaseSizesForItem($order, $item);
         if ($saleSizes === null) {
             return $ordered->pluck('id')->map(fn ($id) => (int) $id)->all();
         }
@@ -3910,7 +3932,7 @@ class WarehouseDashboardController extends Controller
         );
         if ($variants->keys()->contains(fn ($variantId) => ! in_array((int) $variantId, $permittedVariantIds, true))) {
             $message = $expandPackingSizeBounds
-                ? 'Chỉ được đóng size Sale cho phép và một biến thể chặn ở mỗi đầu theo thứ tự Admin.'
+                ? 'Chỉ được đóng size được phép của dòng hàng này và một biến thể chặn ở mỗi đầu theo thứ tự Admin.'
                 : 'Chỉ được đóng các size Sale đã cho phép trong đơn hàng.';
             throw \Illuminate\Validation\ValidationException::withMessages(['allocations' => $message]);
         }
