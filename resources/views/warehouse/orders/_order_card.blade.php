@@ -625,7 +625,7 @@
                                                 <div class="mx-2 mb-2 mt-1 rounded border border-warning-subtle bg-warning-subtle p-2">
                                                     <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
                                                         <div>
-                                                            <strong><i class="bi bi-boxes me-1"></i>{{ $order->packingSizesForProduct((int) $item->product_id) !== null ? 'Cơ cấu đóng hàng theo size Sale cho phép' : 'Không đủ tồn size '.$formattedVariantSize.' — chọn size khác' }}</strong>
+                                                            <strong><i class="bi bi-boxes me-1"></i>Cơ cấu đóng hàng — size đặt {{ $formattedVariantSize }}</strong>
                                                             <div class="small text-muted">Tổng phải đủ {{ number_format($orderedQty) }} con; không bắt buộc dùng size chính {{ $formattedVariantSize }} (cho phép 0%). Chỉ chọn các size được phép bên dưới theo tồn khả dụng.</div>
                                                         </div>
                                                     </div>

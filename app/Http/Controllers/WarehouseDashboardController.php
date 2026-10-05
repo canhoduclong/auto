@@ -2702,7 +2702,10 @@ class WarehouseDashboardController extends Controller
                         'allocations' => 'Cơ cấu đóng không phù hợp với chặn size riêng của dòng hàng. Vui lòng lưu lại cơ cấu trước khi bắt đầu đóng.',
                     ]);
                 }
-                if (! empty($order->packingSizesForProduct((int) $item->product_id)) && (float) $item->variant?->size > 0 && ! $order->allowsPackingSize((float) $item->variant->size, (int) $item->product_id) && ! $hasValidMix) {
+                $baseSizes = $this->packingBaseSizesForItem($order, $item);
+                if ($baseSizes !== null && $baseSizes !== [] && (float) $item->variant?->size > 0
+                    && ! collect($baseSizes)->contains(fn ($size) => abs((float) $size - (float) $item->variant->size) < 0.0001)
+                    && ! $hasValidMix) {
                     throw \Illuminate\Validation\ValidationException::withMessages([
                         'allocations' => 'Vui lòng lưu cơ cấu theo size Sale cho phép trước khi bắt đầu đóng hàng.',
                     ]);
@@ -3152,16 +3155,14 @@ class WarehouseDashboardController extends Controller
     private function packingBaseSizesForItem(Order $order, $item): ?array
     {
         $saleSizes = $order->packingSizesForProduct((int) $item->product_id);
-        $lineSizes = $order->items
-            ->filter(fn ($line) => (int) $line->product_id === (int) $item->product_id
-                && (int) $line->quantity > 0 && (float) $line->variant?->size > 0)
-            ->map(fn ($line) => round((float) $line->variant->size, 4))->unique();
-        if ($lineSizes->count() > 1) {
-            $mainSize = (float) $item->variant?->size;
-            // Each ordered size has its own boundary pair, rather than sharing
-            // the first/last boundary of all sizes on the order.
-            return $saleSizes === null || collect($saleSizes)->contains(fn ($size) => abs((float) $size - $mainSize) < 0.0001)
-                ? [$mainSize] : [];
+        $sizedLines = $order->items->filter(fn ($line) => (int) $line->quantity > 0
+            && (float) $line->variant?->size > 0);
+        $mainSize = (float) $item->variant?->size;
+        if ($sizedLines->count() > 1 && $mainSize > 0) {
+            // The variant ordered on this line is itself Sale-approved. Legacy
+            // shared permissions may list only the first line's size, so they
+            // must not suppress the boundaries on subsequent lines/products.
+            return [$mainSize];
         }
 
         return $saleSizes;
