@@ -88,6 +88,7 @@
         @endif
         <form method="GET" id="filterForm">
             <input type="hidden" name="tab" value="{{ $tab }}">
+            <input type="hidden" name="page" value="1">
             <div class="ds-filter">
                 <div>
                     <label class="form-label small fw-semibold">Từ ngày</label>
@@ -169,6 +170,20 @@
                     <button type="button" class="btn btn-xs btn-outline-secondary"
                             onclick="setDates('{{ $f }}','{{ $t }}')">{{ $label }}</button>
                 @endforeach
+                <span class="small text-muted align-self-center ms-2">Tra soát từng ngày:</span>
+                @php $recentDay = now()->startOfDay(); @endphp
+                @for($daysAgo = 6; $daysAgo >= 0; $daysAgo--)
+                    @php
+                        $day = $recentDay->copy()->subDays($daysAgo);
+                        $dayValue = $day->toDateString();
+                        $isSelectedDay = $fromDate === $dayValue && $toDate === $dayValue;
+                    @endphp
+                    <button type="button"
+                            class="btn btn-xs {{ $isSelectedDay ? 'btn-primary' : 'btn-outline-secondary' }}"
+                            aria-pressed="{{ $isSelectedDay ? 'true' : 'false' }}"
+                            title="Xem báo cáo ngày {{ $day->format('d/m/Y') }}"
+                            onclick="setDates('{{ $dayValue }}','{{ $dayValue }}')">{{ $day->format('j/n') }}</button>
+                @endfor
             </div>
         </form>
     </div>
