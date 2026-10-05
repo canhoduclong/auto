@@ -2094,6 +2094,15 @@ class AccountingDashboardController extends Controller
             ELSE COALESCE(adj.adjusted_quantity, order_items.quantity, 0) END";
         $priceAdjustmentExpr = "ROUND(({$effectivePriceExpr} - {$companyPriceExpr}) * ({$pricingQuantityExpr}), 2)";
 
+        // Attach the customer delivery fee to one visible product line per order.
+        // Choose the line before pagination so a fee cannot recur on another page.
+        $shippingLineSub = DB::table('order_items as shipping_items')
+            ->join('products as shipping_products', 'shipping_products.id', '=', 'shipping_items.product_id')
+            ->selectRaw('MIN(shipping_items.id)')
+            ->whereColumn('shipping_items.order_id', 'orders.id');
+        $customerShippingFeeExpr = 'CASE WHEN orders.collect_customer_shipping_fee = 1
+            THEN GREATEST(COALESCE(orders.customer_shipping_fee, 0), 0) ELSE 0 END';
+
         // ── Paginated list ────────────────────────────────────────────
         $listQ = $makeBase()->select([
             'order_items.id',
@@ -2105,6 +2114,8 @@ class AccountingDashboardController extends Controller
             END as order_date'),
             'orders.created_at as created_date',
             'orders.delivery_date',
+            DB::raw("CASE WHEN order_items.id = ({$shippingLineSub->toSql()})
+                THEN {$customerShippingFeeExpr} ELSE 0 END as customer_shipping_fee"),
             'orders.code as order_code',
             'orders.daily_sequence',
             'products.name as product_name',
@@ -2200,7 +2211,7 @@ class AccountingDashboardController extends Controller
             ->selectRaw('COALESCE(SUM(orders.extra_discount_total), 0) as extra_discount_total')
             ->selectRaw('COALESCE(SUM(CASE WHEN orders.extra_discount_total > 0 THEN orders.extra_discount_total ELSE 0 END), 0) as extra_discount')
             ->selectRaw('COALESCE(SUM(CASE WHEN orders.extra_discount_total < 0 THEN -orders.extra_discount_total ELSE 0 END), 0) as extra_increase')
-            ->selectRaw('COALESCE(SUM(orders.shipping_fee), 0) as total_shipping_fee')
+            ->selectRaw("COALESCE(SUM({$customerShippingFeeExpr}), 0) as total_shipping_fee")
             ->first();
         $summary->total_discount = (float) $summary->item_discount + (float) ($orderCostSummary->extra_discount ?? 0);
         $summary->total_increase = (float) $summary->item_increase + (float) ($orderCostSummary->extra_increase ?? 0);

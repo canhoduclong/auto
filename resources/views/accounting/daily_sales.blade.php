@@ -335,7 +335,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
         <div class="sub">{{ number_format((int)($summary->order_count ?? 0)) }} đơn hàng</div>
     </div>
     <div class="ds-kpi-item">
-        <div class="lbl">Tổng chi phí ship</div>
+        <div class="lbl">Phí giao hàng thu khách</div>
         <div class="val text-primary">{{ number_format((float)($summary->total_shipping_fee ?? 0), 0, ',', '.') }}đ</div>
         <div class="sub">Theo đơn trong khoảng ngày đã lọc</div>
     </div>
@@ -460,6 +460,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                                 <i class="bi bi-{{ $sort === 'amount_asc' ? 'sort-up' : ($sort === 'amount_desc' ? 'sort-down' : 'sort') }}"></i>
                             </a>
                         </th>
+                        <th class="text-end">Phí giao hàng thu khách</th>
                         <th class="text-end">Điều chỉnh</th>
                     </tr>
                 </thead>
@@ -530,13 +531,16 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         <td class="text-end fw-bold text-success">
                             {{ number_format($effTotal, 0, ',', '.') }}
                         </td>
+                        <td class="text-end text-primary" title="Phí giao hàng thu khách được ghi một lần trên mỗi đơn">
+                            {{ (float) $row->customer_shipping_fee > 0 ? number_format((float) $row->customer_shipping_fee, 0, ',', '.') : '—' }}
+                        </td>
                         <td class="text-end fw-bold {{ $priceAdjustment > 0 ? 'ds-price-increase' : ($priceAdjustment < 0 ? 'text-danger' : 'text-muted') }}">
                             {{ $priceAdjustment != 0 ? ($priceAdjustment > 0 ? '+' : '').number_format($priceAdjustment, 0, ',', '.').'đ' : '—' }}
                         </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="15" class="text-center text-muted py-4">
+                        <td colspan="16" class="text-center text-muted py-4">
                             <i class="bi bi-inbox fs-4 d-block mb-2"></i>
                             Không có dữ liệu cho bộ lọc này.
                         </td>
@@ -546,7 +550,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                 @if($items->isNotEmpty())
                 <tfoot class="table-light fw-semibold">
                     <tr>
-                        <td colspan="8" class="text-end text-muted small">Tổng trang này:</td>
+                        <td colspan="8" class="text-end text-muted small">Tổng tiền hàng trang này:</td>
                         <td class="text-end">
                             {{ $fmtN((float)$items->sum('eff_qty')) }}
                         </td>
@@ -559,10 +563,16 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         <td class="text-end text-success">
                             {{ number_format($items->sum('eff_total'), 0, ',', '.') }}đ
                         </td>
+                        <td class="text-end text-primary">{{ number_format((float) $items->sum('customer_shipping_fee'), 0, ',', '.') }}đ</td>
                         @php $pageAdjustment = (float) $items->sum('price_adjustment'); @endphp
                         <td class="text-end {{ $pageAdjustment > 0 ? 'ds-price-increase' : ($pageAdjustment < 0 ? 'text-danger' : 'text-muted') }}">
                             {{ $pageAdjustment > 0 ? '+' : '' }}{{ number_format($pageAdjustment, 0, ',', '.') }}đ
                         </td>
+                    </tr>
+                    <tr>
+                        <td colspan="13" class="text-end text-muted small">Tiền hàng + phí giao hàng thu khách (trang này):</td>
+                        <td colspan="2" class="text-end text-success">{{ number_format((float) $items->sum('eff_total') + (float) $items->sum('customer_shipping_fee'), 0, ',', '.') }}đ</td>
+                        <td></td>
                     </tr>
                 </tfoot>
                 @endif

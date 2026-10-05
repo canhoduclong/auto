@@ -106,6 +106,10 @@ class GitPushService
             $this->logs[] = $output;
         }
         if (! $process->isSuccessful()) {
+            if (str_contains($output, 'insufficient permission for adding an object')
+                || str_contains($output, 'Unable to create') && str_contains($output, 'Permission denied')) {
+                throw new \RuntimeException('Tài khoản chạy web không có quyền ghi vào repository Git (.git). Quản trị hệ thống cần cấp quyền ghi cho tài khoản chạy PHP trên thư mục .git và các thư mục con trước khi push lại.');
+            }
             $hint = str_contains($output, 'UNPROTECTED PRIVATE KEY FILE') || str_contains($output, 'bad permissions')
                 ? 'Quyền private key SSH không hợp lệ. File cần quyền 0600 và thuộc tài khoản chạy web.'
                 : (str_contains($output, 'Permission denied (publickey)')
