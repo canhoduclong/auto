@@ -159,8 +159,6 @@
             <div class="d-flex gap-2 mt-2 flex-wrap">
                 @php
                     $shortcuts = [
-                        'Hôm nay'   => [now()->toDateString(), now()->toDateString()],
-                        'Hôm qua'   => [now()->subDay()->toDateString(), now()->subDay()->toDateString()],
                         '7 ngày'    => [now()->subDays(6)->toDateString(), now()->toDateString()],
                         'Tháng này' => [now()->startOfMonth()->toDateString(), now()->toDateString()],
                         'Tháng trước' => [now()->subMonth()->startOfMonth()->toDateString(), now()->subMonth()->endOfMonth()->toDateString()],
@@ -170,7 +168,6 @@
                     <button type="button" class="btn btn-xs btn-outline-secondary"
                             onclick="setDates('{{ $f }}','{{ $t }}')">{{ $label }}</button>
                 @endforeach
-                <span class="small text-muted align-self-center ms-2">Tra soát từng ngày:</span>
                 @php $recentDay = now()->startOfDay(); @endphp
                 @for($daysAgo = 6; $daysAgo >= 0; $daysAgo--)
                     @php
@@ -182,7 +179,7 @@
                             class="btn btn-xs {{ $isSelectedDay ? 'btn-primary' : 'btn-outline-secondary' }}"
                             aria-pressed="{{ $isSelectedDay ? 'true' : 'false' }}"
                             title="Xem báo cáo ngày {{ $day->format('d/m/Y') }}"
-                            onclick="setDates('{{ $dayValue }}','{{ $dayValue }}')">{{ $day->format('j/n') }}</button>
+                            onclick="setDates('{{ $dayValue }}','{{ $dayValue }}')">{{ $daysAgo === 0 ? 'Hôm nay ' : '' }}{{ $day->format('j/n') }}</button>
                 @endfor
             </div>
         </form>

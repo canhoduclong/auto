@@ -2375,6 +2375,8 @@
                                                         @if($adjustment->reject_reason)<div class="monitor-sent-adjustment-meta text-danger"><strong>Lý do từ chối:</strong> {{ $adjustment->reject_reason }}</div>@endif
                                                     </div>
                                                     <div class="monitor-sent-adjustment-actions">
+                                                        <button type="button" class="btn btn-sm btn-outline-success monitor-sent-adjustment-link js-copy-zalo-order"
+                                                                data-zalo-text="{{ app(\App\Services\OrderAdjustmentZaloService::class)->text($adjustment, $order, route('site.order-adjustments.show', $adjustment)) }}"><i class="bi bi-clipboard me-1"></i>Chép Zalo</button>
                                                         <a href="{{ route('site.order-adjustments.show', $adjustment) }}" class="btn btn-sm btn-outline-primary monitor-sent-adjustment-link">Xem tiến trình</a>
                                                         @if($canDeleteAdjustment)
                                                             <form method="POST" action="{{ route('site.order-adjustments.destroy', $adjustment) }}" onsubmit="return confirm('Xóa yêu cầu điều chỉnh #{{ $adjustment->id }}? Thao tác này không thể hoàn tác.');">
@@ -2884,14 +2886,15 @@ document.addEventListener('click', async event => {
             document.body.appendChild(helper);
             helper.focus();
             helper.select();
-            document.execCommand('copy');
+            const copied = document.execCommand('copy');
             helper.remove();
+            if (!copied) throw new Error('Copy failed');
         }
         const original = button.innerHTML;
         button.innerHTML = '<i class="bi bi-check2 me-1"></i>Đã chép';
         setTimeout(() => { button.innerHTML = original; }, 1600);
     } catch (error) {
-        window.alert('Không thể chép nội dung đơn. Vui lòng thử lại.');
+        window.alert('Không thể chép nội dung. Vui lòng thử lại.');
     }
 });
 
@@ -3917,7 +3920,7 @@ document.addEventListener('submit', async function (event) {
     const escapeHtml = value => {
         const node = document.createElement('div');
         node.textContent = String(value ?? '');
-        return node.innerHTML;
+        return node.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     };
     const notify = (message, type = 'error') => typeof window.showToast === 'function'
         ? window.showToast(message, type)
@@ -4143,7 +4146,7 @@ document.addEventListener('submit', async function (event) {
                 const deleteAction = data.can_delete
                     ? `<form method="POST" action="${escapeHtml(data.delete_url)}" onsubmit="return confirm('Xóa yêu cầu điều chỉnh #${escapeHtml(data.adjustment_id)}? Thao tác này không thể hoàn tác.');"><input type="hidden" name="_token" value="${escapeHtml(csrfToken)}"><input type="hidden" name="_method" value="DELETE"><button type="submit" class="btn btn-sm btn-outline-danger monitor-sent-adjustment-link"><i class="bi bi-trash me-1"></i>Xóa</button></form>`
                     : '';
-                statusItems.insertAdjacentHTML('afterbegin', `<div class="monitor-sent-adjustment is-${escapeHtml(data.status_tone || 'warning')} mb-1" data-adjustment-id="${escapeHtml(data.adjustment_id)}"><div><div class="monitor-sent-adjustment-name">Yêu cầu #${escapeHtml(data.adjustment_id)} · ${escapeHtml(data.requested_at || '')}</div><div class="monitor-sent-adjustment-state"><i class="bi bi-hourglass-split me-1"></i>${escapeHtml(data.status_label || 'Đang chờ duyệt')}</div></div><div class="monitor-sent-adjustment-actions"><a href="${escapeHtml(data.url)}" class="btn btn-sm btn-outline-primary monitor-sent-adjustment-link">Xem tiến trình</a>${deleteAction}</div></div>`);
+                statusItems.insertAdjacentHTML('afterbegin', `<div class="monitor-sent-adjustment is-${escapeHtml(data.status_tone || 'warning')} mb-1" data-adjustment-id="${escapeHtml(data.adjustment_id)}"><div><div class="monitor-sent-adjustment-name">Yêu cầu #${escapeHtml(data.adjustment_id)} · ${escapeHtml(data.requested_at || '')}</div><div class="monitor-sent-adjustment-state"><i class="bi bi-hourglass-split me-1"></i>${escapeHtml(data.status_label || 'Đang chờ duyệt')}</div></div><div class="monitor-sent-adjustment-actions"><button type="button" class="btn btn-sm btn-outline-success monitor-sent-adjustment-link js-copy-zalo-order" data-zalo-text="${escapeHtml(data.zalo_text || '')}"><i class="bi bi-clipboard me-1"></i>Chép Zalo</button><a href="${escapeHtml(data.url)}" class="btn btn-sm btn-outline-primary monitor-sent-adjustment-link">Xem tiến trình</a>${deleteAction}</div></div>`);
             }
             const opener = orderCard?.querySelector('.monitor-adjustment-open');
             if (opener) { opener.disabled = true; opener.innerHTML = '<i class="bi bi-check2"></i><span>Đã gửi yêu cầu</span>'; }

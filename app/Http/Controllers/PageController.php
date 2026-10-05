@@ -1059,10 +1059,11 @@ class PageController extends Controller
                 },
                 'adjustments' => function ($query): void {
                     $query->with([
-                        'requester:id,name,team_id',
+                        'requester:id,name,short_name,team_id',
                         'approvalSteps.step:id,role_slug,step_order',
                         'approvalSteps.approver:id,name',
                         'items.variant.product:id,name',
+                        'items.orderItem.product:id,name',
                     ])->latest('id');
                 },
                 'items.product',

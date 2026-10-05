@@ -342,11 +342,13 @@ class OrderAdjustmentController extends Controller
             : 'Đã gửi yêu cầu điều chỉnh đơn hàng cho quy trình duyệt.';
 
         if ($request->expectsJson()) {
-            $adjustment->loadMissing('approvalSteps.step');
+            $adjustment->loadMissing(['approvalSteps.step', 'items.variant.product', 'items.orderItem.product', 'requester']);
+            $order->loadMissing(['customer', 'user']);
 
             return response()->json([
                 'success' => true,
                 'message' => $message,
+                'zalo_text' => app(\App\Services\OrderAdjustmentZaloService::class)->text($adjustment, $order, route('site.order-adjustments.show', $adjustment)),
                 'adjustment_id' => $adjustment->id,
                 'url' => route('site.order-adjustments.show', $adjustment),
                 'status_label' => $adjustment->progressLabel(),
