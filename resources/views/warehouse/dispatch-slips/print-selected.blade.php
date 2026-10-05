@@ -38,6 +38,18 @@
         </tbody>
         <tfoot><tr class="summary"><td colspan="4">TỔNG CỘNG</td><td class="num">{{ number_format($totalOrders) }}</td><td class="num">{{ number_format($totalQuantity) }}</td><td class="num">{{ $formatKg($totalWeight) }}</td></tr></tfoot>
     </table>
+    @if($documents->contains(fn ($document) => filled($document['slip']->notes)))
+        <h2>GHI CHÚ XUẤT PHIẾU TỔNG</h2>
+        @foreach($documents as $document)
+            @php($noteSlip = $document['slip'])
+            @if(filled($noteSlip->notes))
+                <div style="border:1px solid #64748b; padding:10px; margin-bottom:10px; break-inside:avoid;">
+                    <strong>{{ $noteSlip->code }} · {{ $noteSlip->targetWarehouse?->name }} · {{ $noteSlip->shipper?->short_name ?: $noteSlip->shipper?->name }}</strong>
+                    <div style="white-space:pre-wrap; overflow-wrap:anywhere; margin-top:6px;">{{ $noteSlip->notes }}</div>
+                </div>
+            @endif
+        @endforeach
+    @endif
     <h2>DANH SÁCH ĐƠN HÀNG GỘP</h2>
     <table class="combined-orders">
         <thead><tr><th class="center">STT</th><th>Khách hàng / Mã đơn</th><th>Sale</th><th class="num">Số lượng</th><th class="num">KL thực đóng</th><th class="num">Tổng tiền hàng</th><th>Ghi chú đơn</th></tr></thead>

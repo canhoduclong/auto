@@ -59,7 +59,7 @@ class TransferWorkbenchController extends Controller
             'groups' => ['required', 'array', 'min:1', 'max:100'],
             'groups.*.target_warehouse_id' => ['required', 'integer', 'distinct', 'exists:warehouses,id', Rule::notIn([$warehouseId])],
             'groups.*.shipper_id' => ['required', 'integer', 'exists:users,id'],
-            'groups.*.note' => ['nullable', 'string', 'max:1000'],
+            'groups.*.note' => ['nullable', 'string', 'max:2000'],
             'groups.*.order_ids' => ['sometimes', 'array'],
             'groups.*.order_ids.*' => ['required', 'integer', 'distinct', 'min:1'],
             'groups.*.items' => ['sometimes', 'array'],
@@ -97,6 +97,7 @@ class TransferWorkbenchController extends Controller
                     Warehouse::whereKey($warehouseId)->lockForUpdate()->firstOrFail();
                     $codes = [];
                     foreach ($data['groups'] as $group) {
+                        $group['note'] = trim((string) ($group['note'] ?? '')) ?: null;
                         $targetId = (int) $group['target_warehouse_id'];
                         $slip = WarehouseDispatchSlip::create([
                             'business_date' => $data['business_date'],
@@ -109,7 +110,7 @@ class TransferWorkbenchController extends Controller
                         ]);
                         if (! empty($group['order_ids'])) {
                             $transfer = $service->createOrders($warehouseId, [
-                                'warehouse_id' => $targetId, 'shipper_id' => $group['shipper_id'],
+                                'warehouse_id' => $targetId, 'shipper_id' => $group['shipper_id'], 'note' => $group['note'],
                             ], $group['order_ids']);
                             $slip->entries()->create(['order_transfer_id' => $transfer->id]);
                         }

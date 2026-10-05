@@ -36,7 +36,7 @@
     <div class="col-md-3"><div class="card h-100"><div class="card-body"><div class="small text-muted">Người lập/chốt</div><div class="fw-bold">{{ $slip->creator?->name }}</div><div class="small">{{ $slip->finalizer?->name ?: 'Chưa chốt' }}</div></div></div></div>
 </div>
 
-@if($slip->notes)<div class="alert alert-light border"><strong>Ghi chú bàn giao:</strong> {{ $slip->notes }}</div>@endif
+@if($slip->notes)<div class="alert alert-light border"><strong>Ghi chú bàn giao:</strong><div style="white-space:pre-wrap; overflow-wrap:anywhere;">{{ $slip->notes }}</div></div>@endif
 @if(!$readOnly && request()->routeIs('admin.warehouse-dispatch-slips.*') && $slip->status === 'finalized' && ($slip->mismatched_order_count ?? 0) > 0)
     <div class="alert alert-warning d-flex justify-content-between align-items-center gap-3 flex-wrap">
         <div><strong>Cảnh báo ngày:</strong> Có {{ $slip->mismatched_order_count }} đơn được tạo khác ngày nghiệp vụ {{ $slip->business_date->format('d/m/Y') }}.</div>

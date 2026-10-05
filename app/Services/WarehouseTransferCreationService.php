@@ -160,7 +160,7 @@ class WarehouseTransferCreationService
             $orderTransfer = OrderTransfer::create([
                 'shipper_id' => $data['shipper_id'],
                 'warehouse_id' => $data['warehouse_id'],
-                'notes' => null,
+                'notes' => trim((string) ($data['note'] ?? '')) ?: null,
                 'created_by' => auth()->id(),
             ]);
 
