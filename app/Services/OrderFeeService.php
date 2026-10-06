@@ -30,7 +30,10 @@ class OrderFeeService
             ->orderBy('name')
             ->get()
             ->filter(fn (OrderFeeType $type): bool => $type->is_active || $this->currentState($order, $type)['enabled'])
-            ->values();
+            ->map(function (OrderFeeType $type) {
+                if ($type->code === 'shipping') $type->name = 'Phí giao hàng thu khách';
+                return $type;
+            })->values();
     }
 
     public function prepareChanges(Order $order, Collection $types, array $submittedFees): array
@@ -50,7 +53,8 @@ class OrderFeeService
 
             return [$type->code => [
                 'fee_type_id' => $type->id,
-                'name' => $type->name,
+                'name' => $type->code === 'shipping' ? 'Phí giao hàng thu khách' : $type->name,
+                'shipping_target' => $type->code === 'shipping' ? 'customer' : null,
                 'calculation_type' => $calculationType,
                 'direction' => $type->direction,
                 'is_system' => $type->is_system,
@@ -60,11 +64,30 @@ class OrderFeeService
         })->all();
     }
 
+    public static function customerShippingState(Order $order): array
+    {
+        $enabled = (bool)$order->collect_customer_shipping_fee;
+        return ['enabled'=>$enabled || (bool)$order->charge_shipping_fee, 'value'=>$enabled ? (float)$order->customer_shipping_fee : ((bool)$order->charge_shipping_fee ? (float)$order->shipping_fee : 0)];
+    }
+
+    public static function shippingChange(Order $order, array $change): array
+    {
+        if (($change['shipping_target'] ?? null) !== 'customer') {
+            $old = (array)($change['original'] ?? []);
+            $new = (array)($change['adjusted'] ?? []);
+            $changed = (bool)($old['enabled'] ?? false) !== (bool)($new['enabled'] ?? false) || abs((float)($old['value'] ?? 0)-(float)($new['value'] ?? 0)) > 0.001;
+            $change['original'] = self::customerShippingState($order);
+            if (!$changed) $change['adjusted'] = $change['original'];
+        }
+        $change['name'] = 'Phí giao hàng thu khách';
+        return $change;
+    }
+
     public function currentState(Order $order, OrderFeeType $type): array
     {
         return match ($type->code) {
             'vat' => ['enabled' => (bool) ($order->charge_vat ?? false), 'value' => (float) ($order->vat_amount ?? 0)],
-            'shipping' => ['enabled' => (bool) ($order->charge_shipping_fee ?? false), 'value' => (float) ($order->shipping_fee ?? 0)],
+            'shipping' => self::customerShippingState($order),
             'discount' => ['enabled' => (float) ($order->extra_discount_total ?? 0) > 0, 'value' => max(0, (float) ($order->extra_discount_total ?? 0))],
             'foam_box' => ['enabled' => (bool) ($order->charge_foam_box_fee ?? false), 'value' => (float) ($order->foam_box_price ?? 0)],
             default => $this->customCurrentState($order, $type),
@@ -87,9 +110,10 @@ class OrderFeeService
             }
         }
         if (isset($changes['shipping']['adjusted'])) {
-            $state = $changes['shipping']['adjusted'];
-            $updates['charge_shipping_fee'] = (bool) ($state['enabled'] ?? false);
-            $updates['shipping_fee'] = $updates['charge_shipping_fee'] ? max(0, (float) ($state['value'] ?? 0)) : 0;
+            $state = self::shippingChange($order, $changes['shipping'])['adjusted'];
+            $updates['collect_customer_shipping_fee'] = (bool) ($state['enabled'] ?? false);
+            $updates['customer_shipping_fee'] = $updates['collect_customer_shipping_fee'] ? max(0, (float) ($state['value'] ?? 0)) : 0;
+            $updates['charge_shipping_fee'] = false;
         }
         if (isset($changes['discount']['adjusted'])) {
             $state = $changes['discount']['adjusted'];

@@ -53,8 +53,10 @@
             <div class="adjustment-meta-row"><span>Tiền hàng</span><span>{{ $money($order->items->sum('total')) }}</span></div>
             <div class="adjustment-meta-row"><span>Chiết khấu thêm</span><span>{{ $money($order->extra_discount_total) }}</span></div>
             @if($order->charge_vat)<div class="adjustment-meta-row"><span>VAT</span><span>{{ $money($order->vat_amount) }}</span></div>@endif
-            @if($order->charge_shipping_fee)<div class="adjustment-meta-row"><span>Phí vận chuyển</span><span>{{ $money($order->shipping_fee) }}</span></div>@endif
-            @if($order->collect_customer_shipping_fee)<div class="adjustment-meta-row"><span>Phí giao hàng thu khách</span><span>{{ $money($order->customer_shipping_fee) }}</span></div>@endif
+            @php
+                $customerShipping = \App\Services\OrderFeeService::customerShippingState($order);
+            @endphp
+            @if($customerShipping['enabled'])<div class="adjustment-meta-row"><span>Phí giao hàng thu khách</span><span>{{ $money($customerShipping['value']) }}</span></div>@endif
             @if($order->charge_foam_box_fee)<div class="adjustment-meta-row"><span>Phí thùng xốp</span><span>{{ $money($order->foam_box_price) }}</span></div>@endif
             @foreach($order->additionalFees as $fee)<div class="adjustment-meta-row"><span>{{ $fee->fee_name }}</span><span>{{ $fee->direction === 'discount' ? '-' : '+' }}{{ $money($fee->amount) }}</span></div>@endforeach
             <div class="adjustment-meta-row"><span>Tổng đơn hàng</span><span>{{ $money($order->total) }}</span></div>

@@ -65,12 +65,12 @@ class OrderAdjustmentComparison
         $definitions = [
             'discount'=>['name'=>'Chiết khấu đơn','direction'=>'discount','value'=>(float)($order?->extra_discount_total ?? 0),'enabled'=>(float)($order?->extra_discount_total ?? 0)>0],
             'vat'=>['name'=>'VAT','value'=>(float)($order?->vat_percent ?: $order?->vat_amount ?? 0),'enabled'=>(bool)$order?->charge_vat,'calculation_type'=>$order?->vat_percent > 0 ? 'percent' : 'fixed'],
-            'shipping'=>['name'=>'Phí Ship','value'=>(float)($order?->shipping_fee ?? 0),'enabled'=>(bool)$order?->charge_shipping_fee],
+            'shipping'=>array_merge(['name'=>'Phí giao hàng thu khách'], $order ? \App\Services\OrderFeeService::customerShippingState($order) : ['enabled'=>false,'value'=>0]),
             'foam_box'=>['name'=>'Phí thùng xốp','value'=>(float)($order?->foam_box_price ?? 0),'enabled'=>(bool)$order?->charge_foam_box_fee],
-            'customer_shipping'=>['name'=>'Phí giao hàng thu khách','value'=>(float)($order?->customer_shipping_fee ?? 0),'enabled'=>(bool)$order?->collect_customer_shipping_fee],
         ];
         foreach ($order?->additionalFees ?? [] as $fee) $definitions[$fee->fee_code] = ['name'=>$fee->fee_name,'value'=>(float)$fee->rate,'enabled'=>true,'calculation_type'=>$fee->calculation_type,'direction'=>$fee->direction];
         foreach ((array)$adjustment->fee_changes as $code=>$change) {
+            if ($code === 'shipping' && $order) $change = \App\Services\OrderFeeService::shippingChange($order, $change);
             $definitions[$code] = array_merge($definitions[$code] ?? [], array_intersect_key($change,array_flip(['name','direction','calculation_type'])),(array)($change[$state] ?? []));
         }
         $discount = $definitions['discount']['enabled'] ? (float)$definitions['discount']['value'] : 0;

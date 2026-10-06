@@ -86,4 +86,31 @@ class OrderAdjustmentComparisonTest extends TestCase
         self::assertEquals(4913400,$new['subtotal']);
     }
 
+    public function test_existing_customer_shipping_is_replaced_instead_of_added_twice(): void
+    {
+        $order = new \App\Models\Order(['collect_customer_shipping_fee'=>true,'customer_shipping_fee'=>120000,'charge_shipping_fee'=>false,'shipping_fee'=>0]);
+        $order->setRelation('additionalFees',new Collection);
+        $adjustment = new OrderAdjustment(['fee_changes'=>['shipping'=>['original'=>['enabled'=>true,'value'=>0],'adjusted'=>['enabled'=>true,'value'=>120000]]]]);
+        $adjustment->setRelation('order',$order);
+        $rows = [['new'=>false,'originalTotal'=>4913400,'adjustedTotal'=>4913400]];
+        foreach (['original','adjusted'] as $state) {
+            $total = OrderAdjustmentComparison::totals($adjustment,$rows,$state);
+            self::assertEquals(5033400,$total['total']);
+            self::assertCount(1,$total['fees']);
+            self::assertSame('Phí giao hàng thu khách',$total['fees'][0]['name']);
+        }
+    }
+    public function test_shipping_application_preserves_shipper_cost_and_updates_only_customer_charge(): void
+    {
+        $order = new class extends \App\Models\Order {
+            public function save(array $options = []) { return true; }
+        };
+        $order->forceFill(['collect_customer_shipping_fee'=>true,'customer_shipping_fee'=>120000,'charge_shipping_fee'=>false,'shipping_fee'=>80000]);
+        (new \App\Services\OrderFeeService)->applySystemChanges($order,['shipping'=>['original'=>['enabled'=>false,'value'=>0],'adjusted'=>['enabled'=>true,'value'=>150000]]]);
+        self::assertEquals(150000,$order->customer_shipping_fee);
+        self::assertEquals(80000,$order->shipping_fee);
+        self::assertFalse((bool)$order->charge_shipping_fee);
+        self::assertTrue((bool)$order->collect_customer_shipping_fee);
+    }
+
 }

@@ -959,14 +959,11 @@ class OrderAdjustmentController extends Controller
             $customerShippingFee = (bool) ($order->collect_customer_shipping_fee ?? false)
                 ? max(0, (float) ($order->customer_shipping_fee ?? 0))
                 : 0;
-            $assignedShippingFee = (bool) ($order->charge_shipping_fee ?? false)
-                ? max(0, (float) ($order->shipping_fee ?? 0))
-                : 0;
             $foamBoxFee = (bool) ($order->charge_foam_box_fee ?? false)
                 ? max(0, (float) ($order->foam_box_price ?? 0))
                 : 0;
             $customFeeNet = $feeService->syncCustomFees($order, $feeChanges, $productTotal, $adjustment->id);
-            $newTotal = max(0, $productTotal + $vatAmount + $customerShippingFee + $assignedShippingFee + $foamBoxFee + $customFeeNet);
+            $newTotal = max(0, $productTotal + $vatAmount + $customerShippingFee + $foamBoxFee + $customFeeNet);
 
             $order->update([
                 'subtotal_amount' => round($subtotal, 2),

@@ -140,11 +140,14 @@
         <div class="adjustment-layout">
             <main class="adjustment-main">
                 <section class="adjustment-card"><div class="adjustment-card-body">
-                    @include('site.orders.adjustments._product_comparison', ['adjustment' => $adjustment, 'comparisonSection' => 'both', 'comparisonStacked' => true])
+                    @include('site.orders.adjustments._product_comparison', ['adjustment' => $adjustment, 'comparisonSection' => 'both', 'comparisonStacked' => true, 'comparisonShowOrderInformation' => true])
                 </div></section>
-                @if($order)
-                    <details class="adjustment-card"><summary class="adjustment-card-head fw-semibold">Thông tin đơn hàng hiện tại và thanh toán</summary>
-                    @include('site.orders.adjustments._confirmed_order', ['beforeAdjustment' => $adjustment->status !== 'completed'])
+                @php
+                    $accountingConfirmed = $adjustment->approvalSteps->contains(fn($approval) => $approval->status === 'approved' && in_array(strtolower((string)$approval->step?->role_slug), ['account','accountant','accounting'], true));
+                @endphp
+                @if($order && $accountingConfirmed && $adjustment->status === 'completed')
+                    <details class="adjustment-card" open><summary class="adjustment-card-head fw-semibold">Đơn hoàn thiện sau điều chỉnh</summary>
+                    @include('site.orders.adjustments._confirmed_order', ['beforeAdjustment' => false])
                     </details>
                 @endif
 

@@ -5,7 +5,9 @@
         'discount' => ['label' => 'Chiết khấu đơn', 'unit' => 'đ'],
         'foam_box' => ['label' => 'Phí thùng xốp', 'unit' => 'đ'],
     ];
-    $changedFees = collect((array) ($adjustment->fee_changes ?? []))->filter(function ($change): bool {
+    $changedFees = collect((array) ($adjustment->fee_changes ?? []))->map(function ($change, $code) use ($adjustment) {
+        return $code === 'shipping' && $adjustment->order ? \App\Services\OrderFeeService::shippingChange($adjustment->order, $change) : $change;
+    })->filter(function ($change): bool {
         $original = (array) ($change['original'] ?? []);
         $adjusted = (array) ($change['adjusted'] ?? []);
 

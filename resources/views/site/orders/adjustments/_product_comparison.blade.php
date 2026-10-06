@@ -29,6 +29,9 @@
 @endphp
 <div class="mb-3 {{ $state === 'original' ? 'adjustment-comparison-original' : '' }}">
 <h6 class="fw-bold">{{ $state === 'original' ? 'Đơn trước điều chỉnh' : 'Đơn sau điều chỉnh (đề nghị)' }}</h6>
+@if($state === 'original' && ($comparisonShowOrderInformation ?? false) && $adjustment->order)
+    @include('site.orders.adjustments._original_order_information', ['adjustment' => $adjustment])
+@endif
 <div class="table-responsive"><table class="table table-sm align-middle mb-1">
 <thead><tr><th>Sản phẩm / biến thể</th><th class="text-end">Size đặt</th><th class="text-end">Số lượng</th><th class="text-end">Khối lượng</th><th class="text-end"><span title="{{ $state === 'original' ? 'Size kho đã đóng thực tế' : 'Size bình quân theo đề nghị điều chỉnh' }}">Size</span></th><th class="text-end">Đơn giá</th><th class="text-end">Thành tiền</th></tr></thead>
 <tbody>
@@ -59,6 +62,7 @@
 <tr><td colspan="6" class="text-end">Tiền hàng</td><td class="text-end fw-semibold">{{ $comparisonMoney($totals['subtotal']) }}</td></tr>
 @php
     $shippingChange = (array) data_get($adjustment->fee_changes, 'shipping', []);
+    if ($shippingChange && $adjustment->order) $shippingChange = \App\Services\OrderFeeService::shippingChange($adjustment->order, $shippingChange);
     $oldShipping = (bool) data_get($shippingChange, 'original.enabled', false) ? (float) data_get($shippingChange, 'original.value', 0) : 0;
     $newShipping = (bool) data_get($shippingChange, 'adjusted.enabled', false) ? (float) data_get($shippingChange, 'adjusted.value', 0) : 0;
 @endphp
@@ -70,6 +74,16 @@
 {{ $fee['name'] }}</td><td class="text-end">{{ $comparisonMoney($fee['amount']) }}</td></tr>
 @endforeach
 <tr><td colspan="6" class="text-end fw-bold">Tổng đơn {{ $state === 'adjusted' ? 'đề nghị' : 'trước điều chỉnh' }}</td><td class="text-end fw-bold">{{ $comparisonMoney($totals['total']) }}</td></tr>
+@if($state === 'original' && ($comparisonShowOrderInformation ?? false) && $adjustment->order)
+@php
+    $originalPaid = max(0, (float)$adjustment->order->amount_paid, (float)($adjustment->order->collected_amount ?? 0));
+    $originalDue = max(0, $totals['total'] - $originalPaid);
+    $originalPaymentStatus = $originalDue <= 0 ? 'Đã thanh toán' : ($originalPaid > 0 ? 'Thanh toán một phần' : 'Chưa thanh toán');
+@endphp
+<tr><td colspan="6" class="text-end">Đã thanh toán</td><td class="text-end">{{ $comparisonMoney($originalPaid) }}</td></tr>
+<tr><td colspan="6" class="text-end">Còn phải thu</td><td class="text-end fw-semibold">{{ $comparisonMoney($originalDue) }}</td></tr>
+<tr><td colspan="6" class="text-end">Thanh toán</td><td class="text-end">{{ $originalPaymentStatus }}</td></tr>
+@endif
 </tfoot>
 </table></div>
 </div>
@@ -106,6 +120,7 @@
 @endforeach
 @foreach((array)$adjustment->fee_changes as $code=>$change)
 @php
+    if ($code === 'shipping' && $adjustment->order) $change = \App\Services\OrderFeeService::shippingChange($adjustment->order, $change);
     $oldFee = (array)($change['original'] ?? []);
     $newFee = (array)($change['adjusted'] ?? []);
     $feeChanged = (bool)($oldFee['enabled'] ?? false) !== (bool)($newFee['enabled'] ?? false) || abs((float)($oldFee['value'] ?? 0)-(float)($newFee['value'] ?? 0)) > 0.0001;
