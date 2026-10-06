@@ -24,7 +24,7 @@ class SubTaskRecallTest extends TestCase
         DB::table('task_assignees')->insert(['task_id'=>2,'user_id'=>3,'status'=>'completed']);
     }
     protected function tearDown(): void { DB::disconnect('sqlite');$this->app->flush();restore_error_handler();restore_exception_handler();parent::tearDown(); }
-    private function actor(int $id): User { $user=$this->createMock(User::class);$user->id=$id;$user->method('hasRole')->willReturn(false);return $user; }
+    private function actor(int $id): User { $user=new User;$user->id=$id;$user->setRelation('roles',new \Illuminate\Database\Eloquent\Collection);return $user; }
     public function test_parent_creator_can_recall_branch_and_preserve_finished_work(): void {
         self::assertSame(2,(new SubTaskRecallService)->recall(1,2,$this->actor(1),'Thay đổi kế hoạch'));
         self::assertSame('cancelled',TaskAssignment::find(2)->status);

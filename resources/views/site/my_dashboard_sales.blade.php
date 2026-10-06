@@ -358,28 +358,23 @@
         .manager-kpi-grid > div { border-bottom:1px solid #e5eaf0; }
         .manager-size-body { flex-direction:column; align-items:flex-start; }
     }
-    /* Shared typography and cell spacing for dashboard tables. */
-    .my-dashboard { --dashboard-table-font: .875rem; --dashboard-table-padding: 8px 12px; }
-    .my-dashboard .manager-panel table,
-    .my-dashboard .weekly-production-table,
-    .my-dashboard .price-board-table { font-family: inherit; font-size: var(--dashboard-table-font); line-height: 1.45; font-variant-numeric: tabular-nums; }
-    .my-dashboard .manager-panel table th,
-    .my-dashboard .manager-panel table td,
-    .my-dashboard .weekly-production-table th,
-    .my-dashboard .weekly-production-table td,
-    .my-dashboard .price-board-table td { padding: var(--dashboard-table-padding); font-size: var(--dashboard-table-font); line-height: 1.45; vertical-align: middle; }
-    .my-dashboard .manager-product-heading { margin: 0; padding: var(--dashboard-table-padding); line-height: 1.45; flex-wrap: wrap; }
-    .my-dashboard .manager-product-heading strong,
-    .my-dashboard .manager-product-heading span,
-    .my-dashboard .price-board-product-name,
-    .my-dashboard .price-update-price { font-size: var(--dashboard-table-font); line-height: 1.45; }
-    .my-dashboard .manager-panel > h2 { padding: var(--dashboard-table-padding); font-size: var(--dashboard-table-font); line-height: 1.45; }
-    .my-dashboard .price-board-card { padding: 0 0 12px; }
-    .my-dashboard .price-board-head { padding: 8px 12px; margin-bottom: 0; }
-    .my-dashboard .price-board-title { font-size: var(--dashboard-table-font); line-height: 1.45; }
-    .my-dashboard .price-board-group td { padding: var(--dashboard-table-padding); }
-    .my-dashboard .price-board-variant-name { padding-left: 24px !important; }
-    .my-dashboard .price-board-note { padding: 8px 12px 0; }
+    /* Consistent typography in the main dashboard; the price board keeps its original styling. */
+    .dashboard-main { --dashboard-table-font: .875rem; --dashboard-table-padding: 8px 12px; font-size: var(--dashboard-table-font); }
+    .dashboard-main .manager-panel table,
+    .dashboard-main .weekly-production-table { font-family: inherit; font-size: var(--dashboard-table-font); line-height: 1.45; font-variant-numeric: tabular-nums; }
+    .dashboard-main .manager-panel table th,
+    .dashboard-main .manager-panel table td,
+    .dashboard-main .weekly-production-table th,
+    .dashboard-main .weekly-production-table td { padding: var(--dashboard-table-padding); font-size: var(--dashboard-table-font); line-height: 1.45; vertical-align: middle; }
+    .dashboard-main .manager-product-heading { margin: 0; padding: var(--dashboard-table-padding); line-height: 1.45; flex-wrap: wrap; }
+    .dashboard-main .manager-product-heading strong,
+    .dashboard-main .manager-product-heading span,
+    .dashboard-main .manager-board-head p,
+    .dashboard-main .manager-date-filter input,
+    .dashboard-main .manager-date-filter button,
+    .dashboard-main .manager-date-filter label span,
+    .dashboard-main .manager-quick-day { font-size: var(--dashboard-table-font); line-height: 1.45; }
+    .dashboard-main .manager-panel > h2 { padding: var(--dashboard-table-padding); font-size: var(--dashboard-table-font); line-height: 1.45; }
 </style>
 @endpush
 
