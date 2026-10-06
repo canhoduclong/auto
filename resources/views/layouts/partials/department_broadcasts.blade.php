@@ -61,6 +61,11 @@
                             @endif
                             <div class="dept-broadcast-time">{{ optional($broadcast['created_at'])->format('d/m/Y H:i') }}</div>
                     </a>
+                    <form method="POST" action="{{ route('department-notifications.notification.destroy', ['notificationId' => $broadcast['id'], 'layout' => $departmentNotificationLayoutKey]) }}" class="dept-broadcast-delete" onsubmit="return confirm('Xóa thông báo này khỏi hộp thư của bạn?')">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="dept-broadcast-action" title="Xóa thông báo khỏi hộp thư của bạn"><i class="bi bi-trash3"></i> Xóa</button>
+                    </form>
                 </div>
             @empty
                 <div class="dept-broadcast-item">
@@ -92,6 +97,7 @@
             }
             .dept-broadcast-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
             .dept-broadcast-actions form { margin: 0; }
+            .dept-broadcast-delete { margin: 6px 0 0; text-align: right; }
             .dept-broadcast-action { padding: 3px 7px; border: 1px solid #f4c04e; border-radius: 5px; background: #fff; color: #92400e; font-size: .68rem; font-weight: 700; }
             .dept-broadcast-action:hover { background: #fef3c7; }
             .dept-broadcast-card.is-collapsed .dept-broadcast-list { display: none; }
