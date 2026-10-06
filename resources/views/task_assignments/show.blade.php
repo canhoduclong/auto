@@ -183,38 +183,6 @@
                 </form>
                 </details>
             @endif
-            {{-- My assignee action card --}}
-            @if($myAssignee && in_array($myAssignee->status, ['pending', 'in_progress', 'processing']))
-                <div class="card border-primary shadow-sm mb-3">
-                    <div class="card-header bg-primary bg-opacity-10 py-2">
-                        <span class="fw-semibold text-primary"><i class="ph-clipboard-text me-1"></i>Cập nhật công việc của bạn</span>
-                    </div>
-                    <div class="card-body">
-                        <p class="small text-muted mb-3">
-                            Trạng thái hiện tại: <span class="badge bg-{{ $myAssignee->statusColor() }}">{{ $myAssignee->status }}</span>
-                        </p>
-                        <form action="{{ route('task-assignments.assignee-update', $task) }}" method="POST">
-                            @csrf
-                            <div class="mb-2">
-                                <select name="status" class="form-select form-select-sm">
-                                    <option value="in_progress" {{ in_array($myAssignee->status, ['in_progress', 'processing']) ? 'selected' : '' }}>Đang thực hiện</option>
-                                    <option value="rejected">Không thể thực hiện</option>
-                                </select>
-                            </div>
-                            <div class="mb-2">
-                                <textarea name="note" class="form-control form-control-sm" rows="2"
-                                          placeholder="Nội dung đã thực hiện / kết quả...">{{ $myAssignee->note }}</textarea>
-                            </div>
-                            <button type="submit" class="btn btn-primary btn-sm w-100">
-                                <i class="ph-check me-1"></i>Cập nhật trạng thái
-                            </button>
-                        </form>
-                        <a href="{{ route('task-assignments.complete-form', $task) }}" class="btn btn-success btn-sm w-100 mt-2">
-                            <i class="ph-check-circle me-1"></i>Hoàn thành công việc
-                        </a>
-                    </div>
-                </div>
-            @endif
 
         </div>
 
@@ -256,7 +224,7 @@
             @endif
 
             {{-- Approval timeline --}}
-            <div class="card shadow-sm">
+            <div class="card shadow-sm mb-3">
                 <div class="card-header py-2 fw-semibold small text-uppercase text-muted">
                     <i class="ph-flow-arrow me-1"></i>Quy trinh phe duyet
                     @if($task->workflow)
@@ -304,6 +272,39 @@
                     @endif
                 </div>
             </div>
+
+            {{-- My assignee action card --}}
+            @if($myAssignee && in_array($myAssignee->status, ['pending', 'in_progress', 'processing']))
+                <div class="card border-primary shadow-sm mb-3">
+                    <div class="card-header bg-primary bg-opacity-10 py-2">
+                        <span class="fw-semibold text-primary"><i class="ph-clipboard-text me-1"></i>Cập nhật công việc của bạn</span>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-3">
+                            Trạng thái hiện tại: <span class="badge bg-{{ $myAssignee->statusColor() }}">{{ $myAssignee->status }}</span>
+                        </p>
+                        <form action="{{ route('task-assignments.assignee-update', $task) }}" method="POST">
+                            @csrf
+                            <div class="mb-2">
+                                <select name="status" class="form-select form-select-sm">
+                                    <option value="in_progress" {{ in_array($myAssignee->status, ['in_progress', 'processing']) ? 'selected' : '' }}>Đang thực hiện</option>
+                                    <option value="rejected">Không thể thực hiện</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <textarea name="note" class="form-control form-control-sm" rows="2"
+                                          placeholder="Nội dung đã thực hiện / kết quả...">{{ $myAssignee->note }}</textarea>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-sm w-100">
+                                <i class="ph-check me-1"></i>Cập nhật trạng thái
+                            </button>
+                        </form>
+                        <a href="{{ route('task-assignments.complete-form', $task) }}" class="btn btn-success btn-sm w-100 mt-2">
+                            <i class="ph-check-circle me-1"></i>Hoàn thành công việc
+                        </a>
+                    </div>
+                </div>
+            @endif
         </div>
     </div>
 </div>
