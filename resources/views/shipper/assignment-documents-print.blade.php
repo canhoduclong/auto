@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
     <meta charset="utf-8">
-    <title>Phiếu giao hàng {{ date('d-m-Y', strtotime($selectedDate)) }}</title>
+    <title>{{ $printTitle ?? 'Phiếu giao hàng' }} {{ date('d-m-Y', strtotime($selectedDate)) }}</title>
     <style>
         @page { size: A4 portrait; margin: 10mm; }
         * { box-sizing: border-box; }
@@ -48,10 +48,13 @@
     $companyTax = \App\Models\Setting::get('company_tax_code', '');
     $companyLogo = 'https://hoanglongtnt.com/storage/media/1XrclAQJcTDneyC1SUTth1Qk976G0W20LO0e51oO.png';
 @endphp
+@if($orders->isEmpty())
+<p style="padding:24px;text-align:center">Không có đơn đã xuất kho trong bộ lọc đã chọn.</p>
+@endif
 @foreach($orders as $order)
 @php
     $totalQuantity = $order->items->sum('quantity');
-    $totalWeight = $order->items->sum(fn ($item) => (float) ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight ?? 0));
+    $totalWeight = $order->items->sum(fn ($item) => $item->effective_priced_by_kg ? (float) ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight ?? 0) : 0);
 @endphp
 <section class="sheet">
     <div class="company">
@@ -69,7 +72,7 @@
             Ngày phiếu: <strong>{{ date('d/m/Y', strtotime($selectedDate)) }}</strong>
         </div>
     </div>
-    <h1>PHIẾU GIAO HÀNG</h1>
+    <h1>{{ $printTitle ?? 'PHIẾU GIAO HÀNG' }}</h1>
     <div class="subtitle">Số chứng từ: <strong>PXK-{{ $order->code ?: $order->id }}</strong></div>
     <div class="info">
         <div><span class="label">Khách hàng:</span> {{ $order->recipient_name ?: $order->customer?->name ?: '—' }}</div>
@@ -89,7 +92,7 @@
             @php
                 $product = $item->variant?->product ?: $item->product;
                 $unit = $product?->unit_label ?? 'Cái';
-                $weight = $item->actual_weight ?? $item->packed_weight ?? $item->total_weight;
+                $weight = $item->effective_priced_by_kg ? ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight) : null;
                 $amount = (float) ($item->total ?? ((float) $item->quantity * (float) $item->price));
             @endphp
             <tr><td class="center">{{ $index + 1 }}</td><td class="center">{{ $item->variant?->sku ?? '—' }}</td><td><strong>{{ $product?->name ?? $item->imported_name ?? '—' }}</strong><br>{{ $item->variant?->name }}</td><td class="center">{{ $unit }}</td><td class="center">{{ number_format((float) $item->quantity, 0, ',', '.') }}</td><td class="center">{{ $weight !== null ? format_kg((float) $weight) : '—' }}</td><td></td><td class="right">{{ number_format((float) $item->price, 0, ',', '.') }}đ</td><td class="right">{{ number_format($amount, 0, ',', '.') }}đ</td></tr>
@@ -101,7 +104,12 @@
     <table class="totals">
         <tr><td>Tổng số lượng</td><td>{{ number_format((float) $totalQuantity, 0, ',', '.') }}</td></tr>
         <tr><td>Khối lượng thực tế</td><td>{{ $totalWeight > 0 ? format_kg($totalWeight) : '—' }}</td></tr>
+        @if(isset($printTitle))
+        @php($customerShipping = app(\App\Services\OrderFeeService::class)->customerShippingState($order))
+        <tr><td>Phí giao hàng thu khách</td><td>{{ number_format((float) $customerShipping['value'], 0, ',', '.') }}đ</td></tr>
+        @else
         <tr><td>Phí vận chuyển</td><td>{{ number_format((float) $order->shipping_fee, 0, ',', '.') }}đ</td></tr>
+        @endif
         <tr><td>Tổng cộng</td><td>{{ number_format((float) $order->total, 0, ',', '.') }}đ</td></tr>
     </table>
     <div class="signatures">
@@ -112,6 +120,6 @@
     </div>
 </section>
 @endforeach
-<script>window.addEventListener('load', function () { window.print(); });</script>
+<script>window.addEventListener('load', function () { if (@json($orders->isNotEmpty())) window.print(); });</script>
 </body>
 </html>

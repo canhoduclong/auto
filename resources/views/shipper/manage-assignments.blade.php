@@ -545,30 +545,36 @@
 @endpush
 
 @section('content')
-<div id="manageAssignmentsApp" data-refresh-url="{{ route('shipper.manage-assignments', ['date' => $selectedDate]) }}">
+<div id="manageAssignmentsApp" data-refresh-url="{{ route('shipper.manage-assignments', ['date' => $selectedDate, 'warehouse_id' => $selectedWarehouseId]) }}">
 <div class="row ">
     <div class="col col-md-6">
-        <form method="GET" action="{{ route('shipper.manage-assignments') }}" class="d-flex gap-2 align-items-center flex-grow-1">
+        <form method="GET" action="{{ route('shipper.manage-assignments') }}" class="d-flex gap-2 align-items-center flex-grow-1 flex-wrap">
             <input type="date" name="date" value="{{ $selectedDate }}" class="form-control form-control-sm" style="max-width: 150px">
+            <select name="warehouse_id" aria-label="Kho xuất" class="form-select form-select-sm" style="min-width:140px;max-width:200px">
+                <option value="0">Tất cả kho xuất</option>
+                @foreach($warehouses as $warehouse)
+                    <option value="{{ $warehouse->id }}" @selected($selectedWarehouseId === $warehouse->id)>{{ $warehouse->name }}</option>
+                @endforeach
+            </select>
             <button type="submit" class="btn btn-sm btn-primary">
                 <i class="bi bi-search me-1"></i>Lọc
             </button>
-            <a href="{{ route('shipper.manage-assignments', ['date' => now()->toDateString()]) }}" class="btn btn-sm {{ $selectedDate === now()->toDateString() ? 'btn-success' : 'btn-outline-success' }}">
+            <a href="{{ route('shipper.manage-assignments', ['date' => now()->toDateString(), 'warehouse_id' => $selectedWarehouseId]) }}" class="btn btn-sm {{ $selectedDate === now()->toDateString() ? 'btn-success' : 'btn-outline-success' }}">
                 Hôm nay
             </a>
-            <a href="{{ route('shipper.manage-assignments', ['date' => now()->subDay()->toDateString()]) }}" class="btn btn-sm {{ $selectedDate === now()->subDay()->toDateString() ? 'btn-success' : 'btn-outline-success' }}">
+            <a href="{{ route('shipper.manage-assignments', ['date' => now()->subDay()->toDateString(), 'warehouse_id' => $selectedWarehouseId]) }}" class="btn btn-sm {{ $selectedDate === now()->subDay()->toDateString() ? 'btn-success' : 'btn-outline-success' }}">
                 Hôm qua
             </a>
             <a href="{{ route('shipper.manage-assignments') }}" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-arrow-clockwise me-1"></i>Đặt lại
             </a>
-            <a href="{{ route('shipper.manage-assignments', ['date' => $selectedDate, 'refresh' => now()->timestamp]) }}"
+            <a href="{{ route('shipper.manage-assignments', ['date' => $selectedDate, 'warehouse_id' => $selectedWarehouseId, 'refresh' => now()->timestamp]) }}"
                 class="btn btn-sm btn-outline-primary"
-                onclick="localStorage.removeItem(@js('shipperTripPlan:' . $selectedDate))"
+                onclick="localStorage.removeItem(@js('shipperTripPlan:' . $selectedDate . ($selectedWarehouseId > 0 ? ':warehouse:' . $selectedWarehouseId : '')))"
                 title="Bỏ bản chỉnh sửa cục bộ và tải lại dữ liệu mới nhất của ngày đang chọn">
                 <i class="bi bi-arrow-repeat me-1"></i>Tải mới
             </a>
-            <a href="{{ route('shipper.manage-assignments.history', ['date' => $selectedDate]) }}"
+            <a href="{{ route('shipper.manage-assignments.history', ['date' => $selectedDate, 'warehouse_id' => $selectedWarehouseId]) }}"
                 class="btn btn-sm {{ $historyCount > 0 ? 'btn-outline-primary' : 'btn-outline-secondary' }}">
                 <i class="bi bi-clock-history me-1"></i>Lịch sử{{ $historyCount > 0 ? ' (' . $historyCount . ')' : '' }}
             </a>
@@ -577,6 +583,9 @@
             Chỉ hiển thị các đơn được tạo ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}; ngày giao của từng đơn có thể khác ngày tạo.
         </div>
     </div>
+    @if($selectedWarehouseId > 0)
+        <div class="small text-muted my-2">Chọn Tất cả kho xuất để xem lại và gửi toàn bộ lộ trình.</div>
+    @endif
     <div class="col col-md-6 d-flex justify-content-end align-items-center">
         @if($activeDispatch ?? null)
             <form method="POST" action="{{ route('shipper.manage-assignments.history.revoke', $activeDispatch) }}" class="me-2"
@@ -1218,10 +1227,18 @@
 @endphp
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('submit', function (event) {
+        if (@json($selectedWarehouseId) > 0 && /(?:create-delivery-schedule|manage-assignments\/review)/.test(event.target.action || '')) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            alert('Chọn Tất cả kho xuất trước khi gửi lộ trình.');
+        }
+    }, true);
+
     const appSelector = '#manageAssignmentsApp';
     const currency = new Intl.NumberFormat('vi-VN');
     const availableShippers = @json($availableShippersForPicker);
-    const tripStorageKey = 'shipperTripPlan:' + @json($selectedDate);
+    const tripStorageKey = 'shipperTripPlan:' + @json($selectedDate) + (@json($selectedWarehouseId) > 0 ? ':warehouse:' + @json($selectedWarehouseId) : '');
     const pinnedShippersStorageKey = 'pinnedAssignmentShippers';
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
     let isRestoringTrips = false;

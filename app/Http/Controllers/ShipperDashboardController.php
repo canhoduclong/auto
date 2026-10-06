@@ -2318,6 +2318,9 @@ class ShipperDashboardController extends Controller
             ? Carbon::parse($request->input('date'))->toDateString()
             : Carbon::today()->toDateString();
 
+        $request->validate(['warehouse_id' => ['nullable', 'integer', 'min:0']]);
+        $selectedWarehouseId = $request->integer('warehouse_id');
+
         $this->applyDefaultShipperAssignmentsForDate($selectedDate);
 
         $archivedPlannedOrderIds = $this->archivedPlannedOrderIdsForDate($selectedDate);
@@ -2373,6 +2376,13 @@ class ShipperDashboardController extends Controller
             ->orderByRaw('CASE WHEN daily_sequence IS NULL THEN 1 ELSE 0 END')
             ->orderBy('daily_sequence', 'asc')
             ->orderBy('created_at', 'asc');
+
+        if ($selectedWarehouseId > 0) {
+            $matchingIds = (clone $ordersQuery)->get()->filter(
+                fn ($order) => $this->resolveAssignmentOriginWarehouse($order)?->id === $selectedWarehouseId
+            )->modelKeys();
+            $ordersQuery->whereIn('orders.id', $matchingIds);
+        }
 
         $assignedOrdersCount = (clone $ordersQuery)->whereNotNull('shipper_id')->count();
         $unassignedOrdersCount = (clone $ordersQuery)->whereNull('shipper_id')->count();
@@ -2442,6 +2452,7 @@ class ShipperDashboardController extends Controller
             'assignedOrders',
             'shippers',
             'selectedDate',
+            'selectedWarehouseId',
             'assignedOrdersCount',
             'unassignedOrdersCount',
             'totalOrdersCount',
@@ -3483,6 +3494,7 @@ class ShipperDashboardController extends Controller
     public function reviewDeliverySchedule(Request $request)
     {
         $this->authorizeManagerShipper();
+        abort_if($request->integer('warehouse_id') > 0, 422, 'Chọn Tất cả kho trước khi gửi lộ trình.');
 
         $validated = $request->validate([
             'date' => ['required', 'date'],
@@ -3514,6 +3526,7 @@ class ShipperDashboardController extends Controller
     public function createDeliverySchedule(Request $request)
     {
         $this->authorizeManagerShipper();
+        abort_if($request->integer('warehouse_id') > 0, 422, 'Chọn Tất cả kho trước khi gửi lộ trình.');
 
         $validated = $request->validate([
             'notes' => ['nullable', 'string', 'max:500'],

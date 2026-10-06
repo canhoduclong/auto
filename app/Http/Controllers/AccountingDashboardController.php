@@ -1977,6 +1977,42 @@ class AccountingDashboardController extends Controller
         ]);
     }
 
+    public function printDailySalesExportOrders(Request $request)
+    {
+        $request->validate([
+            'from_date' => ['nullable', 'date'], 'to_date' => ['nullable', 'date'],
+            'sale_id' => ['nullable', 'integer', 'min:0'],
+            'customer_id' => ['nullable', 'integer', 'min:0'],
+        ]);
+        $from = Carbon::parse($request->input('from_date', now()->toDateString()))->toDateString();
+        $to = Carbon::parse($request->input('to_date', now()->toDateString()))->toDateString();
+        if ($from > $to) { [$from, $to] = [$to, $from]; }
+        $businessDate = "DATE(CASE WHEN orders.accounting_sales_import_batch_id IS NOT NULL THEN COALESCE(orders.delivery_date, orders.created_at) ELSE orders.created_at END)";
+        $orders = Order::query()
+            ->with(['customer', 'shipper', 'user', 'warehouse', 'items.product', 'items.variant.product'])
+            ->whereNotIn('orders.status', ['rejected', 'cancelled'])
+            ->whereBetween(DB::raw($businessDate), [$from, $to])
+            ->when($request->integer('sale_id') > 0, fn ($q) => $q->where('orders.user_id', $request->integer('sale_id')))
+            ->when($request->integer('customer_id') > 0, fn ($q) => $q->where('orders.customer_id', $request->integer('customer_id')))
+            ->where(function ($query) {
+                $query->whereExists(function ($documents) {
+                    $documents->selectRaw('1')->from('inventory_documents')
+                        ->where('type', 'export')
+                        ->whereRaw("inventory_documents.notes = CONCAT('Xuất kho cho đơn #', orders.code)");
+                })->orWhereHas('warehouseTransfers', function ($transfers) {
+                    $transfers->whereIn('status', ['in_transit', 'delivered_waiting_receive', 'received_completed'])
+                        ->whereHas('exportDocument', fn ($documents) => $documents->where('type', 'export'));
+                });
+            })
+            ->orderByRaw($businessDate.' '.($request->input('sort') === 'date_asc' ? 'asc' : 'desc'))
+            ->orderBy('orders.daily_sequence')->orderBy('orders.id')->get();
+
+        return view('shipper.assignment-documents-print', [
+            'orders' => $orders, 'selectedDate' => $from,
+            'printTitle' => 'PHIẾU XUẤT ĐƠN HÀNG',
+        ]);
+    }
+
     public function dailySales(Request $request)
     {
         $tab = (string) $request->input('tab', 'overview');

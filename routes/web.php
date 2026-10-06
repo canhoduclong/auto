@@ -333,6 +333,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/discounts', [AccountingDashboardController::class, 'storeDiscount'])->name('discounts.store');
         Route::get('/daily-orders', [AccountingDashboardController::class, 'dailyOrders'])->name('daily-orders');
         Route::get('/daily-sales', [AccountingDashboardController::class, 'dailySales'])->name('daily-sales');
+        Route::get('/daily-sales/print-export-orders', [AccountingDashboardController::class, 'printDailySalesExportOrders'])->name('daily-sales.print-export-orders');
         Route::post('/daily-sales/google-sheets', [AccountingDashboardController::class, 'syncDailySalesJournalToGoogleSheets'])
             ->name('daily-sales.google-sheets');
         Route::get('/financial-reports', [AccountingDashboardController::class, 'financialReports'])->name('financial-reports');

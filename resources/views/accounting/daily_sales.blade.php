@@ -369,9 +369,17 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                 Hàng - Số lượng
                 <span class="fw-normal">({{ $productStats->count() }} sản phẩm)</span>
             </div>
+            <div class="d-flex gap-2">
+            @if(request()->routeIs('accounting.*'))
+                <a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener"
+                   href="{{ route('accounting.daily-sales.print-export-orders', ['from_date' => $fromDate, 'to_date' => $toDate, 'sale_id' => $saleId, 'customer_id' => $customerId, 'sort' => $sort]) }}">
+                    <i class="bi bi-printer"></i> In đơn xuất
+                </a>
+            @endif
             <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleProdStats">
                 <i class="bi bi-chevron-expand"></i> Chi tiết
             </button>
+            </div>
         </div>
 
         <div id="prodStatsWrap" class="d-none">

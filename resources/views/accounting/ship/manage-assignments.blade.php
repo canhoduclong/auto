@@ -208,18 +208,24 @@
 @endpush
 
 @section('accounting_content')
-<div id="manageAssignmentsApp" data-refresh-url="{{ route('accounting.shippers', ['date' => $selectedDate]) }}">
+<div id="manageAssignmentsApp" data-refresh-url="{{ route('accounting.shippers', ['date' => $selectedDate, 'warehouse_id' => $selectedWarehouseId]) }}">
 <div class="row ">
     <div class="col col-md-6">
-        <form method="GET" action="{{ route('accounting.shippers') }}" class="d-flex gap-2 align-items-center flex-grow-1">
+        <form method="GET" action="{{ route('accounting.shippers') }}" class="d-flex gap-2 align-items-center flex-grow-1 flex-wrap">
             <input type="date" name="date" value="{{ $selectedDate }}" class="form-control form-control-sm" style="max-width: 150px">
+            <select name="warehouse_id" aria-label="Kho xuất" class="form-select form-select-sm" style="min-width:140px;max-width:200px">
+                <option value="0">Tất cả kho xuất</option>
+                @foreach($warehouses as $warehouse)
+                    <option value="{{ $warehouse->id }}" @selected($selectedWarehouseId === $warehouse->id)>{{ $warehouse->name }}</option>
+                @endforeach
+            </select>
             <button type="submit" class="btn btn-sm btn-primary">
                 <i class="bi bi-search me-1"></i>Lọc
             </button>
-            <a href="{{ route('accounting.shippers', ['date' => now()->toDateString()]) }}" class="btn btn-sm {{ $selectedDate === now()->toDateString() ? 'btn-success' : 'btn-outline-success' }}">
+            <a href="{{ route('accounting.shippers', ['date' => now()->toDateString(), 'warehouse_id' => $selectedWarehouseId]) }}" class="btn btn-sm {{ $selectedDate === now()->toDateString() ? 'btn-success' : 'btn-outline-success' }}">
                 Hôm nay
             </a>
-            <a href="{{ route('accounting.shippers', ['date' => now()->subDay()->toDateString()]) }}" class="btn btn-sm {{ $selectedDate === now()->subDay()->toDateString() ? 'btn-success' : 'btn-outline-success' }}">
+            <a href="{{ route('accounting.shippers', ['date' => now()->subDay()->toDateString(), 'warehouse_id' => $selectedWarehouseId]) }}" class="btn btn-sm {{ $selectedDate === now()->subDay()->toDateString() ? 'btn-success' : 'btn-outline-success' }}">
                 Hôm qua
             </a>
             <a href="{{ route('accounting.shippers') }}" class="btn btn-sm btn-outline-secondary">
@@ -230,6 +236,9 @@
             Chỉ hiển thị các đơn được tạo ngày {{ \Carbon\Carbon::parse($selectedDate)->format('d/m/Y') }}; ngày giao của từng đơn có thể khác ngày tạo.
         </div>
     </div>
+    @if($selectedWarehouseId > 0)
+        <div class="small text-muted my-2">Chọn Tất cả kho xuất để xem lại và gửi toàn bộ lộ trình.</div>
+    @endif
     <div class="col col-md-6 d-flex justify-content-end align-items-center">
         <div class="d-flex gap-2 align-items-center ms-auto">
             <input type="text" id="scheduleNotesInput" class="form-control form-control-sm" maxlength="500" placeholder="Ghi chú (tùy chọn)" style="width: 100%">
@@ -692,6 +701,14 @@
 @push('scripts')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('submit', function (event) {
+        if (@json($selectedWarehouseId) > 0 && /(?:create-delivery-schedule|manage-assignments\/review)/.test(event.target.action || '')) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            alert('Chọn Tất cả kho xuất trước khi gửi lộ trình.');
+        }
+    }, true);
+
     const appSelector = '#manageAssignmentsApp';
     const currency = new Intl.NumberFormat('vi-VN');
 
