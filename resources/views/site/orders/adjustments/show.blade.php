@@ -140,37 +140,12 @@
         <div class="adjustment-layout">
             <main class="adjustment-main">
                 <section class="adjustment-card"><div class="adjustment-card-body">
-                    @include('site.orders.adjustments._product_comparison', ['adjustment' => $adjustment, 'comparisonSection' => 'original'])
-                </div></section>
-                <section class="adjustment-card">
-                    <div class="adjustment-card-head"><h2 class="adjustment-card-title"><i class="bi bi-chat-left-text"></i>Nội dung yêu cầu</h2></div>
-                    <div class="adjustment-card-body"><div class="adjustment-note">{{ $adjustment->adjustment_note ?: 'Không có ghi chú bổ sung.' }}</div></div>
-                </section>
-
-                @if(!empty($adjustment->order_changes))
-                    @php $orderChangeLabels = ['recipient_name' => 'Người nhận', 'recipient_phone' => 'Số điện thoại', 'delivery_time' => 'Giờ giao hàng']; @endphp
-                    <section class="adjustment-card">
-                        <div class="adjustment-card-head"><h2 class="adjustment-card-title"><i class="bi bi-truck"></i>Thông tin giao nhận thay đổi</h2></div>
-                        <div class="table-responsive">
-                            <table class="table adjustment-table align-middle mb-0">
-                                <thead><tr><th>Thông tin</th><th>Trước điều chỉnh</th><th>Sau điều chỉnh</th></tr></thead>
-                                <tbody>
-                                @foreach((array) $adjustment->order_changes as $field => $change)
-                                    <tr><td class="fw-semibold">{{ $orderChangeLabels[$field] ?? $field }}</td><td>{{ data_get($change, 'original') ?: '—' }}</td><td><span class="adjustment-change">{{ data_get($change, 'adjusted') ?: '—' }}</span></td></tr>
-                                @endforeach
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-                @endif
-
-                @include('site.orders.adjustments._fee_changes', ['adjustment' => $adjustment])
-
-                <section class="adjustment-card"><div class="adjustment-card-body">
-                    @include('site.orders.adjustments._product_comparison', ['adjustment' => $adjustment, 'comparisonSection' => 'changes'])
+                    @include('site.orders.adjustments._product_comparison', ['adjustment' => $adjustment, 'comparisonSection' => 'both'])
                 </div></section>
                 @if($order)
+                    <details class="adjustment-card"><summary class="adjustment-card-head fw-semibold">Thông tin đơn hàng hiện tại và thanh toán</summary>
                     @include('site.orders.adjustments._confirmed_order', ['beforeAdjustment' => $adjustment->status !== 'completed'])
+                    </details>
                 @endif
 
                 @if(!empty($adjustment->evidence_images))

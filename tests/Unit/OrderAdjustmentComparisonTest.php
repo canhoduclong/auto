@@ -59,4 +59,31 @@ class OrderAdjustmentComparisonTest extends TestCase
         self::assertTrue($this->row(['order_item_id'=>null,'original_quantity'=>0,'original_weight'=>0])['new']);
         self::assertEquals(36,$this->row(['adjusted_weight'=>null])['adjustedWeight']);
     }
+    public function test_complete_preview_keeps_unchanged_rows_and_calculates_each_state_with_shipping_once(): void
+    {
+        $order = new \App\Models\Order(['charge_shipping_fee'=>false,'shipping_fee'=>0]);
+        $order->setRelation('additionalFees',new Collection);
+        $product = new Product(['name'=>'Thùng xốp','unit'=>'cai']);
+        $variant = new ProductVariant(['name'=>'Thùng xốp','size'=>'1']);
+        $variant->setRelation('product',$product);
+        $unchanged = new OrderItem(['quantity'=>1,'price'=>75000,'is_priced_by_kg'=>false]);
+        $unchanged->id=2;
+        $unchanged->setRelation('variant',$variant)->setRelation('product',$product);
+        $order->setRelation('items',new Collection([$unchanged]));
+        $changed = new OrderAdjustmentItem(['order_item_id'=>1,'original_quantity'=>30,'adjusted_quantity'=>25,'original_price'=>63000,'adjusted_price'=>63000,'original_weight'=>76.8,'adjusted_weight'=>76.8]);
+        $changed->setRelation('variant',null)->setRelation('orderItem',null);
+        $adjustment = new OrderAdjustment(['fee_changes'=>['shipping'=>['name'=>'Phí Ship','original'=>['enabled'=>false,'value'=>0],'adjusted'=>['enabled'=>true,'value'=>120000]]]]);
+        $adjustment->setRelation('order',$order)->setRelation('items',new Collection([$changed]));
+        $rows = OrderAdjustmentComparison::completeRows($adjustment);
+        self::assertCount(2,$rows);
+        self::assertFalse($rows[1]['changed']);
+        self::assertEquals(75000,$rows[1]['adjustedTotal']);
+        $old = OrderAdjustmentComparison::totals($adjustment,$rows,'original');
+        $new = OrderAdjustmentComparison::totals($adjustment,$rows,'adjusted');
+        self::assertEquals(4913400,$old['total']);
+        self::assertEquals(5033400,$new['total']);
+        self::assertCount(1,$new['fees']);
+        self::assertEquals(4913400,$new['subtotal']);
+    }
+
 }

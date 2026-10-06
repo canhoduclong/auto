@@ -82,11 +82,6 @@
                 </div>
             @endif
 
-            @if($adjustment->adjustment_note)
-                <div class="alert alert-light border py-2"><strong>Lý do điều chỉnh:</strong> {{ $adjustment->adjustment_note }}</div>
-            @endif
-            @include('site.orders.adjustments._fee_changes', ['adjustment' => $adjustment])
-
             @include('site.orders.adjustments._product_comparison', ['adjustment' => $adjustment, 'comparisonSection' => 'both'])
 
             <div class="d-flex flex-wrap justify-content-end gap-2">

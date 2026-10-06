@@ -1,64 +1,85 @@
 @php
-    $comparisonRows = \App\Support\OrderAdjustmentComparison::rows($adjustment);
+    $comparisonRows = \App\Support\OrderAdjustmentComparison::completeRows($adjustment);
     $comparisonNumber = static fn($value) => $value === null ? '—' : rtrim(rtrim(number_format((float)$value, 3, ',', ''), '0'), ',');
     $comparisonMoney = static fn($value) => number_format((float)$value, 0, ',', '.') . 'đ';
     $comparisonSections = $comparisonSection ?? 'both';
+    $comparisonStates = $comparisonSections === 'original' ? ['original'] : ($comparisonSections === 'changes' ? ['adjusted'] : ['original','adjusted']);
 @endphp
-@if(in_array($comparisonSections, ['both', 'original'], true))
+@foreach($comparisonStates as $state)
+@php
+    $totals = \App\Support\OrderAdjustmentComparison::totals($adjustment, $comparisonRows, $state);
+@endphp
 <div class="mb-3">
-<h6 class="fw-bold">Sản phẩm trước điều chỉnh</h6>
-<div class="table-responsive"><table class="table table-sm align-middle">
-<thead><tr><th>Sản phẩm / biến thể</th><th class="text-end">Size đặt</th><th class="text-end">Số lượng</th><th class="text-end">Khối lượng</th><th class="text-end">Size thực tế</th><th class="text-end">Đơn giá</th></tr></thead>
+<h6 class="fw-bold">{{ $state === 'original' ? 'Đơn trước điều chỉnh' : 'Đơn sau điều chỉnh (đề nghị)' }}</h6>
+<div class="table-responsive"><table class="table table-sm align-middle mb-1">
+<thead><tr><th>Sản phẩm / biến thể</th><th class="text-end">Size đặt</th><th class="text-end">Số lượng</th><th class="text-end">Khối lượng</th><th class="text-end">{{ $state === 'original' ? 'Size kho đã đóng' : 'Size bình quân đề nghị' }}</th><th class="text-end">Đơn giá</th><th class="text-end">Thành tiền</th></tr></thead>
 <tbody>
 @foreach($comparisonRows as $row)
-@if(!$row['new'])
-<tr><td><strong>{{ $row['name'] }}</strong><div class="small text-muted">{{ $row['variant'] }}</div>
-@if($row['packedWeight'] !== null)<div class="small text-muted">Kho đã đóng: {{ $comparisonNumber($row['packedQuantity']) }} · {{ $comparisonNumber($row['packedWeight']) }} kg</div>@endif
-</td><td class="text-end">{{ $row['size'] ?: '—' }}</td><td class="text-end">{{ $comparisonNumber($row['originalQuantity']) }}</td><td class="text-end">{{ $row['byKg'] ? $comparisonNumber($row['originalWeight']).' kg' : '—' }}</td><td class="text-end">{{ $comparisonNumber($row['originalSize']) }}</td><td class="text-end">{{ $comparisonMoney($row['originalPrice']) }}</td></tr>
-@endif
-@endforeach
-@foreach($adjustment->order?->items ?? [] as $orderItem)
-@if(!$adjustment->items->contains('order_item_id', $orderItem->id) && !$adjustment->items->contains(fn($item) => !$item->order_item_id && (int)$item->product_variant_id === (int)$orderItem->product_variant_id))
+@continue($state === 'original' && $row['new'])
 @php
-    $weight = $orderItem->quantity > 0 ? (float) ($orderItem->actual_weight ?? $orderItem->total_weight ?? 0) : 0;
-    $packedQuantity = (float) ($orderItem->packed_quantity ?? $orderItem->quantity);
+    $highlight = $state === 'adjusted' && $row['changed'];
 @endphp
-<tr><td><strong>{{ $orderItem->variant?->product?->name ?? $orderItem->imported_name ?? 'Sản phẩm' }}</strong><div class="small text-muted">{{ $orderItem->variant?->name }} · Không đề nghị thay đổi</div></td><td class="text-end">{{ $orderItem->variant?->size ?: '—' }}</td><td class="text-end">{{ $comparisonNumber($orderItem->quantity) }}</td><td class="text-end">{{ $orderItem->effective_priced_by_kg ? $comparisonNumber($weight).' kg' : '—' }}</td><td class="text-end">{{ $comparisonNumber($orderItem->effective_priced_by_kg && $packedQuantity > 0 && $orderItem->packed_weight !== null ? $orderItem->packed_weight / $packedQuantity : null) }}</td><td class="text-end">{{ $comparisonMoney($orderItem->price) }}</td></tr>
+<tr class="{{ $highlight ? 'table-warning' : '' }}">
+<td><strong>{{ $row['name'] }}</strong><div class="small text-muted">{{ $row['variant'] }}@if($row['new']) · Bổ sung mới @endif</div></td>
+<td class="text-end">{{ $row['size'] ?: '—' }}</td>
+<td class="text-end {{ $highlight && $row['originalQuantity'] !== $row['adjustedQuantity'] ? 'fw-bold text-danger' : '' }}">{{ $comparisonNumber($row[$state.'Quantity']) }}</td>
+<td class="text-end {{ $highlight && abs($row['originalWeight']-$row['adjustedWeight']) > 0.0001 ? 'fw-bold text-danger' : '' }}">{{ $row['byKg'] ? $comparisonNumber($row[$state.'Weight']).' kg' : '—' }}</td>
+<td class="text-end">{{ $comparisonNumber($row[$state.'Size']) }}</td>
+<td class="text-end {{ $highlight && $row['originalPrice'] !== $row['adjustedPrice'] ? 'fw-bold text-danger' : '' }}">{{ $comparisonMoney($row[$state.'Price']) }}</td>
+<td class="text-end fw-semibold">{{ $comparisonMoney($row[$state.'Total']) }}</td>
+</tr>
+@endforeach
+</tbody>
+<tfoot>
+<tr><td colspan="6" class="text-end">Tiền hàng</td><td class="text-end fw-semibold">{{ $comparisonMoney($totals['subtotal']) }}</td></tr>
+@foreach($totals['fees'] as $fee)
+<tr><td colspan="6" class="text-end">{{ $fee['name'] }}</td><td class="text-end">{{ $comparisonMoney($fee['amount']) }}</td></tr>
+@endforeach
+<tr><td colspan="6" class="text-end fw-bold">Tổng đơn {{ $state === 'adjusted' ? 'đề nghị' : 'trước điều chỉnh' }}</td><td class="text-end fw-bold">{{ $comparisonMoney($totals['total']) }}</td></tr>
+</tfoot>
+</table></div>
+</div>
+@endforeach
+@if($comparisonSections !== 'original')
+<div class="border rounded p-3 mb-3 bg-light">
+<div class="fw-bold mb-2">Nội dung thay đổi</div>
+<ul class="mb-0 ps-3">
+@foreach(array_filter($comparisonRows, fn($row) => $row['changed']) as $row)
+@php
+    $changes = [];
+    if ($row['new']) $changes[] = 'Bổ sung '.$comparisonNumber($row['adjustedQuantity']).', đơn giá '.$comparisonMoney($row['adjustedPrice']);
+    else {
+        if ($row['originalQuantity'] !== $row['adjustedQuantity']) $changes[] = 'Số lượng '.$comparisonNumber($row['originalQuantity']).' thay đổi thành '.$comparisonNumber($row['adjustedQuantity']);
+        if ($row['originalPrice'] !== $row['adjustedPrice']) $changes[] = 'Đơn giá '.$comparisonMoney($row['originalPrice']).' thay đổi thành '.$comparisonMoney($row['adjustedPrice']);
+    }
+    if ($row['byKg'] && abs($row['originalWeight']-$row['adjustedWeight']) > 0.0001) $changes[] = 'Khối lượng '.$comparisonNumber($row['originalWeight']).' kg thay đổi thành '.$comparisonNumber($row['adjustedWeight']).' kg';
+@endphp
+<li><strong>{{ $row['name'] }} {{ $row['variant'] }}:</strong> {{ implode('; ', $changes) }}.
+@if($row['item']?->note) {{ $row['item']->note }} @endif
+@if($row['item']?->warehouse_received_quantity !== null || $row['item']?->warehouse_received_weight !== null)
+<span class="small text-muted">Kho xác nhận: {{ $row['item']->warehouse_received_quantity ?? '—' }}; {{ $comparisonNumber($row['item']->warehouse_received_weight) }} kg; {{ $row['item']->warehouse_condition ?: '—' }}.</span>
+@endif
+</li>
+@endforeach
+@foreach((array)$adjustment->fee_changes as $code=>$change)
+@php
+    $oldFee = (array)($change['original'] ?? []);
+    $newFee = (array)($change['adjusted'] ?? []);
+    $feeChanged = (bool)($oldFee['enabled'] ?? false) !== (bool)($newFee['enabled'] ?? false) || abs((float)($oldFee['value'] ?? 0)-(float)($newFee['value'] ?? 0)) > 0.0001;
+    $feeLabel = $change['name'] ?? ['shipping'=>'Phí Ship','vat'=>'VAT','discount'=>'Chiết khấu đơn','foam_box'=>'Phí thùng xốp'][$code] ?? $code;
+    $formatFee = static fn($fee) => !($fee['enabled'] ?? false) ? 'Không áp dụng' : (($change['calculation_type'] ?? 'fixed') === 'percent' ? $comparisonNumber($fee['value']).'%' : $comparisonMoney($fee['value']));
+@endphp
+@if($feeChanged)
+<li><strong>{{ $feeLabel }}:</strong> {{ $formatFee($oldFee) }} thay đổi thành <strong>{{ $formatFee($newFee) }}</strong>.</li>
 @endif
 @endforeach
-</tbody></table></div>
-<div class="small text-muted">Size thực tế trước điều chỉnh = khối lượng kho đã đóng / số lượng kho đã đóng; chưa có cân đóng thực tế thì hiển thị “—”. Size sau điều chỉnh là bình quân theo số lượng và khối lượng đề nghị. Size đặt là size của biến thể sản phẩm. Các dòng trong yêu cầu dùng số liệu gốc đã lưu.</div>
+@foreach((array)$adjustment->order_changes as $field=>$change)
+<li><strong>{{ ['recipient_name'=>'Người nhận','recipient_phone'=>'Số điện thoại','delivery_time'=>'Giờ giao'][$field] ?? $field }}:</strong> {{ data_get($change,'original') ?: '—' }} thay đổi thành <strong>{{ data_get($change,'adjusted') ?: '—' }}</strong>.</li>
+@endforeach
+@if($adjustment->adjustment_note)
+<li><strong>Lý do / ghi chú:</strong> {{ $adjustment->adjustment_note }}</li>
+@endif
+</ul>
 </div>
-@endif
-@if(in_array($comparisonSections, ['both', 'changes'], true))
-<div class="mb-3">
-<h6 class="fw-bold">Sản phẩm đề nghị thay đổi</h6>
-<div class="table-responsive"><table class="table table-sm align-middle">
-<thead><tr><th>Sản phẩm / biến thể</th><th class="text-end">Size đặt</th><th class="text-end">Số lượng</th><th class="text-end">Khối lượng</th><th class="text-end">Size thực tế</th><th class="text-end">Đơn giá</th><th>Nội dung thay đổi</th></tr></thead>
-<tbody>
-@forelse(array_filter($comparisonRows, fn($row) => $row['changed']) as $row)
-<tr class="table-warning"><td><strong>{{ $row['name'] }}</strong><div class="small text-muted">{{ $row['variant'] }}</div>@if($row['item']->note)<div class="small">{{ $row['item']->note }}</div>@endif</td>
-<td class="text-end">{{ $row['size'] ?: '—' }}</td>
-<td class="text-end">{{ $comparisonNumber($row['originalQuantity']) }} → <strong>{{ $comparisonNumber($row['adjustedQuantity']) }}</strong></td>
-<td class="text-end">@if($row['byKg']){{ $comparisonNumber($row['originalWeight']) }} → <strong>{{ $comparisonNumber($row['adjustedWeight']) }} kg</strong>@else — @endif</td>
-<td class="text-end">@if($row['byKg']){{ $comparisonNumber($row['originalSize']) }} → <strong>{{ $comparisonNumber($row['adjustedSize']) }}</strong>@else — @endif</td>
-<td class="text-end">{{ $comparisonMoney($row['originalPrice']) }} → <strong>{{ $comparisonMoney($row['adjustedPrice']) }}</strong></td>
-<td>
-@if($row['new'])<div><strong>Bổ sung sản phẩm:</strong> {{ $comparisonNumber($row['adjustedQuantity']) }}, đơn giá {{ $comparisonMoney($row['adjustedPrice']) }}</div>@endif
-@if($row['originalQuantity'] !== $row['adjustedQuantity'])<div>Số lượng {{ $comparisonNumber($row['originalQuantity']) }} <strong>thay đổi thành {{ $comparisonNumber($row['adjustedQuantity']) }}</strong></div>@endif
-@if($row['byKg'] && abs($row['originalWeight']-$row['adjustedWeight']) > 0.0001)<div>Khối lượng {{ $comparisonNumber($row['originalWeight']) }} kg <strong>thay đổi thành {{ $comparisonNumber($row['adjustedWeight']) }} kg</strong></div>@endif
-@if($row['byKg'] && $row['originalSize'] !== null && abs((float)$row['originalSize']-(float)$row['adjustedSize']) > 0.0001)<div>Size thực tế {{ $comparisonNumber($row['originalSize']) }} <strong>thay đổi thành {{ $comparisonNumber($row['adjustedSize']) }}</strong></div>@endif
-@if($row['originalPrice'] !== $row['adjustedPrice'])<div>Đơn giá {{ $comparisonMoney($row['originalPrice']) }} <strong>thay đổi thành {{ $comparisonMoney($row['adjustedPrice']) }}</strong></div>@endif
-@if($comparisonSections === 'changes')
-<div class="small text-muted">Kho xác nhận: {{ $row['item']->warehouse_received_quantity ?? '—' }}
-@if($row['item']->warehouse_received_weight !== null)
- · {{ $comparisonNumber($row['item']->warehouse_received_weight) }} kg
-@endif
- · {{ $row['item']->warehouse_condition ?: '—' }}</div>
-@endif
-
-</td></tr>
-@empty<tr><td colspan="7" class="text-muted">Không đề nghị thay đổi sản phẩm. Xem nội dung yêu cầu và phí / chiết khấu.</td></tr>@endforelse
-</tbody></table></div>
-</div>
+<div class="small text-muted mb-3">Size kho đã đóng lấy từ cân và số lượng đóng thực tế. Size ở đơn đề nghị được tính theo khối lượng / số lượng đề nghị; chưa phải kết quả kho cân lại.</div>
 @endif
