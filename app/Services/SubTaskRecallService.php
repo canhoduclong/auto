@@ -6,13 +6,21 @@ use Illuminate\Support\Facades\DB;
 
 class SubTaskRecallService
 {
+    public function canRecall(TaskAssignment $parent, TaskAssignment $child, User $actor): bool
+    {
+        return (int) $child->parent_id === (int) $parent->id
+            && ($actor->hasRole('admin')
+                || (int) $child->created_by === (int) $actor->id
+                || (int) $parent->created_by === (int) $actor->id);
+    }
+
     public function recall(int $parentId, int $childId, User $actor, string $reason): int
     {
         return DB::transaction(function () use ($parentId, $childId, $actor, $reason) {
             $parent = TaskAssignment::whereKey($parentId)->lockForUpdate()->firstOrFail();
             $child = TaskAssignment::whereKey($childId)->lockForUpdate()->firstOrFail();
             abort_unless((int)$child->parent_id === $parentId,404);
-            abort_unless($actor->hasRole('admin') || (int)$child->created_by === (int)$actor->id || (int)$parent->created_by === (int)$actor->id,403);
+            abort_unless($this->canRecall($parent, $child, $actor),403);
             abort_if(in_array($child->status,['done','cancelled'],true),422,'Công việc con đã hoàn thành hoặc đã thu hồi / hủy.');
             abort_if(trim($reason) === '',422,'Vui lòng nhập lý do thu hồi.');
             $pending = collect([$child]);

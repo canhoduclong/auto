@@ -45,6 +45,29 @@ class SubTaskRecallTest extends TestCase
         self::assertSame('completed',TaskAssignment::find(2)->status);
         self::assertSame(0,DB::table('task_status_logs')->count());
     }
+    public function test_child_creator_can_open_confirmation_and_view_parent_without_parent_assignment(): void {
+        $actor = $this->actor(2);
+        $parent = TaskAssignment::findOrFail(1);
+        $child = TaskAssignment::findOrFail(2);
+        $controller = (new \ReflectionClass(\App\Http\Controllers\TaskAssignmentController::class))->newInstanceWithoutConstructor();
+        $request = \Illuminate\Http\Request::create('/tasks/1/subtasks/2/recall');
+        $request->setUserResolver(fn () => $actor);
+        $view = $controller->recallSubTaskForm($request, $parent, $child, new SubTaskRecallService);
+        self::assertSame('task_assignments.recall', $view->name());
+        self::assertSame('completed', $child->fresh()->status);
+        self::assertSame(0, DB::table('task_status_logs')->count());
+        $canView = new \ReflectionMethod($controller, 'canViewTask');
+        self::assertTrue($canView->invoke($controller, $parent, $actor));
+    }
+    public function test_confirmation_page_denies_unrelated_user(): void {
+        $controller = (new \ReflectionClass(\App\Http\Controllers\TaskAssignmentController::class))->newInstanceWithoutConstructor();
+        $request = \Illuminate\Http\Request::create('/tasks/1/subtasks/2/recall');
+        $request->setUserResolver(fn () => $this->actor(3));
+        try {
+            $controller->recallSubTaskForm($request, TaskAssignment::find(1), TaskAssignment::find(2), new SubTaskRecallService);
+            self::fail('Unauthorized');
+        } catch (HttpException $e) { self::assertSame(403, $e->getStatusCode()); }
+    }
     public function test_task_must_be_a_child_of_requested_parent(): void {
         try {(new SubTaskRecallService)->recall(1,3,$this->actor(1),'Thu hồi');self::fail('Wrong parent');}
         catch(HttpException $e){self::assertSame(404,$e->getStatusCode());}

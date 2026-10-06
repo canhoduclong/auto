@@ -54,7 +54,7 @@
                             <div class="small text-muted mt-1">Tạo: {{ $child->created_at?->format('d/m/Y') }} · Hạn: {{ $child->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}
                                 @if($child->due_date && !in_array($child->status, ['done', 'completed', 'cancelled'], true))<span class="{{ $child->isOverdue() ? 'text-danger' : '' }}"> · {{ $child->isOverdue() ? 'Quá hạn' : 'Còn hạn' }}: {{ $child->due_date->diffForHumans() }}</span>@endif
                             </div>
-                            @if(!in_array($child->status, ['done','cancelled'], true) && (auth()->user()->hasRole('admin') || (int)$child->created_by === (int)auth()->id() || (int)$task->created_by === (int)auth()->id()))
+                            @if(!in_array($child->status, ['done','cancelled'], true) && app(\App\Services\SubTaskRecallService::class)->canRecall($task, $child, auth()->user()))
                             <details class="mt-2">
                                 <summary class="small text-danger fw-semibold">Thu hồi công việc con</summary>
                                 <form method="POST" action="{{ route('tasks.subtasks.recall', [$task, $child]) }}" class="border rounded bg-light p-3 mt-2" onsubmit="return confirm('Thu hồi công việc con này và các việc con bên dưới chưa hoàn thành?');">

@@ -917,6 +917,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('/tasks/verify', [\App\Http\Controllers\TaskAssignmentController::class, 'verifyList'])->name('tasks.verify');
     Route::get('/tasks/rejected', [\App\Http\Controllers\TaskAssignmentController::class, 'history'])->name('tasks.rejected');
     Route::post('/tasks/{taskAssignment}/assignees/{assignee}/evaluation', [\App\Http\Controllers\TaskAssignmentController::class, 'evaluateAssignee'])->name('tasks.assignees.evaluate');
+    Route::get('/tasks/{taskAssignment}/subtasks/{child}/recall', [\App\Http\Controllers\TaskAssignmentController::class, 'recallSubTaskForm'])->name('tasks.subtasks.recall-form');
     Route::post('/tasks/{taskAssignment}/subtasks/{child}/recall', [\App\Http\Controllers\TaskAssignmentController::class, 'recallSubTask'])->name('tasks.subtasks.recall');
     Route::post('/tasks/{taskAssignment}/subtasks', [\App\Http\Controllers\TaskAssignmentController::class, 'storeSubTask'])->name('tasks.subtasks.store');
     Route::post('/tasks/{taskAssignment}/debt-progress/{item}', [\App\Http\Controllers\TaskAssignmentController::class, 'updateDebtProgress'])->whereNumber('item')->name('tasks.debt-progress');

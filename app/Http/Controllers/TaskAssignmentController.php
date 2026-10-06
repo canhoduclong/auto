@@ -290,9 +290,20 @@ class TaskAssignmentController extends Controller
         return back()->with('success', 'Đã lưu đánh giá thành viên.');
     }
 
+    public function recallSubTaskForm(Request $request, TaskAssignment $taskAssignment, TaskAssignment $child, \App\Services\SubTaskRecallService $service)
+    {
+        abort_unless((int) $child->parent_id === (int) $taskAssignment->id, 404);
+        abort_unless($service->canRecall($taskAssignment, $child, $request->user()), 403);
+        $user = $request->user();
+        $layout = $user->hasRole('warehouse') ? 'layouts.warehouse'
+            : ($user->isSalesFlowRole() ? 'layouts.site' : 'layouts.admin');
+        return view('task_assignments.recall', compact('taskAssignment', 'child', 'layout'));
+    }
+
     public function recallSubTask(Request $request, TaskAssignment $taskAssignment, TaskAssignment $child, \App\Services\SubTaskRecallService $service)
     {
-        abort_unless($this->canViewTask($taskAssignment, $request->user()),403);
+        abort_unless((int) $child->parent_id === (int) $taskAssignment->id, 404);
+        abort_unless($service->canRecall($taskAssignment, $child, $request->user()), 403);
         $data = $request->validate(['recall_reason'=>['required','string','max:1000']]);
         $count = $service->recall($taskAssignment->id,$child->id,$request->user(),trim($data['recall_reason']));
         return redirect()->route('tasks.show',$taskAssignment)->with('success','Đã thu hồi '.$count.' công việc con. Lịch sử và tài liệu đã gửi được giữ lại.');
@@ -1015,6 +1026,7 @@ class TaskAssignmentController extends Controller
             || ($task->parent_id && $task->parent()->where(function ($parent) use ($user) {
                 $parent->where('created_by', $user->id)->orWhereHas('assignees', fn ($assignees) => $assignees->where('user_id', $user->id));
             })->exists())
+            || $task->subTasks()->where('created_by', $user->id)->exists()
             || $task->assignees()->where('user_id', $user->id)->exists()
             || $task->approvalSteps()->where('approved_by', $user->id)->exists()
             || $task->approvalSteps()->whereHas('step', fn ($query) => $query->whereIn('role_slug', $user->roles->pluck('name')))->exists();
