@@ -20,6 +20,9 @@
     $flow = $transaction->transactionCategory?->flow_direction === 'in' || $transaction->type === 'extra_income' ? 'Thu' : 'Chi';
     $isPaymentProposal = $transaction->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT;
     $documentTitle = $transaction->request_document_title ?: ($isPaymentProposal ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu');
+    $isCashVoucher = $documentTitle === 'Phiếu chi';
+    $isAdvance = $transaction->request_form_type === \App\Models\Transaction::REQUEST_FORM_ADVANCE;
+    $isSampleProposal = $isAdvance || in_array($documentTitle, ['Đề nghị thanh toán', 'Phiếu đề nghị thanh toán'], true);
     $departmentName = $transaction->submitter?->department?->name
         ?: $transaction->submitter?->block?->name
         ?: ($transaction->request_department ?: ($config['label'] ?? '-'));
@@ -202,7 +205,7 @@
         h1 {
             margin: 16px 0 12px;
             text-align: center;
-            font-family: Arial, sans-serif;
+            font-family: "Times New Roman", serif;
             font-size: 25px;
             text-transform: uppercase;
             letter-spacing: .2px;
@@ -266,7 +269,7 @@
             gap: 12px;
             margin-top: 34px;
             text-align: center;
-            font-family: Arial, sans-serif;
+            font-family: "Times New Roman", serif;
             font-size: 13px;
         }
         .signature-box {
@@ -309,7 +312,7 @@
                 <div class="voucher-no"><strong>Số phiếu:</strong> #{{ $transaction->id }}</div>
             </div>
             <div class="form-code">
-                Mẫu số: 05-TT
+                Mẫu số: {{ $isCashVoucher ? '02-TT' : '05-TT' }}
                 <em class="form-code-line">(Ban hành theo Thông tư 200/2014/TT-BTC)</em>
                 <em>ngày 24/12/2014 của Bộ trưởng BTC</em>
             </div>
@@ -321,12 +324,17 @@
         </div>
 
         <div class="info-lines">
+            @if($isCashVoucher)
+                <div class="info-row"><span>Người nhận tiền:</span><strong>{{ $transaction->request_recipient ?: $transaction->external_recipient ?: '-' }}</strong></div>
+                <div class="info-row"><span>Địa chỉ:</span><strong>{{ $transaction->request_recipient_address ?: '-' }}</strong></div>
+                <div class="info-row"><span>Lý do chi:</span><strong>{{ $transaction->request_title }}</strong></div>
+            @else
             <div class="info-row">
                 <span class="info-label">Kính gửi:</span>
                 <span>Ban lãnh đạo và bộ phận kế toán</span>
             </div>
             <div class="info-row">
-                <span class="info-label">{{ $isPaymentProposal ? 'Họ và tên người đề nghị thanh toán:' : 'Họ và tên người yêu cầu:' }}</span>
+                <span class="info-label">{{ $isAdvance ? 'Họ và tên người đề nghị tạm ứng:' : ($isPaymentProposal ? 'Họ và tên người đề nghị thanh toán:' : 'Họ và tên người yêu cầu:') }}</span>
                 <span>{{ $transaction->submitter?->name ?: '-' }}</span>
             </div>
             <div class="info-row">
@@ -346,9 +354,10 @@
                 </div>
             @endif
             <div class="info-row">
-                <span class="info-label">{{ $isPaymentProposal ? 'Nội dung thanh toán:' : 'Nội dung yêu cầu:' }}</span>
+                <span class="info-label">{{ $isAdvance ? 'Nội dung tạm ứng:' : ($isPaymentProposal ? 'Nội dung thanh toán:' : 'Nội dung yêu cầu:') }}</span>
                 <span>{{ $transaction->request_title ?: ($transaction->note ?: '-') }}</span>
             </div>
+            @endif
             <div class="info-row">
                 <span class="info-label">Số tiền:</span>
                 <span>
@@ -364,10 +373,11 @@
             @endif
             <div class="info-row">
                 <span class="info-label">(Kèm theo:</span>
-                <span>........................................................ chứng từ gốc).</span>
+                <span>{{ count($transaction->request_attachments ?: []) + ($transaction->receipt_image_path ? 1 : 0) ?: '........................................................' }} chứng từ gốc).</span>
             </div>
         </div>
 
+        @unless($isCashVoucher)
         <table>
             <thead>
                 <tr>
@@ -414,28 +424,31 @@
                 </tr>
             </tbody>
         </table>
+        @endunless
 
         <div class="note">
             <strong>Nội dung/Lý do:</strong>
-            <div>{{ $transaction->note ?: '-' }}</div>
+            <div style="white-space:pre-line">{{ $transaction->note ?: '-' }}</div>
         </div>
 
-        <div class="signatures">
+        <div class="signatures" style="grid-template-columns: repeat({{ $isSampleProposal ? 3 : 4 }}, 1fr); {{ $isCashVoucher ? 'margin-top:80px;' : '' }}">
             <div class="signature-box">
-                <div class="signature-title">{{ $isPaymentProposal ? 'Người đề nghị' : 'Người lập phiếu' }}</div>
+                <div class="signature-title">{{ $isAdvance ? 'Người đề nghị tạm ứng' : ($isPaymentProposal ? 'Người đề nghị thanh toán' : 'Người lập phiếu') }}</div>
                 <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
                 <div style="margin-top:42px;font-weight:700">{{ $transaction->submitter?->name ?: '-' }}</div>
             </div>
             <div class="signature-box">
-                <div class="signature-title">Trưởng bộ phận</div>
+                <div class="signature-title">{{ $isCashVoucher ? 'Người nhận tiền' : ($isSampleProposal ? 'Kiểm tra' : 'Trưởng bộ phận') }}</div>
                 <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
             </div>
+            @unless($isSampleProposal)
             <div class="signature-box">
                 <div class="signature-title">Kế toán</div>
                 <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
             </div>
+            @endunless
             <div class="signature-box">
-                <div class="signature-title">Giám Đốc</div>
+                <div class="signature-title">Ban giám đốc</div>
                 <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
             </div>
         </div>

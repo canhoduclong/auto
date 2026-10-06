@@ -17,6 +17,7 @@ class Transaction extends Model
     public const STATUS_REJECTED = 'rejected';
     public const REQUEST_FORM_CASH = 'cash_request';
     public const REQUEST_FORM_PAYMENT = 'payment_proposal';
+    public const REQUEST_FORM_ADVANCE = 'advance_request';
 
     protected $fillable = [
         'order_id',
@@ -53,6 +54,8 @@ class Transaction extends Model
         'request_job_title',
         'request_form_type',
         'request_document_title',
+        'request_recipient',
+        'request_recipient_address',
         'request_title',
         'request_items',
         'request_subtotal',

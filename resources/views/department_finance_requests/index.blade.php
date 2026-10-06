@@ -26,7 +26,8 @@
     $requestJobTitle = $formSubmitter?->job_title ?: $config['label'];
     $storedDocumentTitle = $editingRequest?->request_document_title
         ?: ($selectedFormType === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu');
-    $standardDocumentTitles = ['Phiếu yêu cầu', 'Phiếu đề nghị thanh toán'];
+    $standardDocumentTitles = $source === 'warehouse' ? ['Phiếu chi', 'Đề nghị tạm ứng', 'Đề nghị thanh toán'] : ['Phiếu yêu cầu', 'Phiếu đề nghị thanh toán', 'Đề nghị tạm ứng'];
+    if ($source === 'warehouse' && !$editingRequest) $storedDocumentTitle = 'Phiếu chi';
     $selectedDocumentTitle = old('request_document_title', in_array($storedDocumentTitle, $standardDocumentTitles, true) ? $storedDocumentTitle : '__custom__');
     $customDocumentTitle = old('request_document_title_custom', in_array($storedDocumentTitle, $standardDocumentTitles, true) ? '' : $storedDocumentTitle);
 @endphp
@@ -291,20 +292,30 @@
                 </div>
                 <div class="fr-meta-grid mb-4">
                     <div>
-                        <label class="form-label fw-semibold">Tiêu đề chứng từ <span class="text-danger">*</span></label>
+                        <label class="form-label fw-semibold">Mẫu chứng từ <span class="text-danger">*</span></label>
                         <select name="request_document_title" id="requestDocumentTitle" class="form-select" required>
-                            <option value="Phiếu yêu cầu" @selected($selectedDocumentTitle === 'Phiếu yêu cầu')>Phiếu yêu cầu</option>
-                            <option value="Phiếu đề nghị thanh toán" @selected($selectedDocumentTitle === 'Phiếu đề nghị thanh toán')>Phiếu đề nghị thanh toán</option>
-                            <option value="__custom__" @selected($selectedDocumentTitle === '__custom__')>Nhập tiêu đề khác...</option>
+                            @foreach($standardDocumentTitles as $title)
+                                <option value="{{ $title }}" @selected($selectedDocumentTitle === $title)>{{ $title }}</option>
+                            @endforeach
+                            @if($source !== 'warehouse')
+                                <option value="__custom__" @selected($selectedDocumentTitle === '__custom__')>Nhập tiêu đề khác...</option>
+                            @endif
                         </select>
                         <input type="text" name="request_document_title_custom" id="requestDocumentTitleCustom" class="form-control mt-2" maxlength="255" value="{{ $customDocumentTitle }}" placeholder="Nhập tiêu đề chứng từ khác">
                     </div>
-                    <div>
+                    <div @class(['d-none' => $source === 'warehouse'])>
                         <label class="form-label fw-semibold">Loại chứng từ <span class="text-danger">*</span></label>
                         <select name="request_form_type" id="requestFormType" class="form-select" required>
                             <option value="{{ \App\Models\Transaction::REQUEST_FORM_CASH }}" @selected($selectedFormType === \App\Models\Transaction::REQUEST_FORM_CASH)>Phiếu yêu cầu</option>
                             <option value="{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}" @selected($selectedFormType === \App\Models\Transaction::REQUEST_FORM_PAYMENT)>Phiếu đề nghị thanh toán</option>
+                            <option value="{{ \App\Models\Transaction::REQUEST_FORM_ADVANCE }}" @selected($selectedFormType === \App\Models\Transaction::REQUEST_FORM_ADVANCE)>Đề nghị tạm ứng</option>
                         </select>
+                    </div>
+                    <div id="cashVoucherRecipient">
+                        <label class="form-label fw-semibold">Người nhận tiền <span class="text-danger">*</span></label>
+                        <input name="request_recipient" class="form-control" maxlength="255" value="{{ old('request_recipient', $editingRequest?->request_recipient) }}">
+                        <label class="form-label fw-semibold mt-2">Địa chỉ <span class="text-danger">*</span></label>
+                        <input name="request_recipient_address" class="form-control" maxlength="500" value="{{ old('request_recipient_address', $editingRequest?->request_recipient_address) }}">
                     </div>
                     <div id="flowDirectionGroup">
                         <label class="form-label fw-semibold">Dòng tiền <span class="text-danger">*</span></label>
@@ -533,6 +544,7 @@
                         <option value="all" @selected($formType === 'all')>Tất cả</option>
                         <option value="{{ \App\Models\Transaction::REQUEST_FORM_CASH }}" @selected($formType === \App\Models\Transaction::REQUEST_FORM_CASH)>Yêu cầu thu/chi</option>
                         <option value="{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}" @selected($formType === \App\Models\Transaction::REQUEST_FORM_PAYMENT)>Đề nghị thanh toán</option>
+                        <option value="{{ \App\Models\Transaction::REQUEST_FORM_ADVANCE }}" @selected($formType === \App\Models\Transaction::REQUEST_FORM_ADVANCE)>Đề nghị tạm ứng</option>
                     </select>
                 </div>
                 <div>
@@ -760,7 +772,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function syncFormType() {
-        const isPaymentProposal = formTypeInput?.value === '{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}';
+        const isPaymentProposal = ['{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}', '{{ \App\Models\Transaction::REQUEST_FORM_ADVANCE }}'].includes(formTypeInput?.value) || requestDocumentTitle?.value === 'Phiếu chi';
         flowDirectionGroup?.classList.toggle('d-none', isPaymentProposal);
         if (isPaymentProposal) {
             const outInput = document.getElementById('requestOut');
@@ -774,6 +786,13 @@ document.addEventListener('DOMContentLoaded', function () {
         requestDocumentTitleCustom?.toggleAttribute('required', isCustom);
         if (requestDocumentTitle?.value === 'Phiếu yêu cầu') formTypeInput.value = '{{ \App\Models\Transaction::REQUEST_FORM_CASH }}';
         if (requestDocumentTitle?.value === 'Phiếu đề nghị thanh toán') formTypeInput.value = '{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}';
+        if (requestDocumentTitle?.value === 'Phiếu chi') formTypeInput.value = '{{ \App\Models\Transaction::REQUEST_FORM_CASH }}';
+        if (requestDocumentTitle?.value === 'Đề nghị thanh toán') formTypeInput.value = '{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}';
+        if (requestDocumentTitle?.value === 'Đề nghị tạm ứng') formTypeInput.value = '{{ \App\Models\Transaction::REQUEST_FORM_ADVANCE }}';
+        const cashVoucher = requestDocumentTitle?.value === 'Phiếu chi';
+        const recipientGroup = document.getElementById('cashVoucherRecipient');
+        recipientGroup?.classList.toggle('d-none', !cashVoucher);
+        recipientGroup?.querySelectorAll('input').forEach(input => input.required = cashVoucher);
         syncFormType();
     }
 
