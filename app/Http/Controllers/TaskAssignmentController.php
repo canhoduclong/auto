@@ -290,6 +290,17 @@ class TaskAssignmentController extends Controller
         return back()->with('success', 'Đã lưu đánh giá thành viên.');
     }
 
+    public function deleteRecalledSubTask(Request $request, TaskAssignment $taskAssignment, TaskAssignment $child, \App\Services\SubTaskRecallService $service)
+    {
+        try {
+            $count = $service->deleteRecalled($taskAssignment->id, $child->id, $request->user());
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $error) {
+            if ($error->getStatusCode() !== 422) throw $error;
+            return redirect()->route('tasks.show', $taskAssignment)->with('error', $error->getMessage());
+        }
+        return redirect()->route('tasks.show', $taskAssignment)->with('success', 'Đã xóa '.$count.' công việc con đã thu hồi.');
+    }
+
     public function recallSubTaskForm(Request $request, TaskAssignment $taskAssignment, TaskAssignment $child, \App\Services\SubTaskRecallService $service)
     {
         abort_unless((int) $child->parent_id === (int) $taskAssignment->id, 404);

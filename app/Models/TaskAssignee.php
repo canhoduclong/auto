@@ -40,6 +40,7 @@ class TaskAssignee extends Model
             'completed'  => 'success',
             'in_progress', 'processing' => 'primary',
             'rejected'   => 'danger',
+            'cancelled'  => 'secondary',
             default      => 'warning',
         };
     }

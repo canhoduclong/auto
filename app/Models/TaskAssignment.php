@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TaskAssignment extends Model
 {
+    use \Illuminate\Database\Eloquent\SoftDeletes;
         /**
          * Check if all assignees are still in "pending" status
          * Used to determine if creator can still edit the task

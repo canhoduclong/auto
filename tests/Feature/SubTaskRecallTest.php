@@ -15,6 +15,7 @@ class SubTaskRecallTest extends TestCase
         $this->app->make(\Illuminate\Contracts\Console\Kernel::class)->bootstrap();
         config(['database.default'=>'sqlite','database.connections.sqlite.database'=>':memory:','cache.default'=>'array']); DB::purge('sqlite');
         foreach(['task_assignments'=>'parent_id,created_by,status,code,title,completion_content','task_assignees'=>'task_id,user_id,status','task_status_logs'=>'task_id,from_status,to_status,changed_by,reason'] as $name=>$columns) Schema::create($name,function(Blueprint $t)use($columns){$t->id();foreach(explode(',',$columns) as $c)$t->string($c)->nullable();$t->timestamps();});
+        Schema::table('task_assignments', fn (Blueprint $table) => $table->softDeletes());
         DB::table('task_assignments')->insert([
             ['id'=>1,'parent_id'=>null,'created_by'=>1,'status'=>'processing','code'=>'P','title'=>'Parent'],
             ['id'=>2,'parent_id'=>1,'created_by'=>2,'status'=>'completed','code'=>'C','title'=>'Child'],
@@ -67,6 +68,33 @@ class SubTaskRecallTest extends TestCase
             $controller->recallSubTaskForm($request, TaskAssignment::find(1), TaskAssignment::find(2), new SubTaskRecallService);
             self::fail('Unauthorized');
         } catch (HttpException $e) { self::assertSame(403, $e->getStatusCode()); }
+    }
+    public function test_recalled_branch_can_be_deleted_with_history_preserved(): void {
+        TaskAssignment::find(4)->update(['status'=>'cancelled']);
+        $service = new SubTaskRecallService;
+        $service->recall(1, 2, $this->actor(2), 'Thu hồi');
+        self::assertSame(3, $service->deleteRecalled(1, 2, $this->actor(2)));
+        self::assertNull(TaskAssignment::find(2));
+        self::assertNull(TaskAssignment::find(3));
+        self::assertNotNull(TaskAssignment::withTrashed()->find(2));
+        self::assertSame(1, TaskAssignment::count());
+        self::assertGreaterThan(0, DB::table('task_status_logs')->where('task_id', 2)->count());
+    }
+    public function test_delete_requires_recall_and_protects_finished_descendants(): void {
+        $service = new SubTaskRecallService;
+        try { $service->deleteRecalled(1, 2, $this->actor(2)); self::fail('Active task deleted'); }
+        catch (HttpException $e) { self::assertSame(422, $e->getStatusCode()); }
+        $service->recall(1, 2, $this->actor(2), 'Thu hồi');
+        try { $service->deleteRecalled(1, 2, $this->actor(2)); self::fail('Finished descendant lost'); }
+        catch (HttpException $e) { self::assertSame(422, $e->getStatusCode()); }
+        self::assertNotNull(TaskAssignment::find(2));
+        self::assertSame('done', TaskAssignment::find(4)->status);
+    }
+    public function test_unrelated_user_cannot_delete_recalled_task(): void {
+        TaskAssignment::find(2)->update(['status'=>'cancelled']);
+        try { (new SubTaskRecallService)->deleteRecalled(1, 2, $this->actor(3)); self::fail('Unauthorized'); }
+        catch (HttpException $e) { self::assertSame(403, $e->getStatusCode()); }
+        self::assertNotNull(TaskAssignment::find(2));
     }
     public function test_task_must_be_a_child_of_requested_parent(): void {
         try {(new SubTaskRecallService)->recall(1,3,$this->actor(1),'Thu hồi');self::fail('Wrong parent');}

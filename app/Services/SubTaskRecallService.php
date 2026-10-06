@@ -14,6 +14,35 @@ class SubTaskRecallService
                 || (int) $parent->created_by === (int) $actor->id);
     }
 
+    public function deleteRecalled(int $parentId, int $childId, User $actor): int
+    {
+        return DB::transaction(function () use ($parentId, $childId, $actor) {
+            $parent = TaskAssignment::whereKey($parentId)->lockForUpdate()->firstOrFail();
+            $child = TaskAssignment::whereKey($childId)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $child->parent_id === $parentId, 404);
+            abort_unless($this->canRecall($parent, $child, $actor), 403);
+            abort_unless($child->status === TaskAssignment::STATUS_CANCELLED, 422, 'Chỉ được xóa công việc con đã thu hồi / hủy.');
+            $pending = collect([$child]);
+            $branch = collect();
+            $seen = [];
+            while ($pending->isNotEmpty()) {
+                $current = $pending->shift();
+                if (isset($seen[$current->id])) continue;
+                $seen[$current->id] = true;
+                $branch->push($current);
+                $pending = $pending->concat(TaskAssignment::where('parent_id', $current->id)->lockForUpdate()->get());
+            }
+            abort_if($branch->contains(fn ($task) => $task->status !== TaskAssignment::STATUS_CANCELLED), 422,
+                'Việc con còn chứa công việc chưa thu hồi hoặc đã hoàn thành. Hãy xử lý các việc bên dưới trước khi xóa.');
+            foreach ($branch as $task) {
+                TaskStatusLog::log($task, $task->status, $actor, 'Xóa công việc con sau thu hồi.');
+                $task->delete();
+            }
+            TaskStatusLog::log($parent, $parent->status, $actor, 'Đã xóa công việc con '.$child->code.' — '.$child->title.' sau thu hồi ('.$branch->count().' việc).');
+            return $branch->count();
+        });
+    }
+
     public function recall(int $parentId, int $childId, User $actor, string $reason): int
     {
         return DB::transaction(function () use ($parentId, $childId, $actor, $reason) {

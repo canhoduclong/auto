@@ -62,9 +62,17 @@
                                     <label class="form-label small">Lý do thu hồi *</label>
                                     <textarea name="recall_reason" class="form-control form-control-sm mb-2" required maxlength="1000" rows="2"></textarea>
                                     <div class="small text-muted mb-2">Ngừng thực hiện công việc; giữ lịch sử và tài liệu đã gửi. Các việc bên dưới đã hoàn thành được giữ nguyên.</div>
-                                    <button class="btn btn-outline-danger btn-sm">Xác nhận thu hồi</button>
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">Xác nhận thu hồi</button>
                                 </form>
                             </details>
+                            @endif
+                            @if($child->status === 'cancelled' && app(\App\Services\SubTaskRecallService::class)->canRecall($task, $child, auth()->user()))
+                                <form method="POST" action="{{ route('tasks.subtasks.destroy', [$task, $child]) }}" class="mt-2"
+                                      onsubmit="return confirm('Xóa công việc đã thu hồi khỏi danh sách?');">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash me-1"></i>Xóa công việc đã thu hồi</button>
+                                </form>
                             @endif
                             @if($child->status === 'cancelled')
                             @php
