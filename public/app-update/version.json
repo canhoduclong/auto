@@ -1,8 +1,10 @@
 {
-  "version": "1.1.26",
-  "version_code": 69,
+  "version": "1.1.27",
+  "version_code": 70,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
-  "force_update": true,
-  "message": "Bản cập nhật 1.1.26: Hiển thị số điện thoại và địa chỉ khách trong phần đóng hàng; đồng bộ đơn chờ đóng hàng qua ngày."
+  "force_update": false,
+  "message": "Bản 1.1.27: Thêm Đối soát đơn hàng, Thống kê bán hàng và Điều chỉnh cho Kế toán; duyệt tại danh sách và chi tiết. Sửa khối lượng và form điều chỉnh trên Sale. Do khóa ký cũ đã mất, cần gỡ bản app cũ rồi cài bản mới. Dữ liệu trên máy chủ được giữ nguyên.",
+  "requires_reinstall": true,
+  "sha256": "aa752e8d851592814d3f0bbf3124b0e3fcc7b61e9729ef8c6795577d3163b021"
 }
