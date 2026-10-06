@@ -24,6 +24,11 @@ class TaskAssignment extends Model
                 ->exists();
         }
 
+    public function setDescriptionAttribute(?string $value): void
+    {
+        $this->attributes['description'] = \App\Support\TaskDescription::sanitize($value);
+    }
+
     // New unified status constants based on user requirements
     public const STATUS_PENDING     = 'pending';      // Chờ thực hiện
     public const STATUS_PROCESSING  = 'processing';   // Đang thực hiện

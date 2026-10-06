@@ -92,7 +92,7 @@
                         </div>
 
                         @if($task->description)
-                            <p class="small text-muted mb-2" style="line-height:1.4">{{ \Str::limit($task->description, 80) }}</p>
+                            <p class="small text-muted mb-2" style="line-height:1.4">{{ \Str::limit(\App\Support\TaskDescription::text($task->description), 80) }}</p>
                         @endif
 
                                 {{-- Custom assignees --}}

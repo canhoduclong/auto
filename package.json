@@ -16,6 +16,7 @@
         "vite": "^7.1.6"
     },
     "dependencies": {
-        "jspdf": "^3.0.4"
+        "jspdf": "^3.0.4",
+        "tinymce": "8.9.3"
     }
 }

@@ -130,7 +130,7 @@
                     @if($task->description)
                         <div class="border-top pt-3">
                             <div class="small fw-semibold text-muted mb-1">Mo ta:</div>
-                            <div style="white-space: pre-wrap; font-size:14px">{{ $task->description }}</div>
+                            <div class="task-description">{!! \App\Support\TaskDescription::render($task->description) !!}</div>
                         </div>
                     @endif
 
@@ -178,7 +178,7 @@
                     <input id="child-due" class="form-control mb-2" type="date" name="due_date" min="{{ today()->toDateString() }}" value="{{ old('due_date') }}" required>
                     <small class="text-muted mb-3">Hạn mặc định: cuối ngày đã chọn (24:00).</small>
                     <label class="form-label" for="child-description">Mô tả / yêu cầu tài liệu</label>
-                    <textarea id="child-description" class="form-control mb-3" name="description" maxlength="5000">{{ old('description') }}</textarea>
+                    <textarea id="child-description" class="form-control mb-3 task-description-editor" name="description" maxlength="20000">{{ \App\Support\TaskDescription::render(old('description')) }}</textarea>
                     <button class="btn btn-primary align-self-start" type="submit" @disabled($subTaskAssignees->isEmpty())>Giao việc con</button>
                 </form>
                 </details>
@@ -362,3 +362,5 @@
 })();
 </script>
 @endpush
+
+@include('task_assignments.partials.description-editor')

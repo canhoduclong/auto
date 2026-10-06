@@ -147,7 +147,7 @@
                 </div>
 
                 @if ($task->description)
-                    <p class="mb-2" style="color: #6c757d;">{{ Str::limit($task->description, 150) }}</p>
+                    <p class="mb-2" style="color: #6c757d;">{{ Str::limit(\App\Support\TaskDescription::text($task->description), 150) }}</p>
                 @endif
 
                 <div class="task-item-meta">

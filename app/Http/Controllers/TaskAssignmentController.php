@@ -137,7 +137,7 @@ class TaskAssignmentController extends Controller
             'debt_items.*.sale_id' => 'required|integer|exists:users,id',
             'debt_items.*.target' => 'required|numeric|min:1|max:999999999999',
             'title'            => 'required|string|max:255',
-            'description'      => 'nullable|string|max:5000',
+            'description'      => 'nullable|string|max:20000',
             'priority'         => 'required|in:low,medium,high,urgent',
             'approval_flow_id' => 'nullable|exists:approval_flows,id',
             'parent_id'        => 'nullable|exists:task_assignments,id',
@@ -331,7 +331,7 @@ class TaskAssignmentController extends Controller
             'assignee_ids' => ['required', 'array', 'min:1'],
             'assignee_ids.*' => ['required', 'integer', 'distinct', 'exists:users,id'],
             'title' => ['required', 'string', 'max:255'],
-            'description' => ['nullable', 'string', 'max:5000'],
+            'description' => ['nullable', 'string', 'max:20000'],
             'due_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
         ]);
         $allowedIds = $this->allowedAssigneesFor($user)->pluck('id')->map(fn ($id) => (int) $id)->all();
@@ -431,7 +431,7 @@ class TaskAssignmentController extends Controller
 
         $data = $request->validate([
             'title'            => 'required|string|max:255',
-            'description'      => 'nullable|string|max:5000',
+            'description'      => 'nullable|string|max:20000',
             'priority'         => 'required|in:low,medium,high,urgent',
             'approval_flow_id' => 'nullable|exists:approval_flows,id',
             'parent_id'        => 'nullable|exists:task_assignments,id',

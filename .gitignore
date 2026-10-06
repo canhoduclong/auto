@@ -57,3 +57,5 @@ readme.txt
 !/tests/Unit/OrderAdjustmentComparisonTest.php
 
 !/tests/Feature/SubTaskRecallTest.php
+
+!/tests/Unit/TaskDescriptionTest.php

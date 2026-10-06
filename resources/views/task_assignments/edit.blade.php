@@ -53,8 +53,8 @@
 
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Mô tả chi tiết</label>
-                            <textarea name="description" class="form-control" rows="5" maxlength="5000"
-                                      placeholder="Ghi rõ yêu cầu, kết quả cần đạt, ghi chú...">{{ old('description', $task->description) }}</textarea>
+                            <textarea name="description" class="form-control task-description-editor" rows="5" maxlength="20000"
+                                      placeholder="Ghi rõ yêu cầu, kết quả cần đạt, ghi chú...">{{ \App\Support\TaskDescription::render(old('description', $task->description)) }}</textarea>
                         </div>
 
                         <div class="row g-3 mb-3">
@@ -238,3 +238,5 @@ function initDueDatePreview() {
 document.addEventListener('DOMContentLoaded', initDueDatePreview);
 </script>
 @endsection
+
+@include('task_assignments.partials.description-editor')
