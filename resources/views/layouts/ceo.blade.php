@@ -357,12 +357,32 @@
                 <i class="bi bi-exclamation-triangle"></i> Cảnh báo
             </a>
 
+            <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Điều hành & Giao việc</div>
+            <a href="{{ route('operating.index') }}" class="ceo-nav-link {{ request()->routeIs('operating.index') && in_array(request('filter', 'mine'), ['mine'], true) ? 'active' : '' }}">
+                <i class="bi bi-speedometer2"></i> Tổng quan điều hành
+            </a>
+            <a href="{{ route('tasks.create') }}" class="ceo-nav-link {{ request()->routeIs('tasks.create', 'task-assignments.create', 'task-assignments.edit') ? 'active' : '' }}">
+                <i class="bi bi-plus-circle"></i> Tạo công việc / Giao việc
+            </a>
+            <a href="{{ route('operating.index', ['filter' => 'assigned']) }}" class="ceo-nav-link {{ (request()->routeIs('operating.index') && request('filter') === 'assigned') || request()->routeIs('tasks.assigned', 'task-assignments.assigned-by-me') ? 'active' : '' }}">
+                <i class="bi bi-send"></i> Việc tôi giao
+            </a>
+            <a href="{{ route('operating.index', ['filter' => 'received']) }}" class="ceo-nav-link {{ (request()->routeIs('operating.index') && request('filter') === 'received') || request()->routeIs('tasks.my-tasks', 'my-tasks', 'task-assignments.assigned-to-me') ? 'active' : '' }}">
+                <i class="bi bi-inbox"></i> Nhận việc / Việc của tôi
+            </a>
+            <a href="{{ route('operating.index', ['filter' => 'coordination']) }}" class="ceo-nav-link {{ request()->routeIs('operating.index') && request('filter') === 'coordination' ? 'active' : '' }}">
+                <i class="bi bi-people"></i> Yêu cầu phối hợp
+            </a>
+            <a href="{{ route('operating.index', ['filter' => 'verification']) }}" class="ceo-nav-link {{ (request()->routeIs('operating.index') && request('filter') === 'verification') || request()->routeIs('task-assignments.verify', 'task-assignments.verify-form', 'tasks.verify') ? 'active' : '' }}">
+                <i class="bi bi-check2-circle"></i> Chờ nghiệm thu
+            </a>
+            <a href="{{ route('operating.index') }}#bieu-quyet" class="ceo-nav-link {{ request()->routeIs('operating.proposals.*') ? 'active' : '' }}">
+                <i class="bi bi-ui-checks"></i> Đề xuất & Biểu quyết
+            </a>
+
             <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Quản Lý</div>
             <a href="{{ route('ceo.price-management.index') }}" class="ceo-nav-link {{ request()->routeIs('ceo.price-management.*') ? 'active' : '' }}">
                 <i class="bi bi-tags"></i> Quản lý giá
-            </a>
-            <a href="{{ route('task-assignments.index') }}" class="ceo-nav-link {{ request()->routeIs('task-assignments.*') ? 'active' : '' }}">
-                <i class="bi bi-checklist-rtl"></i> Giao việc
             </a>
             <a href="{{ route('department-notifications.index', ['layout' => 'ceo']) }}" class="ceo-nav-link {{ request()->routeIs('department-notifications.*') && request('layout') === 'ceo' ? 'active' : '' }}">
                 <i class="bi bi-megaphone"></i> Tạo thông báo
@@ -462,8 +482,7 @@
                 <div class="alert alert-danger py-2">{{ session('error') }}</div>
             @endif
 
-            @include('layouts.partials.operating-navigation')
-                @yield('content')
+            @yield('content')
             @yield('accounting_content')
         </section>
     </main>
