@@ -1,5 +1,5 @@
 @php
-    $personStatuses = ['pending' => 'Chờ thực hiện', 'in_progress' => 'Đang thực hiện', 'processing' => 'Đang thực hiện', 'completed' => 'Đã báo hoàn thành', 'done' => 'Đã hoàn thành', 'rejected' => 'Không thể thực hiện'];
+    $personStatuses = ['pending' => 'Chờ thực hiện', 'in_progress' => 'Đang thực hiện', 'processing' => 'Đang thực hiện', 'completed' => 'Đã báo hoàn thành', 'done' => 'Đã hoàn thành', 'rejected' => 'Không thể thực hiện', 'cancelled' => 'Đã thu hồi / hủy'];
     $delegations = $task->subTasks->sortBy('due_date')->flatMap(fn ($child) => $child->assignees->map(fn ($assignment) => ['task' => $child, 'assignment' => $assignment]))->groupBy(fn ($entry) => $entry['task']->created_by . ':' . $entry['assignment']->user_id);
 @endphp
 <section class="card shadow-sm mb-3">
@@ -54,6 +54,26 @@
                             <div class="small text-muted mt-1">Tạo: {{ $child->created_at?->format('d/m/Y') }} · Hạn: {{ $child->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}
                                 @if($child->due_date && !in_array($child->status, ['done', 'completed', 'cancelled'], true))<span class="{{ $child->isOverdue() ? 'text-danger' : '' }}"> · {{ $child->isOverdue() ? 'Quá hạn' : 'Còn hạn' }}: {{ $child->due_date->diffForHumans() }}</span>@endif
                             </div>
+                            @if(!in_array($child->status, ['done','cancelled'], true) && (auth()->user()->hasRole('admin') || (int)$child->created_by === (int)auth()->id() || (int)$task->created_by === (int)auth()->id()))
+                            <details class="mt-2">
+                                <summary class="small text-danger fw-semibold">Thu hồi công việc con</summary>
+                                <form method="POST" action="{{ route('tasks.subtasks.recall', [$task, $child]) }}" class="border rounded bg-light p-3 mt-2" onsubmit="return confirm('Thu hồi công việc con này và các việc con bên dưới chưa hoàn thành?');">
+                                    @csrf
+                                    <label class="form-label small">Lý do thu hồi *</label>
+                                    <textarea name="recall_reason" class="form-control form-control-sm mb-2" required maxlength="1000" rows="2"></textarea>
+                                    <div class="small text-muted mb-2">Ngừng thực hiện công việc; giữ lịch sử và tài liệu đã gửi. Các việc bên dưới đã hoàn thành được giữ nguyên.</div>
+                                    <button class="btn btn-outline-danger btn-sm">Xác nhận thu hồi</button>
+                                </form>
+                            </details>
+                            @endif
+                            @if($child->status === 'cancelled')
+                            @php
+                                $recallLog = $child->statusLogs->filter(fn($log) => str_starts_with((string)$log->reason, 'Thu hồi công việc con:'))->sortByDesc('created_at')->first();
+                            @endphp
+                            @if($recallLog)
+                            <div class="alert alert-secondary small py-2 mt-2 mb-0"><strong>Đã thu hồi:</strong> {{ $recallLog->reason }} · {{ $recallLog->changedBy?->name }} · {{ $recallLog->created_at?->format('d/m/Y H:i') }}</div>
+                            @endif
+                            @endif
                             @include('task_assignments.partials.evaluation', ['ratedTask' => $child, 'ratedAssignment' => $childAssignment, 'compactEvaluation' => false])
                             @foreach($child->statusLogs->where('changed_by', $childAssignment->user_id)->sortBy('created_at') as $activity)
                                 @include('task_assignments.partials.activity')
@@ -67,5 +87,5 @@
         @endforeach
         @if($task->assignees->isEmpty() && $delegations->isEmpty())<p class="text-muted mt-3">Chưa có người nhận việc.</p>@endif
     </div>
-    <div class="card-footer small text-muted">{{ $task->subTasks->whereIn('status', ['completed', 'done'])->count() }}/{{ $task->subTasks->count() }} việc con đã báo hoàn thành.</div>
+    <div class="card-footer small text-muted">{{ $task->subTasks->whereIn('status', ['completed', 'done'])->count() }}/{{ $task->subTasks->where('status', '!=', 'cancelled')->count() }} việc con đang theo dõi đã báo hoàn thành. {{ $task->subTasks->where('status', 'cancelled')->count() }} việc con đã thu hồi / hủy.</div>
 </section>

@@ -290,6 +290,14 @@ class TaskAssignmentController extends Controller
         return back()->with('success', 'Đã lưu đánh giá thành viên.');
     }
 
+    public function recallSubTask(Request $request, TaskAssignment $taskAssignment, TaskAssignment $child, \App\Services\SubTaskRecallService $service)
+    {
+        abort_unless($this->canViewTask($taskAssignment, $request->user()),403);
+        $data = $request->validate(['recall_reason'=>['required','string','max:1000']]);
+        $count = $service->recall($taskAssignment->id,$child->id,$request->user(),trim($data['recall_reason']));
+        return redirect()->route('tasks.show',$taskAssignment)->with('success','Đã thu hồi '.$count.' công việc con. Lịch sử và tài liệu đã gửi được giữ lại.');
+    }
+
     public function storeSubTask(Request $request, TaskAssignment $taskAssignment)
     {
         $user = $request->user();
@@ -549,6 +557,7 @@ class TaskAssignmentController extends Controller
 
     public function assigneeUpdate(Request $request, TaskAssignment $taskAssignment)
     {
+        abort_if(in_array($taskAssignment->status, ['done','cancelled'], true),422,'Công việc đã hoàn thành hoặc đã thu hồi / hủy.');
         $request->validate([
             'status' => 'required|in:in_progress,processing,rejected',
             'note'   => 'nullable|string|max:1000',

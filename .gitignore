@@ -55,3 +55,5 @@ readme.txt
 !/tests/Feature/ShipperHoldingExceptionTest.php
 
 !/tests/Unit/OrderAdjustmentComparisonTest.php
+
+!/tests/Feature/SubTaskRecallTest.php

@@ -847,6 +847,7 @@ class ApprovalService
 
     public function getCurrentPendingTaskStep(\App\Models\TaskAssignment $task): ?ApprovalOrder
     {
+        if (in_array($task->status, ['done','cancelled'], true)) return null;
         return ApprovalOrder::where('task_id', $task->id)
             ->where('status', 'pending')
             ->with('step')

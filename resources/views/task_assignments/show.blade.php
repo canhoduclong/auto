@@ -109,6 +109,7 @@
 <div class="content-body pb-4">
     @if(session('success'))<div class="alert alert-success alert-dismissible fade show">{{ session('success') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>@endif
     @if($errors->has('collected') || $errors->has('note'))<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
+    @error('recall_reason')<div class="alert alert-danger">{{ $message }}</div>@enderror
     @error('evaluation_score')<div class="alert alert-danger">{{ $message }}</div>@enderror
     @if(session('error'))<div class="alert alert-danger alert-dismissible fade show">{{ session('error') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>@endif
 
