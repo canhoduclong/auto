@@ -47,3 +47,7 @@ readme.txt
 !/tests/Feature/RouteRecallTest.php
 
 !/tests/Feature/TaskEvaluationTest.php
+
+!/tests/Unit/
+/tests/Unit/*
+!/tests/Unit/MobileAccountingSessionTest.php

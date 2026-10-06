@@ -72,6 +72,8 @@ use App\Http\Controllers\Warehouse\AssignmentReviewController;
 
 // Public mobile update files. These routes are also a fallback when Nginx does
 // not serve public/app-update directly.
+Route::get('/mobile/accounting/session/{ticket}', [\App\Http\Controllers\MobileAccountingSessionController::class, 'consume'])->middleware('throttle:30,1')->name('mobile.accounting.session');
+
 Route::get('/app-update/version.json', [AppUpdateController::class, 'manifest'])
     ->name('app-update.manifest');
 Route::get('/app-update/{filename}', [AppUpdateController::class, 'apk'])

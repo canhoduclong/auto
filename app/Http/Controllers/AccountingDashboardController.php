@@ -108,6 +108,8 @@ class AccountingDashboardController extends Controller
             })->values();
         }
 
+        $adjustments = $adjustments->sortByDesc('id')->values();
+
         $perPage = 20;
         $page = max(1, (int) $request->input('page', 1));
         $paginator = new LengthAwarePaginator(

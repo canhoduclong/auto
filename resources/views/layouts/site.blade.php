@@ -109,6 +109,7 @@ use App\Models\Setting;
     </style>
     @stack('styles')
 
+    @include('layouts.partials.mobile_accounting')
 </head>
 
 
@@ -117,13 +118,17 @@ use App\Models\Setting;
     <div id="preloder">
         <div class="loader"></div>
     </div>
-    @include('layouts.partials.site_header') 
+    @unless(session('mobile_accounting'))
+    @include('layouts.partials.site_header')
+    @endunless
     @include('layouts.notifications')
 
     @yield('breadcrumb')
     @yield('content')
 
+    @unless(session('mobile_accounting'))
     @include('layouts.partials.site_footer')
+    @endunless
 
     
 

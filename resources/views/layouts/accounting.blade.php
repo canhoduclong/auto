@@ -351,6 +351,7 @@
         }
     </style>
     @stack('styles')
+    @include('layouts.partials.mobile_accounting')
 </head>
 <body class="{{ !empty($isMobileClient) ? 'is-mobile-client' : '' }}">
 <div class="acc-shell">

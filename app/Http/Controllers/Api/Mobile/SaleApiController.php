@@ -133,6 +133,35 @@ class SaleApiController extends BaseApiController
         return $this->ok(null, 'Đã từ chối yêu cầu điều chỉnh và thông báo cho kho.');
     }
 
+    public function adjustmentOptions(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureSaleRole($request);
+        $user = $request->user();
+        abort_unless((int) $order->user_id === (int) $user->id || $user->hasRole('admin'), 403);
+        abort_unless($order->canRequestAdjustment(), 422, 'Đơn chưa được phép điều chỉnh.');
+        $order->load(['items.variant.product', 'items.product', 'additionalFees']);
+        $feeService = app(\App\Services\OrderFeeService::class);
+
+        return $this->ok([
+            'code' => $order->code,
+            'items' => $order->items->map(fn ($item) => [
+                'order_item_id' => (int) $item->id,
+                'name' => trim(($item->product?->name ?? $item->variant?->product?->name ?? 'Sản phẩm') . ' ' . ($item->variant?->name ?? '')),
+                'quantity' => (int) $item->quantity,
+                'price' => (float) $item->price,
+                'weight' => (float) ($item->actual_weight ?? $item->total_weight ?? ((float) $item->unit_weight * $item->quantity)),
+                'is_priced_by_kg' => (bool) $item->effective_priced_by_kg,
+            ])->values(),
+            'fees' => $feeService->availableTypesForOrder($order)->map(fn ($type) => [
+                'id' => (int) $type->id,
+                'name' => $type->name,
+                'calculation_type' => $type->code === 'vat' ? 'fixed' : $type->calculation_type,
+                'state' => $feeService->currentState($order, $type),
+            ])->values(),
+            'warehouses' => \App\Models\Warehouse::query()->orderBy('name')->get(['id', 'name']),
+        ]);
+    }
+
     public function requestAdjustment(Request $request, Order $order): JsonResponse
     {
         $this->ensureSaleRole($request);
@@ -145,7 +174,7 @@ class SaleApiController extends BaseApiController
         $order->load('items');
         $request->merge([
             'action' => 'submit',
-            'items' => $order->items->map(fn ($item): array => [
+            'items' => $request->input('items') ?? $order->items->map(fn ($item): array => [
                 'order_item_id' => (int) $item->id,
                 'adjusted_quantity' => (int) $item->quantity,
                 'adjusted_price' => (float) $item->price,

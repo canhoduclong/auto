@@ -96,6 +96,7 @@ Route::prefix('mobile')->group(function () {
             Route::get('/dashboard', [SaleApiController::class, 'dashboard']);
             Route::post('/order-adjustments/{order}/confirm', [SaleApiController::class, 'confirmWarehouseAdjustment']);
             Route::post('/order-adjustments/{order}/reject', [SaleApiController::class, 'rejectWarehouseAdjustment']);
+            Route::get('/orders/{order}/adjustment-options', [SaleApiController::class, 'adjustmentOptions']);
             Route::post('/orders/{order}/request-adjustment', [SaleApiController::class, 'requestAdjustment']);
             Route::get('/customers', [SaleApiController::class, 'customers']);
             Route::get('/customers/form-options', [SaleApiController::class, 'customerFormOptions']);
@@ -132,6 +133,7 @@ Route::prefix('mobile')->group(function () {
         });
 
         Route::prefix('accounting')->group(function () {
+            Route::post('/mobile-session', [\App\Http\Controllers\MobileAccountingSessionController::class, 'create']);
             Route::post('/orders/{order}/confirm', [RoleScreenApiController::class, 'confirmAccountingOrder']);
             Route::post('/orders/{order}/approve', [RoleScreenApiController::class, 'approveAccountingOrder']);
             Route::post('/orders/{order}/reject', [RoleScreenApiController::class, 'rejectAccountingOrder']);
