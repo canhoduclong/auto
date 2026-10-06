@@ -5,6 +5,21 @@
     $comparisonSections = $comparisonSection ?? 'both';
     $comparisonStates = $comparisonSections === 'original' ? ['original'] : ($comparisonSections === 'changes' ? ['adjusted'] : ['original','adjusted']);
 @endphp
+@once
+<style>
+.adjustment-comparison-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
+.adjustment-comparison-orders, .adjustment-comparison-notes { min-width: 0; }
+.adjustment-comparison-grid .table td, .adjustment-comparison-grid .table th { padding: .35rem .25rem; }
+.adjustment-comparison-grid .table th { white-space: nowrap; }
+.adjustment-shipping-note { white-space: normal; overflow-wrap: anywhere; font-size: .82rem; }
+@media (min-width: 1200px) {
+    .adjustment-comparison-grid { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+    .adjustment-review-actions { width: calc(60% - 14px); }
+}
+</style>
+@endonce
+<div class="adjustment-comparison-grid">
+<div class="adjustment-comparison-orders">
 @foreach($comparisonStates as $state)
 @php
     $totals = \App\Support\OrderAdjustmentComparison::totals($adjustment, $comparisonRows, $state);
@@ -12,7 +27,7 @@
 <div class="mb-3">
 <h6 class="fw-bold">{{ $state === 'original' ? 'Đơn trước điều chỉnh' : 'Đơn sau điều chỉnh (đề nghị)' }}</h6>
 <div class="table-responsive"><table class="table table-sm align-middle mb-1">
-<thead><tr><th>Sản phẩm / biến thể</th><th class="text-end">Size đặt</th><th class="text-end">Số lượng</th><th class="text-end">Khối lượng</th><th class="text-end">{{ $state === 'original' ? 'Size kho đã đóng' : 'Size bình quân đề nghị' }}</th><th class="text-end">Đơn giá</th><th class="text-end">Thành tiền</th></tr></thead>
+<thead><tr><th>Sản phẩm / biến thể</th><th class="text-end">Size đặt</th><th class="text-end">Số lượng</th><th class="text-end">Khối lượng</th><th class="text-end"><span title="{{ $state === 'original' ? 'Size kho đã đóng thực tế' : 'Size bình quân theo đề nghị điều chỉnh' }}">Size</span></th><th class="text-end">Đơn giá</th><th class="text-end">Thành tiền</th></tr></thead>
 <tbody>
 @foreach($comparisonRows as $row)
 @continue($state === 'original' && $row['new'])
@@ -20,7 +35,14 @@
     $highlight = $state === 'adjusted' && $row['changed'];
 @endphp
 <tr class="{{ $highlight ? 'table-warning' : '' }}">
-<td><strong>{{ $row['name'] }}</strong><div class="small text-muted">{{ $row['variant'] }}@if($row['new']) · Bổ sung mới @endif</div></td>
+<td class="text-nowrap"><strong>{{ $row['name'] }}</strong>
+@if($row['sku'] || $row['variant'])
+ <span class="small text-muted">({{ $row['sku'] ?: $row['variant'] }})</span>
+@endif
+@if($row['new'])
+ <span class="badge text-bg-success">Bổ sung mới</span>
+@endif
+</td>
 <td class="text-end">{{ $row['size'] ?: '—' }}</td>
 <td class="text-end {{ $highlight && $row['originalQuantity'] !== $row['adjustedQuantity'] ? 'fw-bold text-danger' : '' }}">{{ $comparisonNumber($row[$state.'Quantity']) }}</td>
 <td class="text-end {{ $highlight && abs($row['originalWeight']-$row['adjustedWeight']) > 0.0001 ? 'fw-bold text-danger' : '' }}">{{ $row['byKg'] ? $comparisonNumber($row[$state.'Weight']).' kg' : '—' }}</td>
@@ -32,6 +54,18 @@
 </tbody>
 <tfoot>
 <tr><td colspan="6" class="text-end">Tiền hàng</td><td class="text-end fw-semibold">{{ $comparisonMoney($totals['subtotal']) }}</td></tr>
+@php
+    $shippingChange = (array) data_get($adjustment->fee_changes, 'shipping', []);
+    $oldShipping = (bool) data_get($shippingChange, 'original.enabled', false) ? (float) data_get($shippingChange, 'original.value', 0) : 0;
+    $newShipping = (bool) data_get($shippingChange, 'adjusted.enabled', false) ? (float) data_get($shippingChange, 'adjusted.value', 0) : 0;
+@endphp
+@if($state === 'adjusted' && $shippingChange && abs($oldShipping - $newShipping) > 0.0001)
+<tr><td colspan="7" class="adjustment-shipping-note bg-light"><strong>Ghi chú điều chỉnh Phí Ship:</strong> {{ $comparisonMoney($oldShipping) }} thay đổi thành <strong>{{ $comparisonMoney($newShipping) }}</strong>.
+@if($adjustment->adjustment_note)
+ {{ $adjustment->adjustment_note }}
+@endif
+</td></tr>
+@endif
 @foreach($totals['fees'] as $fee)
 <tr><td colspan="6" class="text-end">{{ $fee['name'] }}</td><td class="text-end">{{ $comparisonMoney($fee['amount']) }}</td></tr>
 @endforeach
@@ -40,6 +74,8 @@
 </table></div>
 </div>
 @endforeach
+</div>
+<div class="adjustment-comparison-notes">
 @if($comparisonSections !== 'original')
 <div class="border rounded p-3 mb-3 bg-light">
 <div class="fw-bold mb-2">Nội dung thay đổi</div>
@@ -83,3 +119,6 @@
 </div>
 <div class="small text-muted mb-3">Size kho đã đóng lấy từ cân và số lượng đóng thực tế. Size ở đơn đề nghị được tính theo khối lượng / số lượng đề nghị; chưa phải kết quả kho cân lại.</div>
 @endif
+
+</div>
+</div>

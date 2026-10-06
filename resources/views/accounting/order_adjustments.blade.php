@@ -84,7 +84,7 @@
 
             @include('site.orders.adjustments._product_comparison', ['adjustment' => $adjustment, 'comparisonSection' => 'both'])
 
-            <div class="d-flex flex-wrap justify-content-end gap-2">
+            <div class="d-flex flex-wrap justify-content-end gap-2 adjustment-review-actions">
                 <a href="{{ route('site.order-adjustments.show', $adjustment) }}" class="btn btn-outline-primary btn-sm">Xem chi tiết</a>
                 @if($isPendingAccounting)
                     <button class="btn btn-outline-danger btn-sm" data-bs-toggle="collapse" data-bs-target="#rejectAccountingAdjustment{{ $adjustment->id }}">Từ chối</button>

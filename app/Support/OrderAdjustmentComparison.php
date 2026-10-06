@@ -19,7 +19,7 @@ class OrderAdjustmentComparison
             $rows[] = [
                 'item'=>$item,
                 'name'=>$item->variant?->product?->name ?? $item->orderItem?->imported_name ?? 'Sản phẩm',
-                'variant'=>$item->variant?->name,
+                'variant'=>$item->variant?->name, 'sku'=>$item->variant?->sku,
                 'size'=>$item->variant?->size,
                 'byKg'=>$byKg,
                 'originalQuantity'=>$originalQuantity, 'adjustedQuantity'=>$adjustedQuantity,
@@ -45,7 +45,7 @@ class OrderAdjustmentComparison
             $weight = $byKg && $quantity > 0 ? (float)($item->actual_weight ?? $item->total_weight ?? 0) : 0;
             $packedQuantity = (float)($item->packed_quantity ?? $quantity);
             $size = $byKg && $packedQuantity > 0 && $item->packed_weight !== null ? (float)$item->packed_weight / $packedQuantity : null;
-            $rows[] = ['item'=>null,'name'=>$item->variant?->product?->name ?? $item->imported_name ?? 'Sản phẩm','variant'=>$item->variant?->name,'size'=>$item->variant?->size,
+            $rows[] = ['item'=>null,'name'=>$item->variant?->product?->name ?? $item->imported_name ?? 'Sản phẩm','variant'=>$item->variant?->name, 'sku'=>$item->variant?->sku,'size'=>$item->variant?->size,
                 'byKg'=>$byKg,'originalQuantity'=>$quantity,'adjustedQuantity'=>$quantity,'originalWeight'=>$weight,'adjustedWeight'=>$weight,
                 'originalPrice'=>(float)$item->price,'adjustedPrice'=>(float)$item->price,'originalSize'=>$size,'adjustedSize'=>$size,
                 'packedQuantity'=>$packedQuantity,'packedWeight'=>$item->packed_weight,'new'=>false,'changed'=>false];
