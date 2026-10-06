@@ -414,8 +414,7 @@
         margin-left: 8px;
         white-space: nowrap;
     }
-    .trip-order-customer,
-    .trip-order-address {
+    .trip-order-customer {
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -445,6 +444,13 @@
     }
     .trip-order-address {
         color: #475569;
+        min-width: 0;
+        width: 260px;
+        max-width: 320px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: normal;
+        line-height: 1.45;
     }
     .trip-order-main {
         min-width: 260px;
