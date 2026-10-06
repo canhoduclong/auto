@@ -204,6 +204,9 @@
     .manager-create-page .fr-note-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+    #externalBankGroup[hidden], #managedTransferGroup[hidden] {
+        display: none !important;
+    }
     .manager-create-page #externalBankGroup {
         grid-column: 1 / -1;
     }
@@ -303,14 +306,7 @@
                         </select>
                         <input type="text" name="request_document_title_custom" id="requestDocumentTitleCustom" class="form-control mt-2" maxlength="255" value="{{ $customDocumentTitle }}" placeholder="Nhập tiêu đề chứng từ khác">
                     </div>
-                    <div @class(['d-none' => $source === 'warehouse'])>
-                        <label class="form-label fw-semibold">Loại chứng từ <span class="text-danger">*</span></label>
-                        <select name="request_form_type" id="requestFormType" class="form-select" required>
-                            <option value="{{ \App\Models\Transaction::REQUEST_FORM_CASH }}" @selected($selectedFormType === \App\Models\Transaction::REQUEST_FORM_CASH)>Phiếu yêu cầu</option>
-                            <option value="{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}" @selected($selectedFormType === \App\Models\Transaction::REQUEST_FORM_PAYMENT)>Phiếu đề nghị thanh toán</option>
-                            <option value="{{ \App\Models\Transaction::REQUEST_FORM_ADVANCE }}" @selected($selectedFormType === \App\Models\Transaction::REQUEST_FORM_ADVANCE)>Đề nghị tạm ứng</option>
-                        </select>
-                    </div>
+                    <input type="hidden" name="request_form_type" id="requestFormType" value="{{ $selectedFormType }}">
                     <div id="cashVoucherRecipient">
                         <label class="form-label fw-semibold">Người nhận tiền <span class="text-danger">*</span></label>
                         <input name="request_recipient" class="form-control" maxlength="255" value="{{ old('request_recipient', $editingRequest?->request_recipient) }}">
@@ -342,7 +338,7 @@
                         </select>
                     </div>
                     @if($managedAccounts->isNotEmpty())
-                        <div id="managedTransferGroup">
+                        <div id="managedTransferGroup" @if($selectedMethod !== 'managed_transfer') hidden @endif>
                             <label class="form-label fw-semibold">Tài khoản chuyển khoản đang quản lý <span class="text-danger">*</span></label>
                             <select name="destination_account_id" id="managedDestinationAccountId" class="form-select">
                                 <option value="">-- Chọn tài khoản --</option>
@@ -355,7 +351,7 @@
                             <div class="form-text">Chỉ hiển thị tài khoản bạn được gán quản lý.</div>
                         </div>
                     @endif
-                    <div id="externalBankGroup" class="fr-meta-grid">
+                    <div id="externalBankGroup" class="fr-meta-grid" @if($selectedMethod !== 'bank_transfer') hidden @endif>
                         <div>
                             <label class="form-label fw-semibold">Tên tài khoản <span class="text-danger">*</span></label>
                             <input type="text" name="external_recipient" id="externalRecipient" class="form-control" maxlength="255" value="{{ old('external_recipient', $editingRequest?->external_recipient) }}" placeholder="VD: Công ty ABC, Nguyễn Văn A...">
@@ -744,15 +740,19 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    if (!requestItemsTable) return;
-
     function syncPaymentMethod() {
         const method = paymentMethod?.value || 'cash';
         const isManagedTransfer = method === 'managed_transfer';
         const isBankTransfer = method === 'bank_transfer';
 
-        managedTransferGroup?.classList.toggle('d-none', !isManagedTransfer);
-        externalBankGroup?.classList.toggle('d-none', !isBankTransfer);
+        if (managedTransferGroup) {
+            managedTransferGroup.hidden = !isManagedTransfer;
+            managedTransferGroup.classList.remove('d-none');
+        }
+        if (externalBankGroup) {
+            externalBankGroup.hidden = !isBankTransfer;
+            externalBankGroup.classList.remove('d-none');
+        }
 
         if (managedDestinationAccountId) managedDestinationAccountId.required = isManagedTransfer;
         if (externalRecipient) externalRecipient.required = isBankTransfer;
@@ -760,7 +760,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (externalBankName) externalBankName.required = isBankTransfer;
     }
 
-    paymentMethod?.addEventListener('change', syncPaymentMethod);
+    // jQuery Nice Select triggers onchange rather than native change listeners.
+    if (paymentMethod) paymentMethod.onchange = syncPaymentMethod;
+    paymentMethod?.addEventListener('input', syncPaymentMethod);
     syncPaymentMethod();
 
     function formatMoney(value) {
@@ -800,9 +802,11 @@ document.addEventListener('DOMContentLoaded', function () {
         syncPaymentMethod();
     }));
     formTypeInput?.addEventListener('change', syncFormType);
-    requestDocumentTitle?.addEventListener('change', syncDocumentTitle);
+    if (requestDocumentTitle) requestDocumentTitle.onchange = syncDocumentTitle;
     syncDocumentTitle();
     syncFormType();
+
+    if (!requestItemsTable) return;
 
     function requestRows() {
         return Array.from(requestItemsTable.querySelectorAll('tbody tr.request-line'));

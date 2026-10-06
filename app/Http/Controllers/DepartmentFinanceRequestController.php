@@ -578,6 +578,19 @@ class DepartmentFinanceRequestController extends Controller
             $request->merge(['request_form_type' => $templates[$title], 'flow_direction' => 'out']);
         }
 
+        // The selected template determines the internal type; users choose only one field.
+        $templateTypes = [
+            'Phiếu yêu cầu' => Transaction::REQUEST_FORM_CASH,
+            'Phiếu chi' => Transaction::REQUEST_FORM_CASH,
+            'Phiếu đề nghị thanh toán' => Transaction::REQUEST_FORM_PAYMENT,
+            'Đề nghị thanh toán' => Transaction::REQUEST_FORM_PAYMENT,
+            'Đề nghị tạm ứng' => Transaction::REQUEST_FORM_ADVANCE,
+        ];
+        $selectedTitle = $request->input('request_document_title');
+        if (is_string($selectedTitle) && isset($templateTypes[$selectedTitle])) {
+            $request->merge(['request_form_type' => $templateTypes[$selectedTitle]]);
+        }
+
         $validated = $request->validate([
             'request_form_type' => ['required', 'in:' . Transaction::REQUEST_FORM_CASH . ',' . Transaction::REQUEST_FORM_PAYMENT . ',' . Transaction::REQUEST_FORM_ADVANCE],
             'request_document_title' => ['nullable', 'string', 'max:255'],
