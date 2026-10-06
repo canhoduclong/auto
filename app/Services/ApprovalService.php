@@ -219,7 +219,7 @@ class ApprovalService
             'order.customer:id,name',
             'order.user:id,name,short_name,team_id',
             'requester:id,name,team_id',
-            'items.orderItem:id,product_id,product_variant_id,quantity,price',
+            'items.orderItem:id,product_id,product_variant_id,quantity,price,packed_quantity,packed_weight,is_priced_by_kg',
             'items.variant.product',
             'approvalSteps.step:id,role_slug,step_order',
         ];

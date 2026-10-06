@@ -434,6 +434,9 @@
             <a href="{{ route('accounting.accounts.index') }}?action=deposit" style="padding-left:2rem;font-size:13px">
                 <i class="bi bi-plus-circle text-success"></i> Nạp / Rút tiền
             </a>
+            <a href="{{ route('accounting.document-templates.index') }}" class="{{ request()->routeIs('accounting.document-templates.*') ? 'active' : '' }}">
+                <i class="bi bi-file-earmark-text"></i> Mẫu chứng từ Thu / Chi
+            </a>
             <a href="{{ route('accounting.transaction-categories.index') }}" class="{{ request()->routeIs('accounting.transaction-categories.*') ? 'active' : '' }}">
                 <i class="bi bi-diagram-3"></i> Quản trị danh mục giao dịch
             </a>

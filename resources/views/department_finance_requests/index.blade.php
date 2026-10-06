@@ -26,8 +26,9 @@
     $requestJobTitle = $formSubmitter?->job_title ?: $config['label'];
     $storedDocumentTitle = $editingRequest?->request_document_title
         ?: ($selectedFormType === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu');
-    $standardDocumentTitles = $source === 'warehouse' ? ['Phiếu chi', 'Đề nghị tạm ứng', 'Đề nghị thanh toán'] : ['Phiếu yêu cầu', 'Phiếu đề nghị thanh toán', 'Đề nghị tạm ứng'];
-    if ($source === 'warehouse' && !$editingRequest) $storedDocumentTitle = 'Phiếu chi';
+    $documentTemplates = \App\Models\FinanceDocumentTemplate::where('is_active', true)->orderBy('id')->get();
+    $standardDocumentTitles = $documentTemplates->pluck('name')->all();
+    if (!$editingRequest) $storedDocumentTitle = $documentTemplates->firstWhere('flow_direction', 'out')?->name ?? ($standardDocumentTitles[0] ?? '');
     $selectedDocumentTitle = old('request_document_title', in_array($storedDocumentTitle, $standardDocumentTitles, true) ? $storedDocumentTitle : '__custom__');
     $customDocumentTitle = old('request_document_title_custom', in_array($storedDocumentTitle, $standardDocumentTitles, true) ? '' : $storedDocumentTitle);
 @endphp
@@ -297,8 +298,8 @@
                     <div>
                         <label class="form-label fw-semibold">Mẫu chứng từ <span class="text-danger">*</span></label>
                         <select name="request_document_title" id="requestDocumentTitle" class="form-select" required>
-                            @foreach($standardDocumentTitles as $title)
-                                <option value="{{ $title }}" @selected($selectedDocumentTitle === $title)>{{ $title }}</option>
+                            @foreach($documentTemplates as $template)
+                                <option value="{{ $template->name }}" data-type="{{ $template->form_type }}" data-flow="{{ $template->flow_direction }}" @selected($selectedDocumentTitle === $template->name)>{{ $template->name }} — {{ ['in'=>'Thu','out'=>'Chi','both'=>'Thu / Chi'][$template->flow_direction] }}</option>
                             @endforeach
                             @if($source !== 'warehouse')
                                 <option value="__custom__" @selected($selectedDocumentTitle === '__custom__')>Nhập tiêu đề khác...</option>
@@ -308,7 +309,7 @@
                     </div>
                     <input type="hidden" name="request_form_type" id="requestFormType" value="{{ $selectedFormType }}">
                     <div id="cashVoucherRecipient">
-                        <label class="form-label fw-semibold">Người nhận tiền <span class="text-danger">*</span></label>
+                        <label class="form-label fw-semibold">Người nhận / nộp tiền <span class="text-danger">*</span></label>
                         <input name="request_recipient" class="form-control" maxlength="255" value="{{ old('request_recipient', $editingRequest?->request_recipient) }}">
                         <label class="form-label fw-semibold mt-2">Địa chỉ <span class="text-danger">*</span></label>
                         <input name="request_recipient_address" class="form-control" maxlength="500" value="{{ old('request_recipient_address', $editingRequest?->request_recipient_address) }}">
@@ -774,11 +775,11 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function syncFormType() {
-        const isPaymentProposal = ['{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}', '{{ \App\Models\Transaction::REQUEST_FORM_ADVANCE }}'].includes(formTypeInput?.value) || requestDocumentTitle?.value === 'Phiếu chi';
-        flowDirectionGroup?.classList.toggle('d-none', isPaymentProposal);
-        if (isPaymentProposal) {
-            const outInput = document.getElementById('requestOut');
-            if (outInput) outInput.checked = true;
+        const flow = requestDocumentTitle?.selectedOptions[0]?.dataset.flow;
+        const fixedFlow = flow === 'in' || flow === 'out';
+        flowDirectionGroup?.classList.toggle('d-none', fixedFlow);
+        if (fixedFlow) {
+            document.querySelector('input[name="flow_direction"][value="' + flow + '"]')?.click();
         }
     }
 
@@ -786,12 +787,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const isCustom = requestDocumentTitle?.value === '__custom__';
         requestDocumentTitleCustom?.classList.toggle('d-none', !isCustom);
         requestDocumentTitleCustom?.toggleAttribute('required', isCustom);
-        if (requestDocumentTitle?.value === 'Phiếu yêu cầu') formTypeInput.value = '{{ \App\Models\Transaction::REQUEST_FORM_CASH }}';
-        if (requestDocumentTitle?.value === 'Phiếu đề nghị thanh toán') formTypeInput.value = '{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}';
-        if (requestDocumentTitle?.value === 'Phiếu chi') formTypeInput.value = '{{ \App\Models\Transaction::REQUEST_FORM_CASH }}';
-        if (requestDocumentTitle?.value === 'Đề nghị thanh toán') formTypeInput.value = '{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}';
-        if (requestDocumentTitle?.value === 'Đề nghị tạm ứng') formTypeInput.value = '{{ \App\Models\Transaction::REQUEST_FORM_ADVANCE }}';
-        const cashVoucher = requestDocumentTitle?.value === 'Phiếu chi';
+        const selectedType = requestDocumentTitle?.selectedOptions[0]?.dataset.type;
+        if (selectedType) formTypeInput.value = selectedType;
+        const cashVoucher = selectedType === 'cash_request' && ['in', 'out'].includes(requestDocumentTitle?.selectedOptions[0]?.dataset.flow);
         const recipientGroup = document.getElementById('cashVoucherRecipient');
         recipientGroup?.classList.toggle('d-none', !cashVoucher);
         recipientGroup?.querySelectorAll('input').forEach(input => input.required = cashVoucher);

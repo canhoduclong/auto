@@ -460,6 +460,9 @@
 						</li>
 						@if(auth()->user()?->isAdmin())
 						<li class="nav-item">
+                            <a href="{{ route('admin.shipper-holdings.index') }}" class="nav-link{{ request()->routeIs('admin.shipper-holdings.*') ? ' active' : '' }}"><i class="ph-truck"></i><span>Đơn Shipper đang giữ</span></a>
+                        </li>
+                        <li class="nav-item">
 							<a href="{{ route('admin.notifications.index') }}" class="nav-link{{ request()->routeIs('admin.notifications.*') ? ' active' : '' }}">
 								<i class="ph-bell-ringing"></i>
 								<span>Quản trị thông báo</span>

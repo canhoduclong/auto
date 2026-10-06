@@ -51,3 +51,7 @@ readme.txt
 !/tests/Unit/
 /tests/Unit/*
 !/tests/Unit/MobileAccountingSessionTest.php
+
+!/tests/Feature/ShipperHoldingExceptionTest.php
+
+!/tests/Unit/OrderAdjustmentComparisonTest.php

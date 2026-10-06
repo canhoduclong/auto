@@ -87,30 +87,7 @@
             @endif
             @include('site.orders.adjustments._fee_changes', ['adjustment' => $adjustment])
 
-            <div class="table-responsive">
-                <table class="table table-sm align-middle">
-                    <thead><tr><th>Sản phẩm</th><th class="text-end">SL cũ</th><th class="text-end">SL mới</th><th class="text-end">Giá cũ</th><th class="text-end">Giá mới</th><th>Nội dung thay đổi</th></tr></thead>
-                    <tbody>
-                    @foreach($adjustment->items as $item)
-                        @php
-                            $quantityChanged = (float) $item->original_quantity !== (float) $item->adjusted_quantity;
-                            $priceChanged = (float) $item->original_price !== (float) $item->adjusted_price;
-                        @endphp
-                        <tr>
-                            <td class="fw-semibold">{{ $item->variant?->product?->name ?? $item->variant?->name ?? 'Sản phẩm' }}</td>
-                            <td class="text-end">{{ number_format((float) $item->original_quantity, 0, ',', '.') }}</td>
-                            <td class="text-end {{ $quantityChanged ? 'text-danger fw-bold' : '' }}">{{ number_format((float) $item->adjusted_quantity, 0, ',', '.') }}</td>
-                            <td class="text-end">{{ number_format((float) $item->original_price, 0, ',', '.') }}đ</td>
-                            <td class="text-end {{ $priceChanged ? 'text-danger fw-bold' : '' }}">{{ number_format((float) $item->adjusted_price, 0, ',', '.') }}đ</td>
-                            <td>
-                                @if($quantityChanged)<span class="badge text-bg-info">Số lượng</span>@endif
-                                @if($priceChanged)<span class="badge text-bg-danger">Giá bán</span>@endif
-                            </td>
-                        </tr>
-                    @endforeach
-                    </tbody>
-                </table>
-            </div>
+            @include('site.orders.adjustments._product_comparison', ['adjustment' => $adjustment, 'comparisonSection' => 'both'])
 
             <div class="d-flex flex-wrap justify-content-end gap-2">
                 <a href="{{ route('site.order-adjustments.show', $adjustment) }}" class="btn btn-outline-primary btn-sm">Xem chi tiết</a>

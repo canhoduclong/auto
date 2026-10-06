@@ -240,6 +240,7 @@ class DepartmentFinanceRequestController extends Controller
                 'request_job_title' => trim((string) ($request->user()->job_title ?: $config['label'])),
                 'request_form_type' => $transaction->request_form_type,
                 'request_document_title' => $transaction->request_document_title,
+                'request_document_layout' => $transaction->request_document_layout,
                 'request_recipient' => $transaction->request_recipient,
                 'request_recipient_address' => $transaction->request_recipient_address,
                 'request_title' => $transaction->request_title,
@@ -569,28 +570,19 @@ class DepartmentFinanceRequestController extends Controller
     {
         $config = $this->config($source);
 
-        if ($source === 'warehouse') {
-            $templates = ['Phiếu chi' => Transaction::REQUEST_FORM_CASH, 'Đề nghị tạm ứng' => Transaction::REQUEST_FORM_ADVANCE, 'Đề nghị thanh toán' => Transaction::REQUEST_FORM_PAYMENT];
-            $title = $request->input('request_document_title');
-            if (!isset($templates[$title])) {
-                throw ValidationException::withMessages(['request_document_title' => 'Vui lòng chọn một trong ba mẫu chứng từ.']);
-            }
-            $request->merge(['request_form_type' => $templates[$title], 'flow_direction' => 'out']);
-        }
-
-        // The selected template determines the internal type; users choose only one field.
-        $templateTypes = [
-            'Phiếu yêu cầu' => Transaction::REQUEST_FORM_CASH,
-            'Phiếu chi' => Transaction::REQUEST_FORM_CASH,
-            'Phiếu đề nghị thanh toán' => Transaction::REQUEST_FORM_PAYMENT,
-            'Đề nghị thanh toán' => Transaction::REQUEST_FORM_PAYMENT,
-            'Đề nghị tạm ứng' => Transaction::REQUEST_FORM_ADVANCE,
-        ];
         $selectedTitle = $request->input('request_document_title');
-        if (is_string($selectedTitle) && isset($templateTypes[$selectedTitle])) {
-            $request->merge(['request_form_type' => $templateTypes[$selectedTitle]]);
+        if ($selectedTitle !== '__custom__') {
+            $template = \App\Models\FinanceDocumentTemplate::where('name', $selectedTitle)->where('is_active', true)->first();
+            if (!$template) {
+                throw ValidationException::withMessages(['request_document_title'=>'Mẫu chứng từ không còn sử dụng. Vui lòng chọn lại.']);
+            }
+            $request->merge(['request_form_type'=>$template->form_type]);
+            if ($template->flow_direction !== 'both') $request->merge(['flow_direction'=>$template->flow_direction]);
         }
 
+        if (isset($template) && $template->form_type === Transaction::REQUEST_FORM_CASH && $template->flow_direction !== 'both') {
+            $request->validate(['request_recipient'=>['required','string','max:255'], 'request_recipient_address'=>['required','string','max:500']]);
+        }
         $validated = $request->validate([
             'request_form_type' => ['required', 'in:' . Transaction::REQUEST_FORM_CASH . ',' . Transaction::REQUEST_FORM_PAYMENT . ',' . Transaction::REQUEST_FORM_ADVANCE],
             'request_document_title' => ['nullable', 'string', 'max:255'],
@@ -704,6 +696,7 @@ class DepartmentFinanceRequestController extends Controller
             'request_source' => $source,
             'request_department' => $config['label'],
             'request_job_title' => trim((string) (($validated['request_job_title'] ?? null) ?: auth()->user()?->job_title ?: $config['label'])),
+            'request_document_layout' => isset($template) ? ($template->form_type === Transaction::REQUEST_FORM_CASH ? ($template->flow_direction === 'both' ? 'request' : 'cash_voucher') : $template->form_type) : 'request',
             'request_form_type' => $validated['request_form_type'],
             'request_recipient' => trim((string) ($validated['request_recipient'] ?? '')),
             'request_recipient_address' => trim((string) ($validated['request_recipient_address'] ?? '')),

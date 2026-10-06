@@ -112,8 +112,10 @@ class AccountingDashboardController extends Controller
 
         $perPage = 20;
         $page = max(1, (int) $request->input('page', 1));
+        $pageAdjustments = new \Illuminate\Database\Eloquent\Collection($adjustments->forPage($page, $perPage)->values()->all());
+        $pageAdjustments->loadMissing(['items.orderItem.variant.product', 'order.items.variant.product']);
         $paginator = new LengthAwarePaginator(
-            $adjustments->forPage($page, $perPage)->values(),
+            $pageAdjustments,
             $adjustments->count(),
             $perPage,
             $page,

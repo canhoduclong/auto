@@ -20,9 +20,9 @@
     $flow = $transaction->transactionCategory?->flow_direction === 'in' || $transaction->type === 'extra_income' ? 'Thu' : 'Chi';
     $isPaymentProposal = $transaction->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT;
     $documentTitle = $transaction->request_document_title ?: ($isPaymentProposal ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu');
-    $isCashVoucher = $documentTitle === 'Phiếu chi';
+    $isCashVoucher = $transaction->request_document_layout === 'cash_voucher' || in_array($documentTitle, ['Phiếu chi', 'Phiếu thu'], true);
     $isAdvance = $transaction->request_form_type === \App\Models\Transaction::REQUEST_FORM_ADVANCE;
-    $isSampleProposal = $isAdvance || in_array($documentTitle, ['Đề nghị thanh toán', 'Phiếu đề nghị thanh toán'], true);
+    $isSampleProposal = $isAdvance || $isPaymentProposal;
     $departmentName = $transaction->submitter?->department?->name
         ?: $transaction->submitter?->block?->name
         ?: ($transaction->request_department ?: ($config['label'] ?? '-'));
@@ -312,7 +312,7 @@
                 <div class="voucher-no"><strong>Số phiếu:</strong> #{{ $transaction->id }}</div>
             </div>
             <div class="form-code">
-                Mẫu số: {{ $isCashVoucher ? '02-TT' : '05-TT' }}
+                Mẫu số: {{ $isCashVoucher ? ($flow === 'Thu' ? '01-TT' : '02-TT') : '05-TT' }}
                 <em class="form-code-line">(Ban hành theo Thông tư 200/2014/TT-BTC)</em>
                 <em>ngày 24/12/2014 của Bộ trưởng BTC</em>
             </div>
@@ -325,9 +325,9 @@
 
         <div class="info-lines">
             @if($isCashVoucher)
-                <div class="info-row"><span>Người nhận tiền:</span><strong>{{ $transaction->request_recipient ?: $transaction->external_recipient ?: '-' }}</strong></div>
+                <div class="info-row"><span>{{ $flow === 'Thu' ? 'Người nộp tiền:' : 'Người nhận tiền:' }}</span><strong>{{ $transaction->request_recipient ?: $transaction->external_recipient ?: '-' }}</strong></div>
                 <div class="info-row"><span>Địa chỉ:</span><strong>{{ $transaction->request_recipient_address ?: '-' }}</strong></div>
-                <div class="info-row"><span>Lý do chi:</span><strong>{{ $transaction->request_title }}</strong></div>
+                <div class="info-row"><span>{{ $flow === 'Thu' ? 'Lý do thu:' : 'Lý do chi:' }}</span><strong>{{ $transaction->request_title }}</strong></div>
             @else
             <div class="info-row">
                 <span class="info-label">Kính gửi:</span>
@@ -438,7 +438,7 @@
                 <div style="margin-top:42px;font-weight:700">{{ $transaction->submitter?->name ?: '-' }}</div>
             </div>
             <div class="signature-box">
-                <div class="signature-title">{{ $isCashVoucher ? 'Người nhận tiền' : ($isSampleProposal ? 'Kiểm tra' : 'Trưởng bộ phận') }}</div>
+                <div class="signature-title">{{ $isCashVoucher ? ($flow === 'Thu' ? 'Người nộp tiền' : 'Người nhận tiền') : ($isSampleProposal ? 'Kiểm tra' : 'Trưởng bộ phận') }}</div>
                 <div class="signature-hint">(Ký, ghi rõ họ tên)</div>
             </div>
             @unless($isSampleProposal)

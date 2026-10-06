@@ -348,6 +348,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/api/customer-detail/{customer}', [AccountingDashboardController::class, 'apiCustomerDetail'])->name('api.customer-detail');
         Route::post('/api/reconcile-account-balances', [AccountingDashboardController::class, 'apiReconcileAccountBalances'])->name('api.reconcile-account-balances');
         // Transaction categories
+        Route::get('/document-templates', [\App\Http\Controllers\FinanceDocumentTemplateController::class, 'index'])->name('document-templates.index');
+        Route::post('/document-templates', [\App\Http\Controllers\FinanceDocumentTemplateController::class, 'store'])->name('document-templates.store');
+        Route::put('/document-templates/{template}', [\App\Http\Controllers\FinanceDocumentTemplateController::class, 'update'])->name('document-templates.update');
         Route::get('/transaction-categories', [\App\Http\Controllers\TransactionCategoryController::class, 'index'])->name('transaction-categories.index');
         Route::post('/transaction-categories', [\App\Http\Controllers\TransactionCategoryController::class, 'store'])->name('transaction-categories.store');
         Route::put('/transaction-categories/{transactionCategory}', [\App\Http\Controllers\TransactionCategoryController::class, 'update'])->name('transaction-categories.update');
@@ -771,6 +774,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/ai/generate-description', [AIController::class, 'generateDescription'])->name('ai.generateDescription');
 
     Route::middleware('role:admin')->group(function () {
+        Route::get('admin/shipper-holdings', [\App\Http\Controllers\AdminShipperHoldingController::class, 'index'])->name('admin.shipper-holdings.index');
+        Route::post('admin/shipper-holdings/{kind}/{id}', [\App\Http\Controllers\AdminShipperHoldingController::class, 'process'])->where('kind', 'order|transfer')->whereNumber('id')->name('admin.shipper-holdings.process');
         Route::get('admin/notifications', [AdminNotificationController::class, 'index'])->name('admin.notifications.index');
         Route::post('admin/notifications/department-broadcast', [AdminNotificationController::class, 'storeDepartmentBroadcast'])->name('admin.notifications.department_broadcast');
         Route::delete('admin/notifications/inbox/{notificationId}', [AdminNotificationController::class, 'destroyNotification'])->name('admin.notifications.notification.destroy');

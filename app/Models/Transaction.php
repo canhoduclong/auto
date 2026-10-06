@@ -54,6 +54,7 @@ class Transaction extends Model
         'request_job_title',
         'request_form_type',
         'request_document_title',
+        'request_document_layout',
         'request_recipient',
         'request_recipient_address',
         'request_title',

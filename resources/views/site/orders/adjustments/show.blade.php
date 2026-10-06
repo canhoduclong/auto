@@ -23,12 +23,7 @@
         'warehouse' => 'Kho',
     ];
     $approvalSteps = $adjustment->approvalSteps->sortBy(fn ($approval) => (int) ($approval->step?->step_order ?? PHP_INT_MAX));
-    $changedItems = $adjustment->items->filter(fn ($item) =>
-        (int) $item->original_quantity !== (int) $item->adjusted_quantity
-        || abs((float) $item->original_price - (float) $item->adjusted_price) > 0.001
-        || abs((float) $item->original_weight - (float) $item->adjusted_weight) > 0.001
-        || ! $item->order_item_id
-    )->count();
+    $changedItems = count(array_filter(\App\Support\OrderAdjustmentComparison::rows($adjustment), fn($row) => $row['changed']));
     $compactNumber = static fn ($value, int $precision = 3) => rtrim(rtrim(number_format((float) $value, $precision, '.', ''), '0'), '.');
     $money = static fn ($value) => number_format((float) $value, 0, ',', '.') . 'đ';
 @endphp
@@ -144,9 +139,9 @@
 
         <div class="adjustment-layout">
             <main class="adjustment-main">
-                @if($order)
-                    @include('site.orders.adjustments._confirmed_order', ['beforeAdjustment' => $adjustment->status !== 'completed'])
-                @endif
+                <section class="adjustment-card"><div class="adjustment-card-body">
+                    @include('site.orders.adjustments._product_comparison', ['adjustment' => $adjustment, 'comparisonSection' => 'original'])
+                </div></section>
                 <section class="adjustment-card">
                     <div class="adjustment-card-head"><h2 class="adjustment-card-title"><i class="bi bi-chat-left-text"></i>Nội dung yêu cầu</h2></div>
                     <div class="adjustment-card-body"><div class="adjustment-note">{{ $adjustment->adjustment_note ?: 'Không có ghi chú bổ sung.' }}</div></div>
@@ -171,45 +166,12 @@
 
                 @include('site.orders.adjustments._fee_changes', ['adjustment' => $adjustment])
 
-                <section class="adjustment-card">
-                    <div class="adjustment-card-head"><h2 class="adjustment-card-title"><i class="bi bi-box-seam"></i>Chi tiết sản phẩm điều chỉnh</h2><span class="badge text-bg-light border">{{ $adjustment->items->count() }} dòng sản phẩm</span></div>
-                    <div class="table-responsive">
-                        <table class="table adjustment-table align-middle">
-                            <thead><tr><th>Sản phẩm</th><th class="text-center">Số lượng</th><th class="text-end">Đơn giá</th><th class="text-end">Khối lượng</th><th class="text-center">Kho xác nhận</th><th>Tình trạng hàng</th></tr></thead>
-                            <tbody>
-                            @foreach($adjustment->items as $item)
-                                @php
-                                    $quantityChanged = (int) $item->original_quantity !== (int) $item->adjusted_quantity;
-                                    $priceChanged = abs((float) $item->original_price - (float) $item->adjusted_price) > 0.001;
-                                    $weightChanged = abs((float) $item->original_weight - (float) $item->adjusted_weight) > 0.001;
-                                    $isNewItem = ! $item->order_item_id;
-                                @endphp
-                                <tr>
-                                    <td>
-                                        <div class="adjustment-product">{{ $item->variant?->product?->name ?? 'Sản phẩm' }}</div>
-                                        <div class="small text-muted">{{ $item->variant?->name ?? '—' }} @if($item->variant?->sku) · {{ $item->variant->sku }} @endif</div>
-                                        @if($isNewItem)<span class="adjustment-new-badge">Sản phẩm bổ sung</span>@endif
-                                        @if($item->note)<div class="small text-muted mt-1"><i class="bi bi-chat-dots me-1"></i>{{ $item->note }}</div>@endif
-                                    </td>
-                                    <td class="text-center">@if($quantityChanged || $isNewItem)<span class="adjustment-change">{{ (int) $item->original_quantity }} <i class="bi bi-arrow-right"></i> {{ (int) $item->adjusted_quantity }}</span>@else{{ (int) $item->adjusted_quantity }}@endif</td>
-                                    <td class="text-end">@if($priceChanged || $isNewItem)<div class="small text-muted text-decoration-line-through">{{ $money($item->original_price) }}</div><div class="adjustment-change">{{ $money($item->adjusted_price) }}</div>@else{{ $money($item->adjusted_price) }}@endif</td>
-                                    <td class="text-end">
-                                        @if(! ($item->variant?->effective_priced_by_kg ?? $item->orderItem?->effective_priced_by_kg ?? true))
-                                            —
-                                        @elseif($weightChanged || $isNewItem)
-                                            <span class="adjustment-change">{{ $compactNumber($item->original_weight) }} <i class="bi bi-arrow-right"></i> {{ $compactNumber($item->adjusted_weight) }} kg</span>
-                                        @else
-                                            {{ $compactNumber($item->adjusted_weight) }} kg
-                                        @endif
-                                    </td>
-                                    <td class="text-center">@if(is_null($item->warehouse_received_quantity) && is_null($item->warehouse_received_weight))<span class="text-muted">—</span>@else<div class="fw-semibold">{{ is_null($item->warehouse_received_quantity) ? '—' : (int) $item->warehouse_received_quantity }}</div>@if(!is_null($item->warehouse_received_weight))<div class="small text-muted">{{ $compactNumber($item->warehouse_received_weight) }} kg</div>@endif @endif</td>
-                                    <td>{{ $item->warehouse_condition ?: '—' }}</td>
-                                </tr>
-                            @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
+                <section class="adjustment-card"><div class="adjustment-card-body">
+                    @include('site.orders.adjustments._product_comparison', ['adjustment' => $adjustment, 'comparisonSection' => 'changes'])
+                </div></section>
+                @if($order)
+                    @include('site.orders.adjustments._confirmed_order', ['beforeAdjustment' => $adjustment->status !== 'completed'])
+                @endif
 
                 @if(!empty($adjustment->evidence_images))
                     <section class="adjustment-card">
