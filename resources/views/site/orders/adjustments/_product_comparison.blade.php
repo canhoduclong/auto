@@ -16,11 +16,12 @@
 .adjustment-comparison-grid .table th { white-space: nowrap; }
 @media (min-width: 1200px) {
     .adjustment-comparison-grid { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
+    .adjustment-comparison-grid.adjustment-comparison-stacked { grid-template-columns: minmax(0, 1fr); }
     .adjustment-review-actions { width: calc(60% - 14px); }
 }
 </style>
 @endonce
-<div class="adjustment-comparison-grid">
+<div class="adjustment-comparison-grid {{ ($comparisonStacked ?? false) ? 'adjustment-comparison-stacked' : '' }}">
 <div class="adjustment-comparison-orders">
 @foreach($comparisonStates as $state)
 @php

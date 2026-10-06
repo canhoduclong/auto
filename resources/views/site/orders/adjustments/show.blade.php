@@ -140,7 +140,7 @@
         <div class="adjustment-layout">
             <main class="adjustment-main">
                 <section class="adjustment-card"><div class="adjustment-card-body">
-                    @include('site.orders.adjustments._product_comparison', ['adjustment' => $adjustment, 'comparisonSection' => 'both'])
+                    @include('site.orders.adjustments._product_comparison', ['adjustment' => $adjustment, 'comparisonSection' => 'both', 'comparisonStacked' => true])
                 </div></section>
                 @if($order)
                     <details class="adjustment-card"><summary class="adjustment-card-head fw-semibold">Thông tin đơn hàng hiện tại và thanh toán</summary>
