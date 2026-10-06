@@ -116,7 +116,7 @@ class TaskAssignmentController extends Controller
         $debtCustomers = \App\Models\Customer::visibleTo($user)->orderBy('name')->get(['id', 'name']);
 
         $useFrontend = $isFrontRoles && $isFrontendRoute;
-        $layout = $useFrontend ? 'layouts.site' : 'layouts.admin';
+        $layout = \App\Support\TaskWorkspace::layout(auth()->user());
         $indexRoute = $useFrontend ? 'tasks.index' : 'task-assignments.index';
         $storeRoute = $useFrontend ? 'tasks.store' : 'task-assignments.store';
 
@@ -131,6 +131,10 @@ class TaskAssignmentController extends Controller
         abort_unless(TaskMenuService::canAssignTasks($user) || TaskDelegateConfig::canAssignTasks($user), 403);
 
         $data = $request->validate([
+            'work_kind' => 'nullable|in:execution,coordination',
+            'proposal_id' => 'nullable|integer|exists:operating_proposals,id',
+            'accountable_user_id' => 'required|integer|exists:users,id',
+            'acceptance_due_at' => 'required|date|after:now',
             'task_type' => 'nullable|in:default,debt_collection',
             'debt_items' => 'required_if:task_type,debt_collection|array|max:100',
             'debt_items.*.customer_id' => 'required|integer|exists:customers,id',
@@ -141,7 +145,7 @@ class TaskAssignmentController extends Controller
             'priority'         => 'required|in:low,medium,high,urgent',
             'approval_flow_id' => 'nullable|exists:approval_flows,id',
             'parent_id'        => 'nullable|exists:task_assignments,id',
-            'due_date'         => 'nullable|date_format:Y-m-d|after_or_equal:today',
+            'due_date'         => 'required|date_format:Y-m-d|after_or_equal:today',
             'attachments.*'    => 'nullable|file|max:10240|mimes:jpg,jpeg,png,pdf,doc,docx,xlsx,zip',
             'assignee_ids'     => 'required|array|min:1',
             'assignee_ids.*'   => 'required|integer|distinct|exists:users,id',
@@ -149,6 +153,23 @@ class TaskAssignmentController extends Controller
 
         if (!empty($data['due_date'])) {
             $data['due_date'] = Carbon::createFromFormat('!Y-m-d', $data['due_date'])->endOfDay()->format('Y-m-d H:i:s');
+        }
+
+        if (!in_array((int)$data['accountable_user_id'], array_map('intval',$data['assignee_ids']),true)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['accountable_user_id'=>'Người chủ trì phải thuộc danh sách người nhận việc.']);
+        }
+        if (Carbon::parse($data['acceptance_due_at'])->gt(Carbon::parse($data['due_date']))) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['acceptance_due_at'=>'Hạn tiếp nhận không được sau hạn hoàn thành.']);
+        }
+        if (!empty($data['proposal_id'])) {
+            $proposal=\App\Models\OperatingProposal::findOrFail($data['proposal_id']);
+            abort_unless($proposal->status==='approved' && ((int)$proposal->created_by===(int)$user->id || $user->hasRole('admin')),403);
+        }
+
+        if (!empty($data['parent_id'])) {
+            $parent=TaskAssignment::findOrFail($data['parent_id']);
+            abort_unless($this->canViewTask($parent,$user) && ((int)$parent->created_by===(int)$user->id || $parent->assignees()->where('user_id',$user->id)->exists() || $user->hasRole('admin')),403);
+            abort_if(in_array($parent->status,['done','cancelled'],true),422,'Việc cha đã kết thúc.');
         }
 
         // Validate that chosen assignees are actually allowed for this user
@@ -173,6 +194,12 @@ class TaskAssignmentController extends Controller
             }
         }
 
+        if (!empty($data['approval_flow_id'])) {
+            $validWorkflow=ApprovalWorkflow::whereKey($data['approval_flow_id'])->where('is_active',true)
+                ->where(fn($q)=>$q->whereJsonContains('applies_to',ApprovalWorkflow::ACTIVITY_TASK_ASSIGNMENT)->orWhereNull('applies_to'))->exists();
+            if (!$validWorkflow) throw \Illuminate\Validation\ValidationException::withMessages(['approval_flow_id'=>'Quy trình không còn hoạt động hoặc không áp dụng cho giao việc.']);
+        }
+
         // Handle file uploads
         $paths = [];
         if ($request->hasFile('attachments')) {
@@ -181,7 +208,12 @@ class TaskAssignmentController extends Controller
             }
         }
 
+        $task = DB::transaction(function () use ($data,$user,$paths,$debtItems) {
         $task = TaskAssignment::create([
+            'work_kind' => $data['work_kind'] ?? 'execution',
+            'proposal_id' => $data['proposal_id'] ?? null,
+            'accountable_user_id' => $data['accountable_user_id'],
+            'acceptance_due_at' => $data['acceptance_due_at'],
             'task_type' => $data['task_type'] ?? 'default',
             'debt_items' => $debtItems ?: null,
             'code'             => TaskAssignment::generateCode(),
@@ -207,10 +239,17 @@ class TaskAssignmentController extends Controller
             }
         }
 
-        $this->approvalService->initTaskApproval($task);
+        // New execution tasks wait for explicit receipt; existing workflow remains an independent gate.
+        if ($task->approval_flow_id) $this->approvalService->initTaskApproval($task);
+        $task->update(['status'=>TaskAssignment::STATUS_PENDING]);
+
+            return $task;
+        });
+
+        \Illuminate\Support\Facades\Notification::send(User::whereIn('id',$data['assignee_ids'])->get(),new \App\Notifications\OperatingNotification('Công việc mới cần tiếp nhận',$task->title,route('tasks.show',$task)));
 
         return redirect()->route('task-assignments.show', $task)
-            ->with('success', 'Giao viec ' . $task->code . ' da duoc tao va gui len quy trinh phe duyet.');
+            ->with('success', 'Đã giao việc '.$task->code.'. Đang chờ người nhận tiếp nhận.');
     }
 
     // ── Show ──────────────────────────────────────────────────────────
@@ -243,7 +282,7 @@ class TaskAssignmentController extends Controller
         // Current user's assignee record (if any)
         $myAssignee = $task->assignees->firstWhere('user_id', $user->id);
 
-        $layout = $isWarehouse ? 'layouts.warehouse' : ($isFrontRoles ? 'layouts.site' : 'layouts.admin');
+        $layout = \App\Support\TaskWorkspace::layout(auth()->user());
         $indexRoute = $isWarehouse ? 'tasks.my-tasks' : ($isFrontRoles ? 'my-tasks' : 'task-assignments.index');
         $showRoute = $isFrontRoles ? 'tasks.show' : 'task-assignments.show';
         $createRoute = $isFrontRoles ? 'tasks.create' : 'task-assignments.create';
@@ -306,8 +345,7 @@ class TaskAssignmentController extends Controller
         abort_unless((int) $child->parent_id === (int) $taskAssignment->id, 404);
         abort_unless($service->canRecall($taskAssignment, $child, $request->user()), 403);
         $user = $request->user();
-        $layout = $user->hasRole('warehouse') ? 'layouts.warehouse'
-            : ($user->isSalesFlowRole() ? 'layouts.site' : 'layouts.admin');
+        $layout = \App\Support\TaskWorkspace::layout($request->user());
         return view('task_assignments.recall', compact('taskAssignment', 'child', 'layout'));
     }
 
@@ -330,20 +368,29 @@ class TaskAssignmentController extends Controller
         $data = $request->validate([
             'assignee_ids' => ['required', 'array', 'min:1'],
             'assignee_ids.*' => ['required', 'integer', 'distinct', 'exists:users,id'],
+            'accountable_user_id' => ['required','integer','exists:users,id'],
+            'acceptance_due_at' => ['required','date','after:now'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string', 'max:20000'],
             'due_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
         ]);
+        if (!in_array((int)$data['accountable_user_id'],array_map('intval',$data['assignee_ids']),true)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['accountable_user_id'=>'Chủ trì phải là người nhận việc đã chọn.']);
+        }
+        if (Carbon::parse($data['acceptance_due_at'])->gt(Carbon::parse($data['due_date'])->endOfDay())) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['acceptance_due_at'=>'Hạn tiếp nhận phải trước hạn hoàn thành.']);
+        }
         $allowedIds = $this->allowedAssigneesFor($user)->pluck('id')->map(fn ($id) => (int) $id)->all();
         foreach ($data['assignee_ids'] as $id) {
             if (! in_array((int) $id, $allowedIds, true)) {
                 throw \Illuminate\Validation\ValidationException::withMessages(['assignee_ids' => 'Có người nhận bị ẩn hoặc bạn không được phép giao việc. Vui lòng tải lại danh sách.']);
             }
         }
-        DB::transaction(function () use ($taskAssignment, $user, $data) {
+        $child=DB::transaction(function () use ($taskAssignment, $user, $data) {
             $parent = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
             abort_if(in_array($parent->status, [TaskAssignment::STATUS_DONE, TaskAssignment::STATUS_CANCELLED], true), 422, 'Công việc đã hoàn thành hoặc bị hủy.');
             $child = TaskAssignment::create([
+                'work_kind'=>'execution','accountable_user_id'=>$data['accountable_user_id'],'acceptance_due_at'=>$data['acceptance_due_at'],
                 'code' => TaskAssignment::generateCode(), 'title' => $data['title'],
                 'description' => $data['description'] ?? null, 'priority' => $parent->priority,
                 'parent_id' => $parent->id, 'due_date' => Carbon::createFromFormat('!Y-m-d', $data['due_date'])->endOfDay(),
@@ -352,7 +399,9 @@ class TaskAssignmentController extends Controller
             foreach ($data['assignee_ids'] as $id) {
                 TaskAssignee::create(['task_id' => $child->id, 'user_id' => (int) $id, 'status' => 'pending']);
             }
+            return $child;
         });
+        \Illuminate\Support\Facades\Notification::send(User::whereIn('id',$data['assignee_ids'])->get(),new \App\Notifications\OperatingNotification('Việc con mới cần tiếp nhận',$child->title,route('tasks.show',$child)));
         return redirect()->route('tasks.show', $taskAssignment)->with('success', 'Đã thêm công việc con và hạn hoàn thành.');
     }
 
@@ -395,7 +444,7 @@ class TaskAssignmentController extends Controller
             ->limit(50)
             ->get(['id', 'code', 'title']);
 
-        $layout = 'layouts.admin';
+        $layout = \App\Support\TaskWorkspace::layout(auth()->user());
         $indexRoute = 'task-assignments.index';
         $storeRoute = 'task-assignments.update';
         $formMethod = 'PUT';
@@ -443,6 +492,10 @@ class TaskAssignmentController extends Controller
 
         if (!empty($data['due_date'])) {
             $data['due_date'] = Carbon::createFromFormat('!Y-m-d', $data['due_date'])->endOfDay()->format('Y-m-d H:i:s');
+        }
+
+        if ($task->work_kind && !in_array((int)$task->accountable_user_id,array_map('intval',$data['assignee_ids']),true)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['assignee_ids'=>'Không được bỏ người chủ trì khỏi danh sách người nhận.']);
         }
 
         // Validate that chosen assignees are actually allowed for this user
@@ -565,6 +618,10 @@ class TaskAssignmentController extends Controller
     {
         $user = auth()->user();
 
+        if ($taskAssignment->work_kind) {
+            abort_unless((int)$taskAssignment->created_by===(int)$user->id || $user->hasRole('admin'),403);
+        }
+
         if ($taskAssignment->created_by !== $user->id && !$user->hasRole('admin') && !$user->hasRole('manager') && !$user->hasRole('CEO')) {
             return back()->with('error', 'Ban khong co quyen huy cong viec nay.');
         }
@@ -576,6 +633,36 @@ class TaskAssignmentController extends Controller
     }
 
     // ── Assignee: update own status ───────────────────────────────────
+
+    public function declineCoordination(Request $request, TaskAssignment $taskAssignment)
+    {
+        $data=$request->validate(['reason'=>'required|string|max:2000']);
+        DB::transaction(function()use($request,$taskAssignment,$data){
+            $task=TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
+            abort_unless($task->work_kind==='coordination' && (int)$task->accountable_user_id===(int)$request->user()->id,403);
+            abort_unless($task->status==='pending',422,'Yêu cầu không còn chờ phản hồi.');
+            $record=$task->assignees()->where('user_id',$request->user()->id)->firstOrFail();
+            abort_if($record->accepted_at!==null,422,'Yêu cầu đã được tiếp nhận.');
+            TaskStatusLog::log($task,'cancelled',$request->user(),'Từ chối yêu cầu phối hợp: '.$data['reason']);
+            $task->update(['status'=>'cancelled','reject_reason'=>$data['reason']]);
+            $task->assignees()->update(['status'=>'cancelled']);
+        });
+        $taskAssignment->creator?->notify(new \App\Notifications\OperatingNotification('Yêu cầu phối hợp bị từ chối',$data['reason'],route('tasks.show',$taskAssignment)));
+        return back()->with('success','Đã gửi phản hồi từ chối phối hợp kèm lý do.');
+    }
+
+    public function acceptTask(Request $request, TaskAssignment $taskAssignment)
+    {
+        DB::transaction(function () use ($request,$taskAssignment) {
+            $task=TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
+            abort_if(in_array($task->status,['done','completed','cancelled'],true),422,'Công việc đã kết thúc hoặc đang chờ xác nhận.');
+            $record=$task->assignees()->where('user_id',$request->user()->id)->lockForUpdate()->firstOrFail();
+            abort_if($record->accepted_at!==null,422,'Bạn đã tiếp nhận công việc.');
+            $record->update(['accepted_at'=>now()]);
+            TaskStatusLog::log($task,$task->status,$request->user(),'Đã tiếp nhận công việc.');
+        });
+        return back()->with('success','Đã tiếp nhận. Bạn có thể bắt đầu thực hiện.');
+    }
 
     public function assigneeUpdate(Request $request, TaskAssignment $taskAssignment)
     {
@@ -593,7 +680,10 @@ class TaskAssignmentController extends Controller
             ->where('user_id', auth()->id())
             ->firstOrFail();
 
+        abort_if($taskAssignment->work_kind && !$record->accepted_at,422,'Vui lòng tiếp nhận công việc trước khi thực hiện.');
+        abort_if($taskAssignment->work_kind && $assigneeStatus===TaskAssignment::STATUS_PROCESSING && $taskAssignment->approvalSteps()->where('status','pending')->exists(),422,'Công việc đang chờ duyệt giao, chưa thể bắt đầu.');
         $record->update([
+            'started_at' => $assigneeStatus === TaskAssignment::STATUS_PROCESSING ? ($record->started_at ?? now()) : $record->started_at,
             'status'       => $assigneeStatus,
             'note'         => $request->note,
             'completed_at' => $assigneeStatus === 'completed' ? now() : null,
@@ -656,7 +746,7 @@ class TaskAssignmentController extends Controller
             return back()->with('success', 'Phần việc của bạn đã hoàn thành và đang chờ các thành viên còn lại.');
         }
 
-        $layout = $isWarehouse ? 'layouts.warehouse' : ($isFrontRoles ? 'layouts.site' : 'layouts.app');
+        $layout = \App\Support\TaskWorkspace::layout(auth()->user());
         $showRoute = $isFrontRoles ? 'tasks.show' : 'task-assignments.show';
         $submitRoute = $isFrontRoles ? 'tasks.complete' : 'task-assignments.complete-with-content';
 
@@ -690,6 +780,11 @@ class TaskAssignmentController extends Controller
 
         if ($taskAssignment->status === TaskAssignment::STATUS_DONE || $taskAssignment->status === TaskAssignment::STATUS_CANCELLED) {
             return back()->with('error', 'Công việc đã kết thúc, không thể gửi hoàn thành lại.');
+        }
+
+        if ($taskAssignment->work_kind) {
+            $receipt=$taskAssignment->assignees()->where('user_id',$user->id)->first();
+            abort_unless($receipt?->accepted_at && $receipt?->started_at,422,'Vui lòng tiếp nhận và bắt đầu thực hiện trước khi gửi kết quả.');
         }
 
         $request->validate([
@@ -831,9 +926,7 @@ class TaskAssignmentController extends Controller
             'statusLogs.changedBy:id,name',
         ]);
 
-        $layout = $user->hasRole('warehouse')
-            ? 'layouts.warehouse'
-            : ($user->isSalesFlowRole() ? 'layouts.site' : 'layouts.admin');
+        $layout = \App\Support\TaskWorkspace::layout(auth()->user());
 
         return view('task_assignments.verify', compact('task', 'layout'));
     }
@@ -906,9 +999,7 @@ class TaskAssignmentController extends Controller
             ->paginate(20)
             ->withQueryString();
 
-        $layout = $isWarehouse
-            ? 'layouts.warehouse'
-            : (($isFrontRoles && $isFrontendRoute) ? 'layouts.site' : 'layouts.app');
+        $layout = \App\Support\TaskWorkspace::layout(auth()->user());
         $filterRoute = $isFrontendRoute
             ? 'my-tasks'
             : ($isWarehouse ? 'tasks.my-tasks' : 'task-assignments.assigned-to-me');
@@ -928,7 +1019,7 @@ class TaskAssignmentController extends Controller
             ->latest()
             ->paginate(20);
 
-        $layout = $isFrontRoles ? 'layouts.site' : 'layouts.app';
+        $layout = \App\Support\TaskWorkspace::layout(auth()->user());
         $filterRoute = 'tasks.assigned';
         $createRoute = $isFrontRoles ? 'tasks.create' : 'task-assignments.create';
 
@@ -949,7 +1040,7 @@ class TaskAssignmentController extends Controller
             ->latest()
             ->paginate(20);
 
-        $layout = $isWarehouse ? 'layouts.warehouse' : ($isFrontRoles ? 'layouts.site' : 'layouts.app');
+        $layout = \App\Support\TaskWorkspace::layout(auth()->user());
         $detailRoute = $isFrontRoles ? 'tasks.show' : 'task-assignments.show';
 
         return view('task_assignments.in-progress', compact('tasks', 'layout', 'detailRoute'));
@@ -968,7 +1059,7 @@ class TaskAssignmentController extends Controller
             ->latest()
             ->paginate(20);
 
-        $layout = $isFrontRoles ? 'layouts.site' : 'layouts.app';
+        $layout = \App\Support\TaskWorkspace::layout(auth()->user());
         $detailRoute = $isFrontRoles ? 'tasks.show' : 'task-assignments.show';
 
         return view('task_assignments.awaiting-verification', compact('tasks', 'layout', 'detailRoute'));
@@ -1002,7 +1093,7 @@ class TaskAssignmentController extends Controller
             ->latest()
             ->paginate(20);
 
-        $layout = $isFrontRoles ? 'layouts.site' : 'layouts.app';
+        $layout = \App\Support\TaskWorkspace::layout(auth()->user());
         $detailRoute = $isFrontRoles ? 'tasks.show' : 'task-assignments.show';
 
         return view('task_assignments.history', compact('tasks', 'layout', 'detailRoute'));
@@ -1029,6 +1120,14 @@ class TaskAssignmentController extends Controller
 
     private function canViewTask(TaskAssignment $task, User $user): bool
     {
+        if ($task->work_kind && !$user->hasRole('admin')) {
+            return (int)$task->created_by===(int)$user->id
+                || $task->assignees()->where('user_id',$user->id)->exists()
+                || ($task->parent_id && $task->parent()->where('created_by',$user->id)->exists())
+                || $task->subTasks()->where('created_by',$user->id)->exists()
+                || $task->approvalSteps()->whereHas('step',fn($q)=>$q->whereIn('role_slug',$user->roles->pluck('name')))->exists();
+        }
+
         if ($user->hasRole('admin') || $user->hasRole('CEO') || $user->hasRole('manager')) {
             return true;
         }
@@ -1045,6 +1144,8 @@ class TaskAssignmentController extends Controller
 
     private function canVerifyTask(TaskAssignment $task, User $user): bool
     {
+        if ($task->work_kind) return (int)$task->created_by===(int)$user->id || $user->hasRole('admin');
+
         return (int) $task->created_by === (int) $user->id
             || $user->hasRole('admin')
             || $user->hasRole('CEO')

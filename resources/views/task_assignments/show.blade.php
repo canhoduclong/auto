@@ -84,7 +84,7 @@
         <div class="d-flex align-items-center flex-wrap gap-2">
             <h4 class="mb-0">{{ $task->title }}</h4>
             <span class="badge bg-{{ $task->statusColor() }} ms-1">
-                {{ \App\Models\TaskAssignment::STATUS_LABELS[$task->status] ?? $task->status }}
+                {{ $task->operatingStatusLabel() }}
             </span>
             <span class="badge bg-{{ $task->priorityColor() }}">
                 {{ \App\Models\TaskAssignment::PRIORITY_LABELS[$task->priority] }}
@@ -117,6 +117,7 @@
         {{-- ── LEFT: detail + sub-tasks ── --}}
         <div class="col-lg-8">
 
+            @if($task->work_kind)<div class="alert alert-light border"><strong>{{ $task->work_kind==='coordination'?'Yêu cầu phối hợp':'Giao thực hiện' }}</strong> · Chủ trì: {{ $task->assignees->firstWhere('user_id',$task->accountable_user_id)?->user?->name ?? '—' }} @if($task->proposal_id) · <a href="{{ route('operating.proposals.show',$task->proposal_id) }}">Nguồn biểu quyết #{{ $task->proposal_id }}</a>@endif</div>@endif
             {{-- Description --}}
             <div class="card shadow-sm mb-3">
                 <div class="card-header py-2 fw-semibold small text-uppercase text-muted">
@@ -172,6 +173,8 @@
                         <div class="text-danger small mt-1" data-recipient-error role="alert" hidden>Vui lòng chọn ít nhất một người nhận việc.</div>
                     </fieldset>
                     @if($subTaskAssignees->isEmpty())<div class="alert alert-warning">Chưa có người nhận được phép. Vui lòng nhờ admin cấu hình quyền giao việc.</div>@endif
+                    <label class="form-label">Người chủ trì *</label><select name="accountable_user_id" required class="form-select mb-2"><option value="">Chọn người chịu trách nhiệm chính</option>@foreach($subTaskAssignees as $person)<option value="{{ $person->id }}">{{ $person->name }}</option>@endforeach</select>
+                    <label class="form-label">Hạn tiếp nhận *</label><input type="datetime-local" name="acceptance_due_at" required class="form-control mb-2" value="{{ now()->addDay()->format('Y-m-d\TH:i') }}">
                     <label class="form-label" for="child-title">Nội dung việc con</label>
                     <input id="child-title" class="form-control mb-2" name="title" value="{{ old('title') }}" maxlength="255" required>
                     <label class="form-label" for="child-due">Hạn hoàn thành</label>
@@ -223,6 +226,9 @@
                 </div>
             @endif
 
+            @if($task->status==='completed' && ((int)$task->created_by===(int)auth()->id() || auth()->user()->hasRole('admin')))
+                <div class="card card-body mb-3"><h6>Nghiệm thu kết quả</h6><a class="btn btn-success" href="{{ route('task-assignments.verify-form',$task) }}">Kiểm tra và nghiệm thu</a></div>
+            @endif
             {{-- Approval timeline --}}
             <div class="card shadow-sm mb-3">
                 <div class="card-header py-2 fw-semibold small text-uppercase text-muted">
@@ -281,8 +287,18 @@
                     </div>
                     <div class="card-body">
                         <p class="small text-muted mb-3">
-                            Trạng thái hiện tại: <span class="badge bg-{{ $myAssignee->statusColor() }}">{{ $myAssignee->status }}</span>
+                            Trạng thái hiện tại: <span class="badge bg-{{ $myAssignee->statusColor() }}">{{ $task->work_kind && !$myAssignee->accepted_at ? 'Chưa tiếp nhận' : ($myAssignee->accepted_at && !$myAssignee->started_at ? 'Đã tiếp nhận' : ($myAssignee->status === 'processing' ? 'Đang thực hiện' : $myAssignee->status)) }}</span>
                         </p>
+                        @if($task->work_kind && !$myAssignee->accepted_at)
+                            <form method="POST" action="{{ route('tasks.accept',$task) }}">@csrf
+                                <button type="submit" class="btn btn-primary w-100">Tiếp nhận {{ $task->work_kind==='coordination'?'yêu cầu phối hợp':'công việc' }}</button>
+                            </form>
+                            @if($task->work_kind==='coordination' && (int)$task->accountable_user_id===(int)auth()->id())
+                                <details class="mt-2"><summary class="small text-danger">Từ chối phối hợp</summary><form method="POST" action="{{ route('tasks.decline-coordination',$task) }}" class="mt-2">@csrf<label class="form-label small">Lý do *</label><textarea name="reason" class="form-control mb-2" required maxlength="2000" rows="2"></textarea><button type="submit" class="btn btn-outline-danger btn-sm">Gửi phản hồi từ chối</button></form></details>
+                            @endif
+                            <small class="text-muted d-block mt-2">Hạn tiếp nhận: {{ $task->acceptance_due_at?->format('d/m/Y H:i') ?? '—' }}</small>
+                        @else
+                            @if($myAssignee->accepted_at)<div class="small text-muted mb-2">Đã tiếp nhận: {{ $myAssignee->accepted_at->format('d/m/Y H:i') }}</div>@endif
                         <form action="{{ route('task-assignments.assignee-update', $task) }}" method="POST">
                             @csrf
                             <div class="mb-2">
@@ -295,13 +311,16 @@
                                 <textarea name="note" class="form-control form-control-sm" rows="2"
                                           placeholder="Nội dung đã thực hiện / kết quả...">{{ $myAssignee->note }}</textarea>
                             </div>
-                            <button type="submit" class="btn btn-primary btn-sm w-100">
+                            <button type="submit" class="btn btn-primary btn-sm w-100" @disabled($task->work_kind && $task->approvalSteps->where('status','pending')->isNotEmpty())>
                                 <i class="ph-check me-1"></i>Cập nhật trạng thái
                             </button>
                         </form>
+                        @if(!$task->work_kind || $myAssignee->started_at)
                         <a href="{{ route('task-assignments.complete-form', $task) }}" class="btn btn-success btn-sm w-100 mt-2">
-                            <i class="ph-check-circle me-1"></i>Hoàn thành công việc
+                            <i class="ph-check-circle me-1"></i>Gửi báo cáo hoàn thành
                         </a>
+                        @endif
+                        @endif
                     </div>
                 </div>
             @endif

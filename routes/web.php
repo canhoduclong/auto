@@ -906,6 +906,15 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     // My Tasks - cho Sale/Leader/Manager users
     Route::get('/my-tasks', [\App\Http\Controllers\TaskAssignmentController::class, 'assignedToMe'])->name('my-tasks');
 
+    Route::get('/operating', [\App\Http\Controllers\OperatingController::class, 'index'])->name('operating.index');
+    Route::get('/operating/proposals/create', [\App\Http\Controllers\OperatingController::class, 'create'])->name('operating.proposals.create');
+    Route::post('/operating/proposals', [\App\Http\Controllers\OperatingController::class, 'store'])->name('operating.proposals.store');
+    Route::get('/operating/proposals/{proposal}', [\App\Http\Controllers\OperatingController::class, 'show'])->name('operating.proposals.show');
+    Route::post('/operating/proposals/{proposal}/vote', [\App\Http\Controllers\OperatingController::class, 'vote'])->name('operating.proposals.vote');
+    Route::post('/operating/proposals/{proposal}/close', [\App\Http\Controllers\OperatingController::class, 'close'])->name('operating.proposals.close');
+    Route::post('/tasks/{taskAssignment}/decline-coordination', [\App\Http\Controllers\TaskAssignmentController::class, 'declineCoordination'])->name('tasks.decline-coordination');
+    Route::post('/tasks/{taskAssignment}/accept', [\App\Http\Controllers\TaskAssignmentController::class, 'acceptTask'])->name('tasks.accept');
+
     // User-facing task aliases
     Route::get('/tasks', [\App\Http\Controllers\TaskAssignmentController::class, 'index'])->name('tasks.index');
     Route::get('/tasks/create', [\App\Http\Controllers\TaskAssignmentController::class, 'create'])->name('tasks.create');

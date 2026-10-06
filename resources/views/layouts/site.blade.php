@@ -124,7 +124,8 @@ use App\Models\Setting;
     @include('layouts.notifications')
 
     @yield('breadcrumb')
-    @yield('content')
+    @include('layouts.partials.operating-navigation')
+                @yield('content')
 
     @unless(session('mobile_accounting'))
     @include('layouts.partials.site_footer')

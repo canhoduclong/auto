@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class TaskAssignee extends Model
 {
     protected $fillable = [
+        'accepted_at', 'started_at',
         'task_id',
         'user_id',
         'status',
@@ -19,6 +20,7 @@ class TaskAssignee extends Model
     ];
 
     protected $casts = [
+        'accepted_at' => 'datetime', 'started_at' => 'datetime',
         'completed_at' => 'datetime',
         'evaluation_score' => 'integer',
         'evaluated_at' => 'datetime',

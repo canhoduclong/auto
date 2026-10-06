@@ -172,6 +172,7 @@
 
 
             <div class="content-inner"> 
+                @include('layouts.partials.operating-navigation')
                 @yield('content')
             </div>  
         </div>

@@ -75,7 +75,7 @@ class TaskAssignment extends Model
     ];
 
     protected $fillable = [
-        'task_type', 'debt_items',
+        'task_type', 'debt_items', 'work_kind', 'proposal_id', 'accountable_user_id', 'acceptance_due_at',
         'code', 'title', 'description', 'priority', 'status',
         'created_by', 'approval_flow_id', 'parent_id',
         'due_date', 'completed_at', 'attachments', 'reject_reason',
@@ -85,6 +85,7 @@ class TaskAssignment extends Model
 
     protected $casts = [
         'debt_items' => 'array',
+        'acceptance_due_at' => 'datetime',
         'due_date'                  => 'datetime',
         'completed_at'              => 'datetime',
         'completion_verified_at'    => 'datetime',
@@ -190,6 +191,15 @@ class TaskAssignment extends Model
     }
     */
 
+    public function operatingStatusLabel(): string
+    {
+        if ($this->work_kind && $this->status==='pending') {
+            if ($this->approval_flow_id && $this->approvalSteps()->where('status','pending')->exists()) return 'Chờ duyệt giao';
+            return $this->assignees->firstWhere('user_id',$this->accountable_user_id)?->accepted_at ? 'Đã tiếp nhận' : 'Chưa tiếp nhận';
+        }
+        return self::STATUS_LABELS[$this->status] ?? $this->status;
+    }
+
     public function canBeCompleted(): bool
     {
         return in_array($this->status, [self::STATUS_PENDING, self::STATUS_PROCESSING, 'in_progress']);
@@ -199,6 +209,12 @@ class TaskAssignment extends Model
     {
         if (!$user) {
             return false;
+        }
+
+        if ($this->work_kind) {
+            return ((int)$this->created_by===(int)$user->id || $user->hasRole('admin'))
+                && $this->status==='pending'
+                && !$this->assignees()->whereNotNull('accepted_at')->exists();
         }
 
         $canManage = (int) $this->created_by === (int) $user->id
@@ -224,21 +240,20 @@ class TaskAssignment extends Model
 
     public static function generateCode(): string
     {
-        $date = now()->format('Ymd');
-        $lastTask = self::whereDate('created_at', now()->toDateString())
-            ->orderByDesc('id')
-            ->value('code');
-        
-        if (!$lastTask) {
-            return "TASK-{$date}-001";
-        }
-        
-        $lastNumber = (int) substr($lastTask, -3);
-        $newNumber = str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
-        
-        return "TASK-{$date}-{$newNumber}";
+        return \Illuminate\Support\Facades\DB::transaction(function () {
+            $date=now()->format('Ymd'); $prefix='TASK-'.$date.'-';
+            $db=\Illuminate\Support\Facades\DB::table('task_code_sequences');
+            $db->insertOrIgnore(['date'=>$date,'value'=>0]);
+            $sequence=(clone $db)->where('date',$date)->lockForUpdate()->first();
+            // Deleted tasks retain their codes; allocation is serialized across requests.
+            $existing=self::withTrashed()->where('code','like',$prefix.'%')->pluck('code')
+                ->map(fn($code)=>(int)substr($code,strlen($prefix)))->max() ?? 0;
+            $next=max((int)$sequence->value,$existing)+1;
+            (clone $db)->where('date',$date)->update(['value'=>$next]);
+            return $prefix.str_pad($next,3,'0',STR_PAD_LEFT);
+        });
     }
-    
+
     /* 
     public static function generateCode(): string
     {

@@ -565,7 +565,12 @@
                     <a href="{{ route('accounting.order-adjustments') }}" class="btn btn-warning btn-sm">Kiểm tra và duyệt</a>
                 </div>
             @endif
-            @yield('accounting_content')
+            @include('layouts.partials.operating-navigation')
+            @hasSection('accounting_content')
+                @yield('accounting_content')
+            @else
+                @yield('content')
+            @endif
         </section>
     </main>
 </div>

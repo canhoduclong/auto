@@ -817,9 +817,9 @@ class ApprovalService
      */
     public function initTaskApproval(\App\Models\TaskAssignment $task): bool
     {
-        $workflow = $this->resolveActiveWorkflowForActivity(
-            ApprovalWorkflow::ACTIVITY_TASK_ASSIGNMENT
-        );
+        $workflow = $task->work_kind
+            ? ApprovalWorkflow::with('steps')->where('is_active',true)->find($task->approval_flow_id)
+            : $this->resolveActiveWorkflowForActivity(ApprovalWorkflow::ACTIVITY_TASK_ASSIGNMENT);
 
         if (! $workflow || $workflow->steps->isEmpty()) {
             // No workflow — mark as in_progress immediately
@@ -896,6 +896,10 @@ class ApprovalService
                 ->where('status', '!=', 'completed')
                 ->doesntExist();
 
+            if ($task->work_kind && !$allAssigneesCompleted) {
+                $task->update(['status' => $task->assignees()->whereNotNull('started_at')->exists() ? 'processing' : 'pending']);
+                return true;
+            }
             $task->update([
                 'status' => $allAssigneesCompleted
                     ? \App\Models\TaskAssignment::STATUS_COMPLETED

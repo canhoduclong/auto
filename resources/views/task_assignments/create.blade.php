@@ -42,6 +42,22 @@
                     <div class="card-body">
 
                         <div class="mb-3">
+                            <label class="form-label fw-semibold">Loại nghiệp vụ *</label>
+                            <select name="work_kind" class="form-select">
+                                <option value="execution" @selected(old('work_kind')!=='coordination')>Giao thực hiện</option>
+                                <option value="coordination" @selected(old('work_kind')==='coordination')>Yêu cầu phối hợp</option>
+                            </select>
+                            <div class="small text-muted mt-1">Việc cần lấy ý kiến đồng ý/không đồng ý: <a href="{{ route('operating.proposals.create') }}">Mở đề xuất biểu quyết</a>.</div>
+                        </div>
+                        @if(request('proposal_id'))
+                            <input type="hidden" name="proposal_id" value="{{ request('proposal_id') }}">
+                            <div class="alert alert-info">Công việc triển khai từ đề xuất biểu quyết #{{ request('proposal_id') }} đã thông qua.</div>
+                        @endif
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6"><label class="form-label fw-semibold">Người chủ trì *</label><select name="accountable_user_id" class="form-select" required><option value="">Chọn người chịu trách nhiệm chính</option>@foreach($allowedAssignees as $person)<option value="{{ $person->id }}" @selected((string)old('accountable_user_id')===(string)$person->id)>{{ $person->name }}</option>@endforeach</select><small class="text-muted">Đồng thời chọn người này trong danh sách người nhận bên dưới.</small></div>
+                            <div class="col-md-6"><label class="form-label fw-semibold">Hạn tiếp nhận *</label><input type="datetime-local" name="acceptance_due_at" required class="form-control" value="{{ old('acceptance_due_at', now()->addDay()->format('Y-m-d\TH:i')) }}"></div>
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label fw-semibold">Tiêu đề công việc <span class="text-danger">*</span></label>
                             <input type="text" name="title" class="form-control @error('title') is-invalid @enderror"
                                    value="{{ old('title') }}" maxlength="255" placeholder="Nham tat, mo ta ngan gon...">
@@ -67,7 +83,7 @@
                             </div>
                             <div class="col-sm-6">
                                 <label class="form-label fw-semibold">Hạn chót</label>
-                                <input type="date" name="due_date" id="due_date_input" class="form-control"
+                                <input type="date" name="due_date" id="due_date_input" required class="form-control"
                                        value="{{ old('due_date') ? \Carbon\Carbon::parse(old('due_date'))->format('Y-m-d') : '' }}"
                                        >
                                 <small id="due_date_preview" class="text-muted d-block mt-1"></small>

@@ -454,7 +454,8 @@
                 <div class="alert alert-danger py-2">{{ session('error') }}</div>
             @endif
 
-            @yield('content')
+            @include('layouts.partials.operating-navigation')
+                @yield('content')
             @yield('accounting_content')
         </section>
     </main>

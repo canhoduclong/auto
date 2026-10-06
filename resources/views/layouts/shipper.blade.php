@@ -384,7 +384,8 @@
                 </div>
             @endif
 
-            @yield('content')
+            @include('layouts.partials.operating-navigation')
+                @yield('content')
         </div>
     </div>
 

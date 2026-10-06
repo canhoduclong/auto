@@ -240,7 +240,8 @@
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             @endif
-            @yield('content')
+            @include('layouts.partials.operating-navigation')
+                @yield('content')
         </div>
         @stack('page_footer')
     </div>

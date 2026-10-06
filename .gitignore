@@ -59,3 +59,7 @@ readme.txt
 !/tests/Feature/SubTaskRecallTest.php
 
 !/tests/Unit/TaskDescriptionTest.php
+
+!/tests/Feature/OperatingVoteTest.php
+
+!/tests/Feature/TaskReceiptTest.php

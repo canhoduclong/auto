@@ -162,7 +162,8 @@ class TaskMenuService
         
         // Or check legacy: Admin, CEO, or Manager roles
         $hasRole = $user->hasRole('admin') || $user->hasRole('CEO') || $user->hasRole('manager') 
-                || $user->hasRole('leader') || $user->hasRole('sale_manager');
+                || $user->hasRole('leader') || $user->hasRole('sale_manager')
+                || $user->roles->contains(fn($role) => in_array(strtolower($role->name), ['ceo','director'], true));
 
         return $hasPermission || $hasRole;
     }
