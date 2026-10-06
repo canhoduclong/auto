@@ -9,9 +9,11 @@
 <style>
 .adjustment-comparison-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start; }
 .adjustment-comparison-orders, .adjustment-comparison-notes { min-width: 0; }
+.adjustment-comparison-original { background: #f1f3f5; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; }
+.adjustment-comparison-original .table { --bs-table-bg: transparent; background: transparent; }
+.adjustment-comparison-original .table > :not(caption) > * > * { background-color: transparent; }
 .adjustment-comparison-grid .table td, .adjustment-comparison-grid .table th { padding: .35rem .25rem; }
 .adjustment-comparison-grid .table th { white-space: nowrap; }
-.adjustment-shipping-note { white-space: normal; overflow-wrap: anywhere; font-size: .82rem; }
 @media (min-width: 1200px) {
     .adjustment-comparison-grid { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }
     .adjustment-review-actions { width: calc(60% - 14px); }
@@ -24,7 +26,7 @@
 @php
     $totals = \App\Support\OrderAdjustmentComparison::totals($adjustment, $comparisonRows, $state);
 @endphp
-<div class="mb-3">
+<div class="mb-3 {{ $state === 'original' ? 'adjustment-comparison-original' : '' }}">
 <h6 class="fw-bold">{{ $state === 'original' ? 'Đơn trước điều chỉnh' : 'Đơn sau điều chỉnh (đề nghị)' }}</h6>
 <div class="table-responsive"><table class="table table-sm align-middle mb-1">
 <thead><tr><th>Sản phẩm / biến thể</th><th class="text-end">Size đặt</th><th class="text-end">Số lượng</th><th class="text-end">Khối lượng</th><th class="text-end"><span title="{{ $state === 'original' ? 'Size kho đã đóng thực tế' : 'Size bình quân theo đề nghị điều chỉnh' }}">Size</span></th><th class="text-end">Đơn giá</th><th class="text-end">Thành tiền</th></tr></thead>
@@ -59,15 +61,12 @@
     $oldShipping = (bool) data_get($shippingChange, 'original.enabled', false) ? (float) data_get($shippingChange, 'original.value', 0) : 0;
     $newShipping = (bool) data_get($shippingChange, 'adjusted.enabled', false) ? (float) data_get($shippingChange, 'adjusted.value', 0) : 0;
 @endphp
-@if($state === 'adjusted' && $shippingChange && abs($oldShipping - $newShipping) > 0.0001)
-<tr><td colspan="7" class="adjustment-shipping-note bg-light"><strong>Ghi chú điều chỉnh Phí Ship:</strong> {{ $comparisonMoney($oldShipping) }} thay đổi thành <strong>{{ $comparisonMoney($newShipping) }}</strong>.
-@if($adjustment->adjustment_note)
- {{ $adjustment->adjustment_note }}
-@endif
-</td></tr>
-@endif
 @foreach($totals['fees'] as $fee)
-<tr><td colspan="6" class="text-end">{{ $fee['name'] }}</td><td class="text-end">{{ $comparisonMoney($fee['amount']) }}</td></tr>
+<tr><td colspan="6" class="text-end">
+@if($state === 'adjusted' && ($fee['code'] ?? '') === 'shipping' && $oldShipping <= 0 && $newShipping > 0)
+<span class="badge text-bg-warning me-3">Thêm</span>
+@endif
+{{ $fee['name'] }}</td><td class="text-end">{{ $comparisonMoney($fee['amount']) }}</td></tr>
 @endforeach
 <tr><td colspan="6" class="text-end fw-bold">Tổng đơn {{ $state === 'adjusted' ? 'đề nghị' : 'trước điều chỉnh' }}</td><td class="text-end fw-bold">{{ $comparisonMoney($totals['total']) }}</td></tr>
 </tfoot>
@@ -77,6 +76,13 @@
 </div>
 <div class="adjustment-comparison-notes">
 @if($comparisonSections !== 'original')
+<div class="border rounded p-3 mb-3 bg-light">
+    <div class="fw-bold mb-2">Nội dung yêu cầu từ Sale</div>
+    @if($adjustment->requester)
+        <div class="small text-muted mb-2">{{ $adjustment->requester->short_name ?: $adjustment->requester->name }}</div>
+    @endif
+    <div style="white-space: pre-wrap; overflow-wrap: anywhere;">{{ $adjustment->adjustment_note ?: 'Không có nội dung bổ sung.' }}</div>
+</div>
 <div class="border rounded p-3 mb-3 bg-light">
 <div class="fw-bold mb-2">Nội dung thay đổi</div>
 <ul class="mb-0 ps-3">
@@ -112,9 +118,6 @@
 @foreach((array)$adjustment->order_changes as $field=>$change)
 <li><strong>{{ ['recipient_name'=>'Người nhận','recipient_phone'=>'Số điện thoại','delivery_time'=>'Giờ giao'][$field] ?? $field }}:</strong> {{ data_get($change,'original') ?: '—' }} thay đổi thành <strong>{{ data_get($change,'adjusted') ?: '—' }}</strong>.</li>
 @endforeach
-@if($adjustment->adjustment_note)
-<li><strong>Lý do / ghi chú:</strong> {{ $adjustment->adjustment_note }}</li>
-@endif
 </ul>
 </div>
 <div class="small text-muted mb-3">Size kho đã đóng lấy từ cân và số lượng đóng thực tế. Size ở đơn đề nghị được tính theo khối lượng / số lượng đề nghị; chưa phải kết quả kho cân lại.</div>

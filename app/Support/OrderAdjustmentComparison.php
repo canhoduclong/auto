@@ -81,7 +81,7 @@ class OrderAdjustmentComparison
             if (!($fee['enabled'] ?? false)) continue;
             $amount = ($fee['calculation_type'] ?? 'fixed') === 'percent' ? round($base * min(100,max(0,(float)$fee['value'])) / 100,2) : max(0,(float)$fee['value']);
             if (($fee['direction'] ?? 'charge') === 'discount') $amount = -($code === 'discount' ? min($subtotal, $amount) : $amount);
-            $fees[] = ['name'=>$fee['name'] ?? $code,'amount'=>$amount];
+            $fees[] = ['code'=>$code,'name'=>$fee['name'] ?? $code,'amount'=>$amount];
             $total += $amount;
         }
         return ['subtotal'=>$subtotal,'fees'=>$fees,'total'=>round(max(0,$total),2)];
