@@ -95,7 +95,7 @@ class OperatingController extends Controller {
         $listing=$listingQuery->orderBy('created_at',$sort==='oldest'?'asc':'desc')->orderBy('entity_type')->orderByDesc('entity_id')
             ->paginate((int)$request->input('per_page',20))->appends($request->only(['filter','kinds','kinds_present','q','status','from','to','sort','per_page']));
         $taskModels=TaskAssignment::withTrashed()->with(['creator','assignees.user','approvalSteps'])->whereIn('id',$listing->getCollection()->where('entity_type','task')->pluck('entity_id'))->get()->keyBy('id');
-        $proposalModels=OperatingProposal::with('creator')->withCount(['votes','votes as voted_count'=>fn($q)=>$q->whereNotNull('choice')])
+        $proposalModels=OperatingProposal::with(['creator','votes'=>fn($q)=>$q->where('user_id',$user->id)])->withCount(['votes','votes as voted_count'=>fn($q)=>$q->whereNotNull('choice')])
             ->whereIn('id',$listing->getCollection()->where('entity_type','vote')->pluck('entity_id'))->get()->keyBy('id');
         $listing->getCollection()->transform(fn($row)=>(object)['type'=>$row->entity_type,'entity'=>$row->entity_type==='task'?$taskModels[$row->entity_id]:$proposalModels[$row->entity_id]]);
         $layout=TaskWorkspace::layout($user);

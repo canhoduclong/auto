@@ -323,3 +323,13 @@
 @endpush
 
 @include('task_assignments.partials.description-editor')
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+    if(!['#taskStatusPanel','#taskReportPanel','#taskChildPanel'].includes(window.location.hash))return;
+    const panel=document.querySelector(window.location.hash);
+    if(panel){ panel.classList.add('show'); document.querySelectorAll('[data-bs-target="'+window.location.hash+'"]').forEach(button=>button.setAttribute('aria-expanded','true')); panel.scrollIntoView({block:'start'}); }
+});
+</script>
+@endpush

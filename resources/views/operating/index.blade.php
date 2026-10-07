@@ -28,6 +28,7 @@
 .op-workspace .op-footer{padding:14px 20px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
 .op-workspace .op-footer .pagination{margin-bottom:0}.op-workspace .op-empty{text-align:center;color:#718198;padding:40px!important}
 @media(max-width:767px){.op-workspace{padding:16px 10px}.op-workspace h1{font-size:21px}.op-workspace .op-filters,.op-workspace .op-panel-title{padding:14px}.op-workspace .op-table td,.op-workspace .op-table th{padding:12px}}
+.op-workspace .op-actions{white-space:nowrap}.op-workspace .op-actions .btn{font-size:12px;white-space:nowrap}
 </style>
 <div class="container"><div class="op-workspace">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
@@ -38,7 +39,7 @@
     <section class="op-panel" id="bieu-quyet">
         @include('operating.list-filters')
         <div class="op-panel-title"><h2>Danh sách công việc &amp; biểu quyết</h2><span class="op-count">{{ number_format($listing->total()) }} kết quả</span></div>
-        <div class="table-responsive"><table class="table op-table"><thead><tr><th>STT</th><th>Nội dung</th><th>Ngày tạo</th><th>Loại</th><th>Người giao / Chủ trì</th><th>Hạn</th><th>Trạng thái</th></tr></thead><tbody>
+        <div class="table-responsive"><table class="table op-table"><thead><tr><th>STT</th><th>Nội dung</th><th>Ngày tạo</th><th>Loại</th><th>Người giao / Chủ trì</th><th>Hạn</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
         @forelse($listing as $entry)
             @php
                 $entity=$entry->entity;
@@ -55,22 +56,33 @@
                 <td class="op-date">{{ $deadline?->format('d/m/Y H:i') ?? '—' }}@if(!$isVote && $deadline?->isPast() && !in_array($entity->status,['done','cancelled']))<div class="mt-1"><span class="op-badge op-badge-red">Quá hạn</span></div>@endif</td>
                 <td>
                     <span class="op-badge op-badge-{{ $tone }}">{{ $isVote?$entity->statusLabel():($entity->status==='in_progress'?'Đang thực hiện':$entity->operatingStatusLabel()) }}</span>
-                    @if(!$isVote)
+                </td>
+                <td class="op-actions">
+                    @if($isVote)
+                        @php $myBallot=$entity->votes->firstWhere('user_id',auth()->id()); @endphp
+                        <a class="btn btn-sm btn-outline-primary" href="{{ route('operating.proposals.show',$entity) }}">{{ $entity->status==='open' && $entity->closes_at->isFuture() && $myBallot && !$myBallot->voted_at ? 'Biểu quyết' : 'Xem chi tiết' }}</a>
+                    @else
                         @php
                             $myReceipt=$entity->assignees->firstWhere('user_id',auth()->id());
                             $canReceive=!$entity->trashed() && !in_array($entity->status,['done','cancelled','completed','draft'],true)
                                 && $myReceipt && $myReceipt->status==='pending' && !$myReceipt->accepted_at;
                         @endphp
                         @if($canReceive)
-                            <form method="POST" action="{{ route('tasks.accept',$entity) }}" class="mt-2">
+                            <form method="POST" action="{{ route('tasks.accept',$entity) }}" class="m-0">
                                 @csrf
                                 <button type="submit" class="btn btn-primary btn-sm" aria-label="Tiếp nhận công việc {{ $entity->title }}"><i class="bi bi-check2-circle me-1" aria-hidden="true"></i>Tiếp nhận</button>
                             </form>
+                        @elseif(!$entity->trashed() && $entity->status==='completed' && ((int)$entity->created_by===(int)auth()->id() || auth()->user()->hasRole('admin')))
+                            <a class="btn btn-sm btn-outline-primary" href="{{ route('task-assignments.verify-form',$entity) }}">Hoàn thành</a>
+                        @elseif(!$entity->trashed() && !in_array($entity->status,['done','cancelled','completed','draft'],true) && $myReceipt && in_array($myReceipt->status,['pending','processing','in_progress'],true) && (!$entity->work_kind || $myReceipt->accepted_at))
+                            <a class="btn btn-sm btn-outline-primary" href="{{ route('tasks.show',$entity) }}#taskStatusPanel">Cập nhật</a>
+                        @else
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ $entity->trashed()?route('operating.deleted-task',$entity->id):route('tasks.show',$entity) }}">Xem chi tiết</a>
                         @endif
                     @endif
                 </td>
             </tr>
-        @empty<tr><td colspan="7" class="op-empty">{{ empty($selectedKinds)?'Chọn ít nhất một loại nghiệp vụ để xem danh sách.':'Không có kết quả phù hợp với bộ lọc.' }}</td></tr>@endforelse
+        @empty<tr><td colspan="8" class="op-empty">{{ empty($selectedKinds)?'Chọn ít nhất một loại nghiệp vụ để xem danh sách.':'Không có kết quả phù hợp với bộ lọc.' }}</td></tr>@endforelse
         </tbody></table></div>
         <div class="op-footer"><span class="op-muted">Hiển thị {{ $listing->firstItem()??0 }}–{{ $listing->lastItem()??0 }} / {{ number_format($listing->total()) }} kết quả</span>{{ $listing->onEachSide(1)->links('pagination::bootstrap-5') }}</div>
     </section>
