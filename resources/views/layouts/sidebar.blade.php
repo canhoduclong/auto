@@ -129,7 +129,7 @@
 							</a>
 						</li>
 
-                        @include('layouts.partials.task-sidebar-menu', ['taskNavList'=>true])
+                        @include('layouts.partials.task-sidebar-menu', ['taskNavList'=>true, 'taskNavExcludedRoutes'=>['users.index','roles.index','permissions.index']])
 
 						<!-- Đơn hàng -->
 						<li class="nav-item-header">

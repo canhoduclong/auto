@@ -1,6 +1,9 @@
 @auth
 @php
-    $taskNavItems = \App\Support\WebTaskNavigation::items(auth()->user());
+    $excludedTaskUrls=collect($taskNavExcludedRoutes ?? [])->map(fn($route)=>route($route));
+    $taskNavItems = collect(\App\Support\WebTaskNavigation::items(auth()->user()))
+        ->reject(fn($item)=>$excludedTaskUrls->contains($item['url']))
+        ->unique('url')->values()->all();
 @endphp
 @if($taskNavList ?? false)
 @php
