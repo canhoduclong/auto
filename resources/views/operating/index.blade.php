@@ -15,7 +15,7 @@
 .op-workspace .op-filters{padding:16px 20px;background:#f8fafc;border-bottom:1px solid #e5eaf1}
 .op-workspace .op-filters label{display:block;font-size:12px;color:#52647a;font-weight:600;margin-bottom:6px}
 .op-workspace .form-control,.op-workspace .form-select,.op-workspace .btn{font-size:13px}
-.op-workspace .op-table{font-size:14px;width:100%;min-width:1260px;margin:0;table-layout:auto}
+.op-workspace .op-table{font-size:14px;width:100%;min-width:1080px;margin:0;table-layout:auto}
 .op-workspace .op-table th{background:#f2f5f9;color:#52647a;font-size:12px;font-weight:700;white-space:nowrap;padding:12px 16px;border-bottom:1px solid #dce4ee}
 .op-workspace .op-table td{padding:14px 16px;border-bottom:1px solid #edf0f5;vertical-align:middle}
 .op-workspace .op-table tbody tr:hover{background:#f8fbff}
@@ -28,10 +28,11 @@
 .op-workspace .op-footer{padding:14px 20px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px}
 .op-workspace .op-footer .pagination{margin-bottom:0}.op-workspace .op-empty{text-align:center;color:#718198;padding:40px!important}
 @media(max-width:767px){.op-workspace{padding:16px 10px}.op-workspace h1{font-size:21px}.op-workspace .op-filters,.op-workspace .op-panel-title{padding:14px}.op-workspace .op-table td,.op-workspace .op-table th{padding:12px}}
- .operating-container{max-width:1848px;margin:auto}
+.op-workspace .op-content-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px}
+.op-workspace .op-content-meta .op-badge{padding:3px 7px;font-size:11px}
 .op-workspace .op-table th:first-child,.op-workspace .op-table td:first-child{width:52px}
-.op-workspace .op-table td:nth-child(4),.op-workspace .op-table td:nth-child(7){white-space:nowrap}
-.op-workspace .op-table td:nth-child(5){min-width:165px}
+.op-workspace .op-table td:nth-child(6){white-space:nowrap}
+.op-workspace .op-table td:nth-child(4){min-width:165px}
 .op-workspace .op-table tbody tr:hover>td{background:#f8fbff}
 .op-workspace .op-actions{white-space:nowrap;width:125px}
 .op-workspace .op-actions .btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;min-height:34px;min-width:102px;padding:6px 10px;font-size:12px;font-weight:600;border-radius:5px;white-space:nowrap;text-decoration:none;transition:background-color .15s}
@@ -45,9 +46,9 @@
 .op-workspace .op-action-complete:hover{background:#d2ecdf}
 .op-workspace .op-action-view{background:#f8fafc;border-color:#cbd5e1;color:#52647a!important}
 .op-workspace .op-action-view:hover{background:#eaf0f5}
-@media(max-width:767px){.operating-container{padding:0 8px}.op-workspace .op-table .op-title{font-size:15px}}
+@media(max-width:767px){.op-workspace .op-table .op-title{font-size:15px}}
 </style>
-<div class="container-fluid operating-container"><div class="op-workspace">
+<div class="container"><div class="op-workspace">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div><h1>Điều hành &amp; Giao việc</h1><div class="op-subtitle">Một danh sách chung cho công việc và biểu quyết liên quan đến bạn.</div></div>
         @if($canCreate)<div class="d-flex flex-wrap gap-2"><a href="{{ route('tasks.create') }}" class="btn btn-primary">Tạo / Giao việc</a><a href="{{ route('operating.proposals.create') }}" class="btn btn-outline-primary">Tạo biểu quyết</a></div>@endif
@@ -56,7 +57,7 @@
     <section class="op-panel" id="bieu-quyet">
         @include('operating.list-filters')
         <div class="op-panel-title"><h2>Danh sách công việc &amp; biểu quyết</h2><span class="op-count">{{ number_format($listing->total()) }} kết quả</span></div>
-        <div class="table-responsive"><table class="table op-table"><thead><tr><th>STT</th><th>Nội dung</th><th>Ngày tạo</th><th>Loại</th><th>Người giao / Chủ trì</th><th>Hạn</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
+        <div class="table-responsive"><table class="table op-table"><thead><tr><th>STT</th><th>Nội dung</th><th>Ngày tạo</th><th>Người giao / Chủ trì</th><th>Hạn</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
         @forelse($listing as $entry)
             @php
                 $entity=$entry->entity;
@@ -66,9 +67,8 @@
             @endphp
             <tr>
                 <td class="op-muted">{{ $listing->firstItem()+$loop->index }}</td>
-                <td><a class="op-title" href="{{ $isVote ? route('operating.proposals.show',$entity) : ($entity->trashed()?route('operating.deleted-task',$entity->id):route('tasks.show',$entity)) }}">{{ $entity->title }}</a><div class="op-meta">{{ $isVote?'Đề xuất #'.$entity->id:$entity->code }} @if(!$isVote && $entity->trashed()) · Đã xóa @endif</div></td>
+                <td><a class="op-title" href="{{ $isVote ? route('operating.proposals.show',$entity) : ($entity->trashed()?route('operating.deleted-task',$entity->id):route('tasks.show',$entity)) }}">{{ $entity->title }}</a><div class="op-meta op-content-meta"><span>{{ $isVote?'Đề xuất #'.$entity->id:$entity->code }} @if(!$isVote && $entity->trashed()) · Đã xóa @endif</span><span class="op-badge {{ $isVote?'op-badge-blue':'' }}">{{ $isVote?'Biểu quyết':($entity->work_kind==='coordination'?'Yêu cầu phối hợp':'Giao thực hiện') }}</span></div></td>
                 <td class="op-date">{{ $entity->created_at?->format('d/m/Y') }}<div class="op-meta">{{ $entity->created_at?->format('H:i') }}</div></td>
-                <td><span class="op-badge {{ $isVote?'op-badge-blue':'' }}">{{ $isVote?'Biểu quyết':($entity->work_kind==='coordination'?'Yêu cầu phối hợp':'Giao thực hiện') }}</span></td>
                 <td>{{ $entity->creator?->name ?? '—' }}<div class="op-meta">@if($isVote){{ $entity->voted_count }} / {{ $entity->votes_count }} thành viên đã bỏ phiếu @else Chủ trì: {{ $entity->assignees->firstWhere('user_id',$entity->accountable_user_id)?->user?->name ?? 'Chưa chỉ định' }} @endif</div></td>
                 <td class="op-date">{{ $deadline?->format('d/m/Y H:i') ?? '—' }}@if(!$isVote && $deadline?->isPast() && !in_array($entity->status,['done','cancelled']))<div class="mt-1"><span class="op-badge op-badge-red">Quá hạn</span></div>@endif</td>
                 <td>
@@ -102,7 +102,7 @@
                     @endif
                 </td>
             </tr>
-        @empty<tr><td colspan="8" class="op-empty">{{ empty($selectedKinds)?'Chọn ít nhất một loại nghiệp vụ để xem danh sách.':'Không có kết quả phù hợp với bộ lọc.' }}</td></tr>@endforelse
+        @empty<tr><td colspan="7" class="op-empty">{{ empty($selectedKinds)?'Chọn ít nhất một loại nghiệp vụ để xem danh sách.':'Không có kết quả phù hợp với bộ lọc.' }}</td></tr>@endforelse
         </tbody></table></div>
         <div class="op-footer"><span class="op-muted">Hiển thị {{ $listing->firstItem()??0 }}–{{ $listing->lastItem()??0 }} / {{ number_format($listing->total()) }} kết quả</span>{{ $listing->onEachSide(1)->links('pagination::bootstrap-5') }}</div>
     </section>
