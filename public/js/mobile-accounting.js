@@ -7,6 +7,7 @@
     viewport.content = 'width=device-width, initial-scale=1, viewport-fit=cover';
     const style = document.createElement('style');
     style.textContent = `
+    .mobile-toggle-cell{display:none}
     @media screen {
         .accounting-mobile-view .acc-sidebar,.accounting-mobile-view .acc-topbar,.accounting-mobile-view .acc-sidebar-overlay{display:none!important}
         .accounting-mobile-view .acc-shell,.accounting-mobile-view body.acc-sidebar-collapsed .acc-shell{display:block!important}
@@ -45,7 +46,7 @@
         .accounting-mobile-view .recon-orders-table>tbody>tr:not(.d-none){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:12px;border:1px solid #dbe4ef;border-radius:10px;background:#fff}
         .accounting-mobile-view .recon-orders-table>tbody>tr>td{display:block;min-width:0;padding:10px!important;text-align:left!important;white-space:normal!important;overflow-wrap:anywhere}
         .accounting-mobile-view .recon-orders-table>tbody>tr>td[data-label]::before{content:attr(data-label);display:block;font-size:12px;color:#64748b;margin-bottom:4px}
-        .accounting-mobile-view .recon-orders-table>tbody>tr>td:nth-child(3),.accounting-mobile-view .recon-orders-table>tbody>tr>td:last-child,.accounting-mobile-view .recon-orders-table>tbody>tr>td[colspan]{grid-column:1/-1}
+        .accounting-mobile-view .recon-orders-table>tbody>tr>td:nth-child(3),.accounting-mobile-view .recon-orders-table>tbody>tr>td[data-label="Thao tác"],.accounting-mobile-view .recon-orders-table>tbody>tr>td[colspan]{grid-column:1/-1}
         .accounting-mobile-view .recon-orders-table>tbody>.recon-inline-detail-row:not(.d-none){display:block;border:0;background:transparent}
         .accounting-mobile-view .recon-orders-table>tbody>.recon-inline-detail-row>td{width:100%;padding:0!important}
         .accounting-mobile-view .recon-inline-detail-row .recon-detail{padding:0!important}
@@ -58,7 +59,7 @@
         .accounting-mobile-view .recon-detail-totals{width:100%!important}
         .accounting-mobile-view .recon-detail-toolbar{flex-wrap:wrap}
         .accounting-mobile-view .recon-bulk-toolbar{flex-direction:column;align-items:stretch}
-        .accounting-mobile-view .recon-orders-table td:last-child>.d-flex{flex-wrap:wrap;gap:8px!important}
+        .accounting-mobile-view .recon-orders-table td[data-label="Thao tác"]>.d-flex{flex-wrap:wrap;gap:8px!important}
         .accounting-mobile-view .mobile-accounting-table,.accounting-mobile-view .mobile-accounting-table>tbody{display:block!important;width:100%!important;min-width:0!important}
         .accounting-mobile-view .mobile-accounting-table>thead{display:none!important}
         .accounting-mobile-view .mobile-accounting-table>tbody>tr{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:0;margin-bottom:12px;padding:8px;background:#fff;border:1px solid #dbe4ef;border-radius:10px}
@@ -75,11 +76,46 @@
         .accounting-mobile-view .adjustment-summary{grid-template-columns:repeat(2,minmax(0,1fr))!important}
         .accounting-mobile-view .adjustment-card-body{padding:12px!important}
     }
+    @media screen and (max-width:992px){
+        .accounting-mobile-view .recon-orders-table>tbody>tr:not(.d-none){margin-bottom:8px}
+        .accounting-mobile-view .recon-orders-table>tbody>tr>td{padding:5px 8px!important;font-size:13px;line-height:1.3}
+        .accounting-mobile-view .recon-orders-table>tbody>tr>td[data-label]::before{display:inline;margin-right:5px;font-size:11px}
+        .accounting-mobile-view .recon-orders-table>tbody>tr>td:nth-child(3)::before,
+        .accounting-mobile-view .recon-orders-table>tbody>tr>td[data-label="Thao tác"]::before{display:none}
+        .accounting-mobile-view .recon-orders-table td[data-label="Thao tác"]>.d-flex{gap:5px!important}
+        .accounting-mobile-view .recon-orders-table .btn{min-height:32px;padding:4px 8px;font-size:12px}
+        .accounting-mobile-view .recon-orders-table .badge{font-size:11px}
+        .accounting-mobile-view .mobile-accounting-table>tbody>tr{margin-bottom:8px;padding:5px}
+        .accounting-mobile-view .mobile-accounting-table>tbody>tr>td{padding:4px 6px!important}
+        .accounting-mobile-view .mobile-accounting-table>tbody>tr>td[data-mobile-label]::before{display:inline;margin-right:5px;font-size:11px;line-height:1.3}
+        .accounting-mobile-view .mobile-cell-value{display:inline;font-size:13px;line-height:1.3}
+        .accounting-mobile-view .mobile-cell-wide .mobile-cell-value{font-weight:600}
+        .accounting-mobile-view .mobile-compact-row:not(.mobile-expanded)>td.mobile-secondary{display:none!important}
+        .accounting-mobile-view .mobile-toggle-cell{display:block!important;grid-column:1/-1;border:0;text-align:right!important}
+        .accounting-mobile-view .mobile-compact-toggle{grid-column:1/-1;justify-self:end;border:0;background:transparent;color:#2563eb;font-size:12px;padding:4px 8px;min-height:32px}
+    }
     @media screen and (max-width:360px){
         .accounting-mobile-view .ds-kpi,.accounting-mobile-view .ds-kpi.ds-kpi-journal{grid-template-columns:minmax(0,1fr)!important}
         .accounting-mobile-view .ds-prod-row{grid-template-columns:18px minmax(0,1fr) 48px 75px}
     }`;
     document.head.appendChild(style);
+    function compactRow(row, secondaryCells) {
+        if (!secondaryCells.length || row.querySelector('.mobile-compact-toggle')) return;
+        row.classList.add('mobile-compact-row');
+        secondaryCells.forEach(cell => cell.classList.add('mobile-secondary'));
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'mobile-compact-toggle';
+        button.textContent = 'Thông tin thêm'; button.setAttribute('aria-expanded','false');
+        button.addEventListener('click', event => {
+            event.stopPropagation();
+            const expanded = row.classList.toggle('mobile-expanded');
+            button.setAttribute('aria-expanded',String(expanded));
+            button.textContent = expanded ? 'Thu gọn' : 'Thông tin thêm';
+        });
+        // A table cell keeps the DOM valid; it occupies the full card width on mobile.
+        const cell = document.createElement('td'); cell.className = 'mobile-cell-wide mobile-toggle-cell';
+        cell.appendChild(button); row.appendChild(cell);
+    }
     function adapt() {
         // Older server templates also converted the outer reconciliation table.
         // Keep its own order-card layout and adapt only its nested detail tables.
@@ -87,6 +123,7 @@
             table.classList.remove('mobile-accounting-table');
             Array.from(table.tBodies).forEach(body => Array.from(body.rows).forEach(row => {
                 Array.from(row.cells).forEach(cell => { delete cell.dataset.mobileLabel; });
+                if (row.classList.contains('recon-order-row')) compactRow(row,Array.from(row.cells).filter(cell => ['Sale','Shipper','Phí giao hàng thu khách','Ngày giao'].includes(cell.dataset.label)));
             }));
         });
         document.querySelectorAll('a[target="_blank"]').forEach(link => link.removeAttribute('target'));
@@ -96,7 +133,7 @@
             table.classList.add('mobile-accounting-table');
             Array.from(table.tBodies).forEach(body => Array.from(body.rows).forEach(row => {
                 Array.from(row.cells).forEach((cell, index) => {
-                    if (cell.dataset.mobileAdapted) return;
+                    if (cell.dataset.mobileAdapted || cell.classList.contains('mobile-toggle-cell')) return;
                     const label = row.cells.length === headers.length ? headers[index].textContent.trim() : '';
                     if (label) cell.dataset.mobileLabel = label;
                     if (/khách hàng|hàng hóa|sản phẩm|biến thể|nội dung/i.test(label)) cell.classList.add('mobile-cell-wide');
@@ -104,6 +141,9 @@
                     while (cell.firstChild) value.appendChild(cell.firstChild);
                     cell.appendChild(value); cell.dataset.mobileAdapted = '1';
                 });
+                if (table.classList.contains('ds-table') && row.cells.length === headers.length) {
+                    compactRow(row,Array.from(row.cells).filter(cell => /^(#|Ưu tiên|Ngày tạo|Ngày giao|Sale|Giá HL|Phí giao hàng thu khách|Điều chỉnh)/i.test(cell.dataset.mobileLabel || '')));
+                }
             }));
         });
     }

@@ -2,13 +2,15 @@
 
 @section('title', 'Hoàn thành công việc: ' . $task->code)
 
+@include('task_assignments.partials.detail-styles')
+
 @push('styles')
 <style>
     .completion-form {
         background: #f8f9fa;
         border-radius: 12px;
-        padding: 30px;
-        max-width: 800px;
+        padding: 20px;
+        max-width: 100%;
         margin: 0 auto;
     }
     
@@ -98,9 +100,9 @@
 @endpush
 
 @section('content')
-<div class="container mt-4">
+<div class="container mt-4 task-workspace">
     <div class="row">
-        <div class="col-lg-10 offset-lg-1">
+        <div class="col-12">
             <h3 class="mb-4">
                 <i class="bi bi-list-task"></i>
                 Hoàn thành công việc: <strong>{{ $task->code }}</strong>
@@ -111,17 +113,23 @@
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <p><strong>Tiêu đề:</strong> {{ $task->title }}</p>
-                            <p><strong>Mức độ ưu tiên:</strong> <span class="badge bg-{{ $task->getStatusColor() }}">{{ $task->getPriorityLabel() }}</span></p>
+                            <p><strong>Mức độ ưu tiên:</strong> <span class="badge bg-{{ $task->priorityColor() }}">{{ $task->getPriorityLabel() }}</span></p>
                         </div>
                         <div class="col-md-6">
                             <p><strong>Ngày hết hạn:</strong> {{ $task->due_date?->format('d/m/Y H:i') ?? 'Không có' }}</p>
-                            <p><strong>Người giao:</strong> {{ $task->creator->name }}</p>
+                            <p><strong>Người giao:</strong> {{ $task->creator?->name }}</p>
                         </div>
                     </div>
                 </div>
             </div>
 
+            <section class="card task-content-card mb-3">
+                <div class="card-header">Nội dung công việc</div>
+                <div class="card-body task-description">{!! \App\Support\TaskDescription::render($task->description) !!}</div>
+            </section>
+            @include('task_assignments.partials.progress')
             <div class="completion-form">
+                <h4 class="mb-3">Gửi báo cáo hoàn thành công việc</h4>
                 <form id="completionForm" action="{{ route($submitRoute ?? 'task-assignments.complete-with-content', $task) }}" method="POST" enctype="multipart/form-data">
                     @csrf
 

@@ -2,80 +2,10 @@
 
 @section('title', $task->code . ' — ' . $task->title)
 
-@push('styles')
-<style>
-.child-recipient-label { padding:6px 10px; border:1px solid #d9e2ec; border-radius:5px; background:#fff; color:#526b82; font-size:12px; font-weight:600; }
-.child-recipient-label[aria-pressed="true"] { border-color:#34d399; background:#ecfdf5; color:#087f5b; }
-.child-recipient-label:hover { border-color:#34d399; }
-.child-recipient-label:focus-visible { outline:2px solid #087f5b; outline-offset:2px; }
-
-.member-evaluation-row, .member-evaluation-heading { display:grid; grid-template-columns:minmax(0,1fr) 65px 85px; align-items:center; gap:6px; }
-.member-evaluation-row .evaluation-compact, .evaluation-compact .evaluation-picker { display:contents; }
-.evaluation-compact summary, .evaluation-compact .evaluation-readonly { grid-column:2; grid-row:1; text-align:center; }
-.member-evaluation-status { grid-column:3; grid-row:1; justify-self:end; }
-.member-evaluation-info { grid-column:1; grid-row:1; min-width:0; overflow-wrap:anywhere; }
-.evaluation-picker summary { cursor:pointer; list-style:none; color:#123550; }
-.evaluation-picker summary::-webkit-details-marker { display:none; }
-.evaluation-value { display:inline-block; padding:3px 8px; border:1px solid transparent; }
-.evaluation-picker[open] .evaluation-value { border-color:#c5cbd1; background:#fff; }
-.evaluation-options { margin:6px 0 0; }
-.evaluation-compact .evaluation-options { grid-column:1 / -1; grid-row:2; }
-.evaluation-nodes { display:flex; width:100%; max-width:380px; }
-.evaluation-node { flex:1; min-width:0; padding:4px 0; border:0; background:transparent; color:#64748b; font-size:11px; cursor:pointer; }
-.evaluation-node span { display:block; height:2px; background:#cbd5e1; margin-top:8px; position:relative; }
-.evaluation-node span::after { content:''; position:absolute; width:8px; height:8px; border-radius:50%; background:#cbd5e1; left:50%; top:50%; transform:translate(-50%,-50%); }
-.evaluation-node:hover, .evaluation-node.is-selected { color:#d96310; font-weight:700; }
-.evaluation-node:hover span::after, .evaluation-node.is-selected span::after { background:#f58220; width:12px; height:12px; }
-.evaluation-node:focus-visible, .evaluation-picker summary:focus-visible { outline:2px solid #087f5b; outline-offset:2px; }
-.timeline { position: relative; padding-left: 28px; }
-.timeline::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 0; width: 2px; background: #e2e8f0; }
-.tl-item { position: relative; margin-bottom: 20px; }
-.tl-dot { position: absolute; left: -22px; top: 4px; width: 16px; height: 16px; border-radius: 50%; border: 2px solid; display: flex; align-items: center; justify-content: center; font-size: 8px; }
-.tl-dot.approved { border-color: #22c55e; background: #f0fdf4; color: #22c55e; }
-.tl-dot.pending  { border-color: #f59e0b; background: #fffbeb; color: #f59e0b; }
-.tl-dot.rejected { border-color: #ef4444; background: #fef2f2; color: #ef4444; }
-.info-grid { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; font-size: 13px; }
-.info-grid .ig-label { color: #94a3b8; }
-.info-grid .ig-val { font-weight: 600; }
-.attachment-thumb { max-width: 80px; max-height: 60px; border-radius: 6px; border: 1px solid #dee2e6; object-fit: cover; }
-.task-person { border-bottom:1px solid #e2e8f0; padding:16px 0; }
-.task-person-head { display:flex; flex-wrap:wrap; align-items:center; gap:12px; }
-.task-person-head > strong { flex:1; min-width:150px; }
-.task-person details > summary { cursor:pointer; color:#087f80; }
-.task-activity { margin:8px 0; padding-left:14px; border-left:2px solid #dce9e7; font-size:13px; overflow-wrap:anywhere; }
-.task-milestones { display:flex; overflow-x:auto; padding:16px 0 24px; }
-.task-milestone { flex:1; min-width:120px; position:relative; padding:28px 6px 0; font-size:12px; text-align:center; }
-.task-milestone::before { content:''; position:absolute; height:2px; background:#b9d2cc; top:9px; left:0; right:0; }
-.task-milestone:first-child::before { left:50%; }
-.task-milestone:last-child::before { right:50%; }
-.task-milestone-dot { position:absolute; left:50%; top:2px; transform:translateX(-50%); width:16px; height:16px; border:2px solid currentColor; background:#fff; border-radius:50%; z-index:1; }
-.task-person-columns { display:grid; grid-template-columns:minmax(0,1fr) 100px 150px; gap:12px; align-items:center; }
-.task-person-columns > :nth-child(2), .task-person-columns > :nth-child(3) { text-align:center; justify-self:center; }
-.task-person-columns > strong { min-width:0; }
-.evaluation-widget { position:relative; }
-.evaluation-options { position:absolute; width:280px; max-width:calc(100vw - 48px); right:0; top:100%; padding:14px; background:#fff; border:1px solid #cbd5e1; border-radius:8px; box-shadow:0 6px 20px #0002; z-index:10; text-align:left; }
-.evaluation-options input { width:100%; accent-color:#0d827a; }
-@media(max-width:575px) { .task-person-columns { grid-template-columns:minmax(0,1fr) 65px 105px; gap:4px; font-size:12px; } .task-person-columns .badge { white-space:normal; } .evaluation-options { right:-80px; } }
-.task-document { display:flex; gap:12px; padding:16px 0; border-bottom:1px solid #e2e8f0; overflow-wrap:anywhere; }
-.task-document img { width:85px; height:70px; object-fit:cover; }
-.task-document > div { min-width:0; }
-@media(max-width:575px) { .content-wrapper.container { padding:0 12px; } .task-person-head { gap:8px; } }
-.evaluation-toggle { border:0; background:transparent; padding:2px; color:#075985; cursor:pointer; }
-.evaluation-options[hidden] { display:none !important; }
-.evaluation-options { width:380px; }
-.evaluation-options output { border:1px solid #cbd5e1; }
-.evaluation-scale { position:relative; padding-bottom:8px; }
-.evaluation-ticks { display:flex; justify-content:space-between; }
-.evaluation-ticks button { position:relative; padding:0 0 22px; width:24px; border:0; background:none; color:#526b82; font-size:10px; cursor:pointer; }
-.evaluation-ticks button span { position:absolute; bottom:4px; left:50%; transform:translateX(-50%); width:7px; height:7px; border-radius:50%; background:#cbd5e1; }
-.evaluation-ticks button.selected { color:#ea7617; font-weight:bold; }
-.evaluation-ticks button.selected span { background:#ea7617; }
-.evaluation-options .evaluation-range { position:absolute; left:6px; bottom:9px; width:calc(100% - 12px); height:12px; margin:0; accent-color:#f58220; cursor:pointer; }
-</style>
-@endpush
+@include('task_assignments.partials.detail-styles')
 
 @section('content')
-<div class="content-wrapper container">
+<div class="content-wrapper container task-workspace">
 <div class="content-header d-flex align-items-center flex-wrap py-3 gap-3">
     <a href="{{ route($indexRoute ?? 'task-assignments.index') }}" class="btn btn-sm btn-outline-secondary">
         <i class="ph ph-arrow-left"></i>
@@ -119,7 +49,7 @@
 
             @if($task->work_kind)<div class="alert alert-light border"><strong>{{ $task->work_kind==='coordination'?'Yêu cầu phối hợp':'Giao thực hiện' }}</strong> · Chủ trì: {{ $task->assignees->firstWhere('user_id',$task->accountable_user_id)?->user?->name ?? '—' }} @if($task->proposal_id) · <a href="{{ route('operating.proposals.show',$task->proposal_id) }}">Nguồn biểu quyết #{{ $task->proposal_id }}</a>@endif</div>@endif
             {{-- Description --}}
-            <div class="card shadow-sm mb-3">
+            <div class="card shadow-sm mb-3 task-content-card">
                 <div class="card-header py-2 fw-semibold small text-uppercase text-muted">
                     <i class="ph-file-text me-1"></i>Nội dung công việc
                 </div>
@@ -129,8 +59,7 @@
                     @endif
                     @if($task->reject_reason)<div class="alert alert-warning">{{ $task->reject_reason }}</div>@endif
                     @if($task->description)
-                        <div class="border-top pt-3">
-                            <div class="small fw-semibold text-muted mb-1">Mo ta:</div>
+                        <div>
                             <div class="task-description">{!! \App\Support\TaskDescription::render($task->description) !!}</div>
                         </div>
                     @endif
@@ -192,7 +121,7 @@
         {{-- ── RIGHT: approval chain + actions ── --}}
         <div class="col-lg-4">
 
-            @include('task_assignments.partials.documents')
+
 
             {{-- Action card (for current workflow step actor) --}}
             @if($canAct && $current)
@@ -281,7 +210,7 @@
 
             {{-- My assignee action card --}}
             @if($myAssignee && in_array($myAssignee->status, ['pending', 'in_progress', 'processing']))
-                <div class="card border-primary shadow-sm mb-3">
+                <div class="card border-primary shadow-sm mb-3 task-status-card">
                     <div class="card-header bg-primary bg-opacity-10 py-2">
                         <span class="fw-semibold text-primary"><i class="ph-clipboard-text me-1"></i>Cập nhật công việc của bạn</span>
                     </div>
@@ -324,6 +253,7 @@
                     </div>
                 </div>
             @endif
+            @include('task_assignments.partials.documents')
         </div>
     </div>
 </div>

@@ -724,6 +724,35 @@ class TaskAssignmentController extends Controller
 
     // ── Complete Task with Content and Images ─────────────────────────
 
+    public function uploadDocuments(Request $request, TaskAssignment $taskAssignment)
+    {
+        $user = $request->user();
+        abort_unless($user->hasRole('admin') || (int)$taskAssignment->created_by === (int)$user->id
+            || $taskAssignment->assignees()->where('user_id',$user->id)->exists(),403);
+        $data = $request->validate([
+            'explanation'=>'required|string|max:2000',
+            'documents'=>'required|array|min:1|max:10',
+            'documents.*'=>'required|file|mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xls,xlsx,txt|max:20480',
+        ]);
+        $paths = [];
+        try {
+            DB::transaction(function () use ($request,$taskAssignment,$user,$data,&$paths) {
+                $task = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
+                foreach ($request->file('documents') as $file) {
+                    $path = $file->store('task-documents/'.$task->id,'public');
+                    $paths[] = $path;
+                    TaskCompletionImage::create(['task_id'=>$task->id,'image_path'=>$path,
+                        'original_filename'=>$file->getClientOriginalName(),'sort_order'=>0]);
+                }
+                TaskStatusLog::log($task,$task->status,$user,'Upload tài liệu: '.$data['explanation']);
+            });
+        } catch (Throwable $e) {
+            foreach ($paths as $path) Storage::disk('public')->delete($path);
+            throw $e;
+        }
+        return redirect()->route('tasks.show',$taskAssignment)->with('success','Đã upload tài liệu và lưu diễn giải vào lịch sử công việc.');
+    }
+
     public function completeForm(TaskAssignment $taskAssignment)
     {
         $user = auth()->user();
@@ -751,7 +780,7 @@ class TaskAssignmentController extends Controller
         $submitRoute = $isFrontRoles ? 'tasks.complete' : 'task-assignments.complete-with-content';
 
         return view('task_assignments.complete', [
-            'task' => $taskAssignment->load(['creator:id,name', 'assignees.user:id,name']),
+            'task' => $taskAssignment->load(['creator:id,name', 'assignees.user:id,name','statusLogs.changedBy:id,name','subTasks.creator:id,name','subTasks.assignees.user:id,name','subTasks.statusLogs.changedBy:id,name']),
             'layout' => $layout,
             'showRoute' => $showRoute,
             'submitRoute' => $submitRoute,

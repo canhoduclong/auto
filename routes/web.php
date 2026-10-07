@@ -936,6 +936,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/tasks/{taskAssignment}/subtasks/{child}/recall', [\App\Http\Controllers\TaskAssignmentController::class, 'recallSubTask'])->name('tasks.subtasks.recall');
     Route::post('/tasks/{taskAssignment}/subtasks', [\App\Http\Controllers\TaskAssignmentController::class, 'storeSubTask'])->name('tasks.subtasks.store');
     Route::post('/tasks/{taskAssignment}/debt-progress/{item}', [\App\Http\Controllers\TaskAssignmentController::class, 'updateDebtProgress'])->whereNumber('item')->name('tasks.debt-progress');
+    Route::post('/tasks/{taskAssignment}/documents', [\App\Http\Controllers\TaskAssignmentController::class, 'uploadDocuments'])->name('tasks.documents.store');
     Route::get('/tasks/{taskAssignment}', [\App\Http\Controllers\TaskAssignmentController::class, 'show'])->name('tasks.show');
     Route::post('/tasks/{taskAssignment}/complete', [\App\Http\Controllers\TaskAssignmentController::class, 'completeWithContent'])->name('tasks.complete');
     Route::get('/tasks/{taskAssignment}/complete', [\App\Http\Controllers\TaskAssignmentController::class, 'completeForm'])->name('tasks.complete-form');
