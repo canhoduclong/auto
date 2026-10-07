@@ -1,6 +1,6 @@
 @php
     $personStatuses = ['pending' => 'Chờ thực hiện', 'in_progress' => 'Đang thực hiện', 'processing' => 'Đang thực hiện', 'completed' => 'Đã báo hoàn thành', 'done' => 'Đã hoàn thành', 'rejected' => 'Không thể thực hiện', 'cancelled' => 'Đã thu hồi / hủy'];
-    $delegations = $task->subTasks->sortBy('due_date')->flatMap(fn ($child) => $child->assignees->map(fn ($assignment) => ['task' => $child, 'assignment' => $assignment]))->groupBy(fn ($entry) => $entry['task']->created_by . ':' . $entry['assignment']->user_id);
+    $delegations = $task->subTasks->where('status','!=','cancelled')->sortBy('due_date')->flatMap(fn ($child) => $child->assignees->map(fn ($assignment) => ['task' => $child, 'assignment' => $assignment]))->groupBy(fn ($entry) => $entry['task']->created_by . ':' . $entry['assignment']->user_id);
 @endphp
 <section class="card shadow-sm mb-3">
     <div class="card-header fw-semibold">Tiến độ công việc</div>
@@ -20,7 +20,7 @@
             @endforeach
         </div>
         <div class="task-person-columns small text-muted bg-light p-2"><span>Người thực hiện & tiến độ</span><span>Đánh giá</span><span>Trạng thái</span></div>
-        @foreach($task->assignees as $assignment)
+        @foreach($task->assignees->where('status','!=','cancelled') as $assignment)
             <article class="task-person">
                 <div class="task-person-head task-person-columns">
                     <strong>{{ $loop->iteration }}. {{ $assignment->user?->name ?? 'Người dùng đã xóa' }}</strong>
@@ -29,7 +29,7 @@
                 </div>
                 <details class="mt-2">
                     <summary class="small">Chi tiết hoạt động</summary>
-                    @forelse($task->statusLogs->where('changed_by', $assignment->user_id)->sortBy('created_at') as $activity)
+                    @forelse($task->statusLogs->where('changed_by', $assignment->user_id)->reject(fn($log)=>str_starts_with((string)$log->reason,'Thu hồi công việc con') || str_starts_with((string)$log->reason,'Đã xóa công việc con'))->sortBy('created_at') as $activity)
                         @include('task_assignments.partials.activity')
                     @empty
                         <p class="small text-muted mt-2">Chưa có cập nhật hoạt động.</p>
@@ -98,5 +98,5 @@
         @endforeach
         @if($task->assignees->isEmpty() && $delegations->isEmpty())<p class="text-muted mt-3">Chưa có người nhận việc.</p>@endif
     </div>
-    <div class="card-footer small text-muted">{{ $task->subTasks->whereIn('status', ['completed', 'done'])->count() }}/{{ $task->subTasks->where('status', '!=', 'cancelled')->count() }} việc con đang theo dõi đã báo hoàn thành. {{ $task->subTasks->where('status', 'cancelled')->count() }} việc con đã thu hồi / hủy.</div>
+    <div class="card-footer small text-muted">{{ $task->subTasks->whereIn('status', ['completed', 'done'])->count() }}/{{ $task->subTasks->where('status', '!=', 'cancelled')->count() }} việc con đang theo dõi đã báo hoàn thành.</div>
 </section>

@@ -1,5 +1,11 @@
 @push('styles')
 <style>
+.task-workspace .task-status-card { border-color:#e2e8f0!important; }
+.task-workspace .task-status-card .card-header { padding:14px 20px!important; background:#f1f5f9!important; letter-spacing:0; }
+.task-workspace .task-status-title { color:#087b80; font-size:14px; font-weight:600; }
+.task-workspace .task-status-card .card-body { padding:18px 16px 16px; }
+.task-workspace .task-status-card textarea { min-height:52px; }
+
 .task-workspace .task-action-bar { display:flex; align-items:center; gap:8px; flex-wrap:nowrap; }
 .task-workspace .task-action-button { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:7px 14px; border:1px solid #0d827a; border-radius:5px; background:#0d827a; color:#fff!important; font-size:13px; font-weight:600; line-height:1.3; white-space:nowrap; box-shadow:none; }
 .task-workspace .task-action-button:hover,.task-workspace .task-action-button[aria-expanded="true"] { background:#096c66; border-color:#096c66; color:#fff!important; }

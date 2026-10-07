@@ -3,7 +3,7 @@
     </div>
     <div class="card-body">
         @php $documentCount = 0; @endphp
-        @foreach(collect([$task])->concat($task->subTasks) as $documentTask)
+        @foreach(collect([$task])->concat($task->subTasks->where('status','!=','cancelled')) as $documentTask)
             @foreach(($documentTask->attachments ?? []) as $path)
                 @php $documentCount++; @endphp
                 <div class="task-document">

@@ -27,6 +27,8 @@ document.addEventListener('DOMContentLoaded', function () {
         block_formats: 'Đoạn văn=p; Tiêu đề 2=h2; Tiêu đề 3=h3; Tiêu đề 4=h4',
         content_style: 'body { font-family:Arial,sans-serif;font-size:14px;line-height:1.6; } table { border-collapse:collapse; } td,th { border:1px solid #cbd5e1;padding:8px; }',
         setup: function (editor) {
+            const requestedHeight = Number(editor.getElement().dataset.editorHeight);
+            if (requestedHeight > 0) editor.options.set('height', requestedHeight);
             editor.on('change input undo redo', function () { editor.save(); });
             editor.on('init', function () {
                 editor.getElement().form?.addEventListener('submit', function () { tinymce.triggerSave(); }, true);

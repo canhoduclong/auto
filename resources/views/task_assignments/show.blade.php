@@ -114,13 +114,15 @@
                     @if($subTaskAssignees->isEmpty())<div class="alert alert-warning">Chưa có người nhận được phép. Vui lòng nhờ admin cấu hình quyền giao việc.</div>@endif
                     <label class="form-label">Người chủ trì *</label><select name="accountable_user_id" required class="form-select mb-2"><option value="">Chọn người chịu trách nhiệm chính</option>@foreach($subTaskAssignees as $person)<option value="{{ $person->id }}">{{ $person->name }}</option>@endforeach</select>
                     <label class="form-label">Hạn tiếp nhận *</label><input type="datetime-local" name="acceptance_due_at" required class="form-control mb-2" value="{{ now()->addDay()->format('Y-m-d\TH:i') }}">
-                    <label class="form-label" for="child-title">Nội dung việc con</label>
+                    <label class="form-label" for="child-title">Tên việc con *</label>
                     <input id="child-title" class="form-control mb-2" name="title" value="{{ old('title') }}" maxlength="255" required>
+                    <div class="mb-3">
+                        <label class="form-label" for="child-description">Nội dung việc con</label>
+                        <textarea id="child-description" class="form-control task-description-editor" name="description" rows="12" data-editor-height="400" maxlength="20000" placeholder="Nhập nội dung công việc, kết quả cần đạt và yêu cầu tài liệu…">{{ \App\Support\TaskDescription::render(old('description')) }}</textarea>
+                    </div>
                     <label class="form-label" for="child-due">Hạn hoàn thành</label>
                     <input id="child-due" class="form-control mb-2" type="date" name="due_date" min="{{ today()->toDateString() }}" value="{{ old('due_date') }}" required>
                     <small class="text-muted mb-3">Hạn mặc định: cuối ngày đã chọn (24:00).</small>
-                    <label class="form-label" for="child-description">Mô tả / yêu cầu tài liệu</label>
-                    <textarea id="child-description" class="form-control mb-3 task-description-editor" name="description" maxlength="20000">{{ \App\Support\TaskDescription::render(old('description')) }}</textarea>
                     <button class="btn btn-primary align-self-start" type="submit" @disabled($subTaskAssignees->isEmpty())>Giao việc con</button>
                 </form>
                 </div>
@@ -129,13 +131,11 @@
             {{-- My assignee action card --}}
             @if($myAssignee && in_array($myAssignee->status, ['pending', 'in_progress', 'processing']))
                 <div class="collapse mb-3" id="taskStatusPanel"><div class="card border-primary shadow-sm task-status-card">
-                    <div class="card-header bg-primary bg-opacity-10 py-2">
-                        <span class="fw-semibold text-primary"><i class="ph-clipboard-text me-1"></i>Cập nhật công việc của bạn</span>
+                    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <span class="task-status-title">Cập nhật công việc của bạn</span>
+                        <span class="small text-muted fw-normal">Trạng thái hiện tại: <span class="badge bg-{{ $myAssignee->statusColor() }}">{{ $task->work_kind && !$myAssignee->accepted_at ? 'Chưa tiếp nhận' : ($myAssignee->accepted_at && !$myAssignee->started_at ? 'Đã tiếp nhận' : (in_array($myAssignee->status,['processing','in_progress']) ? 'Đang thực hiện' : $myAssignee->status)) }}</span></span>
                     </div>
                     <div class="card-body">
-                        <p class="small text-muted mb-3">
-                            Trạng thái hiện tại: <span class="badge bg-{{ $myAssignee->statusColor() }}">{{ $task->work_kind && !$myAssignee->accepted_at ? 'Chưa tiếp nhận' : ($myAssignee->accepted_at && !$myAssignee->started_at ? 'Đã tiếp nhận' : ($myAssignee->status === 'processing' ? 'Đang thực hiện' : $myAssignee->status)) }}</span>
-                        </p>
                         @if($task->work_kind && !$myAssignee->accepted_at)
                             <form method="POST" action="{{ route('tasks.accept',$task) }}">@csrf
                                 <button type="submit" class="btn btn-primary w-100">Tiếp nhận {{ $task->work_kind==='coordination'?'yêu cầu phối hợp':'công việc' }}</button>
@@ -149,15 +149,14 @@
                         <form action="{{ route('task-assignments.assignee-update', $task) }}" method="POST" enctype="multipart/form-data">
                             @csrf
                             <div class="row g-3"><div class="col-md-6">
-                            <label class="form-label small">Trạng thái</label><div class="mb-2">
-                                <select name="status" class="form-select">
+                            <label class="form-label small" for="personal-status">Trạng thái</label><div class="mb-4">
+                                <select id="personal-status" name="status" class="form-select">
                                     <option value="in_progress" {{ in_array($myAssignee->status, ['in_progress', 'processing']) ? 'selected' : '' }}>Đang thực hiện</option>
                                     <option value="rejected">Không thể thực hiện</option>
                                 </select>
                             </div>
                             <div class="mb-2">
-                                <label class="form-label small">Nội dung đã thực hiện / kết quả</label><textarea name="note" class="form-control form-control-sm" rows="2"
-                                          placeholder="Nội dung đã thực hiện / kết quả...">{{ $myAssignee->note }}</textarea>
+                                <label class="form-label small" for="personal-note">Nội dung đã thực hiện / kết quả</label><textarea id="personal-note" name="note" class="form-control" rows="2" maxlength="1000">{{ $myAssignee->note }}</textarea>
                             </div>
                             </div><div class="col-md-6"><label class="form-label small" for="status-documents">Tài liệu đính kèm</label><input id="status-documents" type="file" name="documents[]" multiple class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt"><div class="form-text">Tối đa 10 tệp, 20MB/tệp.</div></div></div>
                             <button type="submit" class="btn btn-primary btn-sm mt-3" @disabled($task->work_kind && $task->approvalSteps->where('status','pending')->isNotEmpty())>
