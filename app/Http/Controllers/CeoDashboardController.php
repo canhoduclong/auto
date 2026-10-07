@@ -397,30 +397,44 @@ class CeoDashboardController extends Controller
 
     public function customers(Request $request)
     {
-        [$from, $to, $rangeLabel] = $this->resolveRange($request);
-
-        $rows = $this->buildCustomerTop($from, $to, 20);
-
-        return view('ceo.section', [
-            'pageTitle' => 'Khách Hàng Lớn / Tiềm Năng',
-            'pageSubtitle' => 'Nhận diện nhóm khách mang doanh thu cao và cần chăm sóc ưu tiên.',
-            'rangeLabel' => $rangeLabel,
-            'from' => $from,
-            'to' => $to,
-            'cards' => [
-                ['label' => 'Khách phát sinh đơn', 'value' => number_format($rows->count())],
-                ['label' => 'Tổng doanh số top', 'value' => number_format((float) $rows->sum('total_amount')).' đ'],
-                ['label' => 'Tổng số đơn top', 'value' => number_format((int) $rows->sum('total_orders'))],
-            ],
-            'tableTitle' => 'Top khách hàng theo doanh số',
-            'columns' => ['Khách hàng', 'Điện thoại', 'Số đơn', 'Doanh số'],
-            'rows' => $rows->map(fn ($row) => [
-                (string) ($row->name ?? 'N/A'),
-                (string) ($row->phone ?? '-'),
-                number_format((int) $row->total_orders),
-                number_format((float) $row->total_amount).' đ',
-            ])->all(),
+        $request->validate([
+            'search'=>'nullable|string|max:200',
+            'sort'=>'nullable|in:priority,name,phone,total_orders,total_amount,debt_total',
+            'direction'=>'nullable|in:asc,desc', 'per_page'=>'nullable|in:10,20,50,100',
+            'range'=>'nullable|in:day,week,month,year,custom',
+            'from_date'=>'nullable|date_format:Y-m-d', 'to_date'=>'nullable|date_format:Y-m-d',
         ]);
+        [$from, $to, $rangeLabel] = $this->resolveRange($request);
+        $sales = Order::query()->select('customer_id')
+            ->selectRaw('COUNT(*) as total_orders, SUM(total) as total_amount')
+            ->whereBetween('created_at', [$from, $to])->groupBy('customer_id');
+        $debts = Order::query()->select('customer_id')->selectRaw('SUM(amount_due) as debt_total')
+            ->where('amount_due', '>', 0)->whereNotIn('status', ['cancelled', 'draft'])->groupBy('customer_id');
+        $query = Customer::query()->leftJoinSub($sales, 'sales', 'sales.customer_id', '=', 'customers.id')
+            ->leftJoinSub($debts, 'debts', 'debts.customer_id', '=', 'customers.id')
+            ->select('customers.*')->selectRaw('COALESCE(sales.total_orders,0) as total_orders, COALESCE(sales.total_amount,0) as total_amount, COALESCE(debts.debt_total,0) as debt_total')
+            ->where(fn($q)=>$q->whereNotNull('sales.customer_id')->orWhere('customers.is_pinned',true)->orWhereNotNull('debts.customer_id'))
+            ->when($request->filled('search'),function($q)use($request){
+                $term='%'.$request->search.'%';
+                $q->where(fn($s)=>$s->where('customers.name','like',$term)->orWhere('customers.phone','like',$term)->orWhere('customers.customer_code','like',$term));
+            });
+        $totals=DB::query()->fromSub((clone $query)->toBase(),'customer_totals')
+            ->selectRaw('COUNT(*) as customer_count, COALESCE(SUM(total_amount),0) as sales, COALESCE(SUM(total_orders),0) as orders, COALESCE(SUM(debt_total),0) as debt')->first();
+        $summary=['count'=>$totals->customer_count,'sales'=>$totals->sales,'orders'=>$totals->orders,'debt'=>$totals->debt];
+        $sort=$request->input('sort','priority');
+        $direction=$request->input('direction',in_array($sort,['name','phone'],true)?'asc':'desc');
+        if($sort==='priority') $query->orderBy('customers.is_pinned',$direction)->orderByDesc('total_amount');
+        else $query->orderBy(in_array($sort,['name','phone'],true)?'customers.'.$sort:$sort,$direction);
+        $customers=$query->orderBy('customers.id')->paginate((int)$request->input('per_page',20))->withQueryString();
+        return view('ceo.customers',compact('customers','summary','from','to','rangeLabel','sort','direction'));
+    }
+
+    public function customerPriority(Request $request, Customer $customer)
+    {
+        abort_unless($request->user()->hasRole('admin') || $request->user()->roles->contains(fn($role)=>strtolower($role->name)==='ceo'),403);
+        $data=$request->validate(['is_pinned'=>'required|boolean']);
+        $customer->update(['is_pinned'=>(bool)$data['is_pinned']]);
+        return back()->with('success',$data['is_pinned']?'Đã ưu tiên khách hàng.':'Đã bỏ ưu tiên khách hàng.');
     }
 
     public function customersList(Request $request)
@@ -1286,20 +1300,36 @@ class CeoDashboardController extends Controller
 
     public function weeklyReport(Request $request)
     {
-        try {
-            $selectedDate = $request->filled('week')
-                ? Carbon::parse((string) $request->input('week'))
-                : Carbon::today();
-        } catch (\Throwable) {
-            $selectedDate = Carbon::today();
+        $request->validate([
+            'month'=>'nullable|date_format:Y-m', 'month_week'=>'nullable|integer|min:1|max:5',
+            'week'=>'nullable|date_format:Y-m-d',
+        ]);
+        $selectedDate=$request->filled('week') ? Carbon::parse($request->week) : Carbon::today();
+        $selectedMonth=$request->filled('month') ? Carbon::createFromFormat('!Y-m',$request->month) : $selectedDate->copy()->startOfMonth();
+        $monthMode=$request->filled('month') || $request->filled('month_week');
+        $selectedMonthWeek=$monthMode ? (int)$request->input('month_week',1) : null;
+        if($monthMode){
+            $firstDay=($selectedMonthWeek-1)*7+1;
+            abort_if($firstDay>$selectedMonth->daysInMonth,422,'Tháng đã chọn không có tuần này.');
+            $startOfWeek=$selectedMonth->copy()->day($firstDay)->startOfDay();
+            $endOfWeek=$selectedMonth->copy()->day(min($firstDay+6,$selectedMonth->daysInMonth))->endOfDay();
+        }else{
+            $startOfWeek=$selectedDate->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
+            $endOfWeek=$selectedDate->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();
         }
-
-        $startOfWeek = $selectedDate->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
-        $endOfWeek = $selectedDate->copy()->endOfWeek(Carbon::SUNDAY)->endOfDay();
-        $previousStart = $startOfWeek->copy()->subWeek();
-        $previousEnd = $endOfWeek->copy()->subWeek();
-
-        $days = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
+        $previousStart=$startOfWeek->copy()->subWeek();
+        $previousEnd=$endOfWeek->copy()->subWeek();
+        $days=[]; $dayDates=[];
+        for($date=$startOfWeek->copy();$date->lte($endOfWeek);$date->addDay()){
+            $label=$this->weekdayLabel($date->toDateString());
+            $days[]=$label; $dayDates[$label]=$date->format('d/m');
+        }
+        $monthWeeks=[];
+        for($number=1;$number<=5;$number++){
+            $first=($number-1)*7+1;
+            if($first>$selectedMonth->daysInMonth) break;
+            $monthWeeks[]=['number'=>$number,'label'=>'Tuần '.$number.' ('.$first.'–'.min($first+6,$selectedMonth->daysInMonth).'/'.$selectedMonth->format('m').')'];
+        }
         $validOrderStatuses = [
             Order::STATUS_COMPLETED,
             Order::STATUS_DELIVERED,
@@ -1419,7 +1449,7 @@ class CeoDashboardController extends Controller
             'variantWeeklyData',
             'summary',
             'chartData',
-            'period'
+            'period', 'days', 'dayDates', 'selectedMonth', 'selectedMonthWeek', 'monthWeeks'
         ));
     }
 

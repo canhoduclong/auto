@@ -1,10 +1,11 @@
 <?php
 namespace App\Http\Controllers;
-use App\Models\{OperatingProposal,TaskAssignment,User};
+use App\Models\{OperatingProposal,TaskAssignment,User,Setting};
 use App\Services\{OperatingVoteService,TaskMenuService};
 use App\Support\TaskWorkspace;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 class OperatingController extends Controller {
     public function index(Request $request){
         $request->validate([
@@ -60,8 +61,13 @@ class OperatingController extends Controller {
         $proposals=$proposals->orderBy('id',$request->proposal_sort==='oldest'?'asc':'desc')->paginate((int)$request->input('proposal_per_page',10),['*'],'proposal_page')->withQueryString();
         $layout=TaskWorkspace::layout($user);
         $canCreate=$this->canCreate($user);
-        return view('operating.index',compact('tasks','proposals','layout','filter','canCreate'));
+        return view('operating.index',compact('tasks','proposals','layout','filter','canCreate'))->with('settings',$this->settings());
     }
+    private function settings()
+    {
+        return Cache::remember('settings',60,fn()=>Setting::all()->keyBy('key'));
+    }
+
     public function deletedTask(Request $request, int $id)
     {
         abort_unless($request->user()->hasRole('admin'),403);
@@ -79,7 +85,7 @@ class OperatingController extends Controller {
         abort_unless($this->canCreate($request->user()),403);
         $layout=TaskWorkspace::layout($request->user());
         $users=User::orderBy('name')->get(['id','name']);
-        return view('operating.create',compact('layout','users'));
+        return view('operating.create',compact('layout','users'))->with('settings',$this->settings());
     }
     public function store(Request $request){
         abort_unless($this->canCreate($request->user()),403);
@@ -100,7 +106,7 @@ class OperatingController extends Controller {
     public function show(Request $request,OperatingProposal $proposal){
         abort_unless($this->canView($proposal,$request->user()),403);
         $proposal->load(['creator','votes.user','tasks']);$layout=TaskWorkspace::layout($request->user());
-        return view('operating.show',compact('proposal','layout'));
+        return view('operating.show',compact('proposal','layout'))->with('settings',$this->settings());
     }
     public function vote(Request $request,OperatingProposal $proposal,OperatingVoteService $service){
         $data=$request->validate(['choice'=>'required|in:agree,disagree,abstain','comment'=>'nullable|string|max:2000']);

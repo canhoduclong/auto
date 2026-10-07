@@ -618,6 +618,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/shipper', [CeoDashboardController::class, 'shipper'])->name('shipper');
         Route::get('/shipper-costs', [CeoDashboardController::class, 'shipperCosts'])->name('shipper-costs');
         Route::get('/customers', [CeoDashboardController::class, 'customers'])->name('customers');
+        Route::post('/customers/{customer}/priority', [CeoDashboardController::class, 'customerPriority'])->name('customers.priority');
         Route::get('/customers-list', [CeoDashboardController::class, 'customersList'])->name('customers-list');
         Route::get('/users-list', [CeoDashboardController::class, 'usersList'])->name('users-list');
         Route::get('/alerts', [CeoDashboardController::class, 'alerts'])->name('alerts');
@@ -670,6 +671,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/shipper', [CeoDashboardController::class, 'shipper'])->name('shipper');
         Route::get('/shipper-costs', [CeoDashboardController::class, 'shipperCosts'])->name('shipper-costs');
         Route::get('/customers', [CeoDashboardController::class, 'customers'])->name('customers');
+        Route::post('/customers/{customer}/priority', [CeoDashboardController::class, 'customerPriority'])->name('customers.priority');
         Route::get('/customers-list', [CeoDashboardController::class, 'customersList'])->name('customers-list');
         Route::get('/users-list', [CeoDashboardController::class, 'usersList'])->name('users-list');
         Route::get('/alerts', [CeoDashboardController::class, 'alerts'])->name('alerts');

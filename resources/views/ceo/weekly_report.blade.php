@@ -4,214 +4,46 @@
 
 @push('styles')
 <style>
-    .weekly-report-container {
-        background: #f8f9fa;
-        min-height: 100vh;
-        padding: 20px 0;
-    }
-    .report-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 30px;
-        border-radius: 15px;
-        margin-bottom: 30px;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-    }
-    .report-header h1 {
-        font-size: 2.5rem;
-        font-weight: 700;
-        margin-bottom: 10px;
-    }
-    .report-header p {
-        font-size: 1.1rem;
-        opacity: 0.9;
-        margin-bottom: 0;
-    }
-    .summary-cards {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 20px;
-        margin-bottom: 30px;
-    }
-    .summary-card {
-        background: white;
-        border-radius: 12px;
-        padding: 25px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        border-left: 5px solid #667eea;
-        transition: transform 0.2s ease;
-    }
-    .summary-card:hover {
-        transform: translateY(-2px);
-    }
-    .summary-card .card-title {
-        font-size: 0.9rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: #6c757d;
-        margin-bottom: 10px;
-    }
-    .summary-card .card-value {
-        font-size: 2rem;
-        font-weight: 700;
-        color: #343a40;
-        margin-bottom: 8px;
-    }
-    .summary-card .card-meta {
-        color: #64748b;
-        font-size: .85rem;
-        line-height: 1.5;
-    }
-    .summary-card .change {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        border-radius: 999px;
-        padding: 2px 8px;
-        font-size: .78rem;
-        font-weight: 700;
-    }
-    .summary-card .change.up,
-    .change-pill.up {
-        background: #dcfce7;
-        color: #166534;
-    }
-    .summary-card .change.down,
-    .change-pill.down {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-    .summary-card .change.flat,
-    .change-pill.flat {
-        background: #e2e8f0;
-        color: #334155;
-    }
-    .summary-card .change.new,
-    .change-pill.new {
-        background: #dbeafe;
-        color: #1e40af;
-    }
-    .filter-card,
-    .chart-card {
-        background: white;
-        border-radius: 12px;
-        padding: 18px;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
-    }
-    .chart-card {
-        min-height: 340px;
-    }
-    .report-table {
-        background: white;
-        border-radius: 12px;
-        overflow: hidden;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-    .report-table table {
-        width: 100%;
-        margin: 0;
-        border-collapse: collapse;
-    }
-    .report-table th {
-        background: #f8f9fa;
-        padding: 15px 12px;
-        text-align: center;
-        font-weight: 600;
-        color: #495057;
-        border-bottom: 2px solid #dee2e6;
-        font-size: 0.9rem;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .report-table td {
-        padding: 12px;
-        border-bottom: 1px solid #dee2e6;
-        text-align: right;
-        font-size: 0.9rem;
-    }
-    .report-table tbody tr:hover {
-        background: #f8f9fa;
-    }
-    .product-name {
-        text-align: left;
-        font-weight: 500;
-        color: #343a40;
-    }
-    .total-row {
-        background: #fff3cd;
-        font-weight: 700;
-        color: #856404;
-    }
-    .total-row td {
-        border-top: 2px solid #ffc107;
-    }
-    .revenue-row {
-        background: #d1ecf1;
-        font-weight: 700;
-        color: #0c5460;
-    }
-    .revenue-row td {
-        border-top: 2px solid #17a2b8;
-    }
-    .quantity-cell {
-        font-family: 'Courier New', monospace;
-        font-weight: 500;
-    }
-    .zero-quantity {
-        color: #6c757d;
-        opacity: 0.6;
-    }
-    .change-pill {
-        display: inline-flex;
-        border-radius: 999px;
-        padding: 3px 9px;
-        font-size: .78rem;
-        font-weight: 700;
-        white-space: nowrap;
-    }
-    .empty-state {
-        color: #64748b;
-        padding: 28px 12px;
-        text-align: center;
-    }
-    .table-section-title {
-        margin: 28px 0 12px;
-    }
-    .table-section-title h2 {
-        color: #1f2937;
-        font-size: 1.25rem;
-        font-weight: 800;
-        margin: 0 0 4px;
-    }
-    .table-section-title p {
-        color: #64748b;
-        margin: 0;
-    }
-    @media (max-width: 768px) {
-        .report-header {
-            padding: 20px;
-        }
-        .report-header h1 {
-            font-size: 2rem;
-        }
-        .summary-cards {
-            grid-template-columns: 1fr;
-        }
-        .report-table {
-            font-size: 0.8rem;
-        }
-        .report-table th,
-        .report-table td {
-            padding: 8px 6px;
-        }
-    }
+    .weekly-report-container{padding:4px 0 24px;color:#243449;font-size:14px}
+    .weekly-report-container .container-fluid{padding:0}
+    .weekly-report-container .report-header{padding:20px 24px;background:#fff;border:1px solid #dce4ee;border-left:4px solid #1769aa;margin-bottom:18px}
+    .weekly-report-container .report-header h1{font-size:24px;font-weight:700;margin:0 0 8px}
+    .weekly-report-container .report-header p{color:#68788d;font-size:13px;margin:0}
+    .weekly-report-container .summary-cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}
+    .weekly-report-container .summary-card{padding:18px;background:white;border:1px solid #dce4ee;border-top:3px solid #1769aa}
+    .weekly-report-container .card-title{font-size:12px;color:#61738a;font-weight:600;margin-bottom:10px}
+    .weekly-report-container .card-value{font-size:23px;font-weight:700;margin-bottom:8px}
+    .weekly-report-container .card-meta{font-size:12px;color:#68788d;line-height:1.6}
+    .weekly-report-container .change,.weekly-report-container .change-pill{display:inline-flex;padding:3px 7px;font-size:12px;font-weight:600;white-space:nowrap}
+    .weekly-report-container .up{background:#e5f5ed;color:#237448}.weekly-report-container .down{background:#fdecec;color:#b53737}.weekly-report-container .flat{background:#eef1f5;color:#586879}.weekly-report-container .new{background:#eaf2ff;color:#235ea5}
+    .weekly-report-container .filter-card,.weekly-report-container .chart-card{background:#fff;padding:18px 20px;border:1px solid #dce4ee;margin-bottom:20px}
+    .weekly-report-container .chart-card{height:340px}
+    .weekly-report-container .form-control,.weekly-report-container .btn{font-size:13px}
+    .weekly-report-container .week-shortcuts{border-top:1px solid #e5eaf1;padding-top:16px;margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}
+    .weekly-report-container .week-shortcuts .btn{border-radius:0;padding:9px 14px}
+    .weekly-report-container .report-table{background:white;border:1px solid #dce4ee;border-radius:0;overflow-x:auto;margin-bottom:20px}
+    .weekly-report-container .report-table table{width:100%;margin:0;border-collapse:collapse;font-size:14px}
+    .weekly-report-container .report-table th{background:#edf3f9;padding:13px 14px;text-align:center;font-size:12px;font-weight:700;color:#405b78;border:1px solid #dce4ee;white-space:nowrap;text-transform:none;letter-spacing:0}
+    .weekly-report-container .report-table th small{display:block;font-weight:400;color:#718198;margin-top:4px}
+    .weekly-report-container .report-table td{padding:13px 14px;border:1px solid #e4eaf1;text-align:right;font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .weekly-report-container .report-table tbody tr:nth-child(even){background:#fafbfd}
+    .weekly-report-container .report-table tbody tr:hover{background:#f1f7fc}
+    .weekly-report-container .report-table td.product-name{white-space:normal;text-align:left;font-weight:600;min-width:240px;color:#243449}
+    .weekly-report-container .report-table .total-row{background:#edf3f9;font-weight:700}
+    .weekly-report-container .report-table .revenue-row{background:#e8f5f2;font-weight:700;color:#176c5b}
+    .weekly-report-container .quantity-cell{font-family:inherit;font-weight:400}
+    .weekly-report-container .zero-quantity{color:#98a5b5}
+    .weekly-report-container .report-table .empty-state{color:#718198;padding:32px;text-align:center}
+    .weekly-report-container .table-section-title{margin:24px 0 12px}
+    .weekly-report-container .table-section-title h2{font-size:18px;font-weight:700;margin:0 0 5px}
+    .weekly-report-container .table-section-title p{font-size:13px;color:#68788d;margin:0}
+    @media(max-width:1100px){.weekly-report-container .summary-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:600px){.weekly-report-container .summary-cards{grid-template-columns:1fr}.weekly-report-container .report-header{padding:16px}.weekly-report-container .card-value{font-size:21px}}
 </style>
 @endpush
 
 @section('content')
 @php
-    $days = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
     $formatMoney = fn ($value) => number_format((float) $value, 0, ',', '.') . ' đ';
     $formatNumber = fn ($value) => number_format((float) $value, 0, ',', '.');
     $changeClass = function ($percent, $current = null, $previous = null) {
@@ -248,20 +80,24 @@
     <div class="container-fluid">
         <div class="report-header">
             <h1><i class="bi bi-bar-chart-line"></i> Báo cáo tuần</h1>
-            <p>Tuần hiện tại: {{ $period['current_label'] ?? '' }} | Kỳ trước: {{ $period['previous_label'] ?? '' }}</p>
+            <p>Kỳ báo cáo: {{ $period['current_label'] ?? '' }} | Kỳ trước: {{ $period['previous_label'] ?? '' }}</p>
         </div>
 
         <div class="filter-card">
-            <form method="GET" action="{{ route('ceo.weekly-report') }}" class="row g-3 align-items-end">
-                <div class="col-md-4">
-                    <label for="week" class="form-label fw-semibold">Chọn tuần</label>
-                    <input type="date" id="week" name="week" class="form-control" value="{{ $period['selected'] ?? now()->toDateString() }}">
-                </div>
-                <div class="col-md-auto">
-                    <button type="submit" class="btn btn-primary">Xem báo cáo</button>
-                    <a href="{{ route('ceo.weekly-report') }}" class="btn btn-light border">Tuần hiện tại</a>
-                </div>
-            </form>
+            <div class="row g-3">
+                <div class="col-lg-6"><form method="GET" action="{{ route('ceo.weekly-report') }}" class="d-flex flex-wrap align-items-end gap-2">
+                    <div><label for="month" class="form-label fw-semibold">Các tuần của tháng</label><input type="month" id="month" name="month" class="form-control" value="{{ $selectedMonth->format('Y-m') }}" required></div>
+                    <input type="hidden" name="month_week" value="1"><button class="btn btn-primary">Xem tháng</button>
+                </form></div>
+                <div class="col-lg-6"><form method="GET" action="{{ route('ceo.weekly-report') }}" class="d-flex flex-wrap align-items-end gap-2">
+                    <div><label for="week" class="form-label fw-semibold">Tuần lịch (Thứ 2 – Chủ nhật)</label><input type="date" id="week" name="week" class="form-control" value="{{ $period['selected'] }}" required></div>
+                    <button class="btn btn-outline-primary">Xem tuần lịch</button><a href="{{ route('ceo.weekly-report') }}" class="btn btn-outline-secondary">Tuần hiện tại</a>
+                </form></div>
+            </div>
+            <nav class="week-shortcuts" aria-label="Chọn tuần trong tháng">
+                @foreach($monthWeeks as $monthWeek)<a href="{{ route('ceo.weekly-report',['month'=>$selectedMonth->format('Y-m'),'month_week'=>$monthWeek['number']]) }}" class="btn {{ $selectedMonthWeek===$monthWeek['number']?'btn-primary':'btn-outline-secondary' }}" @if($selectedMonthWeek===$monthWeek['number']) aria-current="page" @endif>{{ $monthWeek['label'] }}</a>@endforeach
+            </nav>
+            <div class="small text-muted mt-2">Tuần trong tháng tính từ ngày 1, mỗi kỳ tối đa 7 ngày. Kỳ trước là cùng khoảng ngày lùi 7 ngày.</div>
         </div>
 
         <div class="summary-cards">
@@ -311,18 +147,13 @@
             <canvas id="weeklyReportChart" height="110"></canvas>
         </div>
 
+        <div class="table-section-title"><h2>Sản lượng và doanh thu theo ngày</h2><p>Đơn đã giao / hoàn tất trong kỳ được chọn, so sánh với kỳ trước.</p></div>
         <div class="report-table">
             <table>
                 <thead>
                     <tr>
-                        <th style=" width: 200px;" class="text-end">Mặt hàng</th>
-                        <th>T2</th>
-                        <th>T3</th>
-                        <th>T4</th>
-                        <th>T5</th>
-                        <th>T6</th>
-                        <th>T7</th>
-                        <th>CN</th>
+                        <th style=" width: 200px;" class="text-start">Mặt hàng</th>
+                        @foreach($days as $day)<th>{{ $day }}<small>{{ $dayDates[$day] }}</small></th>@endforeach
                         <th>Tổng</th>
                         <th>Kỳ trước</th>
                         <th>Biến động</th>
@@ -365,7 +196,7 @@
                         @endforeach
                     @else
                         <tr>
-                            <td colspan="12" class="empty-state">
+                            <td colspan="{{ count($days)+5 }}" class="empty-state">
                                 Không có dữ liệu đơn hoàn tất trong tuần đã chọn.
                             </td>
                         </tr>
@@ -404,7 +235,7 @@
                                     {{ number_format($dailyRevenue[$day] ?? 0, 0, ',', '.') }}
                                 </td>
                             @endforeach
-                            <td class="quantity-cell  text-center" style="font-weight: 700; color: #17a2b8; font-size: 1.1rem;">
+                            <td class="quantity-cell  text-center" style="font-weight: 700; color: #17a2b8; font-size: 14px;">
                                 {{ number_format($totalRevenue ?? 0, 0, ',', '.') }}
                             </td>
                             <td class="quantity-cell text-center" style="font-weight: 600; color: #17a2b8;">
@@ -419,7 +250,7 @@
                                 {{ number_format($totalRevenue ?? 0, 0, ',', '.') }}
                             </td>
                         @else
-                            <td colspan="11" style="text-align: center; font-size: 1.2rem;">
+                            <td colspan="{{ count($days)+4 }}" style="text-align: center; font-size: 14px;">
                                 {{ number_format($totalRevenue ?? 0, 0, ',', '.') }} VNĐ
                             </td>
                         @endif
@@ -437,14 +268,8 @@
             <table>
                 <thead>
                     <tr>
-                        <th style="width: 260px;" class="text-end">Biến thể sản phẩm</th>
-                        <th>T2</th>
-                        <th>T3</th>
-                        <th>T4</th>
-                        <th>T5</th>
-                        <th>T6</th>
-                        <th>T7</th>
-                        <th>CN</th>
+                        <th style="width: 260px;" class="text-start">Biến thể sản phẩm</th>
+                        @foreach($days as $day)<th>{{ $day }}<small>{{ $dayDates[$day] }}</small></th>@endforeach
                         <th>Tổng tuần</th>
                     </tr>
                 </thead>
@@ -473,7 +298,7 @@
                         @endforeach
                     @else
                         <tr>
-                            <td colspan="9" class="empty-state">
+                            <td colspan="{{ count($days)+2 }}" class="empty-state">
                                 Không có dữ liệu biến thể trong tuần đã chọn.
                             </td>
                         </tr>
