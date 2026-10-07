@@ -12,7 +12,14 @@ class TaskCompletionImage extends Model
         'image_path',
         'original_filename',
         'sort_order',
+        'uploaded_by',
+        'explanation',
     ];
+
+    public function uploader(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'uploaded_by');
+    }
 
     public function task(): BelongsTo
     {

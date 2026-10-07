@@ -116,6 +116,62 @@
                 </details>
             @endif
 
+            @if($myAssignee && in_array($myAssignee->status,['pending','in_progress','processing']))
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#taskStatusPanel" aria-expanded="false">Cập nhật trạng thái</button>
+                @if(!$task->work_kind || $myAssignee->started_at)
+                <button type="button" class="btn btn-success btn-sm" data-bs-toggle="collapse" data-bs-target="#taskReportPanel" aria-expanded="false">Gửi báo cáo hoàn thành</button>
+                @endif
+            </div>
+            @endif
+            {{-- My assignee action card --}}
+            @if($myAssignee && in_array($myAssignee->status, ['pending', 'in_progress', 'processing']))
+                <div class="collapse mb-3" id="taskStatusPanel"><div class="card border-primary shadow-sm task-status-card">
+                    <div class="card-header bg-primary bg-opacity-10 py-2">
+                        <span class="fw-semibold text-primary"><i class="ph-clipboard-text me-1"></i>Cập nhật công việc của bạn</span>
+                    </div>
+                    <div class="card-body">
+                        <p class="small text-muted mb-3">
+                            Trạng thái hiện tại: <span class="badge bg-{{ $myAssignee->statusColor() }}">{{ $task->work_kind && !$myAssignee->accepted_at ? 'Chưa tiếp nhận' : ($myAssignee->accepted_at && !$myAssignee->started_at ? 'Đã tiếp nhận' : ($myAssignee->status === 'processing' ? 'Đang thực hiện' : $myAssignee->status)) }}</span>
+                        </p>
+                        @if($task->work_kind && !$myAssignee->accepted_at)
+                            <form method="POST" action="{{ route('tasks.accept',$task) }}">@csrf
+                                <button type="submit" class="btn btn-primary w-100">Tiếp nhận {{ $task->work_kind==='coordination'?'yêu cầu phối hợp':'công việc' }}</button>
+                            </form>
+                            @if($task->work_kind==='coordination' && (int)$task->accountable_user_id===(int)auth()->id())
+                                <details class="mt-2"><summary class="small text-danger">Từ chối phối hợp</summary><form method="POST" action="{{ route('tasks.decline-coordination',$task) }}" class="mt-2">@csrf<label class="form-label small">Lý do *</label><textarea name="reason" class="form-control mb-2" required maxlength="2000" rows="4"></textarea><button type="submit" class="btn btn-outline-danger btn-sm">Gửi phản hồi từ chối</button></form></details>
+                            @endif
+                            <small class="text-muted d-block mt-2">Hạn tiếp nhận: {{ $task->acceptance_due_at?->format('d/m/Y H:i') ?? '—' }}</small>
+                        @else
+                            @if($myAssignee->accepted_at)<div class="small text-muted mb-2">Đã tiếp nhận: {{ $myAssignee->accepted_at->format('d/m/Y H:i') }}</div>@endif
+                        <form action="{{ route('task-assignments.assignee-update', $task) }}" method="POST" enctype="multipart/form-data">
+                            @csrf
+                            <div class="row g-3"><div class="col-md-6">
+                            <label class="form-label small">Trạng thái</label><div class="mb-2">
+                                <select name="status" class="form-select">
+                                    <option value="in_progress" {{ in_array($myAssignee->status, ['in_progress', 'processing']) ? 'selected' : '' }}>Đang thực hiện</option>
+                                    <option value="rejected">Không thể thực hiện</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label small">Nội dung đã thực hiện / kết quả</label><textarea name="note" class="form-control form-control-sm" rows="2"
+                                          placeholder="Nội dung đã thực hiện / kết quả...">{{ $myAssignee->note }}</textarea>
+                            </div>
+                            </div><div class="col-md-6"><label class="form-label small" for="status-documents">Tài liệu đính kèm</label><input id="status-documents" type="file" name="documents[]" multiple class="form-control" accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.txt"><div class="form-text">Tối đa 10 tệp, 20MB/tệp.</div></div></div>
+                            <button type="submit" class="btn btn-primary btn-sm mt-3" @disabled($task->work_kind && $task->approvalSteps->where('status','pending')->isNotEmpty())>
+                                <i class="ph-check me-1"></i>Cập nhật trạng thái
+                            </button>
+                        </form>
+
+                        @endif
+                    </div>
+                </div></div>
+            @endif
+            @if($myAssignee && in_array($myAssignee->status,['pending','in_progress','processing']) && (!$task->work_kind || $myAssignee->started_at))
+            <div class="collapse" id="taskReportPanel">
+                @include('task_assignments.partials.completion-report',['submitRoute'=>'tasks.complete','showRoute'=>'tasks.show'])
+            </div>
+            @endif
         </div>
 
         {{-- ── RIGHT: approval chain + actions ── --}}
@@ -208,51 +264,6 @@
                 </div>
             </div>
 
-            {{-- My assignee action card --}}
-            @if($myAssignee && in_array($myAssignee->status, ['pending', 'in_progress', 'processing']))
-                <div class="card border-primary shadow-sm mb-3 task-status-card">
-                    <div class="card-header bg-primary bg-opacity-10 py-2">
-                        <span class="fw-semibold text-primary"><i class="ph-clipboard-text me-1"></i>Cập nhật công việc của bạn</span>
-                    </div>
-                    <div class="card-body">
-                        <p class="small text-muted mb-3">
-                            Trạng thái hiện tại: <span class="badge bg-{{ $myAssignee->statusColor() }}">{{ $task->work_kind && !$myAssignee->accepted_at ? 'Chưa tiếp nhận' : ($myAssignee->accepted_at && !$myAssignee->started_at ? 'Đã tiếp nhận' : ($myAssignee->status === 'processing' ? 'Đang thực hiện' : $myAssignee->status)) }}</span>
-                        </p>
-                        @if($task->work_kind && !$myAssignee->accepted_at)
-                            <form method="POST" action="{{ route('tasks.accept',$task) }}">@csrf
-                                <button type="submit" class="btn btn-primary w-100">Tiếp nhận {{ $task->work_kind==='coordination'?'yêu cầu phối hợp':'công việc' }}</button>
-                            </form>
-                            @if($task->work_kind==='coordination' && (int)$task->accountable_user_id===(int)auth()->id())
-                                <details class="mt-2"><summary class="small text-danger">Từ chối phối hợp</summary><form method="POST" action="{{ route('tasks.decline-coordination',$task) }}" class="mt-2">@csrf<label class="form-label small">Lý do *</label><textarea name="reason" class="form-control mb-2" required maxlength="2000" rows="2"></textarea><button type="submit" class="btn btn-outline-danger btn-sm">Gửi phản hồi từ chối</button></form></details>
-                            @endif
-                            <small class="text-muted d-block mt-2">Hạn tiếp nhận: {{ $task->acceptance_due_at?->format('d/m/Y H:i') ?? '—' }}</small>
-                        @else
-                            @if($myAssignee->accepted_at)<div class="small text-muted mb-2">Đã tiếp nhận: {{ $myAssignee->accepted_at->format('d/m/Y H:i') }}</div>@endif
-                        <form action="{{ route('task-assignments.assignee-update', $task) }}" method="POST">
-                            @csrf
-                            <div class="mb-2">
-                                <select name="status" class="form-select form-select-sm">
-                                    <option value="in_progress" {{ in_array($myAssignee->status, ['in_progress', 'processing']) ? 'selected' : '' }}>Đang thực hiện</option>
-                                    <option value="rejected">Không thể thực hiện</option>
-                                </select>
-                            </div>
-                            <div class="mb-2">
-                                <textarea name="note" class="form-control form-control-sm" rows="2"
-                                          placeholder="Nội dung đã thực hiện / kết quả...">{{ $myAssignee->note }}</textarea>
-                            </div>
-                            <button type="submit" class="btn btn-primary btn-sm w-100" @disabled($task->work_kind && $task->approvalSteps->where('status','pending')->isNotEmpty())>
-                                <i class="ph-check me-1"></i>Cập nhật trạng thái
-                            </button>
-                        </form>
-                        @if(!$task->work_kind || $myAssignee->started_at)
-                        <a href="{{ route('task-assignments.complete-form', $task) }}" class="btn btn-success btn-sm w-100 mt-2">
-                            <i class="ph-check-circle me-1"></i>Gửi báo cáo hoàn thành
-                        </a>
-                        @endif
-                        @endif
-                    </div>
-                </div>
-            @endif
             @include('task_assignments.partials.documents')
         </div>
     </div>

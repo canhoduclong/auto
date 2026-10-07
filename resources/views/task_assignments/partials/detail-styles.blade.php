@@ -6,6 +6,7 @@
 .task-workspace .card { border:1px solid #dce4ec; border-radius:10px; overflow:hidden; box-shadow:0 3px 12px rgba(15,23,42,.04)!important; }
 .task-workspace .card-header { padding:13px 16px!important; letter-spacing:.02em; }
 .task-workspace .task-status-card .card-header,
+.task-workspace .task-upload-card .card-header,
 .task-workspace .task-content-card .card-header,
 .task-workspace .task-documents-card .card-header { background:#f1f5f9!important; color:#24364b!important; font-size:14px; font-weight:700; }
 .task-workspace .task-content-card .card-body { padding:20px; }
@@ -15,6 +16,8 @@
 .task-workspace a:not(.btn) { color:#087b80!important; text-decoration:none; }
 .task-workspace a:not(.btn):hover,.task-workspace a:not(.btn):focus-visible { color:#07565e!important; text-decoration:underline; }
 .task-workspace a:focus-visible { outline:2px solid #0d827a; outline-offset:3px; }
+.task-workspace .task-upload-card { background:#f8fafc; }
+.task-workspace .task-upload-card .card-header { background:transparent!important; border-bottom:0; font-weight:500; color:#087b80!important; }
 .task-workspace .task-document { gap:12px; padding:14px 0; align-items:flex-start; }
 .task-workspace .task-document:first-child { padding-top:0; }
 .task-workspace .task-document:last-child { border-bottom:0; padding-bottom:0; }

@@ -266,8 +266,8 @@ class TaskAssignmentController extends Controller
             'subTasks.assignees.user:id,name',
             'subTasks.statusLogs.changedBy:id,name',
             'statusLogs.changedBy:id,name',
-            'completionImages',
-            'subTasks.completionImages',
+            'completionImages.uploader:id,name',
+            'subTasks.completionImages.uploader:id,name',
             'approvalSteps.step',
             'approvalSteps.approver:id,name',
             'assignees.user:id,name',
@@ -670,6 +670,8 @@ class TaskAssignmentController extends Controller
         $request->validate([
             'status' => 'required|in:in_progress,processing,rejected',
             'note'   => 'nullable|string|max:1000',
+            'documents'=>'nullable|array|max:10',
+            'documents.*'=>'file|mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xls,xlsx,txt|max:20480',
         ]);
 
         $assigneeStatus = $request->status === 'in_progress'
@@ -682,6 +684,9 @@ class TaskAssignmentController extends Controller
 
         abort_if($taskAssignment->work_kind && !$record->accepted_at,422,'Vui lòng tiếp nhận công việc trước khi thực hiện.');
         abort_if($taskAssignment->work_kind && $assigneeStatus===TaskAssignment::STATUS_PROCESSING && $taskAssignment->approvalSteps()->where('status','pending')->exists(),422,'Công việc đang chờ duyệt giao, chưa thể bắt đầu.');
+        $paths = [];
+        try {
+        DB::transaction(function () use ($request,$taskAssignment,$record,$assigneeStatus,&$paths) {
         $record->update([
             'started_at' => $assigneeStatus === TaskAssignment::STATUS_PROCESSING ? ($record->started_at ?? now()) : $record->started_at,
             'status'       => $assigneeStatus,
@@ -718,8 +723,18 @@ class TaskAssignmentController extends Controller
             }
         }
 
+        foreach ($request->file('documents',[]) as $file) {
+            $path=$file->store('task-documents/'.$taskAssignment->id,'public');
+            $paths[]=$path;
+            TaskCompletionImage::create(['task_id'=>$taskAssignment->id,'image_path'=>$path,'original_filename'=>$file->getClientOriginalName(),'sort_order'=>0,'uploaded_by'=>$request->user()->id,'explanation'=>$request->note]);
+        }
+        });
+        } catch (Throwable $e) {
+            foreach ($paths as $path) Storage::disk('public')->delete($path);
+            throw $e;
+        }
         return redirect()->route('task-assignments.show', $taskAssignment)
-            ->with('success', 'Da cap nhat trang thai cua ban.');
+            ->with('success', 'Đã cập nhật trạng thái, nội dung và tài liệu của bạn.');
     }
 
     // ── Complete Task with Content and Images ─────────────────────────
@@ -742,7 +757,7 @@ class TaskAssignmentController extends Controller
                     $path = $file->store('task-documents/'.$task->id,'public');
                     $paths[] = $path;
                     TaskCompletionImage::create(['task_id'=>$task->id,'image_path'=>$path,
-                        'original_filename'=>$file->getClientOriginalName(),'sort_order'=>0]);
+                        'original_filename'=>$file->getClientOriginalName(),'sort_order'=>0,'uploaded_by'=>$user->id,'explanation'=>$data['explanation']]);
                 }
                 TaskStatusLog::log($task,$task->status,$user,'Upload tài liệu: '.$data['explanation']);
             });
@@ -873,6 +888,8 @@ class TaskAssignmentController extends Controller
                             'task_id'           => $taskAssignment->id,
                             'image_path'        => $path,
                             'original_filename' => $image->getClientOriginalName(),
+                            'uploaded_by' => $user->id,
+                            'explanation' => $request->completion_content,
                             'sort_order'        => $index,
                         ]);
                     }
