@@ -11,7 +11,7 @@
     @stack('styles')
     <style>
         :root {
-            --sidebar-width: 240px;
+            --sidebar-width: 320px;
             --theme-primary: #0f766e;
             --theme-primary-hover: #115e59;
             --theme-primary-soft: #ccfbf1;
@@ -56,6 +56,27 @@
         .sp-nav-link.active { color: #fff; background: rgba(255,193,7,.16); border-left-color: var(--sidebar-active); }
         .sp-nav-link .badge { margin-left: auto; font-size: .65rem; }
         .sp-main { margin-left: var(--sidebar-width); min-height: 100vh; display: flex; flex-direction: column; }
+        .sp-nav-link > span:not(.badge) { white-space:nowrap; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+        .sp-nav-link > i { flex-shrink:0; }
+        .sp-sidebar-controls { display:flex; gap:4px; margin-left:auto; }
+        .sp-sidebar-controls button { width:28px; height:28px; padding:0; border:1px solid #ffffff55; border-radius:5px; background:transparent; color:#fff; }
+        .sp-sidebar-controls button:hover,.sp-sidebar-controls button[aria-pressed="true"] { background:#ffffff22; }
+        @media(min-width:769px) {
+            body.sp-menu-compact .sp-sidebar,body.sp-menu-unpinned .sp-sidebar { width:76px; }
+            body.sp-menu-compact .sp-main,body.sp-menu-unpinned .sp-main { margin-left:76px; }
+            body.sp-menu-compact .sp-brand,body.sp-menu-unpinned .sp-brand { flex-wrap:wrap; padding:10px 8px; justify-content:center; }
+            body.sp-menu-compact .sp-brand > span,body.sp-menu-unpinned .sp-brand > span { display:none; }
+            body.sp-menu-compact .sp-sidebar-controls,body.sp-menu-unpinned .sp-sidebar-controls { margin:0; }
+            body.sp-menu-compact .sp-nav-link,body.sp-menu-unpinned .sp-nav-link { padding:12px; justify-content:center; }
+            body.sp-menu-compact .sp-nav-link > span,body.sp-menu-unpinned .sp-nav-link > span { display:none; }
+            body.sp-menu-compact .sp-nav-section,body.sp-menu-unpinned .sp-nav-section,body.sp-menu-compact .sp-sidebar > .border-top,body.sp-menu-unpinned .sp-sidebar > .border-top { display:none; }
+            body.sp-menu-unpinned .sp-sidebar:hover,body.sp-menu-unpinned .sp-sidebar:focus-within { width:var(--sidebar-width); }
+            body.sp-menu-unpinned .sp-sidebar:hover .sp-brand,body.sp-menu-unpinned .sp-sidebar:focus-within .sp-brand { flex-wrap:nowrap; padding:1rem 1.25rem; justify-content:flex-start; }
+            body.sp-menu-unpinned .sp-sidebar:hover .sp-brand > span,body.sp-menu-unpinned .sp-sidebar:focus-within .sp-brand > span,body.sp-menu-unpinned .sp-sidebar:hover .sp-nav-link > span,body.sp-menu-unpinned .sp-sidebar:focus-within .sp-nav-link > span { display:block; }
+            body.sp-menu-unpinned .sp-sidebar:hover .sp-nav-link,body.sp-menu-unpinned .sp-sidebar:focus-within .sp-nav-link { justify-content:flex-start; padding:.55rem 1.25rem; }
+            body.sp-menu-unpinned .sp-sidebar:hover .sp-nav-section,body.sp-menu-unpinned .sp-sidebar:focus-within .sp-nav-section,body.sp-menu-unpinned .sp-sidebar:hover > .border-top,body.sp-menu-unpinned .sp-sidebar:focus-within > .border-top { display:block; }
+        }
+        @media(max-width:768px){.sp-sidebar-controls{display:none}}
         .sp-topbar {
             background: #fff; border-bottom: 1px solid #d8ece9; padding: .8rem 1.5rem;
             display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100;
@@ -230,6 +251,10 @@
             <i class="bi bi-bicycle fs-5"></i>
             <span>Shipper</span>
             <span class="badge ms-auto">SP</span>
+            <div class="sp-sidebar-controls">
+                <button type="button" id="spMenuCollapse" aria-label="Thu gọn menu" title="Thu gọn menu" aria-expanded="true"><i class="bi bi-chevron-left"></i></button>
+                <button type="button" id="spMenuPin" aria-label="Bỏ neo menu" title="Bỏ neo menu" aria-pressed="true"><i class="bi bi-pin-angle-fill"></i></button>
+            </div>
         </div>
         <nav class="mt-1 flex-grow-1 overflow-auto">
             <div class="sp-nav-section">Tổng quan</div>
@@ -438,5 +463,24 @@
     </script>
     @include('layouts.partials.session_expiry_redirect')
     @stack('scripts')
+
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+    const sidebar=document.getElementById('shipper-sidebar'),collapse=document.getElementById('spMenuCollapse'),pin=document.getElementById('spMenuPin');
+    let compact=localStorage.getItem('shipperMenuCompact')==='1',pinned=localStorage.getItem('shipperMenuPinned')!=='0';
+    function paint(){
+        document.body.classList.toggle('sp-menu-compact',compact && pinned);
+        document.body.classList.toggle('sp-menu-unpinned',!pinned);
+        collapse.setAttribute('aria-expanded',String(!compact && pinned));collapse.title=compact || !pinned?'Mở rộng menu':'Thu gọn menu';collapse.setAttribute('aria-label',collapse.title);collapse.querySelector('i').className=compact || !pinned?'bi bi-chevron-right':'bi bi-chevron-left';
+        pin.setAttribute('aria-pressed',String(pinned));pin.title=pinned?'Bỏ neo menu':'Neo menu';pin.setAttribute('aria-label',pin.title);pin.querySelector('i').className=pinned?'bi bi-pin-angle-fill':'bi bi-pin-angle';
+        localStorage.setItem('shipperMenuCompact',compact?'1':'0');localStorage.setItem('shipperMenuPinned',pinned?'1':'0');
+    }
+    collapse.addEventListener('click',()=>{if(!pinned){pinned=true;compact=false;}else compact=!compact;paint();});
+    pin.addEventListener('click',()=>{pinned=!pinned;if(pinned)compact=false;paint();});
+    sidebar.querySelectorAll('.sp-nav-link').forEach(link=>{if(!link.title)link.title=link.textContent.trim();});
+    paint();
+});
+</script>
+
 </body>
 </html>
