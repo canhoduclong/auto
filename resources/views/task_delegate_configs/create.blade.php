@@ -1,6 +1,6 @@
 @extends('layouts.admin')
 
-@section('title', 'Them Phan Quyen Giao Viec')
+@section('title', 'Thêm phân quyền giao việc')
 
 @push('styles')
 <style>
@@ -19,8 +19,8 @@
         <i class="ph ph-arrow-left"></i>
     </a>
     <div>
-        <h4 class="mb-0">Them Phan Quyen Giao Viec</h4>
-        <small class="text-muted">Chon nguoi duoc phep giao viec va danh sach nguoi nhan</small>
+        <h4 class="mb-0">Thêm phân quyền giao việc</h4>
+        <small class="text-muted">Chọn người được phép giao việc và danh sách người nhận</small>
     </div>
 </div>
 
@@ -36,12 +36,12 @@
 
         <div class="card shadow-sm mb-3">
             <div class="card-header py-2 fw-semibold small text-uppercase text-muted">
-                <i class="ph-user-gear me-1"></i>Nguoi duoc phep giao viec
+                <i class="ph-user-gear me-1"></i>Người được phép giao việc
             </div>
             <div class="card-body">
-                <p class="small text-muted mb-3">Nguoi nay se thay danh sach nguoi nhan khi tao cong viec moi.</p>
+                <p class="small text-muted mb-3">Người này sẽ thấy danh sách người nhận khi tạo công việc mới.</p>
                 <select name="assigner_id" class="form-select @error('assigner_id') is-invalid @enderror" required id="assignerSelect">
-                    <option value="">-- Chon nguoi giao viec --</option>
+                    <option value="">-- Chọn người giao việc --</option>
                     @foreach($users as $u)
                         <option value="{{ $u->id }}" {{ old('assigner_id') == $u->id ? 'selected' : '' }}>
                             {{ $u->name }}
@@ -53,18 +53,18 @@
         </div>
 
         <div class="card shadow-sm mb-3">
-            <div class="card-header py-2 d-flex justify-content-between align-items-center">
+            <div class="card-header py-2 d-flex flex-wrap gap-2 justify-content-between align-items-center">
                 <span class="fw-semibold small text-uppercase text-muted">
-                    <i class="ph-users me-1"></i>Nguoi nhan viec
+                    <i class="ph-users me-1"></i>Người nhận việc
                 </span>
                 <div class="d-flex gap-2">
-                    <button type="button" class="btn btn-xs btn-outline-primary" onclick="checkAll(true)">Chon het</button>
-                    <button type="button" class="btn btn-xs btn-outline-secondary" onclick="checkAll(false)">Bo chon</button>
-                    <input type="text" id="userSearch" class="form-control form-control-sm" style="width:160px" placeholder="Tim kiem...">
+                    <button type="button" class="btn btn-xs btn-outline-primary" onclick="checkAll(true)">Chọn hết</button>
+                    <button type="button" class="btn btn-xs btn-outline-secondary" onclick="checkAll(false)">Bỏ chọn</button>
+                    <input type="text" id="userSearch" class="form-control form-control-sm" style="width:160px" placeholder="Tìm kiếm…">
                 </div>
             </div>
             <div class="card-body">
-                <p class="small text-muted mb-3">Chon 1 hoac nhieu nguoi. Nguoi duoc chon se xuat hien trong danh sach khi nguoi giao viec tao cong viec moi.</p>
+                <p class="small text-muted mb-3">Chọn một hoặc nhiều người. Người được chọn sẽ xuất hiện trong danh sách khi người giao việc tạo công việc mới.</p>
                 @error('assignee_ids')<div class="alert alert-danger py-2 small">{{ $message }}</div>@enderror
 
                 <div class="user-checkbox-list" id="userList">
@@ -76,21 +76,21 @@
                         </label>
                     @endforeach
                 </div>
-                <div class="text-muted small mt-2" id="selectedCount">0 nguoi duoc chon</div>
+                <div class="text-muted small mt-2" id="selectedCount">0 người được chọn</div>
             </div>
         </div>
 
         <div class="mb-3">
-            <label class="form-label fw-semibold">Ghi chu (tuy chon)</label>
+            <label class="form-label fw-semibold">Ghi chú (tùy chọn)</label>
             <textarea name="note" class="form-control" rows="2" maxlength="500"
-                      placeholder="Vi du: Leader nhom sale A giao viec cho thanh vien...">{{ old('note') }}</textarea>
+                      placeholder="Ví dụ: Trưởng nhóm kinh doanh giao việc cho các thành viên…">{{ old('note') }}</textarea>
         </div>
 
         <div class="d-flex gap-2">
             <button type="submit" class="btn btn-primary">
-                <i class="ph-floppy-disk me-1"></i>Luu phan quyen
+                <i class="ph-floppy-disk me-1"></i>Lưu phân quyền
             </button>
-            <a href="{{ route('task-delegate-configs.index') }}" class="btn btn-outline-secondary">Huy</a>
+            <a href="{{ route('task-delegate-configs.index') }}" class="btn btn-outline-secondary">Hủy</a>
         </div>
     </form>
 </div>
@@ -107,14 +107,14 @@ document.getElementById('userSearch').addEventListener('input', function () {
 
 // Select all / none
 function checkAll(val) {
-    document.querySelectorAll('#userList input[type=checkbox]').forEach(cb => cb.checked = val);
+    document.querySelectorAll('#userList input[type=checkbox]').forEach(cb => { if (!cb.disabled) cb.checked = val; });
     updateCount();
 }
 
 // Counter
 function updateCount() {
     const cnt = document.querySelectorAll('#userList input:checked').length;
-    document.getElementById('selectedCount').textContent = cnt + ' nguoi duoc chon';
+    document.getElementById('selectedCount').textContent = cnt + ' người được chọn';
 }
 document.getElementById('userList').addEventListener('change', updateCount);
 updateCount();
@@ -127,7 +127,7 @@ document.getElementById('assignerSelect').addEventListener('change', function ()
             cb.checked = false;
             cb.disabled = true;
             cb.closest('.user-check-item').style.opacity = '.4';
-            cb.closest('.user-check-item').title = 'Khong the chon chinh nguoi giao viec';
+            cb.closest('.user-check-item').title = 'Không thể chọn chính người giao việc';
         } else {
             cb.disabled = false;
             cb.closest('.user-check-item').style.opacity = '';

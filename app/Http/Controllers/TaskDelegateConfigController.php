@@ -17,6 +17,7 @@ class TaskDelegateConfigController extends Controller
 
     public function index(Request $request)
     {
+        $request->validate(['assigner_id'=>'nullable|integer|exists:users,id','active'=>'nullable|in:0,1','search'=>'nullable|string|max:200']);
         $configs = TaskDelegateConfig::with([
             'assigner:id,name',
             'assignee:id,name',
@@ -24,7 +25,11 @@ class TaskDelegateConfigController extends Controller
         ])
         ->when($request->filled('assigner_id'), fn ($q) => $q->where('assigner_id', $request->assigner_id))
         ->when($request->filled('active'), fn ($q) => $q->where('is_active', $request->active === '1'))
-        ->orderBy('assigner_id')
+        ->when($request->filled('search'),function($q)use($request){
+            $term='%'.$request->search.'%';
+            $q->where(fn($s)=>$s->whereHas('assigner',fn($u)=>$u->where('name','like',$term))->orWhereHas('assignee',fn($u)=>$u->where('name','like',$term))->orWhere('note','like',$term));
+        })
+        ->orderBy('assigner_id')->orderByDesc('is_active')->orderBy('id')
         ->paginate(30)
         ->withQueryString();
 
@@ -72,7 +77,7 @@ class TaskDelegateConfigController extends Controller
         }
 
         return redirect()->route('task-delegate-configs.index')
-            ->with('success', "Da them {$created} phan quyen giao viec.");
+            ->with('success', "Đã thêm {$created} phân quyền giao việc.");
     }
 
     // ── Toggle active ─────────────────────────────────────────────────
@@ -81,7 +86,7 @@ class TaskDelegateConfigController extends Controller
     {
         $taskDelegateConfig->update(['is_active' => !$taskDelegateConfig->is_active]);
 
-        return back()->with('success', 'Da cap nhat trang thai phan quyen.');
+        return back()->with('success', 'Đã cập nhật trạng thái phân quyền.');
     }
 
     // ── Destroy ───────────────────────────────────────────────────────
@@ -89,7 +94,7 @@ class TaskDelegateConfigController extends Controller
     public function destroy(TaskDelegateConfig $taskDelegateConfig)
     {
         $taskDelegateConfig->delete();
-        return back()->with('success', 'Da xoa phan quyen giao viec.');
+        return back()->with('success', 'Đã xóa phân quyền giao việc.');
     }
 
     // ── Bulk destroy for an assigner ──────────────────────────────────
@@ -98,6 +103,6 @@ class TaskDelegateConfigController extends Controller
     {
         $request->validate(['assigner_id' => 'required|exists:users,id']);
         $count = TaskDelegateConfig::where('assigner_id', $request->assigner_id)->delete();
-        return back()->with('success', "Da xoa {$count} phan quyen cho nguoi dung nay.");
+        return back()->with('success', "Đã xóa {$count} phân quyền cho người dùng này.");
     }
 }

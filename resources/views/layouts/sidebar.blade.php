@@ -1,3 +1,8 @@
+<style>
+.sidebar-main .nav-sidebar .nav-link > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-main .nav-sidebar .nav-link > i { flex-shrink: 0; }
+.sidebar-main .nav-sidebar .nav-item-header > div { white-space: nowrap; }
+</style>
 <!-- Sidebar header -->
 			<div class="sidebar-section bg-black bg-opacity-10 border-bottom border-bottom-white border-opacity-10">
 				<div class="sidebar-logo d-flex justify-content-center align-items-center">
@@ -40,10 +45,10 @@
 					</a>
 
 					<div class="dropdown-menu w-100">
-						
+
 										<!-- Thông tin User -->
 					<div class="p-4 border-b border-gray-700 items-center">
-						 
+
 						<div>
 							<div class="font-semibold">{{ auth()->user()->name }}</div>
 							<div class="text-sm text-gray-400">{{ auth()->user()->email }}</div>
@@ -75,7 +80,7 @@
 							@foreach(auth()->user()->roles as $role)
 								@php
 									$roleName = strtolower((string) $role->name);
-									$isActive = session('active_role') === $role->name || 
+									$isActive = session('active_role') === $role->name ||
 										(session()->missing('active_role') && auth()->user()->roles->first()->name === $role->name);
 									$roleLabel = match ($roleName) {
 										'account', 'accountant', 'accounting' => 'Kế toán',
@@ -87,7 +92,7 @@
 								@endphp
 								<form action="{{ route('role.switch', $role->name) }}" method="POST" class="inline-block">
 									@csrf
-									<button type="submit" 
+									<button type="submit"
 										class="btn btn-sm {{ $isActive ? 'btn-primary' : 'btn-outline-secondary' }}"
 										title="Chuyển sang vai trò {{ $role->name }}">
 										{{ $roleLabel }}
@@ -97,15 +102,14 @@
 						</div>
 					</div>
 					@endif
-						 
+
 					</div>
 				</div>
-				<!-- /customers --> 
+				<!-- /customers -->
 
 				<!-- Main navigation -->
 				<div class="sidebar-section">
 					<ul class="nav nav-sidebar" data-nav-type="accordion">
-                        @include('layouts.partials.task-sidebar-menu', ['taskNavList'=>true])
 
 						<!-- Tổng quan -->
 						<li class="nav-item-header">
@@ -124,6 +128,8 @@
 								<span>{{ __('menu.media') }}</span>
 							</a>
 						</li>
+
+                        @include('layouts.partials.task-sidebar-menu', ['taskNavList'=>true])
 
 						<!-- Đơn hàng -->
 						<li class="nav-item-header">
@@ -152,13 +158,13 @@
 						<li class="nav-item">
 							<a href="{{ route('admin.daily-rebuild.index') }}" class="nav-link{{ request()->routeIs('admin.daily-rebuild.*') ? ' active' : '' }}">
 								<i class="ph-arrow-counter-clockwise"></i>
-								<span>Làm lại nguyên ngày</span>
+								<span>Làm lại theo ngày</span>
 							</a>
 						</li>
 						<li class="nav-item">
 							<a href="{{ route('admin.imported-sales-orders.index') }}" class="nav-link{{ request()->routeIs('admin.imported-sales-orders.*') ? ' active' : '' }}">
 								<i class="ph-clipboard-text"></i>
-								<span>Hoàn chỉnh đơn lịch sử</span>
+								<span>Hoàn chỉnh đơn cũ</span>
 							</a>
 						</li>
 						@endif
@@ -174,27 +180,22 @@
 								<span>Đơn tự động</span>
 							</a>
 						</li>
-						<li class="nav-item">
-							<a href="{{ route('approval-workflows.index') }}" class="nav-link{{ request()->routeIs('approval-workflows.*') ? ' active' : '' }}">
-								<i class="ph-flow-arrow"></i>
-								<span>Quy trình duyệt</span>
+@if(auth()->user()?->isAdmin())
+<li class="nav-item">
+								<a href="{{ route('admin.order-activity.index') }}" class="nav-link{{ request()->routeIs('admin.order-activity.*') ? ' active' : '' }}">
+									<i class="ph-clock-counter-clockwise"></i>
+									<span>Lịch sử đơn hàng</span>
+								</a>
+							</li>
+@endif
+@if(auth()->user()?->isAdmin())
+<li class="nav-item">
+							<a href="{{ route('admin.order-fee-types.index') }}" class="nav-link{{ request()->routeIs('admin.order-fee-types.*') ? ' active' : '' }}">
+								<i class="ph-receipt"></i>
+								<span>Loại phí đơn hàng</span>
 							</a>
 						</li>
-						<li class="nav-item">
-							<a href="{{ route('task-assignments.index') }}" class="nav-link{{ request()->routeIs('task-assignments.*') ? ' active' : '' }}">
-								<i class="ph-clipboard-text"></i>
-								<span>Giao Việc</span>
-							</a>
-						</li>
-						@if(auth()->user()?->hasRole('admin'))
-						<li class="nav-item">
-							<a href="{{ route('task-delegate-configs.index') }}" class="nav-link{{ request()->routeIs('task-delegate-configs.*') ? ' active' : '' }}">
-								<i class="ph-user-gear"></i>
-								<span>Phan Quyen Giao Viec</span>
-							</a>
-						</li>
-						@endif
-
+@endif
 						@if(auth()->user()?->isAdmin())
 						<li class="nav-item-header">
 							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Tài chính</div>
@@ -215,7 +216,7 @@
 						<li class="nav-item">
 							<a href="{{ route('admin.accounting.finance-requests.index') }}" class="nav-link{{ request()->routeIs('admin.accounting.finance-requests.*') ? ' active' : '' }}">
 								<i class="ph-file-text"></i>
-								<span>Quản trị phiếu yêu cầu</span>
+								<span>Phiếu yêu cầu</span>
 							</a>
 						</li>
 						<li class="nav-item">
@@ -233,7 +234,7 @@
 						<li class="nav-item">
 							<a href="{{ route('admin.accounting.transaction-categories.index') }}" class="nav-link{{ request()->routeIs('admin.accounting.transaction-categories.*') ? ' active' : '' }}">
 								<i class="ph-tree-structure"></i>
-								<span>Quản trị danh mục giao dịch</span>
+								<span>Danh mục giao dịch</span>
 							</a>
 						</li>
 						@elseif(auth()->user()?->hasRole('account') || auth()->user()?->hasRole('accountant') || auth()->user()?->hasRole('accounting'))
@@ -249,7 +250,9 @@
 						</li>
 						@endif
 
-						<!-- Khách hàng -->
+
+
+<!-- Khách hàng -->
 						<li class="nav-item-header">
 							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Khách hàng</div>
 							<i class="ph-dots-three sidebar-resize-show"></i>
@@ -339,7 +342,7 @@
 								<span>Đặt chỗ tồn kho</span>
 							</a>
 						</li>
-						
+
 						<li class="nav-item">
 							<a href="{{ route('inventory-documents.index') }}" class="nav-link{{ request()->routeIs('inventory-documents.*') ? ' active' : '' }}">
 								<i class="ph-files"></i>
@@ -352,17 +355,12 @@
 								<span>Phiếu xuất kho tổng</span>
 							</a>
 						</li>
-						<li class="nav-item">
-								<a href="{{ route('admin.order-activity.index') }}" class="nav-link{{ request()->routeIs('admin.order-activity.*') ? ' active' : '' }}">
-									<i class="ph-clock-counter-clockwise"></i>
-									<span>Hoạt động đơn hàng</span>
-								</a>
-							</li>
+
 						@if(auth()->user()?->isAdmin())
 						<li class="nav-item">
 							<a href="{{ route('admin.google-sheet-inventory-reset.index') }}" class="nav-link{{ request()->routeIs('admin.google-sheet-inventory-reset.*') ? ' active' : '' }}">
 								<i class="ph-arrow-counter-clockwise"></i>
-								<span>Reset tồn kho Google Sheet</span>
+								<span>Đặt lại tồn kho</span>
 							</a>
 						</li>
 						@endif
@@ -372,47 +370,36 @@
 								<span>Báo cáo tồn kho</span>
 							</a>
 						</li>
-
-						@if(auth()->user()?->hasRole('warehouse') || auth()->user()?->hasRole('admin'))
-						<li class="nav-item">
-							<a href="{{ route('tasks.my-tasks') }}" class="nav-link{{ request()->routeIs('tasks.my-tasks') || request()->routeIs('task-assignments.assigned-to-me') ? ' active' : '' }}">
-								<i class="ph-clipboard-text"></i>
-								<span>Nhiệm vụ</span>
-							</a>
-						</li>
-						<li class="nav-item">
-							<a href="{{ route('task-assignments.in-progress') }}" class="nav-link{{ request()->routeIs('task-assignments.in-progress') || request()->routeIs('task-assignments.complete-form') ? ' active' : '' }}">
-								<i class="ph-check-circle"></i>
-								<span>Thực hiện</span>
-							</a>
-						</li>
-						@endif
-
-						<!-- Nhà xe -->
+<!-- Nhà xe -->
 						<li class="nav-item-header">
-							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Nhà xe</div>
+							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Vận chuyển</div>
 							<i class="ph-dots-three sidebar-resize-show"></i>
 						</li>
 						<li class="nav-item">
 							<a href="{{ route('admin.truck-brands.index') }}" class="nav-link{{ request()->routeIs('admin.truck-brands.*') ? ' active' : '' }}">
 								<i class="ph-buildings"></i>
-								<span>Nhà xe (Brands)</span>
+								<span>Đơn vị nhà xe</span>
 							</a>
 						</li>
 						<li class="nav-item">
 							<a href="{{ route('admin.truck-stations.index') }}" class="nav-link{{ request()->routeIs('admin.truck-stations.*') ? ' active' : '' }}">
 								<i class="ph-map-pin"></i>
-								<span>Quản lý Trạm xe</span>
+								<span>Trạm nhà xe</span>
 							</a>
 						</li>
 						<li class="nav-item">
 							<a href="{{ route('admin.truck-routes.index') }}" class="nav-link{{ request()->routeIs('admin.truck-routes.*') ? ' active' : '' }}">
 								<i class="ph-path"></i>
-								<span>Quản lý Tuyến đi</span>
+								<span>Tuyến nhà xe</span>
 							</a>
 						</li>
 
-						<!-- Nội dung & CMS -->
+						@if(auth()->user()?->isAdmin())
+<li class="nav-item">
+                            <a href="{{ route('admin.shipper-holdings.index') }}" class="nav-link{{ request()->routeIs('admin.shipper-holdings.*') ? ' active' : '' }}"><i class="ph-truck"></i><span>Đơn shipper giữ</span></a>
+                        </li>
+@endif
+<!-- Nội dung & CMS -->
 						<li class="nav-item-header">
 							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Nội dung</div>
 							<i class="ph-dots-three sidebar-resize-show"></i>
@@ -432,7 +419,7 @@
 						<li class="nav-item">
 							<a href="{{ route('admin.hoang-long-profile.edit') }}" class="nav-link{{ request()->routeIs('admin.hoang-long-profile.*') ? ' active' : '' }}">
 								<i class="ph-buildings"></i>
-								<span>Profile Hoàng Long</span>
+								<span>Hồ sơ công ty</span>
 							</a>
 						</li>
 						<li class="nav-item">
@@ -450,7 +437,7 @@
 						<li class="nav-item">
 							<a href="{{ route('users.index') }}" class="nav-link{{ request()->routeIs('users.*') ? ' active' : '' }}">
 								<i class="ph-user-gear"></i>
-								<span>Quản trị users</span>
+								<span>Người dùng</span>
 							</a>
 						</li>
 						<li class="nav-item">
@@ -460,19 +447,17 @@
 							</a>
 						</li>
 						@if(auth()->user()?->isAdmin())
-						<li class="nav-item">
-                            <a href="{{ route('admin.shipper-holdings.index') }}" class="nav-link{{ request()->routeIs('admin.shipper-holdings.*') ? ' active' : '' }}"><i class="ph-truck"></i><span>Đơn Shipper đang giữ</span></a>
-                        </li>
+
                         <li class="nav-item">
 							<a href="{{ route('admin.notifications.index') }}" class="nav-link{{ request()->routeIs('admin.notifications.*') ? ' active' : '' }}">
 								<i class="ph-bell-ringing"></i>
-								<span>Quản trị thông báo</span>
+								<span>Thông báo</span>
 							</a>
 						</li>
 						<li class="nav-item">
 							<a href="{{ route('layouts.index') }}" class="nav-link{{ request()->routeIs('layouts.*') ? ' active' : '' }}">
 								<i class="ph-layout"></i>
-								<span>Layout</span>
+								<span>Giao diện</span>
 							</a>
 						</li>
 						@endif
@@ -485,7 +470,7 @@
 						<li class="nav-item">
 							<a href="{{ route('teams.index') }}" class="nav-link{{ request()->routeIs('teams.*') ? ' active' : '' }}">
 								<i class="ph-users-three"></i>
-								<span>Teams</span>
+								<span>Nhóm nhân sự</span>
 							</a>
 						</li>
 						@if(auth()->user()?->isAdmin())
@@ -499,7 +484,7 @@
 						<li class="nav-item">
 							<a href="{{ route('provinces.index') }}" class="nav-link{{ request()->routeIs('provinces.*') ? ' active' : '' }}">
 								<i class="ph-map-trifold"></i>
-								<span>Tỉnh/Thành & Phường/Xã</span>
+								<span>Tỉnh thành / Xã phường</span>
 							</a>
 						</li>
 						<li class="nav-item">
@@ -508,25 +493,17 @@
 								<span>{{ __('menu.settings') }}</span>
 							</a>
 						</li>
-						@if(auth()->user()?->isAdmin())
-						<li class="nav-item">
-							<a href="{{ route('admin.order-fee-types.index') }}" class="nav-link{{ request()->routeIs('admin.order-fee-types.*') ? ' active' : '' }}">
-								<i class="ph-receipt"></i>
-								<span>Quản trị phí đơn hàng</span>
-							</a>
-						</li>
-						@endif
-						<li class="nav-item">
+<li class="nav-item">
 							<a href="{{ route('admin.settings.reset-data.index') }}" class="nav-link{{ request()->routeIs('admin.settings.reset-data.*') ? ' active' : '' }}">
 								<i class="ph-database"></i>
-								<span>Reset Data</span>
+								<span>Đặt lại dữ liệu</span>
 							</a>
 						</li>
 
 					</ul>
 					 <!-- Logout -->
 					<div class="p-4 border-t border-gray-700">
-						
+
 					</div>
 
 				</div>

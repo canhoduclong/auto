@@ -58,7 +58,7 @@
 <style>
     .recon-grid {
         display: grid;
-        grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+        grid-template-columns: minmax(0, 1fr);
         gap: 16px;
         align-items: start;
     }
@@ -75,15 +75,26 @@
         color: #0f172a;
     }
     .recon-panel .panel-body { padding: 16px; }
-    .recon-filter-panel { position:sticky; top:72px; z-index:20; transition:width .2s ease; }
-    .recon-filter-panel.is-collapsed { width:58px; min-width:58px; overflow:visible; }
-    .recon-filter-panel.is-collapsed .js-filter-body, .recon-filter-panel.is-collapsed .js-filter-title { display:none; }
-    .recon-filter-panel.is-collapsed .panel-head { padding:10px; justify-content:center; border-bottom:0; }
-    .recon-filter-panel.is-collapsed #reconFilterPin { display:none; }
-    .recon-grid.filter-collapsed { grid-template-columns:58px minmax(0,1fr); }
+    .recon-filter-panel { position:static; width:100%; min-width:0; }
+    .recon-filter-panel.is-pinned { position:sticky; top:var(--recon-sticky-top,72px); z-index:30; }
+    .recon-filter-top { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:10px 16px; border-bottom:1px solid #e2e8f0; }
+    .recon-filter-top > strong { white-space:nowrap; }
+    .recon-filter-top .recon-date-shortcuts { flex:1 1 430px; padding:0; border:0; }
+    .recon-date-range { display:flex; align-items:center; gap:8px; min-width:0; }
+    .recon-date-range label { white-space:nowrap; font-size:.8rem; margin:0; }
+    .recon-date-range input { width:145px; min-width:0; }
+    @media(max-width:992px) {
+        .recon-filter-top .recon-date-shortcuts { order:4; flex-basis:100%; }
+        .recon-date-range { flex:1 1 100%; }
+        .recon-date-range input { flex:1; width:0; }
+        .recon-filter-top .recon-filter-actions { margin-left:auto; }
+    }
+    .recon-filter-panel.is-collapsed .js-filter-body { display:none; }
+    .recon-grid.filter-collapsed { grid-template-columns:minmax(0,1fr); }
     .recon-filter-actions { display:flex; gap:5px; flex:0 0 auto; }
     .recon-stats {
         display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
         gap: 8px;
     }
     .recon-stat {
@@ -202,6 +213,7 @@
     .recon-sort-link .bi { font-size: .72rem; opacity: .7; }
     @media (max-width: 992px) {
         .recon-grid { grid-template-columns: 1fr; }
+        .recon-stats { grid-template-columns:repeat(2,minmax(0,1fr)); }
         .recon-detail-layout { grid-template-columns:1fr; }
         .recon-detail-flow { position:static; }
     }
@@ -214,7 +226,7 @@
         .recon-filter-panel, .recon-filter-panel.is-collapsed { position: static; width: 100%; min-width: 0; }
         .recon-filter-panel.is-collapsed .js-filter-title { display: block; }
         .recon-filter-panel.is-collapsed .panel-head { justify-content: space-between !important; }
-        .recon-filter-panel #reconFilterPin { display: none; }
+
     }
     @media (max-width: 992px) {
         .recon-panel .panel-body, .recon-panel .panel-head { padding: 12px; }
@@ -244,6 +256,7 @@
     @media (max-width: 360px) {
         .recon-orders-table > tbody > tr:not(.d-none) { grid-template-columns: minmax(0, 1fr); }
         .recon-filter-panel .row > [class*="col-"] { width: 100%; }
+        .recon-stats { grid-template-columns:minmax(0,1fr); }
     }
     .recon-date-shortcuts { display: flex; gap: 6px; overflow-x: auto; max-width: 100%; padding: 10px; border-bottom: 1px solid #e2e8f0; scrollbar-width: thin; }
     .recon-date-shortcut { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; min-height: 38px; padding: 6px 9px; border: 1px solid #cbd5e1; border-radius: 999px; text-decoration: none; color: #334155; background: #fff; font-size: .78rem; font-weight: 600; }
@@ -257,16 +270,12 @@
 
 <div class="recon-grid" id="reconGrid">
     <div class="recon-panel recon-filter-panel" id="reconFilterPanel">
-        <div class="panel-head d-flex justify-content-between align-items-start gap-2">
-            <span class="js-filter-title">Tổng quan
-            · Lên đơn {{ $businessDateFrom ? \Carbon\Carbon::parse($businessDateFrom)->format('d/m/Y') : '…' }} – {{ $businessDateTo ? \Carbon\Carbon::parse($businessDateTo)->format('d/m/Y') : '…' }}
-            · Giao {{ $deliveredDateFrom ? \Carbon\Carbon::parse($deliveredDateFrom)->format('d/m/Y') : '…' }} – {{ $deliveredDateTo ? \Carbon\Carbon::parse($deliveredDateTo)->format('d/m/Y') : '…' }}</span>
-            <span class="recon-filter-actions">
-                <button type="button" class="btn btn-sm btn-outline-secondary recon-icon-button" id="reconFilterToggle" title="Thu gọn bộ lọc; rê chuột vào để mở"><i class="bi bi-layout-sidebar-inset"></i></button>
-                <button type="button" class="btn btn-sm btn-outline-primary recon-icon-button" id="reconFilterPin" title="Neo bộ lọc"><i class="bi bi-pin-angle"></i></button>
-            </span>
-        </div>
-        <nav class="recon-date-shortcuts js-filter-body" aria-label="Chọn nhanh ngày nghiệp vụ">
+        <form method="GET" id="reconFilters">
+        <input type="hidden" name="sort" value="{{ $sort }}">
+        <input type="hidden" name="direction" value="{{ $sortDirection }}">
+        <div class="recon-filter-top">
+            <strong>Tổng quan</strong>
+        <nav class="recon-date-shortcuts" aria-label="Chọn nhanh ngày nghiệp vụ">
             @foreach($businessDateShortcuts as $shortcut)
                 <a class="recon-date-shortcut {{ $shortcut['active'] ? 'is-active' : '' }}"
                    href="{{ request()->fullUrlWithQuery(['business_date_from' => $shortcut['date'], 'business_date_to' => $shortcut['date'], 'business_date' => null, 'date' => null, 'date_field' => null, 'page' => null]) }}"
@@ -277,21 +286,24 @@
                 </a>
             @endforeach
         </nav>
+            <div class="recon-date-range">
+                <label for="recon-business-from">Ngày tạo</label>
+                <input id="recon-business-from" class="form-control" aria-label="Ngày lên đơn từ" type="date" name="business_date_from" value="{{ $businessDateFrom }}">
+                <input class="form-control" aria-label="Ngày lên đơn đến" type="date" name="business_date_to" value="{{ $businessDateTo }}">
+            </div>
+            <div class="recon-date-range">
+                <label for="recon-delivered-from">Ngày giao</label>
+                <input id="recon-delivered-from" class="form-control" aria-label="Ngày giao từ" type="date" name="delivered_date_from" value="{{ $deliveredDateFrom }}">
+                <input class="form-control" aria-label="Ngày giao đến" type="date" name="delivered_date_to" value="{{ $deliveredDateTo }}">
+            </div>
+            <div class="recon-filter-actions">
+                <button type="button" class="btn btn-sm btn-outline-primary recon-icon-button" id="reconFilterPin" aria-pressed="true" title="Bỏ neo bộ lọc"><i class="bi bi-pin-angle-fill"></i></button>
+                <button type="button" class="btn btn-sm btn-outline-secondary recon-icon-button" id="reconFilterToggle" title="Thu gọn bộ lọc"><i class="bi bi-chevron-up"></i></button>
+            </div>
+        </div>
         <div class="panel-body js-filter-body">
-            <form method="GET" class="row g-2 mb-3">
-                <input type="hidden" name="sort" value="{{ $sort }}">
-                <input type="hidden" name="direction" value="{{ $sortDirection }}">
-                <div class="col-12">
-                    <label class="form-label">Ngày nghiệp vụ / ngày lên đơn</label>
-                    <div class="row g-2"><div class="col-6"><input class="form-control" aria-label="Ngày lên đơn từ" type="date" name="business_date_from" value="{{ $businessDateFrom }}"></div><div class="col-6"><input class="form-control" aria-label="Ngày lên đơn đến" type="date" name="business_date_to" value="{{ $businessDateTo }}"></div></div>
-                    <div class="form-text">Từ ngày – đến ngày; có thể để trống một đầu.</div>
-                </div>
-                <div class="col-12">
-                    <label class="form-label">Ngày giao thực tế</label>
-                    <div class="row g-2"><div class="col-6"><input class="form-control" aria-label="Ngày giao từ" type="date" name="delivered_date_from" value="{{ $deliveredDateFrom }}"></div><div class="col-6"><input class="form-control" aria-label="Ngày giao đến" type="date" name="delivered_date_to" value="{{ $deliveredDateTo }}"></div></div>
-                    <div class="form-text">Từ ngày – đến ngày; kết hợp được với ngày lên đơn.</div>
-                </div>
-                <div class="col-12">
+            <div class="row g-2">
+                <div class="col-6 col-md-4 col-xl-2">
                     <label class="form-label">Sale</label>
                     <select class="form-select" name="sale_id">
                         <option value="0">Tất cả</option>
@@ -300,7 +312,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-12">
+                <div class="col-6 col-md-4 col-xl-2">
                     <label class="form-label">Shipper</label>
                     <select class="form-select" name="shipper_id">
                         <option value="0">Tất cả</option>
@@ -309,7 +321,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-6">
+                <div class="col-6 col-md-4 col-xl-2">
                     <label class="form-label">Giao hàng</label>
                     <select class="form-select" name="status">
                         @foreach($deliveryStatuses as $value => $label)
@@ -317,7 +329,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-6">
+                <div class="col-6 col-md-4 col-xl-2">
                     <label class="form-label">Thanh toán</label>
                     <select class="form-select" name="payment_status">
                         @foreach($paymentStatuses as $value => $label)
@@ -325,7 +337,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-12">
+                <div class="col-6 col-md-4 col-xl-2">
                     <label class="form-label">Xác nhận kế toán</label>
                     <select class="form-select" name="accounting_status">
                         <option value="" {{ $accountingStatus === '' ? 'selected' : '' }}>Tất cả</option>
@@ -333,24 +345,12 @@
                         <option value="confirmed" {{ $accountingStatus === 'confirmed' ? 'selected' : '' }}>Đã xác nhận</option>
                     </select>
                 </div>
-                <div class="col-12 d-grid">
+                <div class="col-12 col-md-4 col-xl-2 d-grid align-self-end">
                     <button class="btn btn-primary">Lọc đối soát</button>
                 </div>
-            </form>
-
-            <div class="recon-stats">
-                <div class="recon-stat"><span>Tổng số đơn</span><strong>{{ number_format($stats['total_orders']) }}</strong></div>
-                <div class="recon-stat"><span>Tổng mặt hàng bán</span><strong>{{ number_format($stats['total_items']) }}</strong></div>
-                <div class="recon-stat"><span>Tổng giá trị hàng bán</span><strong>{{ $money($stats['total_goods']) }}</strong></div>
-                <div class="recon-stat"><span>Tổng doanh thu</span><strong>{{ $money($stats['total_revenue']) }}</strong></div>
-                <div class="recon-stat"><span>Tổng đã thanh toán</span><strong class="text-success">{{ $money($stats['total_paid']) }}</strong></div>
-                <div class="recon-stat"><span>Tổng còn thiếu</span><strong class="text-danger">{{ $money($stats['total_due']) }}</strong></div>
-                <div class="recon-stat"><span>Tổng phí giao hàng thu khách</span><strong>{{ $money($stats['total_shipping_fee']) }}</strong></div>
-                <div class="recon-stat"><span>Tổng đơn hoàn/trả</span><strong>{{ number_format($stats['return_orders']) }}</strong></div>
-                <div class="recon-stat"><span>Đã kế toán xác nhận</span><strong class="text-success">{{ number_format($stats['confirmed']) }}</strong></div>
-                <div class="recon-stat"><span>Chưa kế toán xác nhận</span><strong class="text-warning">{{ number_format($stats['pending']) }}</strong></div>
             </div>
         </div>
+        </form>
     </div>
 
     <div class="recon-panel">
@@ -542,6 +542,20 @@
             </div>
 
             {{ $orders->links() }}
+            <footer class="border-top mt-3 pt-3" aria-label="Tổng hợp đối soát">
+            <div class="recon-stats">
+                <div class="recon-stat"><span>Tổng số đơn</span><strong>{{ number_format($stats['total_orders']) }}</strong></div>
+                <div class="recon-stat"><span>Tổng mặt hàng bán</span><strong>{{ number_format($stats['total_items']) }}</strong></div>
+                <div class="recon-stat"><span>Tổng giá trị hàng bán</span><strong>{{ $money($stats['total_goods']) }}</strong></div>
+                <div class="recon-stat"><span>Tổng doanh thu</span><strong>{{ $money($stats['total_revenue']) }}</strong></div>
+                <div class="recon-stat"><span>Tổng đã thanh toán</span><strong class="text-success">{{ $money($stats['total_paid']) }}</strong></div>
+                <div class="recon-stat"><span>Tổng còn thiếu</span><strong class="text-danger">{{ $money($stats['total_due']) }}</strong></div>
+                <div class="recon-stat"><span>Tổng phí giao hàng thu khách</span><strong>{{ $money($stats['total_shipping_fee']) }}</strong></div>
+                <div class="recon-stat"><span>Tổng đơn hoàn/trả</span><strong>{{ number_format($stats['return_orders']) }}</strong></div>
+                <div class="recon-stat"><span>Đã kế toán xác nhận</span><strong class="text-success">{{ number_format($stats['confirmed']) }}</strong></div>
+                <div class="recon-stat"><span>Chưa kế toán xác nhận</span><strong class="text-warning">{{ number_format($stats['pending']) }}</strong></div>
+            </div>
+            </footer>
         </div>
     </div>
 </div>
@@ -550,50 +564,37 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const filterPanel = document.getElementById('reconFilterPanel');
-    const reconGrid = document.getElementById('reconGrid');
     const filterToggle = document.getElementById('reconFilterToggle');
     const filterPin = document.getElementById('reconFilterPin');
-    let filterPinned = localStorage.getItem('accountingReconciliationFilterPinned') !== '0';
-    let filterCollapsed = localStorage.getItem('accountingReconciliationFilterCollapsed') === '1';
-
-    function paintFilterPanel(temporaryOpen = false) {
-        const collapsed = filterCollapsed && !temporaryOpen;
-        filterPanel?.classList.toggle('is-collapsed', collapsed);
-        reconGrid?.classList.toggle('filter-collapsed', collapsed);
-        filterPin?.classList.toggle('btn-primary', filterPinned);
-        filterPin?.classList.toggle('btn-outline-primary', !filterPinned);
+    let filterPinned = localStorage.getItem('accountingReconciliationTopFilterPinned') !== '0';
+    function paintFilterPin() {
+        const topbar = document.querySelector('.acc-topbar');
+        const top = topbar && getComputedStyle(topbar).position === 'sticky' ? topbar.getBoundingClientRect().height : 0;
+        filterPanel?.style.setProperty('--recon-sticky-top', `${top}px`);
+        filterPanel?.classList.toggle('is-pinned', filterPinned);
+        filterPin?.setAttribute('aria-pressed', String(filterPinned));
         if (filterPin) {
-            filterPin.title = filterPinned ? 'Tắt neo bộ lọc' : 'Neo bộ lọc';
+            filterPin.title = filterPinned ? 'Bỏ neo bộ lọc' : 'Neo bộ lọc khi cuộn';
             filterPin.querySelector('i').className = filterPinned ? 'bi bi-pin-angle-fill' : 'bi bi-pin-angle';
         }
-        if (filterToggle) {
-            filterToggle.setAttribute('aria-expanded', String(!collapsed));
-            filterToggle.setAttribute('aria-label', collapsed ? 'Mở bộ lọc' : 'Thu gọn bộ lọc');
-            filterToggle.title = collapsed ? 'Mở bộ lọc' : 'Thu gọn bộ lọc; rê chuột vào biểu tượng để mở';
-            filterToggle.querySelector('i').className = collapsed ? 'bi bi-layout-sidebar' : 'bi bi-layout-sidebar-inset';
-        }
     }
-    filterToggle?.addEventListener('click', function () {
-        filterCollapsed = !filterCollapsed;
-        if (filterCollapsed) filterPinned = false;
-        localStorage.setItem('accountingReconciliationFilterPinned', filterPinned ? '1' : '0');
-        localStorage.setItem('accountingReconciliationFilterCollapsed', filterCollapsed ? '1' : '0');
-        paintFilterPanel();
-    });
-    filterToggle?.addEventListener('mouseenter', function () {
-        if (window.matchMedia('(hover: hover) and (min-width: 993px)').matches && filterCollapsed && !filterPinned) paintFilterPanel(true);
-    });
-    filterPanel?.addEventListener('mouseleave', function () {
-        if (window.matchMedia('(hover: hover) and (min-width: 993px)').matches && filterCollapsed && !filterPinned) paintFilterPanel(false);
-    });
     filterPin?.addEventListener('click', function () {
         filterPinned = !filterPinned;
-        if (filterPinned) filterCollapsed = false;
-        localStorage.setItem('accountingReconciliationFilterPinned', filterPinned ? '1' : '0');
-        localStorage.setItem('accountingReconciliationFilterCollapsed', filterCollapsed ? '1' : '0');
-        paintFilterPanel();
+        localStorage.setItem('accountingReconciliationTopFilterPinned', filterPinned ? '1' : '0');
+        paintFilterPin();
     });
-    paintFilterPanel();
+    window.addEventListener('resize', paintFilterPin);
+    paintFilterPin();
+    let filterCollapsed = false;
+    filterToggle?.addEventListener('click', function () {
+        filterCollapsed = !filterCollapsed;
+        filterPanel?.classList.toggle('is-collapsed', filterCollapsed);
+        filterToggle.setAttribute('aria-expanded', String(!filterCollapsed));
+        filterToggle.title = filterCollapsed ? 'Mở bộ lọc' : 'Thu gọn bộ lọc';
+        filterToggle.setAttribute('aria-label', filterToggle.title);
+        filterToggle.querySelector('i').className = filterCollapsed ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
+    });
+    filterToggle?.setAttribute('aria-expanded', 'true');
 
     document.querySelectorAll('.js-exclude-invalid-order-form').forEach(function (form) {
         form.addEventListener('submit', function (event) {

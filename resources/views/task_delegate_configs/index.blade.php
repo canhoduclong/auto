@@ -1,108 +1,31 @@
 @extends('layouts.admin')
-
-@section('title', 'Phan Quyen Giao Viec')
-
+@section('title','Phân quyền giao việc')
 @push('styles')
 <style>
-.assigner-block { border: 1.5px solid #e2e8f0; border-radius: 12px; margin-bottom: 18px; overflow: hidden; }
-.assigner-header { background: #f8fafc; padding: 12px 16px; border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: space-between; }
-.assigner-body { padding: 12px 16px; }
-.assignee-pill { display: inline-flex; align-items: center; gap: 6px; background: #dbeafe; color: #1d4ed8; border-radius: 20px; padding: 4px 10px; font-size: 12px; font-weight: 600; margin: 3px; }
-.assignee-pill.inactive { background: #f1f5f9; color: #94a3b8; text-decoration: line-through; }
+.delegate-page{padding:24px;max-width:1500px;width:100%;margin:auto;font-size:14px;color:#243449}.delegate-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px;margin-bottom:20px}.delegate-header h1{font-size:24px;font-weight:700;margin:0 0 6px}.delegate-muted{font-size:13px;color:#68788d}.delegate-panel{background:#fff;border:1px solid #dce4ee;border-radius:10px;overflow:hidden;margin-bottom:18px}.delegate-filter{padding:18px;background:#f8fafc}.delegate-page label{font-size:12px;color:#52647a;font-weight:600;margin-bottom:6px;display:block}.delegate-group-head{padding:16px 18px;background:#f2f6fa;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid #dce4ee}.delegate-group-head h2{font-size:16px;font-weight:700;margin:0 0 6px}.delegate-page table{font-size:14px;margin:0}.delegate-page th{padding:11px 16px!important;color:#52647a;background:#fafbfd;white-space:nowrap}.delegate-page td{padding:13px 16px!important;vertical-align:middle;border-bottom:1px solid #edf0f5}.delegate-page tbody tr:hover{background:#f8fbff}.delegate-page .badge{font-size:12px}.delegate-page .btn,.delegate-page .form-select,.delegate-page .form-control{font-size:13px}.delegate-page .pagination{margin:0;flex-wrap:wrap}.delegate-actions{display:flex;gap:8px}.delegate-footer{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}@media(max-width:600px){.delegate-page{padding:14px}.delegate-header h1{font-size:21px}.delegate-filter{padding:14px}}
 </style>
 @endpush
-
 @section('content')
-<div class="content-wrapper">
-<div class="content-header d-flex align-items-center justify-content-between py-3 px-4">
-    <div>
-        <h4 class="mb-0">Phan Quyen Giao Viec</h4>
-        <small class="text-muted">Admin cau hinh nguoi dung nao duoc phep giao viec cho ai</small>
-    </div>
-    <a href="{{ route('task-delegate-configs.create') }}" class="btn btn-primary btn-sm">
-        <i class="ph-plus me-1"></i>Them phan quyen
-    </a>
-</div>
-
-<div class="content-body px-4 pb-4">
-    @if(session('success'))<div class="alert alert-success alert-dismissible fade show">{{ session('success') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>@endif
-
-    {{-- Filter bar --}}
-    <form method="GET" class="d-flex gap-2 mb-4">
-        <select name="assigner_id" class="form-select form-select-sm" style="width:200px">
-            <option value="">Tat ca nguoi giao viec</option>
-            @foreach($users as $u)
-                <option value="{{ $u->id }}" {{ request('assigner_id') == $u->id ? 'selected' : '' }}>{{ $u->name }}</option>
-            @endforeach
-        </select>
-        <select name="active" class="form-select form-select-sm" style="width:140px">
-            <option value="">Tat ca trang thai</option>
-            <option value="1" {{ request('active') === '1' ? 'selected' : '' }}>Dang hoat dong</option>
-            <option value="0" {{ request('active') === '0' ? 'selected' : '' }}>Da tat</option>
-        </select>
-        <button type="submit" class="btn btn-sm btn-outline-primary">Loc</button>
-        <a href="{{ route('task-delegate-configs.index') }}" class="btn btn-sm btn-outline-secondary">Reset</a>
-    </form>
-
-    @if($grouped->isEmpty())
-        <div class="text-center text-muted py-5">
-            <i class="ph-users-three" style="font-size:48px;opacity:.3"></i>
-            <p class="mt-2">Chua co phan quyen nao. Hay them phan quyen moi.</p>
-        </div>
-    @else
-        @foreach($grouped as $assignerId => $entries)
-            @php $assigner = $entries->first()->assigner; @endphp
-            <div class="assigner-block">
-                <div class="assigner-header">
-                    <div>
-                        <span class="fw-bold">{{ $assigner?->name ?? '#' . $assignerId }}</span>
-                        <span class="text-muted ms-2 small">{{ $entries->count() }} nguoi nhan</span>
-                        <span class="text-muted ms-1 small">&bull; Tao boi: {{ $entries->first()->admin?->name }}</span>
-                    </div>
-                    <form action="{{ route('task-delegate-configs.destroy-assigner') }}" method="POST"
-                          onsubmit="return confirm('Xoa tat ca phan quyen cua {{ $assigner?->name }}?')">
-                        @csrf
-                        <input type="hidden" name="assigner_id" value="{{ $assignerId }}">
-                        <button type="submit" class="btn btn-sm btn-outline-danger">
-                            <i class="ph-trash me-1"></i>Xoa tat ca
-                        </button>
-                    </form>
-                </div>
-                <div class="assigner-body">
-                    @foreach($entries as $cfg)
-                        <span class="assignee-pill {{ $cfg->is_active ? '' : 'inactive' }}">
-                            <i class="ph-user"></i>
-                            {{ $cfg->assignee?->name }}
-                            @if(!$cfg->is_active)
-                                <span class="badge bg-secondary ms-1" style="font-size:9px">Tat</span>
-                            @endif
-                            {{-- Toggle --}}
-                            <form action="{{ route('task-delegate-configs.toggle', $cfg) }}" method="POST" class="d-inline ms-1">
-                                @csrf
-                                <button type="submit" class="btn btn-link p-0 text-{{ $cfg->is_active ? 'warning' : 'success' }}"
-                                        style="font-size:11px" title="{{ $cfg->is_active ? 'Tat' : 'Bat' }} phan quyen">
-                                    <i class="ph-{{ $cfg->is_active ? 'pause' : 'play' }}"></i>
-                                </button>
-                            </form>
-                            {{-- Delete --}}
-                            <form action="{{ route('task-delegate-configs.destroy', $cfg) }}" method="POST" class="d-inline"
-                                  onsubmit="return confirm('Xoa phan quyen giao viec cho {{ $cfg->assignee?->name }}?')">
-                                @csrf @method('DELETE')
-                                <button type="submit" class="btn btn-link p-0 text-danger" style="font-size:11px">
-                                    <i class="ph-x"></i>
-                                </button>
-                            </form>
-                        </span>
-                    @endforeach
-                    @if($cfg->note ?? null)
-                        <div class="small text-muted mt-2 fst-italic">{{ $entries->first()->note }}</div>
-                    @endif
-                </div>
-            </div>
-        @endforeach
-
-        <div class="mt-2">{{ $configs->links() }}</div>
-    @endif
-</div>
+<div class="delegate-page">
+    <header class="delegate-header"><div><h1>Phân quyền giao việc</h1><div class="delegate-muted">Quản lý người được phép giao việc và phạm vi người nhận.</div></div><a href="{{ route('task-delegate-configs.create') }}" class="btn btn-primary"><i class="ph-plus me-1"></i>Thêm phân quyền</a></header>
+    @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+    @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
+    <div class="delegate-panel delegate-filter"><form method="GET" action="{{ route('task-delegate-configs.index') }}"><div class="row g-3 align-items-end">
+        <div class="col-md-4"><label for="delegate-search">Tìm kiếm</label><input class="form-control" id="delegate-search" name="search" value="{{ request('search') }}" placeholder="Người giao, người nhận hoặc ghi chú…" maxlength="200"></div>
+        <div class="col-md-3"><label for="delegate-assigner">Người giao việc</label><select id="delegate-assigner" name="assigner_id" class="form-select"><option value="">Tất cả người giao việc</option>@foreach($users as $user)<option value="{{ $user->id }}" @selected(request('assigner_id')==$user->id)>{{ $user->name }}</option>@endforeach</select></div>
+        <div class="col-md-2"><label for="delegate-active">Trạng thái</label><select id="delegate-active" name="active" class="form-select"><option value="">Tất cả trạng thái</option><option value="1" @selected(request('active')==='1')>Đang hoạt động</option><option value="0" @selected(request('active')==='0')>Đã tắt</option></select></div>
+        <div class="col-md-3 d-flex gap-2"><button class="btn btn-primary">Lọc</button><a class="btn btn-outline-secondary" href="{{ route('task-delegate-configs.index') }}">Đặt lại</a></div>
+    </div></form></div>
+    <div class="delegate-muted mb-3">{{ number_format($configs->total()) }} phân quyền phù hợp · Gom nhóm theo người giao việc. Mỗi dòng xác định một người được nhận việc.</div>
+    @forelse($grouped as $assignerId=>$entries)
+    <section class="delegate-panel">
+        <div class="delegate-group-head"><div><h2><i class="ph-user-gear me-2"></i>{{ $entries->first()->assigner?->name ?? '#'.$assignerId }}</h2><div class="delegate-muted">{{ $entries->count() }} người nhận trên trang này · {{ $entries->where('is_active',true)->count() }} quyền đang hoạt động</div></div>
+        <form action="{{ route('task-delegate-configs.destroy-assigner') }}" method="POST" onsubmit="return confirm('Xóa toàn bộ phân quyền của người giao việc này, bao gồm các trang khác?')">@csrf<input type="hidden" name="assigner_id" value="{{ $assignerId }}"><button class="btn btn-sm btn-outline-danger"><i class="ph-trash me-1"></i>Xóa toàn bộ quyền</button></form></div>
+        <div class="table-responsive"><table class="table"><thead><tr><th class="text-center" style="width:60px">STT</th><th>Người nhận việc</th><th>Trạng thái</th><th>Ghi chú</th><th>Người cấu hình</th><th>Thao tác</th></tr></thead><tbody>
+        @foreach($entries as $cfg)<tr><td class="text-center text-muted">{{ $loop->iteration }}</td><td class="fw-semibold">{{ $cfg->assignee?->name ?? 'Người dùng không còn tồn tại' }}</td><td><span class="badge {{ $cfg->is_active?'bg-success':'bg-secondary' }}">{{ $cfg->is_active?'Đang hoạt động':'Đã tắt' }}</span></td><td>{{ $cfg->note ?: '—' }}</td><td>{{ $cfg->admin?->name ?? '—' }}<div class="delegate-muted">{{ $cfg->created_at?->format('d/m/Y H:i') }}</div></td><td><div class="delegate-actions"><form method="POST" action="{{ route('task-delegate-configs.toggle',$cfg) }}">@csrf<button class="btn btn-sm btn-outline-{{ $cfg->is_active?'secondary':'success' }} text-nowrap">{{ $cfg->is_active?'Tắt quyền':'Bật quyền' }}</button></form><form method="POST" action="{{ route('task-delegate-configs.destroy',$cfg) }}" onsubmit="return confirm('Xóa phân quyền giao việc cho người nhận này?')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger">Xóa</button></form></div></td></tr>@endforeach
+        </tbody></table></div>
+    </section>
+    @empty<div class="delegate-panel text-center p-5"><i class="ph-users-three fs-1 text-muted"></i><h2 class="fs-5 mt-3">Chưa có phân quyền phù hợp</h2><p class="delegate-muted mb-0">Thay đổi bộ lọc hoặc thêm phân quyền giao việc mới.</p></div>@endforelse
+    <div class="delegate-footer"><span class="delegate-muted">Hiển thị {{ $configs->firstItem()??0 }}–{{ $configs->lastItem()??0 }} / {{ $configs->total() }} phân quyền</span>{{ $configs->onEachSide(1)->links('pagination::bootstrap-5') }}</div>
 </div>
 @endsection

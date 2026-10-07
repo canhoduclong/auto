@@ -9,6 +9,12 @@ use Illuminate\Support\Facades\Cache;
 class OperatingController extends Controller {
     public function index(Request $request){
         $request->validate([
+            'filter'=>'nullable|in:mine,received,assigned,unaccepted,working,reported,verification,overdue,history,all,deleted,execution,coordination,votes',
+            'kinds'=>'nullable|array', 'kinds.*'=>'required|distinct|in:execution,coordination,vote',
+            'q'=>'nullable|string|max:200',
+            'status'=>'nullable|in:task_pending,task_processing,task_completed,task_done,task_rejected,task_cancelled,task_draft,vote_open,vote_expired,vote_approved,vote_rejected,vote_no_quorum',
+            'from'=>'nullable|date_format:Y-m-d', 'to'=>'nullable|date_format:Y-m-d'.($request->filled('from')?'|after_or_equal:from':''),
+            'sort'=>'nullable|in:newest,oldest,due', 'per_page'=>'nullable|in:10,20,50,100',
             'task_q'=>'nullable|string|max:200', 'proposal_q'=>'nullable|string|max:200',
             'task_status'=>'nullable|in:pending,processing,completed,done,rejected,cancelled,draft',
             'task_kind'=>'nullable|in:execution,coordination',
@@ -20,10 +26,25 @@ class OperatingController extends Controller {
             'task_per_page'=>'nullable|in:10,20,50,100', 'proposal_per_page'=>'nullable|in:10,20,50,100',
         ]);
         $user=$request->user(); $filter=$request->input('filter','mine');
+        $selectedKinds=$request->has('kinds_present') || $request->has('kinds') ? (array)$request->input('kinds',[]) : match($filter){
+            'execution'=>['execution'], 'coordination'=>['coordination'], 'votes'=>['vote'], default=>['execution','coordination','vote'],
+        };
+        $sharedStatus=$request->input('status','');
+        $request->merge([
+            'task_q'=>$request->input('q',$request->input('task_q')),
+            'proposal_q'=>$request->input('q',$request->input('proposal_q')),
+            'task_from'=>$request->input('from',$request->input('task_from')),
+            'task_to'=>$request->input('to',$request->input('task_to')),
+            'proposal_from'=>$request->input('from',$request->input('proposal_from')),
+            'proposal_to'=>$request->input('to',$request->input('proposal_to')),
+            'task_status'=>str_starts_with($sharedStatus,'task_')?substr($sharedStatus,5):$request->input('task_status'),
+            'proposal_status'=>str_starts_with($sharedStatus,'vote_')?substr($sharedStatus,5):$request->input('proposal_status'),
+        ]);
+
         abort_if(in_array($filter,['all','deleted'],true) && !$user->hasRole('admin'),403);
-        $tasks=TaskAssignment::with(['creator','assignees.user'])->when($filter==='deleted',fn($q)=>$q->onlyTrashed())->where(function($q)use($user){
+        $tasks=TaskAssignment::with(['creator','assignees.user'])->when($filter==='deleted',fn($q)=>$q->onlyTrashed())->where(function($q)use($user,$filter){
             $q->where('created_by',$user->id)->orWhereHas('assignees',fn($a)=>$a->where('user_id',$user->id));
-            if($user->hasRole('admin'))$q->orWhereRaw('1=1');
+            if($user->hasRole('admin') && in_array($filter,['all','deleted'],true))$q->orWhereRaw('1=1');
         })->when($filter==='received',fn($q)=>$q->whereHas('assignees',fn($a)=>$a->where('user_id',$user->id)))
           ->when($filter==='assigned',fn($q)=>$q->where('created_by',$user->id))
           ->when(in_array($filter,['execution','coordination'],true),fn($q)=>$filter==='execution' ? $q->where(fn($k)=>$k->where('work_kind','execution')->orWhereNull('work_kind')) : $q->where('work_kind','coordination'))
@@ -42,11 +63,9 @@ class OperatingController extends Controller {
           ->when($request->filled('task_kind'),fn($q)=>$request->task_kind==='execution' ? $q->where(fn($k)=>$k->where('work_kind','execution')->orWhereNull('work_kind')) : $q->where('work_kind','coordination'))
           ->when($request->filled('task_from'),fn($q)=>$q->whereDate('created_at','>=',$request->task_from))
           ->when($request->filled('task_to'),fn($q)=>$q->whereDate('created_at','<=',$request->task_to));
-        if($request->task_sort==='due') $tasks->orderByRaw('due_date IS NULL')->orderBy('due_date');
-        $tasks=$tasks->orderBy('id',$request->task_sort==='oldest'?'asc':'desc')->paginate((int)$request->input('task_per_page',20),['*'],'page')->withQueryString();
-        $proposals=OperatingProposal::with('creator')->withCount(['votes','votes as voted_count'=>fn($q)=>$q->whereNotNull('choice')])->where(function($q)use($user){
+        $proposals=OperatingProposal::with('creator')->withCount(['votes','votes as voted_count'=>fn($q)=>$q->whereNotNull('choice')])->where(function($q)use($user,$filter){
             $q->where('created_by',$user->id)->orWhereHas('votes',fn($v)=>$v->where('user_id',$user->id));
-            if($user->hasRole('admin'))$q->orWhereRaw('1=1');
+            if($user->hasRole('admin') && in_array($filter,['all','deleted'],true))$q->orWhereRaw('1=1');
         })->when($request->filled('proposal_q'),function($q)use($request){
             $term='%'.$request->proposal_q.'%';
             $q->where(fn($s)=>$s->where('title','like',$term)->orWhereHas('creator',fn($c)=>$c->where('name','like',$term)));
@@ -57,11 +76,31 @@ class OperatingController extends Controller {
         })->when($request->filled('proposal_vote'),fn($q)=>$q->whereHas('votes',fn($v)=>$v->where('user_id',$user->id)->when($request->proposal_vote==='pending',fn($v)=>$v->whereNull('choice'),fn($v)=>$v->whereNotNull('choice'))))
           ->when($request->filled('proposal_from'),fn($q)=>$q->whereDate('created_at','>=',$request->proposal_from))
           ->when($request->filled('proposal_to'),fn($q)=>$q->whereDate('created_at','<=',$request->proposal_to));
-        if($request->proposal_sort==='due') $proposals->orderBy('closes_at');
-        $proposals=$proposals->orderBy('id',$request->proposal_sort==='oldest'?'asc':'desc')->paginate((int)$request->input('proposal_per_page',10),['*'],'proposal_page')->withQueryString();
+        $tasks->where(function($q)use($selectedKinds){
+            $q->whereRaw('1=0');
+            if(in_array('execution',$selectedKinds,true)) $q->orWhere(fn($k)=>$k->where('work_kind','execution')->orWhereNull('work_kind'));
+            if(in_array('coordination',$selectedKinds,true)) $q->orWhere('work_kind','coordination');
+        });
+        if(str_starts_with($sharedStatus,'vote_')) $tasks->whereRaw('1=0');
+        if(!in_array('vote',$selectedKinds,true) || str_starts_with($sharedStatus,'task_') || in_array($filter,['unaccepted','working','reported','verification','deleted'],true)) $proposals->whereRaw('1=0');
+        if($filter==='assigned') $proposals->where('created_by',$user->id);
+        if($filter==='received') $proposals->whereHas('votes',fn($q)=>$q->where('user_id',$user->id));
+        if($filter==='history') $proposals->where('status','!=','open');
+        if($filter==='overdue') $proposals->where('status','open')->where('closes_at','<',now());
+        $taskRows=(clone $tasks)->select([])->selectRaw("task_assignments.id as entity_id, 'task' as entity_type, task_assignments.created_at as created_at, task_assignments.due_date as deadline")->toBase();
+        $proposalRows=(clone $proposals)->select([])->selectRaw("operating_proposals.id as entity_id, 'vote' as entity_type, operating_proposals.created_at as created_at, operating_proposals.closes_at as deadline")->toBase();
+        $listingQuery=DB::query()->fromSub($taskRows->unionAll($proposalRows),'operating_listing');
+        $sort=$request->input('sort','newest');
+        if($sort==='due') $listingQuery->orderByRaw('deadline IS NULL')->orderBy('deadline');
+        $listing=$listingQuery->orderBy('created_at',$sort==='oldest'?'asc':'desc')->orderBy('entity_type')->orderByDesc('entity_id')
+            ->paginate((int)$request->input('per_page',20))->appends($request->only(['filter','kinds','kinds_present','q','status','from','to','sort','per_page']));
+        $taskModels=TaskAssignment::withTrashed()->with(['creator','assignees.user','approvalSteps'])->whereIn('id',$listing->getCollection()->where('entity_type','task')->pluck('entity_id'))->get()->keyBy('id');
+        $proposalModels=OperatingProposal::with('creator')->withCount(['votes','votes as voted_count'=>fn($q)=>$q->whereNotNull('choice')])
+            ->whereIn('id',$listing->getCollection()->where('entity_type','vote')->pluck('entity_id'))->get()->keyBy('id');
+        $listing->getCollection()->transform(fn($row)=>(object)['type'=>$row->entity_type,'entity'=>$row->entity_type==='task'?$taskModels[$row->entity_id]:$proposalModels[$row->entity_id]]);
         $layout=TaskWorkspace::layout($user);
         $canCreate=$this->canCreate($user);
-        return view('operating.index',compact('tasks','proposals','layout','filter','canCreate'))->with('settings',$this->settings());
+        return view('operating.index',compact('listing','selectedKinds','layout','filter','canCreate'))->with('settings',$this->settings());
     }
     private function settings()
     {
