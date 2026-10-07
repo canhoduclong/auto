@@ -53,6 +53,7 @@ class TaskDelegateConfig extends Model
      */
     public static function canAssignTasks(User $user): bool
     {
+        if (\App\Services\TaskMenuService::isReceiptOnlyShipper($user)) return false;
         return self::where('assigner_id', $user->id)->where('is_active', true)->exists();
     }
 }

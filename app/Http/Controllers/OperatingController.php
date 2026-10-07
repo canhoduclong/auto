@@ -29,6 +29,10 @@ class OperatingController extends Controller {
         $selectedKinds=$request->has('kinds_present') || $request->has('kinds') ? (array)$request->input('kinds',[]) : match($filter){
             'execution'=>['execution'], 'coordination'=>['coordination'], 'votes'=>['vote'], default=>['execution','coordination','vote'],
         };
+        if(TaskMenuService::isReceiptOnlyShipper($user)) {
+            abort_if(in_array($filter,['votes','assigned','verification','all','deleted'],true),403);
+            $selectedKinds=array_values(array_diff($selectedKinds,['vote']));
+        }
         $sharedStatus=$request->input('status','');
         $request->merge([
             'task_q'=>$request->input('q',$request->input('task_q')),
@@ -114,10 +118,12 @@ class OperatingController extends Controller {
         return app(TaskAssignmentController::class)->show($task);
     }
     private function canCreate(User $user): bool {
+        if(TaskMenuService::isReceiptOnlyShipper($user)) return false;
         return TaskMenuService::canAssignTasks($user) || \App\Models\TaskDelegateConfig::canAssignTasks($user)
             || $user->roles->contains(fn($r)=>in_array(strtolower($r->name),['ceo','director'],true));
     }
     private function canView(OperatingProposal $proposal,User $user): bool {
+        if(TaskMenuService::isReceiptOnlyShipper($user)) return false;
         return $user->hasRole('admin') || (int)$proposal->created_by===(int)$user->id || $proposal->votes()->where('user_id',$user->id)->exists();
     }
     public function create(Request $request){
@@ -148,12 +154,14 @@ class OperatingController extends Controller {
         return view('operating.show',compact('proposal','layout'))->with('settings',$this->settings());
     }
     public function vote(Request $request,OperatingProposal $proposal,OperatingVoteService $service){
+        abort_unless($this->canView($proposal,$request->user()),403);
         $data=$request->validate(['choice'=>'required|in:agree,disagree,abstain','comment'=>'nullable|string|max:2000']);
         try{$service->vote($proposal->id,$request->user(),$data['choice'],$data['comment']??null);}
         catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){if($e->getStatusCode()!==422)throw $e;return back()->with('error',$e->getMessage());}
         return back()->with('success','Đã ghi nhận phiếu biểu quyết.');
     }
     public function close(Request $request,OperatingProposal $proposal,OperatingVoteService $service){
+        abort_if(TaskMenuService::isReceiptOnlyShipper($request->user()),403);
         $data=$request->validate(['conclusion'=>'required|string|max:5000']);
         try{$service->close($proposal->id,$request->user(),$data['conclusion']);}
         catch(\Symfony\Component\HttpKernel\Exception\HttpException $e){if($e->getStatusCode()!==422)throw $e;return back()->with('error',$e->getMessage());}

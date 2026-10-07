@@ -362,6 +362,7 @@ class TaskAssignmentController extends Controller
 
     public function storeSubTask(Request $request, TaskAssignment $taskAssignment)
     {
+        abort_if(TaskMenuService::isReceiptOnlyShipper($request->user()),403);
         $user = $request->user();
         abort_unless($this->canViewTask($taskAssignment, $user) && (
             $user->hasRole('admin') || (int) $taskAssignment->created_by === (int) $user->id

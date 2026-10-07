@@ -151,8 +151,14 @@ class TaskMenuService
     /**
      * Check if user can assign tasks
      */
+    public static function isReceiptOnlyShipper(User $user): bool
+    {
+        return $user->hasRole('shipper') && $user->roles->every(fn($role)=>strtolower($role->name)==='shipper');
+    }
+
     public static function canAssignTasks(User $user): bool
     {
+        if (self::isReceiptOnlyShipper($user)) return false;
         // Check if user has task assignment permission through role
         $hasPermission = TaskPermission::userHasPermission($user, TaskPermission::ASSIGN_TASK);
 

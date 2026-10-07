@@ -19,7 +19,7 @@ class WebTaskNavigation {
             $add('Yêu cầu phối hợp','coordination','people');
             $items[]=['label'=>'Mở đề xuất biểu quyết','url'=>route('operating.proposals.create'),'active'=>request()->routeIs('operating.proposals.create'),'icon'=>'ui-checks'];
         }
-        $items[]=['label'=>'Biểu quyết liên quan đến tôi','url'=>route('operating.index',['filter'=>'votes']).'#bieu-quyet','active'=>(request()->routeIs('operating.index') && request('filter')==='votes') || request()->routeIs('operating.proposals.show'),'icon'=>'check2-square'];
+        if (!TaskMenuService::isReceiptOnlyShipper($user)) $items[]=['label'=>'Biểu quyết liên quan đến tôi','url'=>route('operating.index',['filter'=>'votes']).'#bieu-quyet','active'=>(request()->routeIs('operating.index') && request('filter')==='votes') || request()->routeIs('operating.proposals.show'),'icon'=>'check2-square'];
         if($user->hasRole('admin')) {
             $add('Quản trị tất cả công việc','all','kanban');
             $add('Công việc đã xóa','deleted','trash');

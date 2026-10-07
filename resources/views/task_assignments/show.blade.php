@@ -70,7 +70,7 @@
             @include('task_assignments.partials.debt-progress')
             @include('task_assignments.partials.progress')
             <div class="task-action-bar mb-3">
-                @if(!in_array($task->status,['done','cancelled'],true) && (auth()->user()->hasRole('admin') || (int)$task->created_by===(int)auth()->id() || $myAssignee))
+                @if(!\App\Services\TaskMenuService::isReceiptOnlyShipper(auth()->user()) && !in_array($task->status,['done','cancelled'],true) && (auth()->user()->hasRole('admin') || (int)$task->created_by===(int)auth()->id() || $myAssignee))
                 <button type="button" class="btn task-action-button" data-bs-toggle="collapse" data-bs-target="#taskChildPanel" aria-controls="taskChildPanel" aria-expanded="{{ $errors->any() && !$errors->has('evaluation_score') ? 'true' : 'false' }}">Giao việc con</button>
                 @endif
                 @if($myAssignee && in_array($myAssignee->status,['pending','in_progress','processing']))
@@ -80,7 +80,7 @@
                 @endif
                 @endif
             </div>
-            @if(!in_array($task->status, ['done', 'cancelled'], true) && (auth()->user()->hasRole('admin') || (int) $task->created_by === (int) auth()->id() || $myAssignee))
+            @if(!\App\Services\TaskMenuService::isReceiptOnlyShipper(auth()->user()) && !in_array($task->status, ['done', 'cancelled'], true) && (auth()->user()->hasRole('admin') || (int) $task->created_by === (int) auth()->id() || $myAssignee))
                 <div id="taskChildPanel" class="collapse mb-3 {{ $errors->any() && !$errors->has('evaluation_score') ? 'show' : '' }}">
                 <form class="card card-body shadow-sm" action="{{ route('tasks.subtasks.store', $task) }}" method="POST">
                     @csrf
