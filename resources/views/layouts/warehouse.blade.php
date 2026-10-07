@@ -394,7 +394,7 @@
             <a href="{{ route('warehouse.stocktakes.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stocktakes.*') ? 'active' : '' }}">
                 <i class="bi bi-clipboard2-check"></i><span class="wh-nav-label">Kiểm Kê Tồn Đầu</span>
             </a>
-            
+
             <a href="{{ route('warehouse.procurement-receipts.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.procurement-receipts.*') ? 'active' : '' }}">
                 <i class="bi bi-basket2-fill"></i><span class="wh-nav-label">Nhập thu mua</span>
             </a>
@@ -418,13 +418,7 @@
                 <i class="bi bi-file-earmark-text"></i><span class="wh-nav-label">Phiếu yêu cầu</span>
             </a>
 
-            <div class="wh-nav-section">Nhiệm vụ</div>
-            <a href="{{ route('tasks.my-tasks') }}" class="wh-nav-link {{ request()->routeIs('tasks.my-tasks') || request()->routeIs('task-assignments.assigned-to-me') ? 'active' : '' }}">
-                <i class="bi bi-list-task"></i><span class="wh-nav-label">Nhiệm vụ</span>
-            </a>
-            <a href="{{ route('task-assignments.in-progress') }}" class="wh-nav-link {{ request()->routeIs('task-assignments.in-progress') || request()->routeIs('task-assignments.complete-form') ? 'active' : '' }}">
-                <i class="bi bi-check2-circle"></i><span class="wh-nav-label">Thực hiện</span>
-            </a>
+            @include('layouts.partials.task-sidebar-menu', ['taskNavHeadingClass'=>'wh-nav-section','taskNavLinkClass'=>'wh-nav-link','taskNavLabelClass'=>'wh-nav-label'])
             <div class="wh-nav-section">Báo cáo</div>
             <a href="{{ route('warehouse.reports') }}" class="wh-nav-link {{ request()->routeIs('warehouse.reports') ? 'active' : '' }}">
                 <i class="bi bi-graph-up"></i><span class="wh-nav-label">Thống Kê</span>
@@ -654,7 +648,7 @@
                 </div>
             @endif
 
-            @include('layouts.partials.operating-navigation')
+
                 @yield('content')
         </div>
         @stack('page_footer')

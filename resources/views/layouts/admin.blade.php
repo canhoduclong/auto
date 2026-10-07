@@ -6,7 +6,7 @@
     <title>@yield('title','Đăng nhập')</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    
+
 	<!-- Global stylesheets -->
 	<link href="{{ asset('assets/fonts/inter/inter.css') }}" rel="stylesheet" type="text/css">
 	<link href="{{ asset('assets/icons/phosphor/styles.min.css') }}" rel="stylesheet" type="text/css">
@@ -25,7 +25,7 @@
 	<script src="{{ asset('assets/js/vendor/visualization/d3/d3_tooltip.js') }}"></script>
 
      <script src="{{ asset('ckeditor/ckeditor.js') }}"></script>
-     
+
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
     <style>
@@ -51,7 +51,7 @@
             }
         }
     </style>
- 	
+
 
     @stack('styles')
 </head>
@@ -166,18 +166,18 @@
                     </div>
                 @endif
 
-                
-               
+
+
  </div>
 
 
             <div class="content-inner"> 
-                @include('layouts.partials.operating-navigation')
+
                 @yield('content')
             </div>  
         </div>
-       
-        
+
+
 
         {{-- Plugins thường dùng của Limitless (tùy gói bạn có) --}}
         {{-- <script src="{{ asset('assets/js/plugins/forms/styling/uniform.min.js') }}"></script> --}}
@@ -185,7 +185,7 @@
 
         @include('layouts.partials.session_expiry_redirect')
         @stack('scripts')
-        
+
     </div>
 
 @include('layouts.notifications')

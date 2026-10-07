@@ -7,23 +7,66 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 class OperatingController extends Controller {
     public function index(Request $request){
+        $request->validate([
+            'task_q'=>'nullable|string|max:200', 'proposal_q'=>'nullable|string|max:200',
+            'task_status'=>'nullable|in:pending,processing,completed,done,rejected,cancelled,draft',
+            'task_kind'=>'nullable|in:execution,coordination',
+            'proposal_status'=>'nullable|in:open,expired,approved,rejected,no_quorum',
+            'proposal_vote'=>'nullable|in:pending,voted',
+            'task_from'=>'nullable|date_format:Y-m-d', 'task_to'=>'nullable|date_format:Y-m-d'.($request->filled('task_from')?'|after_or_equal:task_from':''),
+            'proposal_from'=>'nullable|date_format:Y-m-d', 'proposal_to'=>'nullable|date_format:Y-m-d'.($request->filled('proposal_from')?'|after_or_equal:proposal_from':''),
+            'task_sort'=>'nullable|in:newest,oldest,due', 'proposal_sort'=>'nullable|in:newest,oldest,due',
+            'task_per_page'=>'nullable|in:10,20,50,100', 'proposal_per_page'=>'nullable|in:10,20,50,100',
+        ]);
         $user=$request->user(); $filter=$request->input('filter','mine');
-        $tasks=TaskAssignment::with(['creator','assignees.user'])->where(function($q)use($user){
+        abort_if(in_array($filter,['all','deleted'],true) && !$user->hasRole('admin'),403);
+        $tasks=TaskAssignment::with(['creator','assignees.user'])->when($filter==='deleted',fn($q)=>$q->onlyTrashed())->where(function($q)use($user){
             $q->where('created_by',$user->id)->orWhereHas('assignees',fn($a)=>$a->where('user_id',$user->id));
             if($user->hasRole('admin'))$q->orWhereRaw('1=1');
         })->when($filter==='received',fn($q)=>$q->whereHas('assignees',fn($a)=>$a->where('user_id',$user->id)))
           ->when($filter==='assigned',fn($q)=>$q->where('created_by',$user->id))
           ->when(in_array($filter,['execution','coordination'],true),fn($q)=>$filter==='execution' ? $q->where(fn($k)=>$k->where('work_kind','execution')->orWhereNull('work_kind')) : $q->where('work_kind','coordination'))
           ->when($filter==='overdue',fn($q)=>$q->where('due_date','<',now())->whereNotIn('status',['done','cancelled']))
-          ->when($filter==='verification',fn($q)=>$q->where('created_by',$user->id)->where('status','completed'))
-          ->orderByDesc('id')->paginate(20)->withQueryString();
-        $proposals=OperatingProposal::with('creator')->withCount('votes')->where(function($q)use($user){
+          ->when($filter==='verification',fn($q)=>$q->when(!$user->hasRole('admin'),fn($q)=>$q->where('created_by',$user->id))->where('status','completed'))
+          ->when($filter==='unaccepted',fn($q)=>$q->whereNotIn('status',['done','cancelled','completed'])->whereHas('assignees',fn($a)=>$a->where('user_id',$user->id)->whereNull('accepted_at')->where('status','pending')))
+          ->when($filter==='working',fn($q)=>$q->whereNotIn('status',['done','cancelled'])->whereHas('assignees',fn($a)=>$a->where('user_id',$user->id)->whereIn('status',['processing','in_progress'])))
+          ->when($filter==='reported',fn($q)=>$q->whereNotIn('status',['done','cancelled'])->whereHas('assignees',fn($a)=>$a->where('user_id',$user->id)->where('status','completed')))
+          ->when($filter==='history',fn($q)=>$q->whereIn('status',['done','cancelled']))
+          ->when($filter==='votes',fn($q)=>$q->whereRaw('1=0'))
+          ->when($request->filled('task_q'),function($q)use($request){
+              $term='%'.$request->input('task_q').'%';
+              $q->where(fn($s)=>$s->where('title','like',$term)->orWhere('code','like',$term)->orWhereHas('creator',fn($c)=>$c->where('name','like',$term))->orWhereHas('assignees.user',fn($a)=>$a->where('name','like',$term)));
+          })
+          ->when($request->filled('task_status'),fn($q)=>$request->task_status==='processing' ? $q->whereIn('status',['processing','in_progress']) : $q->where('status',$request->task_status))
+          ->when($request->filled('task_kind'),fn($q)=>$request->task_kind==='execution' ? $q->where(fn($k)=>$k->where('work_kind','execution')->orWhereNull('work_kind')) : $q->where('work_kind','coordination'))
+          ->when($request->filled('task_from'),fn($q)=>$q->whereDate('created_at','>=',$request->task_from))
+          ->when($request->filled('task_to'),fn($q)=>$q->whereDate('created_at','<=',$request->task_to));
+        if($request->task_sort==='due') $tasks->orderByRaw('due_date IS NULL')->orderBy('due_date');
+        $tasks=$tasks->orderBy('id',$request->task_sort==='oldest'?'asc':'desc')->paginate((int)$request->input('task_per_page',20),['*'],'page')->withQueryString();
+        $proposals=OperatingProposal::with('creator')->withCount(['votes','votes as voted_count'=>fn($q)=>$q->whereNotNull('choice')])->where(function($q)use($user){
             $q->where('created_by',$user->id)->orWhereHas('votes',fn($v)=>$v->where('user_id',$user->id));
             if($user->hasRole('admin'))$q->orWhereRaw('1=1');
-        })->orderByDesc('id')->paginate(10,['*'],'proposal_page')->withQueryString();
+        })->when($request->filled('proposal_q'),function($q)use($request){
+            $term='%'.$request->proposal_q.'%';
+            $q->where(fn($s)=>$s->where('title','like',$term)->orWhereHas('creator',fn($c)=>$c->where('name','like',$term)));
+        })->when($request->filled('proposal_status'),function($q)use($request){
+            if($request->proposal_status==='expired') $q->where('status','open')->where('closes_at','<=',now());
+            elseif($request->proposal_status==='open') $q->where('status','open')->where('closes_at','>',now());
+            else $q->where('status',$request->proposal_status);
+        })->when($request->filled('proposal_vote'),fn($q)=>$q->whereHas('votes',fn($v)=>$v->where('user_id',$user->id)->when($request->proposal_vote==='pending',fn($v)=>$v->whereNull('choice'),fn($v)=>$v->whereNotNull('choice'))))
+          ->when($request->filled('proposal_from'),fn($q)=>$q->whereDate('created_at','>=',$request->proposal_from))
+          ->when($request->filled('proposal_to'),fn($q)=>$q->whereDate('created_at','<=',$request->proposal_to));
+        if($request->proposal_sort==='due') $proposals->orderBy('closes_at');
+        $proposals=$proposals->orderBy('id',$request->proposal_sort==='oldest'?'asc':'desc')->paginate((int)$request->input('proposal_per_page',10),['*'],'proposal_page')->withQueryString();
         $layout=TaskWorkspace::layout($user);
         $canCreate=$this->canCreate($user);
         return view('operating.index',compact('tasks','proposals','layout','filter','canCreate'));
+    }
+    public function deletedTask(Request $request, int $id)
+    {
+        abort_unless($request->user()->hasRole('admin'),403);
+        $task=TaskAssignment::onlyTrashed()->findOrFail($id);
+        return app(TaskAssignmentController::class)->show($task);
     }
     private function canCreate(User $user): bool {
         return TaskMenuService::canAssignTasks($user) || \App\Models\TaskDelegateConfig::canAssignTasks($user)

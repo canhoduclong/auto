@@ -124,7 +124,6 @@ use App\Models\Setting;
     @include('layouts.notifications')
 
     @yield('breadcrumb')
-    @include('layouts.partials.operating-navigation')
                 @yield('content')
 
     @unless(session('mobile_accounting'))

@@ -115,6 +115,7 @@
                 <i class="bi bi-file-earmark-text"></i> Phiếu yêu cầu
             </a>
 
+            @include('layouts.partials.task-sidebar-menu', ['taskNavHeadingClass'=>'pkg-nav-section','taskNavLinkClass'=>'pkg-nav-link'])
         </nav>
     </aside>
     <div class="pkg-main">
@@ -240,7 +241,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
             @endif
-            @include('layouts.partials.operating-navigation')
+
                 @yield('content')
         </div>
         @stack('page_footer')

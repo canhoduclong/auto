@@ -71,12 +71,14 @@
 .hdr-account-btn.show .hdr-account-chevron { transform: rotate(180deg); }
 
 .hdr-account-menu {
+    max-height: 75vh;
     min-width: 230px;
     border-radius: 16px;
     padding: 0;
     border: 1px solid rgba(148,163,184,0.22);
     box-shadow: 0 16px 40px rgba(15,23,42,0.12);
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     margin-top: 8px !important;
 }
 .hdr-account-menu__info {
@@ -364,9 +366,10 @@
                         <li><a href="{{ route('department-notifications.index', ['layout' => 'site']) }}" class="d-block py-1"><i class="bi bi-megaphone me-1"></i> Tạo thông báo</a></li>
                     @endif
                     <li><a href="{{ route('pages.my_profile') }}" class="d-block py-1"><i class="bi bi-person-circle me-1"></i> {{ __('site.profile') }}</a></li>
-                    @if(Auth::user()->hasPermission('task.create') || Auth::user()->hasPermission('task.assign') || \App\Services\TaskMenuService::canAssignTasks(Auth::user()) || \App\Services\TaskMenuService::canCompleteTasks(Auth::user()))
-                        <li><a href="{{ route($offcanvasMyTasksRoute) }}" class="d-block py-1"><i class="bi bi-list-task me-1"></i> Nhiệm vụ được giao</a></li>
-                    @endif
+                    <li class="pt-2 pb-1 text-muted small text-uppercase fw-semibold">Điều hành &amp; Giao việc</li>
+                    @foreach(\App\Support\WebTaskNavigation::items(Auth::user()) as $taskMenuItem)
+                        <li><a href="{{ $taskMenuItem['url'] }}" class="d-block py-1 {{ $taskMenuItem['active'] ? 'fw-semibold' : '' }}"><i class="bi bi-{{ $taskMenuItem['icon'] }} me-1"></i> {{ $taskMenuItem['label'] }}</a></li>
+                    @endforeach
                     @if(Auth::user()->isSalesFlowRole())
                         <li><a href="{{ $offcanvasCanViewMonitoring ? route('pages.my_orders.monitoring', ['tab' => 'drafts']) : route('pages.my_order_drafts') }}" class="d-block py-1"><i class="bi bi-file-earmark-text me-1"></i> Đơn nháp</a></li>
                     @endif
@@ -605,22 +608,14 @@
                                         <a class="dropdown-item" href="{{ route('pages.my_profile') }}">
                                             <i class="bi bi-person-circle"></i> {{ __('site.profile') }}
                                         </a>
-                                        @if(Auth::user()->hasPermission('task.create') || Auth::user()->hasPermission('task.assign') || \App\Services\TaskMenuService::canAssignTasks(Auth::user()) || \App\Services\TaskMenuService::canCompleteTasks(Auth::user()))
-                                            @php
-                                                $headerMyTasksRoute = Auth::user()->isSalesFlowRole() ? 'my-tasks' : 'tasks.my-tasks';
-                                            @endphp
-                                            <div class="dropdown-divider my-0"></div>
-                                            <div class="px-3 py-2 text-muted small text-uppercase fw-semibold">Quản lý công việc</div>
-                                            <a class="dropdown-item" href="{{ route($headerMyTasksRoute) }}">
-                                                <i class="bi bi-list-task"></i> Nhiệm vụ
+                                        <div class="dropdown-divider my-0"></div>
+                                        <div class="px-3 py-2 text-muted small text-uppercase fw-semibold">Điều hành &amp; Giao việc</div>
+                                        @foreach(\App\Support\WebTaskNavigation::items(Auth::user()) as $taskMenuItem)
+                                            <a class="dropdown-item {{ $taskMenuItem['active'] ? 'active' : '' }}" href="{{ $taskMenuItem['url'] }}">
+                                                <i class="bi bi-{{ $taskMenuItem['icon'] }}"></i> {{ $taskMenuItem['label'] }}
                                             </a>
-                                            @if(Auth::user()->hasPermission('task.create') || Auth::user()->hasPermission('task.assign') || \App\Services\TaskMenuService::canAssignTasks(Auth::user()))
-                                               
-                                                <a class="dropdown-item" href="{{ route('tasks.assigned') }}">
-                                                    <i class="bi bi-kanban"></i> Giao việc
-                                                </a>
-                                            @endif
-                                        @endif
+                                        @endforeach
+                                        <div class="dropdown-divider my-0"></div>
                                         @if(Auth::user()->isSalesFlowRole())
                                         <a class="dropdown-item" href="{{ route('pages.my_orders.monitoring', ['tab' => 'drafts']) }}">
                                             <i class="bi bi-file-earmark-text"></i> Đơn nháp

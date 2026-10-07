@@ -288,7 +288,8 @@
                 </a>
                 @endif
 
-                
+
+            @include('layouts.partials.task-sidebar-menu', ['taskNavHeadingClass'=>'sp-nav-section','taskNavLinkClass'=>'sp-nav-link'])
         </nav>
         <div class="p-3 border-top border-success border-opacity-25">
             <div class="d-flex align-items-center gap-2 mb-2">
@@ -384,7 +385,7 @@
                 </div>
             @endif
 
-            @include('layouts.partials.operating-navigation')
+
                 @yield('content')
         </div>
     </div>

@@ -105,6 +105,7 @@
 				<!-- Main navigation -->
 				<div class="sidebar-section">
 					<ul class="nav nav-sidebar" data-nav-type="accordion">
+                        @include('layouts.partials.task-sidebar-menu', ['taskNavList'=>true])
 
 						<!-- Tổng quan -->
 						<li class="nav-item-header">

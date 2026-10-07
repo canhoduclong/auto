@@ -166,6 +166,14 @@
             color: #fff;
             box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.38);
         }
+        .ceo-task-group { margin-top: .8rem; }
+        .ceo-task-group summary { cursor: pointer; list-style: none; font-weight: 600; }
+        .ceo-task-group summary::-webkit-details-marker { display: none; }
+        .ceo-task-chevron { margin-left: auto; font-size: 12px; transition: transform .15s; }
+        .ceo-task-group[open] .ceo-task-chevron { transform: rotate(180deg); }
+        .ceo-task-links { margin: .4rem 0 .8rem .7rem; padding-left: .5rem; border-left: 1px solid rgba(148,163,184,.25); }
+        .ceo-task-links .ceo-nav-link { font-size: .84rem; padding: .5rem .6rem; align-items: flex-start; }
+        .ceo-task-links .ceo-nav-link i { margin-top: .15rem; }
         .ceo-main {
             margin-left: var(--ceo-sidebar-width);
             min-height: 100vh;
@@ -282,6 +290,15 @@
                 <i class="bi bi-person-circle"></i> Hồ sơ CEO
             </a>
 
+            <details class="ceo-task-group" @if(request()->routeIs('operating.*', 'tasks.*', 'task-assignments.*', 'my-tasks')) open @endif>
+                <summary class="ceo-nav-link"><i class="bi bi-kanban"></i><span>Giao việc</span><i class="bi bi-chevron-down ceo-task-chevron"></i></summary>
+                <div class="ceo-task-links">
+                    @foreach(\App\Support\WebTaskNavigation::items(auth()->user()) as $taskItem)
+                        <a href="{{ $taskItem['url'] }}" class="ceo-nav-link {{ $taskItem['active'] ? 'active' : '' }}"><i class="bi bi-{{ $taskItem['icon'] }}"></i><span>{{ $taskItem['label'] }}</span></a>
+                    @endforeach
+                </div>
+            </details>
+
             <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Đơn Hàng</div>
             <a href="{{ route('ceo.orders') }}" class="ceo-nav-link {{ request()->routeIs('ceo.orders') ? 'active' : '' }}">
                 <i class="bi bi-bag-check"></i> Đơn hàng
@@ -355,29 +372,6 @@
             </a>
             <a href="{{ route('ceo.alerts') }}" class="ceo-nav-link {{ request()->routeIs('ceo.alerts') ? 'active' : '' }}">
                 <i class="bi bi-exclamation-triangle"></i> Cảnh báo
-            </a>
-
-            <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Điều hành & Giao việc</div>
-            <a href="{{ route('operating.index') }}" class="ceo-nav-link {{ request()->routeIs('operating.index') && in_array(request('filter', 'mine'), ['mine'], true) ? 'active' : '' }}">
-                <i class="bi bi-speedometer2"></i> Tổng quan điều hành
-            </a>
-            <a href="{{ route('tasks.create') }}" class="ceo-nav-link {{ request()->routeIs('tasks.create', 'task-assignments.create', 'task-assignments.edit') ? 'active' : '' }}">
-                <i class="bi bi-plus-circle"></i> Tạo công việc / Giao việc
-            </a>
-            <a href="{{ route('operating.index', ['filter' => 'assigned']) }}" class="ceo-nav-link {{ (request()->routeIs('operating.index') && request('filter') === 'assigned') || request()->routeIs('tasks.assigned', 'task-assignments.assigned-by-me') ? 'active' : '' }}">
-                <i class="bi bi-send"></i> Việc tôi giao
-            </a>
-            <a href="{{ route('operating.index', ['filter' => 'received']) }}" class="ceo-nav-link {{ (request()->routeIs('operating.index') && request('filter') === 'received') || request()->routeIs('tasks.my-tasks', 'my-tasks', 'task-assignments.assigned-to-me') ? 'active' : '' }}">
-                <i class="bi bi-inbox"></i> Nhận việc / Việc của tôi
-            </a>
-            <a href="{{ route('operating.index', ['filter' => 'coordination']) }}" class="ceo-nav-link {{ request()->routeIs('operating.index') && request('filter') === 'coordination' ? 'active' : '' }}">
-                <i class="bi bi-people"></i> Yêu cầu phối hợp
-            </a>
-            <a href="{{ route('operating.index', ['filter' => 'verification']) }}" class="ceo-nav-link {{ (request()->routeIs('operating.index') && request('filter') === 'verification') || request()->routeIs('task-assignments.verify', 'task-assignments.verify-form', 'tasks.verify') ? 'active' : '' }}">
-                <i class="bi bi-check2-circle"></i> Chờ nghiệm thu
-            </a>
-            <a href="{{ route('operating.index') }}#bieu-quyet" class="ceo-nav-link {{ request()->routeIs('operating.proposals.*') ? 'active' : '' }}">
-                <i class="bi bi-ui-checks"></i> Đề xuất & Biểu quyết
             </a>
 
             <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Quản Lý</div>

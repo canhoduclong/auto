@@ -906,6 +906,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     // My Tasks - cho Sale/Leader/Manager users
     Route::get('/my-tasks', [\App\Http\Controllers\TaskAssignmentController::class, 'assignedToMe'])->name('my-tasks');
 
+    Route::get('/task-role-permissions', [\App\Http\Controllers\TaskRolePermissionController::class, 'index'])->name('task-role-permissions.index');
+    Route::put('/task-role-permissions/{role}', [\App\Http\Controllers\TaskRolePermissionController::class, 'update'])->name('task-role-permissions.update');
+    Route::get('/operating/deleted-tasks/{id}', [\App\Http\Controllers\OperatingController::class, 'deletedTask'])->whereNumber('id')->middleware('role:admin')->name('operating.deleted-task');
     Route::get('/operating', [\App\Http\Controllers\OperatingController::class, 'index'])->name('operating.index');
     Route::get('/operating/proposals/create', [\App\Http\Controllers\OperatingController::class, 'create'])->name('operating.proposals.create');
     Route::post('/operating/proposals', [\App\Http\Controllers\OperatingController::class, 'store'])->name('operating.proposals.store');

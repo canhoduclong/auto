@@ -464,6 +464,7 @@
             <a href="{{ route('accounting.stocktakes.index') }}" class="{{ request()->routeIs('accounting.stocktakes.*') ? 'active' : '' }}">
                 <i class="bi bi-clipboard2-check"></i> Kiểm kê kho
             </a>
+            @include('layouts.partials.task-sidebar-menu', ['taskNavHeadingClass'=>'nav-section','taskNavLinkClass'=>''])
         </nav>
 
         <div class="acc-sidebar-footer">
@@ -565,7 +566,7 @@
                     <a href="{{ route('accounting.order-adjustments') }}" class="btn btn-warning btn-sm">Kiểm tra và duyệt</a>
                 </div>
             @endif
-            @include('layouts.partials.operating-navigation')
+
             @hasSection('accounting_content')
                 @yield('accounting_content')
             @else
