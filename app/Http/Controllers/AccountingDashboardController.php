@@ -1984,36 +1984,11 @@ class AccountingDashboardController extends Controller
             'sale_id' => ['nullable', 'integer', 'min:0'],
             'customer_id' => ['nullable', 'integer', 'min:0'],
         ]);
-        $from = Carbon::parse($request->input('from_date', now()->toDateString()))->toDateString();
-        $to = Carbon::parse($request->input('to_date', now()->toDateString()))->toDateString();
-        if ($from > $to) { [$from, $to] = [$to, $from]; }
-        $businessDate = "DATE(CASE WHEN orders.accounting_sales_import_batch_id IS NOT NULL THEN COALESCE(orders.delivery_date, orders.created_at) ELSE orders.created_at END)";
-        $orders = Order::query()
-            ->with(['customer', 'shipper', 'user', 'warehouse', 'items.product', 'items.variant.product'])
-            ->whereNotIn('orders.status', ['rejected', 'cancelled'])
-            ->whereBetween(DB::raw($businessDate), [$from, $to])
-            ->when($request->integer('sale_id') > 0, fn ($q) => $q->where('orders.user_id', $request->integer('sale_id')))
-            ->when($request->integer('customer_id') > 0, fn ($q) => $q->where('orders.customer_id', $request->integer('customer_id')))
-            ->where(function ($query) {
-                $query->whereExists(function ($documents) {
-                    $documents->selectRaw('1')->from('inventory_documents')
-                        ->where('type', 'export')
-                        ->whereRaw("inventory_documents.notes = CONCAT('Xuất kho cho đơn #', orders.code)");
-                })->orWhereHas('warehouseTransfers', function ($transfers) {
-                    $transfers->whereIn('status', ['in_transit', 'delivered_waiting_receive', 'received_completed'])
-                        ->whereHas('exportDocument', fn ($documents) => $documents->where('type', 'export'));
-                });
-            })
-            ->orderByRaw($businessDate.' '.($request->input('sort') === 'date_asc' ? 'asc' : 'desc'))
-            ->orderBy('orders.daily_sequence')->orderBy('orders.id')->get();
-
-        return view('shipper.assignment-documents-print', [
-            'orders' => $orders, 'selectedDate' => $from,
-            'printTitle' => 'PHIẾU XUẤT ĐƠN HÀNG',
-        ]);
+        $request->merge(['tab'=>'overview']);
+        return $this->dailySales($request, true);
     }
 
-    public function dailySales(Request $request)
+    public function dailySales(Request $request, bool $printExportList = false)
     {
         $tab = (string) $request->input('tab', 'overview');
         if (! in_array($tab, ['overview', 'journal'], true)) {
@@ -2106,7 +2081,7 @@ class AccountingDashboardController extends Controller
             ->selectRaw('oai_s.order_item_id, MAX(oai_s.id) as adj_item_id')
             ->groupBy('oai_s.order_item_id');
 
-        $makeBase = function () use ($approvedAdjSub, $businessDateExpression, $fromDate, $toDate, $saleId, $customerId) {
+        $makeBase = function () use ($approvedAdjSub, $businessDateExpression, $fromDate, $toDate, $saleId, $customerId, $printExportList) {
             return DB::table('order_items')
                 ->join('orders', 'order_items.order_id', '=', 'orders.id')
                 ->join('products', 'order_items.product_id', '=', 'products.id')
@@ -2118,7 +2093,19 @@ class AccountingDashboardController extends Controller
                 ->whereNotIn('orders.status', ['rejected', 'cancelled'])
                 ->whereRaw("{$businessDateExpression} BETWEEN ? AND ?", [$fromDate, $toDate])
                 ->when($saleId > 0, fn ($q) => $q->where('orders.user_id', $saleId))
-                ->when($customerId > 0, fn ($q) => $q->where('orders.customer_id', $customerId));
+                ->when($customerId > 0, fn ($q) => $q->where('orders.customer_id', $customerId))
+                ->when($printExportList, function ($query) {
+                    $exportedOrders = Order::query()->select('orders.id')->where(function ($orders) {
+                        $orders->whereExists(function ($documents) {
+                            $documents->selectRaw('1')->from('inventory_documents')->where('type', 'export')
+                                ->whereRaw("inventory_documents.notes = CONCAT('Xuất kho cho đơn #', orders.code)");
+                        })->orWhereHas('warehouseTransfers', function ($transfers) {
+                            $transfers->whereIn('status', ['in_transit', 'delivered_waiting_receive', 'received_completed'])
+                                ->whereHas('exportDocument', fn ($documents) => $documents->where('type', 'export'));
+                        });
+                    });
+                    $query->whereIn('orders.id', $exportedOrders);
+                });
         };
 
         // Compare the applied sale price with the company's price for this order,
@@ -2213,6 +2200,19 @@ class AccountingDashboardController extends Controller
             'weight_desc' => $listQ->orderByDesc('order_items.total_weight')->orderByDesc('orders.created_at'),
             default => $orderByDateAndPriority($listQ, 'desc'),
         };
+
+        if ($printExportList) {
+            $rows=$listQ->get();
+            $printSummary=[
+                'orders'=>$rows->pluck('order_id_val')->unique()->count(),
+                'quantity'=>$rows->sum('eff_qty'),
+                'weight'=>$rows->where('is_priced_by_kg',1)->sum('eff_weight'),
+                'goods'=>$rows->sum('eff_total'),
+                'shipping'=>$rows->sum('customer_shipping_fee'),
+                'adjustment'=>$rows->sum('price_adjustment'),
+            ];
+            return view('accounting.daily_sales_export_list_print',compact('rows','printSummary','fromDate','toDate','saleId','customerId','sales','customers'));
+        }
 
         $items = $listQ->paginate($perPage)->appends($request->query());
 

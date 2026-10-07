@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Danh sách đơn xuất · {{ $fromDate }} – {{ $toDate }}</title>
+<style>
+@page{size:A4 landscape;margin:10mm}
+*{box-sizing:border-box}body{font-family:Arial,sans-serif;font-size:10px;color:#111;margin:0;background:#e9edf2}.sheet{background:#fff;max-width:277mm;margin:20px auto;padding:10mm}.toolbar{max-width:277mm;margin:16px auto;display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px}.toolbar button{padding:9px 16px;background:#1769aa;color:#fff;border:0;cursor:pointer}.heading{text-align:center;margin-bottom:12px}.heading h1{font-size:17px;margin:6px 0}.heading p{margin:5px 0;font-size:11px}.summary{display:flex;gap:20px;flex-wrap:wrap;margin:12px 0;font-size:11px}.note{font-size:10px;color:#444;line-height:1.5;margin:8px 0}table{width:100%;border-collapse:collapse;table-layout:fixed}th,td{border:1px solid #777;padding:6px 4px;vertical-align:middle;overflow-wrap:anywhere}th{font-size:9px;background:#edf1f5;text-align:center}td.number{text-align:right;font-variant-numeric:tabular-nums}td.center{text-align:center}.meta{font-size:9px;color:#444;margin-top:3px}.totals td{font-weight:bold;background:#f0f2f5}.signatures{display:flex;justify-content:space-between;margin-top:18px;font-size:11px;gap:20px}.signatures>div{width:30%;text-align:center}.signatures small{display:block;margin-top:6px;font-weight:normal}thead{display:table-header-group}tr{break-inside:avoid;page-break-inside:avoid}.signatures{break-inside:avoid}.blank{height:28px}
+@media print{body{background:#fff}.toolbar{display:none}.sheet{max-width:none;width:100%;margin:0;padding:0}th,.totals td{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
+</style>
+</head>
+<body>
+@php
+    $money=fn($n)=>number_format((float)$n,0,',','.');
+    $number=fn($n)=>rtrim(rtrim(number_format((float)$n,3,',','.'),'0'),',');
+@endphp
+<div class="toolbar"><span>A4 ngang · Toàn bộ đơn đã xuất kho trong bộ lọc</span><button type="button" onclick="window.print()">In danh sách / Lưu PDF</button></div>
+<main class="sheet">
+    <header class="heading"><strong>{{ \App\Models\Setting::get('brand_name','HOÀNG LONG TNT') }}</strong><h1>DANH SÁCH ĐƠN XUẤT – ĐỐI SOÁT THỰC TẾ</h1><p>Từ {{ \Carbon\Carbon::parse($fromDate)->format('d/m/Y') }} đến {{ \Carbon\Carbon::parse($toDate)->format('d/m/Y') }}</p><p>Sale: {{ $saleId ? ($sales->firstWhere('id',$saleId)?->name ?? '—') : 'Tất cả' }} · Khách hàng: {{ $customerId ? ($customers->firstWhere('id',$customerId)?->name ?? '—') : 'Tất cả' }}</p></header>
+    <div class="summary"><span><strong>{{ $printSummary['orders'] }}</strong> đơn xuất · <strong>{{ $rows->count() }}</strong> dòng hàng</span><span>Tiền hàng: <strong>{{ $money($printSummary['goods']) }} đ</strong></span><span>Phí giao hàng thu khách: <strong>{{ $money($printSummary['shipping']) }} đ</strong></span><span>Khối lượng: <strong>{{ $number($printSummary['weight']) }} kg</strong></span></div>
+    <table><colgroup><col style="width:3%"><col style="width:4%"><col style="width:11%"><col style="width:7%"><col style="width:6%"><col style="width:13%"><col style="width:12%"><col style="width:4%"><col style="width:4%"><col style="width:3%"><col style="width:5%"><col style="width:6%"><col style="width:7%"><col style="width:6%"><col style="width:5%"><col style="width:4%"></colgroup>
+    <thead><tr><th>STT</th><th>Ưu tiên</th><th>Mã đơn</th><th>Ngày tạo / Giao</th><th>Sale</th><th>Khách hàng</th><th>Hàng hóa</th><th>Size</th><th>SL</th><th>ĐVT</th><th>Kg</th><th>Đơn giá</th><th>Thành tiền</th><th>Phí giao thu khách</th><th>Điều chỉnh giá</th><th>Kiểm tra</th></tr></thead>
+    <tbody>
+    @forelse($rows as $row)<tr><td class="center">{{ $loop->iteration }}</td><td class="center">{{ $row->daily_sequence ?? '—' }}</td><td>{{ $row->order_code }}</td><td class="center">{{ \Carbon\Carbon::parse($row->order_date)->format('d/m/Y') }}<div class="meta">{{ $row->delivery_date ? \Carbon\Carbon::parse($row->delivery_date)->format('d/m/Y') : '—' }}</div></td><td>{{ $row->sale_name }}</td><td><strong>{{ $row->customer_name }}</strong><div class="meta">{{ $row->customer_code }}</div></td><td>{{ $row->product_name }}@if($row->has_adj)<div class="meta">Đ/C đã duyệt</div>@endif</td><td class="number">{{ is_numeric($row->variant_size) ? $number($row->variant_size) : '—' }}</td><td class="number">{{ $number($row->eff_qty) }}</td><td class="center">{{ \App\Enums\ProductUnit::tryFrom($row->product_unit ?? '')?->label() ?? 'Cái' }}</td><td class="number">{{ $row->is_priced_by_kg ? $number($row->eff_weight) : '—' }}</td><td class="number">{{ $money($row->eff_price) }}</td><td class="number">{{ $money($row->eff_total) }}</td><td class="number">{{ $row->customer_shipping_fee>0 ? $money($row->customer_shipping_fee) : '—' }}</td><td class="number">{{ $row->price_adjustment ? $money($row->price_adjustment) : '—' }}</td><td class="blank"></td></tr>
+    @empty<tr><td colspan="16" class="center">Không có đơn đã xuất kho trong khoảng ngày và bộ lọc đã chọn.</td></tr>@endforelse
+    <tr class="totals"><td colspan="8">TỔNG · {{ $printSummary['orders'] }} đơn xuất</td><td class="number">{{ $number($printSummary['quantity']) }}</td><td></td><td class="number">{{ $number($printSummary['weight']) }}</td><td></td><td class="number">{{ $money($printSummary['goods']) }}</td><td class="number">{{ $money($printSummary['shipping']) }}</td><td class="number">{{ $money($printSummary['adjustment']) }}</td><td></td></tr>
+    </tbody></table>
+    <p class="note">Chỉ gồm đơn có chứng từ xuất kho. Số liệu dùng cùng cách tính với bảng Thống kê bán hàng, gồm điều chỉnh đã áp dụng. Phí giao hàng thu khách ghi một lần cho mỗi đơn. Thành tiền là tiền từng dòng hàng; chiết khấu / phí cấp đơn không phân bổ vào các dòng. Cột Kiểm tra dùng để đánh dấu khi đối soát.</p>
+    <div class="signatures"><div><strong>Người lập danh sách</strong><small>(Ký, ghi rõ họ tên)</small></div><div><strong>Người kiểm tra thực tế</strong><small>(Ký, ghi rõ họ tên)</small></div><div><strong>Kế toán đối soát</strong><small>(Ký, ghi rõ họ tên)</small></div></div>
+</main>
+</body></html>
