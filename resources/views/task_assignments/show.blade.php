@@ -69,9 +69,19 @@
 
             @include('task_assignments.partials.debt-progress')
             @include('task_assignments.partials.progress')
+            <div class="task-action-bar mb-3">
+                @if(!in_array($task->status,['done','cancelled'],true) && (auth()->user()->hasRole('admin') || (int)$task->created_by===(int)auth()->id() || $myAssignee))
+                <button type="button" class="btn task-action-button" data-bs-toggle="collapse" data-bs-target="#taskChildPanel" aria-controls="taskChildPanel" aria-expanded="{{ $errors->any() && !$errors->has('evaluation_score') ? 'true' : 'false' }}">Giao việc con</button>
+                @endif
+                @if($myAssignee && in_array($myAssignee->status,['pending','in_progress','processing']))
+                <button type="button" class="btn task-action-button" data-bs-toggle="collapse" data-bs-target="#taskStatusPanel" aria-controls="taskStatusPanel" aria-expanded="false">Cập nhật trạng thái</button>
+                @if(!$task->work_kind || $myAssignee->started_at)
+                <button type="button" class="btn task-action-button" data-bs-toggle="collapse" data-bs-target="#taskReportPanel" aria-controls="taskReportPanel" aria-expanded="false">Báo cáo hoàn thành</button>
+                @endif
+                @endif
+            </div>
             @if(!in_array($task->status, ['done', 'cancelled'], true) && (auth()->user()->hasRole('admin') || (int) $task->created_by === (int) auth()->id() || $myAssignee))
-                <details class="mb-3" @if($errors->any() && !$errors->has('evaluation_score')) open @endif>
-                <summary class="btn btn-primary mb-2">Giao việc con</summary>
+                <div id="taskChildPanel" class="collapse mb-3 {{ $errors->any() && !$errors->has('evaluation_score') ? 'show' : '' }}">
                 <form class="card card-body shadow-sm" action="{{ route('tasks.subtasks.store', $task) }}" method="POST">
                     @csrf
                     <h6>Thêm công việc con</h6>
@@ -113,17 +123,9 @@
                     <textarea id="child-description" class="form-control mb-3 task-description-editor" name="description" maxlength="20000">{{ \App\Support\TaskDescription::render(old('description')) }}</textarea>
                     <button class="btn btn-primary align-self-start" type="submit" @disabled($subTaskAssignees->isEmpty())>Giao việc con</button>
                 </form>
-                </details>
+                </div>
             @endif
 
-            @if($myAssignee && in_array($myAssignee->status,['pending','in_progress','processing']))
-            <div class="d-flex flex-wrap gap-2 mb-3">
-                <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="collapse" data-bs-target="#taskStatusPanel" aria-expanded="false">Cập nhật trạng thái</button>
-                @if(!$task->work_kind || $myAssignee->started_at)
-                <button type="button" class="btn btn-success btn-sm" data-bs-toggle="collapse" data-bs-target="#taskReportPanel" aria-expanded="false">Gửi báo cáo hoàn thành</button>
-                @endif
-            </div>
-            @endif
             {{-- My assignee action card --}}
             @if($myAssignee && in_array($myAssignee->status, ['pending', 'in_progress', 'processing']))
                 <div class="collapse mb-3" id="taskStatusPanel"><div class="card border-primary shadow-sm task-status-card">
@@ -215,17 +217,15 @@
                 <div class="card card-body mb-3"><h6>Nghiệm thu kết quả</h6><a class="btn btn-success" href="{{ route('task-assignments.verify-form',$task) }}">Kiểm tra và nghiệm thu</a></div>
             @endif
             {{-- Approval timeline --}}
+            @if($task->approvalSteps->isNotEmpty())
             <div class="card shadow-sm mb-3">
                 <div class="card-header py-2 fw-semibold small text-uppercase text-muted">
-                    <i class="ph-flow-arrow me-1"></i>Quy trinh phe duyet
+                    <i class="ph-flow-arrow me-1"></i>Quy trình phê duyệt
                     @if($task->workflow)
                         <span class="text-muted fw-normal ms-1">({{ $task->workflow->name }})</span>
                     @endif
                 </div>
                 <div class="card-body">
-                    @if($task->approvalSteps->isEmpty())
-                        <div class="text-muted small">Cong viec nay khong co quy trinh phe duyet.</div>
-                    @else
                         <div class="timeline">
                             @foreach($task->approvalSteps->sortBy('id') as $aStep)
                                 <div class="tl-item">
@@ -237,20 +237,20 @@
                                     </div>
                                     <div>
                                         <div class="fw-semibold" style="font-size:13px">
-                                            Buoc {{ $aStep->step?->step_order ?? '?' }}:
-                                            {{ $aStep->step?->role_slug ?? 'Khong xac dinh' }}
+                                            Bước {{ $aStep->step?->step_order ?? '?' }}:
+                                            {{ $aStep->step?->role_slug ?? 'Không xác định' }}
                                         </div>
                                         <div class="small text-muted">
                                             @if($aStep->status === 'approved')
-                                                <span class="text-success">Da phe duyet</span>
-                                                boi {{ $aStep->approver?->name ?? '-' }}
-                                                luc {{ $aStep->approved_at?->format('d/m/Y H:i') }}
+                                                <span class="text-success">Đã phê duyệt</span>
+                                                bởi {{ $aStep->approver?->name ?? '-' }}
+                                                lúc {{ $aStep->approved_at?->format('d/m/Y H:i') }}
                                             @elseif($aStep->status === 'rejected')
-                                                <span class="text-danger">Tu choi</span>
-                                                boi {{ $aStep->approver?->name ?? '-' }}
+                                                <span class="text-danger">Từ chối</span>
+                                                bởi {{ $aStep->approver?->name ?? '-' }}
                                                 @if($aStep->note) — {{ $aStep->note }} @endif
                                             @else
-                                                <span class="text-warning">Cho phe duyet...</span>
+                                                <span class="text-warning">Chờ phê duyệt…</span>
                                             @endif
                                         </div>
                                         @if($aStep->note && $aStep->status === 'approved')
@@ -260,9 +260,9 @@
                                 </div>
                             @endforeach
                         </div>
-                    @endif
                 </div>
             </div>
+            @endif
 
             @include('task_assignments.partials.documents')
         </div>

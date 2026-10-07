@@ -265,7 +265,9 @@ class TaskAssignmentController extends Controller
             'subTasks.creator:id,name',
             'subTasks.assignees.user:id,name',
             'subTasks.statusLogs.changedBy:id,name',
+            'subTasks.statusLogs.documents',
             'statusLogs.changedBy:id,name',
+            'statusLogs.documents',
             'completionImages.uploader:id,name',
             'subTasks.completionImages.uploader:id,name',
             'approvalSteps.step',
@@ -702,7 +704,7 @@ class TaskAssignmentController extends Controller
             ]);
         }
 
-        TaskStatusLog::log(
+        $activity = TaskStatusLog::log(
             $taskAssignment,
             $taskAssignment->status,
             auth()->user(),
@@ -726,7 +728,7 @@ class TaskAssignmentController extends Controller
         foreach ($request->file('documents',[]) as $file) {
             $path=$file->store('task-documents/'.$taskAssignment->id,'public');
             $paths[]=$path;
-            TaskCompletionImage::create(['task_id'=>$taskAssignment->id,'image_path'=>$path,'original_filename'=>$file->getClientOriginalName(),'sort_order'=>0,'uploaded_by'=>$request->user()->id,'explanation'=>$request->note]);
+            TaskCompletionImage::create(['task_id'=>$taskAssignment->id,'image_path'=>$path,'original_filename'=>$file->getClientOriginalName(),'sort_order'=>0,'uploaded_by'=>$request->user()->id,'explanation'=>$request->note,'status_log_id'=>$activity->id]);
         }
         });
         } catch (Throwable $e) {
@@ -753,13 +755,13 @@ class TaskAssignmentController extends Controller
         try {
             DB::transaction(function () use ($request,$taskAssignment,$user,$data,&$paths) {
                 $task = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
+                $activity = TaskStatusLog::log($task,$task->status,$user,'Upload tài liệu: '.$data['explanation']);
                 foreach ($request->file('documents') as $file) {
                     $path = $file->store('task-documents/'.$task->id,'public');
                     $paths[] = $path;
                     TaskCompletionImage::create(['task_id'=>$task->id,'image_path'=>$path,
-                        'original_filename'=>$file->getClientOriginalName(),'sort_order'=>0,'uploaded_by'=>$user->id,'explanation'=>$data['explanation']]);
+                        'original_filename'=>$file->getClientOriginalName(),'sort_order'=>0,'uploaded_by'=>$user->id,'explanation'=>$data['explanation'],'status_log_id'=>$activity->id]);
                 }
-                TaskStatusLog::log($task,$task->status,$user,'Upload tài liệu: '.$data['explanation']);
             });
         } catch (Throwable $e) {
             foreach ($paths as $path) Storage::disk('public')->delete($path);
@@ -869,7 +871,7 @@ class TaskAssignmentController extends Controller
                 ]);
 
                 // Log status change
-                TaskStatusLog::log(
+                $activity = TaskStatusLog::log(
                     $taskAssignment,
                     $taskAssignment->status,
                     $user,
@@ -889,6 +891,7 @@ class TaskAssignmentController extends Controller
                             'image_path'        => $path,
                             'original_filename' => $image->getClientOriginalName(),
                             'uploaded_by' => $user->id,
+                            'status_log_id' => $activity->id,
                             'explanation' => $request->completion_content,
                             'sort_order'        => $index,
                         ]);

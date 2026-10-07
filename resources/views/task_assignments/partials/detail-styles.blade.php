@@ -1,5 +1,11 @@
 @push('styles')
 <style>
+.task-workspace .task-action-bar { display:flex; align-items:center; gap:8px; flex-wrap:nowrap; }
+.task-workspace .task-action-button { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:7px 14px; border:1px solid #0d827a; border-radius:5px; background:#0d827a; color:#fff!important; font-size:13px; font-weight:600; line-height:1.3; white-space:nowrap; box-shadow:none; }
+.task-workspace .task-action-button:hover,.task-workspace .task-action-button[aria-expanded="true"] { background:#096c66; border-color:#096c66; color:#fff!important; }
+.task-workspace .task-action-button:focus-visible { outline:2px solid #0d827a; outline-offset:3px; }
+@media(max-width:575px) { .task-workspace .task-action-bar { gap:5px; } .task-workspace .task-action-button { flex:1; min-width:0; padding:7px 4px; font-size:11px; white-space:normal; min-height:40px; } }
+
 .task-workspace { color:#24364b; }
 .task-workspace .content-header { padding-bottom:20px!important; }
 .task-workspace .content-header h4 { font-size:24px; font-weight:700; line-height:1.3; }

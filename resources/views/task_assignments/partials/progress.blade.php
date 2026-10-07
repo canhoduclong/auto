@@ -34,6 +34,9 @@
                     @empty
                         <p class="small text-muted mt-2">Chưa có cập nhật hoạt động.</p>
                     @endforelse
+                    @foreach($task->completionImages->filter(fn($file)=>(int)$file->uploaded_by===(int)$assignment->user_id && !$file->status_log_id) as $personalDocument)
+                        <div class="task-activity"><span class="text-muted">{{ $personalDocument->created_at?->format('d/m/Y H:i') }}</span> · <a class="small" href="{{ $personalDocument->getImageUrl() }}" target="_blank" rel="noopener">Mở / tải tài liệu · {{ $personalDocument->original_filename }}</a></div>
+                    @endforeach
                     @if($assignment->note)<div class="small">Ghi chú hiện tại: {{ $assignment->note }}</div>@endif
                 </details>
             </article>

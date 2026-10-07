@@ -22,6 +22,11 @@ class TaskStatusLog extends Model
         'created_at' => 'datetime',
     ];
 
+    public function documents(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(TaskCompletionImage::class, 'status_log_id');
+    }
+
     public function task(): BelongsTo
     {
         return $this->belongsTo(TaskAssignment::class, 'task_id');
@@ -32,9 +37,9 @@ class TaskStatusLog extends Model
         return $this->belongsTo(User::class, 'changed_by');
     }
 
-    public static function log(TaskAssignment $task, string $toStatus, User $user, ?string $reason = null): void
+    public static function log(TaskAssignment $task, string $toStatus, User $user, ?string $reason = null): self
     {
-        self::create([
+        return self::create([
             'task_id'    => $task->id,
             'from_status' => $task->status,
             'to_status'  => $toStatus,

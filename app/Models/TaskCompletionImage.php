@@ -14,6 +14,7 @@ class TaskCompletionImage extends Model
         'sort_order',
         'uploaded_by',
         'explanation',
+        'status_log_id',
     ];
 
     public function uploader(): BelongsTo
