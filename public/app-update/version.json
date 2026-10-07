@@ -1,10 +1,10 @@
 {
-  "version": "1.1.27",
-  "version_code": 70,
+  "version": "1.1.28",
+  "version_code": 71,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản 1.1.27: Thêm Đối soát đơn hàng, Thống kê bán hàng và Điều chỉnh cho Kế toán; duyệt tại danh sách và chi tiết. Sửa khối lượng và form điều chỉnh trên Sale. Do khóa ký cũ đã mất, cần gỡ bản app cũ rồi cài bản mới. Dữ liệu trên máy chủ được giữ nguyên.",
-  "requires_reinstall": true,
-  "sha256": "aa752e8d851592814d3f0bbf3124b0e3fcc7b61e9729ef8c6795577d3163b021"
+  "message": "Bản 1.1.28: Tối ưu giao diện di động Đối soát đơn hàng, chi tiết đối soát, Thống kê bán hàng và Nhật ký bán hàng. Sửa tràn khung, nhãn/giá trị và bố cục nội dung tải động.",
+  "requires_reinstall": false,
+  "sha256": "e97150f3c447ac00f1a2967c9a851416e40fe1116956179f1a633c415799ff49"
 }
