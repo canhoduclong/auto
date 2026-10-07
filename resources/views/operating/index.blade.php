@@ -64,7 +64,7 @@
                         @if($canReceive)
                             <form method="POST" action="{{ route('tasks.accept',$entity) }}" class="mt-2">
                                 @csrf
-                                <button type="submit" class="btn btn-primary btn-sm">Tiếp nhận việc</button>
+                                <button type="submit" class="btn btn-primary btn-sm" aria-label="Tiếp nhận công việc {{ $entity->title }}"><i class="bi bi-check2-circle me-1" aria-hidden="true"></i>Tiếp nhận</button>
                             </form>
                         @endif
                     @endif
