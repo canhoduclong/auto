@@ -657,9 +657,10 @@ class TaskAssignmentController extends Controller
     {
         DB::transaction(function () use ($request,$taskAssignment) {
             $task=TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
-            abort_if(in_array($task->status,['done','completed','cancelled'],true),422,'Công việc đã kết thúc hoặc đang chờ xác nhận.');
+            abort_if(in_array($task->status,['done','completed','cancelled','draft'],true),422,'Công việc chưa được giao, đã kết thúc hoặc đang chờ xác nhận.');
             $record=$task->assignees()->where('user_id',$request->user()->id)->lockForUpdate()->firstOrFail();
             abort_if($record->accepted_at!==null,422,'Bạn đã tiếp nhận công việc.');
+            abort_if($record->status!=='pending',422,'Phần việc của bạn không ở trạng thái chờ tiếp nhận.');
             $record->update(['accepted_at'=>now()]);
             TaskStatusLog::log($task,$task->status,$request->user(),'Đã tiếp nhận công việc.');
         });

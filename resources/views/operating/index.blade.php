@@ -53,7 +53,22 @@
                 <td><span class="op-badge {{ $isVote?'op-badge-blue':'' }}">{{ $isVote?'Biểu quyết':($entity->work_kind==='coordination'?'Yêu cầu phối hợp':'Giao thực hiện') }}</span></td>
                 <td>{{ $entity->creator?->name ?? '—' }}<div class="op-meta">@if($isVote){{ $entity->voted_count }} / {{ $entity->votes_count }} thành viên đã bỏ phiếu @else Chủ trì: {{ $entity->assignees->firstWhere('user_id',$entity->accountable_user_id)?->user?->name ?? 'Chưa chỉ định' }} @endif</div></td>
                 <td class="op-date">{{ $deadline?->format('d/m/Y H:i') ?? '—' }}@if(!$isVote && $deadline?->isPast() && !in_array($entity->status,['done','cancelled']))<div class="mt-1"><span class="op-badge op-badge-red">Quá hạn</span></div>@endif</td>
-                <td><span class="op-badge op-badge-{{ $tone }}">{{ $isVote?$entity->statusLabel():($entity->status==='in_progress'?'Đang thực hiện':$entity->operatingStatusLabel()) }}</span></td>
+                <td>
+                    <span class="op-badge op-badge-{{ $tone }}">{{ $isVote?$entity->statusLabel():($entity->status==='in_progress'?'Đang thực hiện':$entity->operatingStatusLabel()) }}</span>
+                    @if(!$isVote)
+                        @php
+                            $myReceipt=$entity->assignees->firstWhere('user_id',auth()->id());
+                            $canReceive=!$entity->trashed() && !in_array($entity->status,['done','cancelled','completed','draft'],true)
+                                && $myReceipt && $myReceipt->status==='pending' && !$myReceipt->accepted_at;
+                        @endphp
+                        @if($canReceive)
+                            <form method="POST" action="{{ route('tasks.accept',$entity) }}" class="mt-2">
+                                @csrf
+                                <button type="submit" class="btn btn-primary btn-sm">Tiếp nhận việc</button>
+                            </form>
+                        @endif
+                    @endif
+                </td>
             </tr>
         @empty<tr><td colspan="7" class="op-empty">{{ empty($selectedKinds)?'Chọn ít nhất một loại nghiệp vụ để xem danh sách.':'Không có kết quả phù hợp với bộ lọc.' }}</td></tr>@endforelse
         </tbody></table></div>
