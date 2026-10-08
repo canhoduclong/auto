@@ -204,7 +204,7 @@ class TaskAssignmentController extends Controller
         $paths = [];
         if ($request->hasFile('attachments')) {
             foreach ($request->file('attachments') as $file) {
-                $paths[] = $file->store('task_assignments/' . now()->format('Y/m'), 'public');
+                $paths[] = \App\Support\TaskDocumentStorage::store($file, 'task_assignments/' . now()->format('Y/m'));
             }
         }
 
@@ -515,7 +515,7 @@ class TaskAssignmentController extends Controller
         $paths = $task->attachments ? (is_array($task->attachments) ? $task->attachments : []) : [];
         if ($request->hasFile('attachments')) {
             foreach ($request->file('attachments') as $file) {
-                $paths[] = $file->store('task_assignments/' . now()->format('Y/m'), 'public');
+                $paths[] = \App\Support\TaskDocumentStorage::store($file, 'task_assignments/' . now()->format('Y/m'));
             }
         }
 
@@ -728,7 +728,7 @@ class TaskAssignmentController extends Controller
         }
 
         foreach ($request->file('documents',[]) as $file) {
-            $path=$file->store('task-documents/'.$taskAssignment->id,'public');
+            $path=\App\Support\TaskDocumentStorage::store($file, 'task-documents/'.$taskAssignment->id);
             $paths[]=$path;
             TaskCompletionImage::create(['task_id'=>$taskAssignment->id,'image_path'=>$path,'original_filename'=>$file->getClientOriginalName(),'sort_order'=>0,'uploaded_by'=>$request->user()->id,'explanation'=>$request->note,'status_log_id'=>$activity->id]);
         }
@@ -759,7 +759,7 @@ class TaskAssignmentController extends Controller
                 $task = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
                 $activity = TaskStatusLog::log($task,$task->status,$user,'Upload tài liệu: '.$data['explanation']);
                 foreach ($request->file('documents') as $file) {
-                    $path = $file->store('task-documents/'.$task->id,'public');
+                    $path = \App\Support\TaskDocumentStorage::store($file, 'task-documents/'.$task->id);
                     $paths[] = $path;
                     TaskCompletionImage::create(['task_id'=>$task->id,'image_path'=>$path,
                         'original_filename'=>$file->getClientOriginalName(),'sort_order'=>0,'uploaded_by'=>$user->id,'explanation'=>$data['explanation'],'status_log_id'=>$activity->id]);
@@ -883,9 +883,8 @@ class TaskAssignmentController extends Controller
                 // Handle image uploads
                 if ($request->hasFile('images')) {
                     foreach ($request->file('images') as $index => $image) {
-                        $path = $image->store(
-                            'task-completions/' . $taskAssignment->id . '/' . now()->format('Y/m/d'),
-                            'public'
+                        $path = \App\Support\TaskDocumentStorage::store($image,
+                            'task-completions/' . $taskAssignment->id . '/' . now()->format('Y/m/d')
                         );
 
                         TaskCompletionImage::create([
