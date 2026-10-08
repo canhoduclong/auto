@@ -4,7 +4,7 @@
 @section('content')
 <div class="container-fluid process-page">
     <h1>Quản lý phí ship của tôi</h1>
-    <p class="text-muted">Chọn các đơn đã giao để gửi yêu cầu xác nhận chi phí ship.</p>
+    <p class="text-muted">Xem các đơn đã giao theo lộ trình và gửi yêu cầu xác nhận chi phí ship.</p>
     @include('processes.shipping-tabs', ['activeTab' => 'orders'])
     @include('processes.messages')
     @if(!$definition)
@@ -41,48 +41,42 @@
                         <input type="hidden" name="{{ $key }}" value="{{ $value }}">
                     @endif
                 @endforeach
-                <select name="per_page" class="form-select" aria-label="Số đơn mỗi trang" onchange="this.form.submit()">
+                <select name="per_page" class="form-select" aria-label="Số lộ trình mỗi trang" onchange="this.form.submit()">
                     @foreach([20, 50, 100] as $size)
-                        <option value="{{ $size }}" @selected($orders->perPage() === $size)>{{ $size }} đơn</option>
+                        <option value="{{ $size }}" @selected($orders->perPage() === $size)>{{ $size }} lộ trình</option>
                     @endforeach
                 </select>
             </form>
             {{ $orders->links() }}
-            <span class="text-muted">{{ number_format($orders->total(), 0, ',', '.') }} đơn · Trang {{ $orders->currentPage() }} / {{ $orders->lastPage() }}</span>
+            <span class="text-muted">{{ number_format($orders->total(), 0, ',', '.') }} lộ trình · Trang {{ $orders->currentPage() }} / {{ $orders->lastPage() }}</span>
         </div>
-        <button type="button" class="btn btn-primary" id="openExpenseRequest" disabled>Tạo yêu cầu xác nhận chi phí ship</button>
+        <button type="button" class="btn btn-primary" id="openExpenseRequest" hidden disabled>Tạo yêu cầu xác nhận chi phí ship</button>
     </div>
     <form method="POST" action="{{ route('shipping-expenses.store') }}" class="process-card" id="shippingExpenseCreate" enctype="multipart/form-data">
         @csrf
-        <div class="table-responsive"><table class="process-table"><thead><tr><th>Chọn</th><th>Khách hàng / Đơn hàng</th><th aria-sort="{{ request('sort', 'date') === 'date' ? (request('direction', 'desc') === 'asc' ? 'ascending' : 'descending') : 'none' }}"><a class="shipping-sort-link" href="{{ route('shipping-expenses.index', array_merge(request()->except('page'), ['sort' => 'date', 'direction' => request('sort', 'date') === 'date' && request('direction', 'desc') === 'asc' ? 'desc' : 'asc'])) }}">Ngày giao <span aria-hidden="true">{{ request('sort', 'date') === 'date' ? (request('direction', 'desc') === 'asc' ? '↑' : '↓') : '↕' }}</span></a></th><th aria-sort="{{ request('sort', 'date') === 'status' ? (request('direction', 'desc') === 'asc' ? 'ascending' : 'descending') : 'none' }}"><a class="shipping-sort-link" href="{{ route('shipping-expenses.index', array_merge(request()->except('page'), ['sort' => 'status', 'direction' => request('sort', 'date') === 'status' && request('direction', 'desc') === 'asc' ? 'desc' : 'asc'])) }}">Trạng thái <span aria-hidden="true">{{ request('sort', 'date') === 'status' ? (request('direction', 'desc') === 'asc' ? '↑' : '↓') : '↕' }}</span></a></th><th aria-sort="{{ request('sort', 'date') === 'confirmation' ? (request('direction', 'desc') === 'asc' ? 'ascending' : 'descending') : 'none' }}"><a class="shipping-sort-link" href="{{ route('shipping-expenses.index', array_merge(request()->except('page'), ['sort' => 'confirmation', 'direction' => request('sort', 'date') === 'confirmation' && request('direction', 'desc') === 'asc' ? 'desc' : 'asc'])) }}">Xác nhận <span aria-hidden="true">{{ request('sort', 'date') === 'confirmation' ? (request('direction', 'desc') === 'asc' ? '↑' : '↓') : '↕' }}</span></a></th><th aria-sort="{{ request('sort', 'date') === 'payment' ? (request('direction', 'desc') === 'asc' ? 'ascending' : 'descending') : 'none' }}"><a class="shipping-sort-link" href="{{ route('shipping-expenses.index', array_merge(request()->except('page'), ['sort' => 'payment', 'direction' => request('sort', 'date') === 'payment' && request('direction', 'desc') === 'asc' ? 'desc' : 'asc'])) }}">Thanh toán <span aria-hidden="true">{{ request('sort', 'date') === 'payment' ? (request('direction', 'desc') === 'asc' ? '↑' : '↓') : '↕' }}</span></a></th><th>Phí đề nghị</th><th>Diễn giải</th></tr></thead><tbody>
-            @forelse($orders as $order)
-                <tr>
-                    <td><input type="checkbox" class="form-check-input expense-select" aria-label="Chọn đơn {{ $order->code }}" @disabled(!$definition || !$order->expense_selectable)></td>
-                    <td>
-                        @include('processes.shipping-order-identity', ['order' => $order])
-                        <input type="hidden" data-expense-input name="items[{{ $loop->index }}][order_id]" value="{{ $order->id }}" disabled></td>
-                    <td class="text-nowrap expense-delivery">{{ $order->delivered_at?->format('d/m/Y H:i') ?? '—' }}</td>
-                    <td class="text-nowrap">{{ $order->status === 'completed' ? 'Hoàn thành' : 'Đã giao' }}</td>
-                    <td class="text-nowrap">
-                        @if($order->expense_claim_id)
-                            <a href="{{ route('shipping-expenses.show', $order->expense_claim_id) }}">{{ ['running'=>'Chờ xác nhận','revision'=>'Cần điều chỉnh','confirmed'=>'Đã xác nhận','rejected'=>'Đã từ chối'][$order->expense_status] ?? 'Đã gửi yêu cầu' }} #{{ $order->expense_claim_id }}</a>
-                        @else
-                            Chưa gửi yêu cầu
-                        @endif
-                    </td>
-                    <td class="text-nowrap">{{ $order->shipping_fee_transaction_id ? (['approved'=>'Đã thanh toán','pending_approval'=>'Chờ duyệt thanh toán','approved_pending_completion'=>'Chờ thanh toán','rejected'=>'Đã từ chối'][$order->expense_payment_status] ?? 'Đã gửi thanh toán') : 'Chưa gửi thanh toán' }}</td>
-                    <td><input type="text" inputmode="numeric" data-money data-expense-input class="form-control text-end" autocomplete="off" name="items[{{ $loop->index }}][amount]" value="{{ number_format($order->shipping_fee, 0, ',', '.') }}" disabled required style="min-width:130px"></td>
-                    <td><input data-expense-input class="form-control" name="items[{{ $loop->index }}][note]" maxlength="1000" disabled style="min-width:160px"></td>
-                </tr>
-            @empty
-                <tr><td colspan="8" class="text-center text-muted">Không có đơn đã giao phù hợp bộ lọc.</td></tr>
-            @endforelse
+        <input type="hidden" name="route_dispatch_id" id="expenseRouteId" disabled>
+        <div class="table-responsive"><table class="process-table"><thead><tr><th>Lộ trình</th><th>Số đơn</th><th>Phí hiện tại</th><th>Thao tác</th></tr></thead><tbody>
+        @forelse($routes as $route)
+            <tr>
+                <td><strong>Lộ trình #{{ $route['id'] }}</strong><div class="text-muted">{{ $route['date'] }}</div></td>
+                <td>{{ $route['orders']->count() }} đơn</td>
+                <td>{{ number_format($route['total'], 0, ',', '.') }}đ</td>
+                <td><div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="btn btn-outline-secondary" data-route-toggle="route-orders-{{ $route['id'] }}" aria-expanded="false">Xem nhanh đơn</button>
+                    <button type="button" class="btn btn-primary" data-route-send="{{ $route['id'] }}" data-route-label="Lộ trình #{{ $route['id'] }} · {{ $route['date'] }}" @disabled(!$definition || !$route['can_submit'])>Gửi xác nhận chi phí ship</button>
+                </div></td>
+            </tr>
+            <tr id="route-orders-{{ $route['id'] }}" data-route-orders="{{ $route['id'] }}" hidden><td colspan="4">
+                @include('processes.route-expense-orders', ['route' => $route])
+            </td></tr>
+        @empty
+            <tr><td colspan="4" class="text-center text-muted">Không có lộ trình phù hợp bộ lọc.</td></tr>
+        @endforelse
         </tbody></table></div>
-        <p class="small text-muted mt-2">Chọn các đơn trên trang hiện tại. Đơn đang xét duyệt, đã chốt hoặc đã gửi thanh toán không thể tạo yêu cầu trùng.</p>
         <div class="modal fade" id="expenseRequestModal" tabindex="-1" aria-labelledby="expenseRequestTitle" aria-hidden="true">
             <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"><div class="modal-content">
                 <div class="modal-header"><h2 class="modal-title" id="expenseRequestTitle">Tạo yêu cầu xác nhận chi phí ship</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button></div>
-                <div class="modal-body"><div class="row g-4">
+                <div class="modal-body"><div id="expenseRouteLabel" class="alert alert-light border fw-bold mb-3"></div><div class="row g-4">
                     <div class="col-lg-7"><h2>Chi phí các đơn</h2><div class="table-responsive"><table class="process-table"><thead><tr><th>STT</th><th>Khách hàng / Đơn hàng</th><th>Ngày giao</th><th>Chi phí đề nghị</th></tr></thead><tbody id="expenseSelectedOrders"></tbody><tfoot><tr><td colspan="3" class="text-end fw-bold">Tổng chi phí</td><td class="fw-bold text-nowrap" id="expenseSelectedTotal">0đ</td></tr></tfoot></table></div></div>
                     <div class="col-lg-5">
                         <label class="form-label">Ghi chú yêu cầu</label><textarea name="note" class="form-control mb-3" rows="4" maxlength="2000">{{ old('note') }}</textarea>
@@ -100,6 +94,22 @@
 (() => {
     const form = document.getElementById('shippingExpenseCreate');
     const openButton = document.getElementById('openExpenseRequest');
+    document.querySelectorAll('[data-route-toggle]').forEach(button => button.addEventListener('click', () => {
+        const details = document.getElementById(button.dataset.routeToggle);
+        details.hidden = !details.hidden;
+        button.setAttribute('aria-expanded', String(!details.hidden));
+        button.textContent = details.hidden ? 'Xem nhanh đơn' : 'Thu gọn';
+    }));
+    document.querySelectorAll('[data-route-send]').forEach(button => button.addEventListener('click', () => {
+        form.querySelectorAll('.expense-select').forEach(input => {
+            input.checked = !input.disabled && input.closest('[data-route-orders]').dataset.routeOrders === button.dataset.routeSend;
+            input.dispatchEvent(new Event('change'));
+        });
+        const routeInput = document.getElementById('expenseRouteId');
+        routeInput.value = button.dataset.routeSend; routeInput.disabled = false;
+        document.getElementById('expenseRouteLabel').textContent = button.dataset.routeLabel;
+        openButton.click();
+    }));
     const moneyValue = input => Number(input.value.replace(/\D/g, '') || 0);
     const bindMoney = input => {
         input.addEventListener('input', () => {
@@ -128,6 +138,13 @@
     }));
     openButton.addEventListener('click', () => {
         if (!selected().length) return;
+        selected().forEach(input => {
+            const details = input.closest('[data-route-orders]');
+            details.hidden = false;
+            const toggle = document.querySelector(`[data-route-toggle="${details.id}"]`);
+            toggle?.setAttribute('aria-expanded', 'true');
+            if (toggle) toggle.textContent = 'Thu gọn';
+        });
         const body = document.getElementById('expenseSelectedOrders');
         body.replaceChildren();
         selected().forEach((checkbox, index) => {

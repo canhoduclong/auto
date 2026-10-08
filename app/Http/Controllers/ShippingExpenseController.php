@@ -105,13 +105,25 @@ class ShippingExpenseController extends Controller
         }
         $sortColumns = ['date' => 'orders.delivered_at', 'status' => 'orders.status', 'confirmation' => 'expense_run.status', 'payment' => 'expense_payment.status'];
         $orders = $query->orderBy($sortColumns[$request->input('sort', 'date')], $request->input('direction', 'desc'))
-            ->orderByDesc('orders.id')->paginate((int) $request->input('per_page', 20))->withQueryString();
+            ->orderByDesc('orders.id')->get();
         $locked = DB::table('shipping_expense_order_locks')->whereIn('order_id', $orders->pluck('id'))->pluck('order_id')->all();
         foreach ($orders as $order) {
             $order->expense_selectable = ! $order->shipping_fee_transaction_id && ! in_array($order->id, $locked);
         }
 
-        return view('processes.claim-create', ['orders' => $orders, 'layout' => $this->layout(), 'definition' => ProcessDefinition::where('activity', 'shipping_expense')->where('is_active', true)->first()]);
+        $dispatches = \App\Models\ShipperDispatchHistory::whereIn('id', array_values($map))->get()->keyBy('id');
+        $groups = $orders->groupBy(fn ($order) => $map[$order->id])->map(function ($items, $id) use ($dispatches) {
+            $dispatch = $dispatches->get($id);
+
+            return ['id' => $id, 'date' => $dispatch?->schedule_date?->format('d/m/Y'), 'orders' => $items,
+                'total' => $items->sum('shipping_fee'), 'can_submit' => $items->contains(fn ($order) => $order->expense_selectable)];
+        })->values();
+        $size = (int) $request->input('per_page', 20);
+        $page = \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPage();
+        $routes = new \Illuminate\Pagination\LengthAwarePaginator($groups->forPage($page, $size)->values(), $groups->count(), $size, $page,
+            ['path' => $request->url(), 'query' => $request->query()]);
+
+        return view('processes.claim-create', ['orders' => $routes, 'routes' => $routes, 'layout' => $this->layout(), 'definition' => ProcessDefinition::where('activity', 'shipping_expense')->where('is_active', true)->first()]);
     }
 
     private function data(Request $request): array
@@ -122,7 +134,17 @@ class ShippingExpenseController extends Controller
     public function store(Request $request)
     {
         $request->validate(['attachments' => 'nullable|array|max:10', 'attachments.*' => 'file|max:20480']);
-        $claim = $this->service->submit($request->user(), $this->data($request), $request->file('attachments', []));
+        $data = $this->data($request);
+        if ($request->filled('route_dispatch_id')) {
+            $request->validate(['route_dispatch_id' => 'required|integer|exists:shipper_dispatch_histories,id']);
+            $map = $this->service->assignedOrders($request->user());
+            foreach ($data['items'] as $item) {
+                abort_unless((int) ($map[$item['order_id']] ?? 0) === (int) $request->route_dispatch_id, 422, 'Đơn không thuộc lộ trình được chọn.');
+            }
+            $dispatch = \App\Models\ShipperDispatchHistory::findOrFail($request->route_dispatch_id);
+            $data['note'] = 'Lộ trình #'.$dispatch->id.' · '.$dispatch->schedule_date->format('d/m/Y')."\n".($data['note'] ?? '');
+        }
+        $claim = $this->service->submit($request->user(), $data, $request->file('attachments', []));
 
         return redirect()->route('shipping-expenses.show', $claim)->with('success', 'Đã gửi yêu cầu xác nhận chi phí ship.');
     }
