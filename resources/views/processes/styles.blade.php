@@ -26,5 +26,54 @@
 #expenseRequestModal .btn{font-size:14px;font-weight:500;min-height:42px;padding:9px 16px}
 #expenseRequestModal tfoot td{font-size:14px;background:#f8fafc}
 @media(max-width:767px){#expenseRequestModal .modal-dialog{width:calc(100% - 24px)}#expenseRequestModal .modal-header,#expenseRequestModal .modal-body{padding:16px}#expenseRequestModal .form-control{font-size:16px}}
+
+.shipping-expenses-page{min-width:0;max-width:100%}
+.shipping-expense-filters{margin-left:0;margin-right:0}
+.shipping-expenses-page .table-responsive{max-width:100%;overscroll-behavior-x:contain}
+@media(max-width:767px){
+.shipping-expenses-page{padding:16px 10px;font-size:14px}
+.shipping-expenses-page h1{font-size:22px;line-height:1.35}
+.shipping-expenses-page .nav{gap:6px!important}
+.shipping-expenses-page .nav-link{font-size:14px;padding:10px 12px}
+.shipping-expense-filters{--bs-gutter-x:12px;--bs-gutter-y:12px;padding:12px 6px}
+.shipping-expense-filters>div{width:100%}
+.shipping-expense-filters>div:nth-of-type(-n+2){width:50%}
+.shipping-expense-filters .form-label{font-size:13px}
+.shipping-expense-filters .btn{width:100%;min-height:42px}
+.shipping-expense-toolbar>div{width:100%;gap:10px!important}
+.shipping-expense-toolbar nav{width:100%;overflow-x:auto}
+.shipping-expense-toolbar .pagination{flex-wrap:wrap}
+.shipping-expenses-page .shipping-routes-table{min-width:0;display:block;width:100%}
+.shipping-routes-table>thead{display:none}
+.shipping-routes-table>tbody{display:block}
+.shipping-routes-table>tbody>tr:not([data-route-orders]){display:grid;grid-template-columns:1fr 1fr;padding:12px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;gap:8px}
+.shipping-routes-table>tbody>tr>td{border:0;padding:0;min-width:0}
+.shipping-routes-table>tbody>tr:not([data-route-orders])>td:first-child{grid-column:1/-1;font-size:16px}
+.shipping-routes-table>tbody>tr:not([data-route-orders])>td[data-label]::before{content:attr(data-label);display:block;color:#64748b;font-size:12px;margin-bottom:3px}
+.shipping-routes-table>tbody>tr:not([data-route-orders])>td:last-child{grid-column:1/-1;margin-top:6px}
+.shipping-routes-table [data-route-send],.shipping-routes-table [data-route-toggle]{width:100%;min-height:42px;font-size:14px;white-space:normal}
+.shipping-routes-table>tbody>[data-route-orders]:not([hidden]){display:block;margin-bottom:16px}
+.shipping-routes-table>tbody>[data-route-orders]>td{display:block;width:100%}
+#expenseRequestModal .modal-dialog{width:calc(100% - 16px);margin:8px auto;height:calc(100% - 16px)}
+#expenseRequestModal .modal-title{font-size:17px;line-height:1.4;padding-right:10px}
+#expenseRequestModal .modal-body,#expenseRequestModal .modal-header{padding:14px}
+#expenseRequestModal .modal-body>.row{--bs-gutter-x:16px;--bs-gutter-y:20px}
+#expenseRouteLabel{font-size:14px;padding:10px;overflow-wrap:anywhere}
+#expenseRequestModal .process-table{min-width:0;width:100%}
+#expenseRequestModal .process-table thead{display:none}
+#expenseSelectedOrders{display:block}
+#expenseSelectedOrders>tr{display:grid;grid-template-columns:28px minmax(0,1fr);gap:8px;padding:12px 0;border-bottom:1px solid #e2e8f0}
+#expenseSelectedOrders>tr>td{padding:0;border:0;min-width:0}
+#expenseSelectedOrders>tr>td:nth-child(n+3){grid-column:2;white-space:normal}
+#expenseSelectedOrders>tr>td[data-label]::before{content:attr(data-label);display:block;font-size:12px;color:#64748b;margin-bottom:4px}
+#expenseRequestModal .shipping-order-customer{min-width:0;font-size:15px}
+#expenseRequestModal .shipping-order-meta{overflow-wrap:anywhere}
+#expenseRequestModal .process-table input{width:100%;min-width:0!important;font-size:16px}
+#expenseRequestModal tfoot{display:table;width:100%}
+#expenseRequestModal tfoot td{padding:12px 6px}
+#expenseRequestModal .btn{width:100%;min-height:44px}
+#expenseRequestModal .btn-close{flex-shrink:0}
+#expenseRequestModal .modal-body{padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+}
 </style>
 @endpush

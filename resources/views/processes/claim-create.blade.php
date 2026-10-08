@@ -2,7 +2,7 @@
 @section('title', 'Quản lý phí ship của tôi')
 @include('processes.styles')
 @section('content')
-<div class="container-fluid process-page">
+<div class="container-fluid process-page shipping-expenses-page">
     <h1>Quản lý phí ship của tôi</h1>
     <p class="text-muted">Xem các đơn đã giao theo lộ trình và gửi yêu cầu xác nhận chi phí ship.</p>
     @include('processes.shipping-tabs', ['activeTab' => 'orders'])
@@ -10,7 +10,7 @@
     @if(!$definition)
         <div class="alert alert-warning">Chưa có quy trình đang áp dụng. Vui lòng liên hệ quản trị.</div>
     @endif
-    <form class="process-card row g-3" method="GET" action="{{ route('shipping-expenses.index') }}">
+    <form class="process-card row g-3 shipping-expense-filters" method="GET" action="{{ route('shipping-expenses.index') }}">
         <input type="hidden" name="sort" value="{{ request('sort', 'date') }}">
         <input type="hidden" name="direction" value="{{ request('direction', 'desc') }}">
         <input type="hidden" name="per_page" value="{{ request('per_page', 20) }}">
@@ -55,12 +55,12 @@
     <form method="POST" action="{{ route('shipping-expenses.store') }}" class="process-card" id="shippingExpenseCreate" enctype="multipart/form-data">
         @csrf
         <input type="hidden" name="route_dispatch_id" id="expenseRouteId" disabled>
-        <div class="table-responsive"><table class="process-table"><thead><tr><th>Lộ trình</th><th>Số đơn</th><th>Phí hiện tại</th><th>Thao tác</th></tr></thead><tbody>
+        <div class="table-responsive"><table class="process-table shipping-routes-table"><thead><tr><th>Lộ trình</th><th>Số đơn</th><th>Phí hiện tại</th><th>Thao tác</th></tr></thead><tbody>
         @forelse($routes as $route)
             <tr>
                 <td><strong>Lộ trình #{{ $route['id'] }}</strong><div class="text-muted">{{ $route['date'] }}</div></td>
-                <td>{{ $route['orders']->count() }} đơn</td>
-                <td>{{ number_format($route['total'], 0, ',', '.') }}đ</td>
+                <td data-label="Số đơn">{{ $route['orders']->count() }} đơn</td>
+                <td data-label="Phí hiện tại">{{ number_format($route['total'], 0, ',', '.') }}đ</td>
                 <td><div class="d-flex flex-wrap gap-2">
                     <button type="button" class="btn btn-outline-secondary" data-route-toggle="route-orders-{{ $route['id'] }}" aria-expanded="false">Xem nhanh đơn</button>
                     <button type="button" class="btn btn-primary" data-route-send="{{ $route['id'] }}" data-route-label="Lộ trình #{{ $route['id'] }} · {{ $route['date'] }}" @disabled(!$definition || !$route['can_submit'])>Gửi xác nhận chi phí ship</button>
@@ -153,8 +153,8 @@
             const number = document.createElement('td'); number.textContent = index + 1;
             const identity = document.createElement('td');
             identity.append(source.querySelector('.shipping-order-customer').cloneNode(true), source.querySelector('.shipping-order-meta').cloneNode(true));
-            const date = document.createElement('td'); date.className = 'expense-modal-date'; date.textContent = source.querySelector('.expense-delivery').textContent;
-            const price = document.createElement('td');
+            const date = document.createElement('td'); date.dataset.label = 'Ngày giao'; date.className = 'expense-modal-date'; date.textContent = source.querySelector('.expense-delivery').textContent;
+            const price = document.createElement('td'); price.dataset.label = 'Phí đề nghị';
             const original = source.querySelector('[data-money]');
             const input = original.cloneNode(true); input.removeAttribute('name'); input.removeAttribute('data-expense-input'); input.disabled = false;
             bindMoney(input);
