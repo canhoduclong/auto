@@ -13,6 +13,7 @@
         <a href="{{ route('orders.index') }}" class="btn btn-secondary">{{ __('orders.buttons.back_to_list') }}</a>
     </div>
 
+    @include('processes.entity-actions',['entity'=>$order,'position'=>'order_detail'])
     <div class="card mb-3">
         <div class="card-body">
             <div class="row">

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\ApprovalWorkflow;
+use App\Models\ProcessDefinition;
 use App\Models\Role;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +18,11 @@ class ApprovalWorkflowController extends Controller
     {
         $workflows = ApprovalWorkflow::with('steps')->latest()->paginate(15);
 
-        return view('approval_workflows.index', compact('workflows'));
+        $processes = ProcessDefinition::latest()->get();
+        $userIds = $processes->flatMap(fn ($process) => collect($process->configuration['steps'] ?? [])->pluck('user_id'))->unique();
+        $processUsers = User::whereIn('id', $userIds)->get()->keyBy('id');
+
+        return view('approval_workflows.index', compact('workflows', 'processes', 'processUsers'));
     }
 
     public function create(): View
@@ -43,7 +49,7 @@ class ApprovalWorkflowController extends Controller
         DB::transaction(function () use ($data): void {
             $activities = array_values(array_unique($data['applies_to']));
 
-            if (!empty($data['is_active'])) {
+            if (! empty($data['is_active'])) {
                 $this->deactivateOverlappingWorkflows($activities);
             }
 
@@ -93,7 +99,7 @@ class ApprovalWorkflowController extends Controller
         DB::transaction(function () use ($data, $approvalWorkflow): void {
             $activities = array_values(array_unique($data['applies_to']));
 
-            if (!empty($data['is_active'])) {
+            if (! empty($data['is_active'])) {
                 $this->deactivateOverlappingWorkflows($activities, $approvalWorkflow->id);
             }
 

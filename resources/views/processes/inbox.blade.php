@@ -1,0 +1,9 @@
+@extends($layout)
+@section('title','Cần xử lý')
+@include('processes.styles')
+@section('content')
+<div class="container-fluid process-page"><h1>Cần xử lý</h1><p class="text-muted">Hồ sơ được giao cho bạn và các yêu cầu cần bổ sung.</p>
+@include('processes.messages')
+<form class="process-card row g-2" method="GET"><div class="col-md-4"><select class="form-select" name="scope">@foreach(['pending'=>'Cần xử lý','mine'=>'Tôi khởi tạo','history'=>'Đã xử lý'] as $key=>$label)<option value="{{ $key }}" @selected($scope===$key)>{{ $label }}</option>@endforeach</select></div><div class="col-md-5"><input name="q" class="form-control" placeholder="Tìm người khởi tạo" value="{{ request('q') }}"></div><div class="col-md-3"><button class="btn btn-primary">Lọc hồ sơ</button></div></form>
+<div class="process-card table-responsive"><table class="process-table"><thead><tr><th>Hồ sơ</th><th>Hoạt động</th><th>Người gửi</th><th>Bước hiện tại</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>@forelse($runs as $run)<tr><td>#{{ $run->id }}<div class="small text-muted">{{ $run->created_at->format('d/m/Y H:i') }}</div></td><td>{{ \App\Support\ProcessActivities::all()[$run->activity]['label'] ?? $run->activity }}</td><td>{{ $run->initiator?->name }}</td><td>{{ $run->step()['name'] ?? '—' }}</td><td><span class="process-status">{{ $run->statusLabel() }}</span></td><td><a href="{{ route('process-inbox.show',$run) }}" class="btn btn-sm btn-outline-primary">{{ $run->status==='revision' && (int)$run->initiator_id===(int)auth()->id()?'Bổ sung':'Xem / xử lý' }}</a></td></tr>@empty<tr><td colspan="6" class="text-center text-muted py-4">Chưa có hồ sơ trong mục này.</td></tr>@endforelse</tbody></table>{{ $runs->links() }}</div></div>
+@endsection

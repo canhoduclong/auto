@@ -1283,7 +1283,30 @@ Route::middleware(['auth'])->group(function () {
 
 Route::get('/page/{slug}', [PageController::class, 'show'])->name('pages.show');
 
-// Route::get('/{slug}', [PageController::class, 'show'])->name('page.show');
+// // Module quản lý quy trình và chi phí ship: quyền bước được kiểm tra trên máy chủ.
+Route::middleware('auth')->group(function () {
+    Route::get('/process-management/create', [\App\Http\Controllers\ProcessManagementController::class,'create'])->name('process-management.create');
+    Route::post('/process-management', [\App\Http\Controllers\ProcessManagementController::class,'store'])->name('process-management.store');
+    Route::get('/process-inbox', [\App\Http\Controllers\ProcessInboxController::class,'index'])->name('process-inbox.index');
+    Route::get('/process-inbox/{run}', [\App\Http\Controllers\ProcessInboxController::class,'show'])->name('process-inbox.show');
+    Route::post('/process-inbox/{run}/action', [\App\Http\Controllers\ProcessInboxController::class,'action'])->name('process-inbox.action');
+    Route::post('/process-inbox/{run}/revise', [\App\Http\Controllers\ProcessInboxController::class,'revise'])->name('process-inbox.revise');
+    Route::get('/process-definitions/{definition}/request/{subject}', [\App\Http\Controllers\ProcessInboxController::class,'requestForm'])->name('process-inbox.request');
+    Route::post('/process-definitions/{definition}/submit', [\App\Http\Controllers\ProcessInboxController::class,'submit'])->name('process-inbox.submit');
+    Route::get('/process-documents/{document}', [\App\Http\Controllers\ProcessInboxController::class,'document'])->name('process-documents.download');
+    Route::get('/process-management', [\App\Http\Controllers\ProcessManagementController::class,'index'])->name('process-management.index');
+    Route::put('/process-management/{definition}', [\App\Http\Controllers\ProcessManagementController::class,'save'])->name('process-management.save');
+    Route::get('/process-runs', [\App\Http\Controllers\ProcessManagementController::class,'runs'])->name('process-management.runs');
+    Route::get('/shipping-expenses', [\App\Http\Controllers\ShippingExpenseController::class,'index'])->name('shipping-expenses.index');
+    Route::get('/shipping-expenses/create', [\App\Http\Controllers\ShippingExpenseController::class,'create'])->name('shipping-expenses.create');
+    Route::post('/shipping-expenses', [\App\Http\Controllers\ShippingExpenseController::class,'store'])->name('shipping-expenses.store');
+    Route::get('/shipping-expenses/{claim}', [\App\Http\Controllers\ShippingExpenseController::class,'show'])->name('shipping-expenses.show');
+    Route::post('/shipping-expenses/{claim}/action', [\App\Http\Controllers\ShippingExpenseController::class,'action'])->name('shipping-expenses.action');
+    Route::post('/shipping-expenses/{claim}/revise', [\App\Http\Controllers\ShippingExpenseController::class,'revise'])->name('shipping-expenses.revise');
+    Route::post('/shipping-expenses/{claim}/payment', [\App\Http\Controllers\ShippingExpenseController::class,'payment'])->name('shipping-expenses.payment');
+});
+
+Route::get('/{slug}', [PageController::class, 'show'])->name('page.show');
 
 // Posts
 // Cart Routes

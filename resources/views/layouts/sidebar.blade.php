@@ -429,6 +429,12 @@
 							</a>
 						</li>
 
+                        @if(auth()->user()?->hasRole('admin'))
+                        <li class="nav-item-header"><div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Quản lý quy trình</div></li>
+                        <li class="nav-item"><a href="{{ route('process-management.index') }}" class="nav-link {{ request()->routeIs('process-management.index')?'active':'' }}"><i class="ph-flow-arrow"></i><span>Thiết kế quy trình</span></a></li>
+                        <li class="nav-item"><a href="{{ route('process-management.runs') }}" class="nav-link {{ request()->routeIs('process-management.runs')?'active':'' }}"><i class="ph-list-checks"></i><span>Luồng đang xử lý</span></a></li>
+                        <li class="nav-item"><a href="{{ route('shipping-expenses.index') }}" class="nav-link {{ request()->routeIs('shipping-expenses.*')?'active':'' }}"><i class="ph-truck"></i><span>Hồ sơ chi phí ship</span></a></li>
+                        @endif
 						<!-- Hệ thống -->
 						<li class="nav-item-header">
 							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Hệ thống</div>

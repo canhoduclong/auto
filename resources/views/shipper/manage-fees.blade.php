@@ -233,6 +233,7 @@
                     </label>
                 @endunless
                 <div class="mf-order-code">#{{ $order->code }}</div>
+                @include('processes.entity-actions',['entity'=>$order,'position'=>'shipping_list'])
                 <div style="font-size: 0.7rem; color: #94a3b8;">{{ $order->created_at->format('d/m') }}</div>
             </div>
             <div>

@@ -290,7 +290,7 @@
                 <i class="bi bi-person-circle"></i> Hồ sơ CEO
             </a>
 
-            <details class="ceo-task-group" @if(request()->routeIs('operating.*', 'tasks.*', 'task-assignments.*', 'my-tasks')) open @endif>
+            <details class="ceo-task-group" @if(request()->routeIs('operating.*', 'tasks.*', 'task-assignments.*', 'my-tasks', 'process-inbox.*')) open @endif>
                 <summary class="ceo-nav-link"><i class="bi bi-kanban"></i><span>Giao việc</span><i class="bi bi-chevron-down ceo-task-chevron"></i></summary>
                 <div class="ceo-task-links">
                     @foreach(\App\Support\WebTaskNavigation::items(auth()->user()) as $taskItem)

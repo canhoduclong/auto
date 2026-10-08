@@ -225,7 +225,7 @@
                             @endphp
                             <tr>
                                 <td class="text-muted">#{{ $order->id }}</td>
-                                <td class="fw-semibold">{{ $order->code }}</td>
+                                <td class="fw-semibold">{{ $order->code }} @include('processes.entity-actions',['entity'=>$order,'position'=>'order_list'])</td>
                                 <td>
                                     <div class="fw-medium">{{ $order->customer->name ?? '-' }}</div>
                                     <div class="text-muted small">{{ $order->customer->phone ?? '' }}</div>

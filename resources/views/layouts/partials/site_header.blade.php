@@ -620,6 +620,7 @@
                                         <a class="dropdown-item" href="{{ route('pages.my_orders.monitoring', ['tab' => 'drafts']) }}">
                                             <i class="bi bi-file-earmark-text"></i> Đơn nháp
                                         </a>
+                                        <a class="dropdown-item" href="{{ route('process-inbox.index') }}"><i class="bi bi-inbox me-2"></i>Cần xử lý</a>
                                         <a class="dropdown-item" href="{{ route('pages.my_orders.monitoring', ['tab' => 'my_orders']) }}">
                                             <i class="bi bi-bag-check"></i> {{ __('site.my_orders') }}
                                         </a>

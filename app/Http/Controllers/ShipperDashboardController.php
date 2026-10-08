@@ -337,8 +337,12 @@ class ShipperDashboardController extends Controller
 
     public function available(Request $request)
     {
-        $validated = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
-        $selectedDate = $validated['date'] ?? $this->latestAvailableRouteDate();
+        $validated = $request->validate(['date' => ['nullable', 'date_format:Y-m-d'], 'scope'=>['nullable','in:all']]);
+        $showAll = ($validated['scope'] ?? null) === 'all';
+        $selectedDate = $showAll ? null : ($validated['date'] ?? $this->latestAvailableRouteDate());
+        $allAvailableQuery = Order::query();
+        $this->constrainAvailableReadyOrder($allAvailableQuery);
+        $allAvailableCount = (clone $allAvailableQuery)->count();
 
         $today = Carbon::today();
         $startDate = $today->copy()->subDays(6)->toDateString();
@@ -389,7 +393,7 @@ class ShipperDashboardController extends Controller
                         ->where('shipper_id', Auth::id());
                 });
             })
-            ->forPackingDate($selectedDate)
+            ->when($showAll, function ($query) { $this->constrainAvailableReadyOrder($query); }, fn ($query) => $query->forPackingDate($selectedDate))
             ->orderByRaw("CASE WHEN status = 'delivered' THEN 1 ELSE 0 END")
             ->orderBy('created_at', 'asc')
             ->get();
@@ -415,7 +419,7 @@ class ShipperDashboardController extends Controller
             }
         });
 
-        return view('shipper.available', compact('orders', 'selectedDate', 'quickDates'));
+        return view('shipper.available', compact('orders', 'selectedDate', 'quickDates', 'showAll', 'allAvailableCount'));
     }
 
     /**
@@ -3934,6 +3938,7 @@ class ShipperDashboardController extends Controller
                 $foamBoxFee = (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0);
                 [$customerTotal, $vatAmount] = $this->customerOrderTotal($order, $itemsSubtotal, $newFee, $foamBoxFee);
 
+                abort_if(DB::table('shipping_expense_order_locks')->where('order_id', $order->id)->exists(), 422, 'Đơn đang được quản lý qua quy trình chi phí ship.');
                 $updates = ['shipping_fee' => $newFee];
                 if ($order->accounting_sales_import_batch_id === null) {
                     $updates['vat_amount'] = $vatAmount;
@@ -4536,6 +4541,7 @@ class ShipperDashboardController extends Controller
      */
     public function updateFee(Request $request, Order $order)
     {
+        abort_if(DB::table('shipping_expense_order_locks')->where('order_id', $order->id)->exists(), 422, 'Đơn đang được quản lý qua quy trình chi phí ship. Vui lòng xử lý trong hồ sơ chi phí.');
         $this->authorizeManagerShipper();
 
         abort_if(
@@ -4602,6 +4608,7 @@ class ShipperDashboardController extends Controller
      */
     public function bulkUpdateFees(Request $request)
     {
+        abort_if(DB::table('shipping_expense_order_locks')->whereIn('order_id', (array) $request->input('order_ids', []))->exists(), 422, 'Có đơn đang được quản lý qua quy trình chi phí ship.');
         $this->authorizeManagerShipper();
 
         $request->validate([
@@ -4693,6 +4700,7 @@ class ShipperDashboardController extends Controller
 
     public function createShippingFeeRequest(Request $request)
     {
+        abort_if(DB::table('shipping_expense_order_locks')->whereIn('order_id', (array) $request->input('request_order_ids', []))->exists(), 422, 'Phí trong quy trình mới phải được Shipper gửi thanh toán từ hồ sơ đã chốt.');
         $this->authorizeManagerShipper();
 
         $validated = $request->validate([

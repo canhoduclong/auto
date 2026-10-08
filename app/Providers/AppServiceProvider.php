@@ -65,6 +65,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         View::composer('layouts.warehouse', function ($view): void {
+            $view->with('warehouseMenuCounts',auth()->check()?\App\Support\WarehouseMenuIndicators::counts(auth()->user()):[]);
             $warehouseAdjustments = collect();
 
             if (auth()->check()
@@ -78,6 +79,8 @@ class AppServiceProvider extends ServiceProvider
             $view->with('warehouseAdjustmentQueue', $warehouseAdjustments)
                 ->with('warehouseAdjustmentQueueCount', $warehouseAdjustments->count());
         });
+
+        View::composer(['orders.index','orders.show','site.orders.show','products.index','products.show','products.edit','shipper.manage-fees','accounting.daily_orders'], fn($view)=>app(\App\Support\EntityProcessPresenter::class)->compose($view));
 
         Product::observe(ProductObserver::class);
         Customer::observe(CustomerObserver::class);

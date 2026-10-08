@@ -402,6 +402,9 @@
             <a href="{{ route('accounting.shippers') }}" class="{{ request()->routeIs('accounting.shippers*') ? 'active' : '' }}">
                 <i class="bi bi-person-badge"></i> Quản lý Shipper
             </a>
+            @if(collect(['accountant','account','accounting'])->contains(fn($role)=>app(\App\Services\ProcessEngine::class)->isReviewer(auth()->user(),$role)))
+            <a href="{{ route('shipping-expenses.index',['queue'=>'accounting']) }}" class="{{ request()->routeIs('shipping-expenses.*')?'active':'' }}"><i class="bi bi-check2-circle"></i> Xác nhận chi phí ship</a>
+            @endif
             <a href="{{ route('accounting.shipping-costs') }}" class="{{ request()->routeIs('accounting.shipping-costs*') ? 'active' : '' }}">
                 <i class="bi bi-cash-coin"></i> Quản lý chi phí ship
             </a>

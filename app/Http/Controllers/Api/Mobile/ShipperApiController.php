@@ -735,28 +735,44 @@ class ShipperApiController extends BaseApiController
             return $this->fail('Khong co quyen thao tac don nay', 403);
         }
 
+        $validated = $request->validate([
+            'shipping_expense_amount' => 'nullable|integer|min:0|max:1000000000',
+            'shipping_expense_note' => 'nullable|string|max:1000',
+        ]);
+        $amount = $validated['shipping_expense_amount'] ?? null;
         Auth::setUser($user);
         $request->headers->set('Accept', 'application/json');
-        app(ShipperDashboardController::class)->markDelivered($request, $order);
 
-        $order->refresh();
-        $statusBefore = (string) $order->status;
-        $order->update(['status' => Order::STATUS_COMPLETED]);
-
-        OrderHistory::query()->create([
-            'order_id' => $order->id,
-            'action' => 'mobile_complete_delivery',
-            'user_id' => $user->id,
-            'role' => 'shipper',
-            'status_before' => $statusBefore,
-            'status_after' => Order::STATUS_COMPLETED,
-            'note' => 'Shipper hoàn tất giao hàng trên ứng dụng mobile.',
-        ]);
-
-        return $this->ok([
-            'order_id' => (int) $order->id,
-            'status' => Order::STATUS_COMPLETED,
-        ], 'Hoan tat giao hang thanh cong');
+        return DB::transaction(function () use ($request, $order, $user, $amount, $validated) {
+            $order = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $order->shipper_id === (int) $user->id || $user->hasRole('admin'), 403, 'Không có quyền thao tác đơn này.');
+            app(ShipperDashboardController::class)->markDelivered($request, $order);
+            $order->refresh();
+            $statusBefore = (string) $order->status;
+            $order->update(['status' => Order::STATUS_COMPLETED]);
+            OrderHistory::query()->create([
+                'order_id' => $order->id,
+                'action' => 'mobile_complete_delivery',
+                'user_id' => $user->id,
+                'role' => 'shipper',
+                'status_before' => $statusBefore,
+                'status_after' => Order::STATUS_COMPLETED,
+                'note' => 'Shipper hoàn tất giao hàng trên ứng dụng mobile.',
+            ]);
+            $claim = null;
+            if ($amount !== null) {
+                $claim = app(\App\Services\ShippingExpenseService::class)->submit($user, [
+                    'items' => [['order_id' => $order->id, 'amount' => $amount, 'note' => $validated['shipping_expense_note'] ?? null]],
+                    'note' => $validated['shipping_expense_note'] ?? 'Ghi nhận phí ship khi hoàn thành đơn trên ứng dụng.',
+                ]);
+            }
+            return $this->ok([
+                'order_id' => (int) $order->id,
+                'status' => Order::STATUS_COMPLETED,
+                'shipping_expense_claim_id' => $claim?->id,
+                'shipping_expense_status' => $claim ? 'running' : null,
+            ], $claim ? 'Đã hoàn thành đơn và gửi chi phí ship cho điều phối xác nhận.' : 'Hoàn tất giao hàng thành công.');
+        });
     }
 
     public function uploadProof(Request $request, Order $order): JsonResponse

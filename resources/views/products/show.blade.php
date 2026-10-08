@@ -1,6 +1,8 @@
 @extends('layouts.app')
 
 @section('content')
+@include('processes.entity-actions',['entity'=>$product,'position'=>'product_detail'])
+
 <div class="container">
     <div class="row justify-content-center">
         <div class="col-md-12">

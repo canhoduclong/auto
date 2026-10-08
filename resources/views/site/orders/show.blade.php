@@ -670,6 +670,8 @@
 @endpush
 
 @section('content')
+@include('processes.entity-actions',['entity'=>$order,'position'=>'order_detail'])
+
 <section class="order-detail-page">
     <div class="container order-shell">
         <div class="order-hero">

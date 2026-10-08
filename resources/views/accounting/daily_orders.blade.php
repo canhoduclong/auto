@@ -40,7 +40,7 @@
             <tbody>
             @forelse($orders as $order)
                 <tr>
-                    <td>{{ $order->code }}</td>
+                    <td>{{ $order->code }} @include('processes.entity-actions',['entity'=>$order,'position'=>'order_list'])</td>
                     <td>{{ $order->customer?->name ?? '-' }}</td>
                     <td>{{ $order->user?->name ?? '-' }}</td>
                     <td class="fw-semibold">{{ number_format($order->total) }} d</td>

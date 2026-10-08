@@ -63,3 +63,10 @@ readme.txt
 !/tests/Feature/OperatingVoteTest.php
 
 !/tests/Feature/TaskReceiptTest.php
+
+!/tests/Feature/ProcessEngineTest.php
+!/tests/Manual/
+/tests/Manual/*
+!/tests/Manual/ShippingExpenseWorkflow.php
+
+!/tests/Manual/MobileShippingExpense.php

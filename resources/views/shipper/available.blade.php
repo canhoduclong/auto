@@ -448,6 +448,7 @@
                 </button>
                  
                 <div class="sp-av-quick-wrap ml-4">
+                    <a href="{{ route('shipper.available', ['scope'=>'all']) }}" class="sp-av-quick-pill {{ ($showAll??false)?'active':'' }}">Tất cả <span class="sp-av-quick-count">{{ $allAvailableCount??0 }}</span></a>
                     @foreach($quickDates as $quickDate)
                         @if($quickDate['available'])
                             <a href="{{ route('shipper.available', ['date' => $quickDate['date']]) }}"
@@ -504,13 +505,13 @@
         <span class="badge bg-primary sp-av-summary-pill">Có thể nhận: <span data-available-count>{{ $availableOrders->count() }}</span></span>
         <span class="badge bg-warning text-dark sp-av-summary-pill">Đã nhận: <span data-accepted-count>{{ $acceptedOrders->count() }}</span></span>
     </div>
-    <span class="badge bg-info sp-av-summary-pill">{{ \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m/Y') }}</span>
+    <span class="badge bg-info sp-av-summary-pill">{{ ($showAll??false)?'Tất cả ngày':\Illuminate\Support\Carbon::parse($selectedDate)->format('d/m/Y') }}</span>
 </div>
 
 @if($orders->isEmpty())
     <div class="card border-0 shadow-sm text-center py-5" data-page-empty-state>
         <i class="bi bi-inbox fs-1 text-muted"></i>
-        <p class="mt-2 text-muted">Không có đơn sẵn sàng giao trong ngày {{ \Illuminate\Support\Carbon::parse($selectedDate)->format('d/m/Y') }}.</p>
+        <p class="mt-2 text-muted">{{ ($showAll??false)?'Không có đơn đủ điều kiện nhận.':'Không có đơn sẵn sàng giao trong ngày '.\Illuminate\Support\Carbon::parse($selectedDate)->format('d/m/Y').'.' }}</p>
     </div>
 @endif
     <div class="sp-av-order-nav-area mb-4 {{ $orders->isEmpty() ? 'd-none' : '' }}" id="shipper-order-nav">

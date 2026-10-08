@@ -209,6 +209,8 @@
 @endpush
 
 @section('content')
+@include('processes.entity-actions',['entity'=>$product,'position'=>'product_detail'])
+
 <div class="content">
     <div class="edit-product-shell">
             <div class="page-head">

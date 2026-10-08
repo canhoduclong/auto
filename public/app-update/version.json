@@ -1,10 +1,10 @@
 {
-  "version": "1.1.28",
-  "version_code": 71,
+  "version": "1.1.29",
+  "version_code": 72,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản 1.1.28: Tối ưu giao diện di động Đối soát đơn hàng, chi tiết đối soát, Thống kê bán hàng và Nhật ký bán hàng. Sửa tràn khung, nhãn/giá trị và bố cục nội dung tải động.",
+  "message": "Bản 1.1.29: Shipper nhập phí ship đề nghị và diễn giải khi hoàn thành đơn. Gửi yêu cầu theo quy trình Điều phối → Kế toán xác nhận; định dạng tiền Việt Nam và kiểm soát yêu cầu trùng.",
   "requires_reinstall": false,
-  "sha256": "e97150f3c447ac00f1a2967c9a851416e40fe1116956179f1a633c415799ff49"
+  "sha256": "253b781d7397aa23dc40a2ba2cba370e8a058eb13e182197ae435ea61fb08784"
 }

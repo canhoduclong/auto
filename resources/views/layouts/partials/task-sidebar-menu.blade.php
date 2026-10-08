@@ -19,7 +19,7 @@
         'Cấu hình quy trình phê duyệt'=>'Quy trình duyệt',
     ];
     $taskMenuGroups = [
-        'Công việc của tôi'=>['Tổng quan công việc','Nhận việc / Chưa tiếp nhận','Việc tôi nhận','Đang thực hiện','Báo cáo đã gửi / Chờ xác nhận','Lịch sử công việc'],
+        'Công việc của tôi'=>['Cần xử lý','Tổng quan công việc','Nhận việc / Chưa tiếp nhận','Việc tôi nhận','Đang thực hiện','Báo cáo đã gửi / Chờ xác nhận','Lịch sử công việc'],
         'Giao việc & Điều hành'=>['Tạo công việc / Giao việc','Việc tôi giao','Chờ nghiệm thu','Yêu cầu phối hợp','Mở đề xuất biểu quyết','Biểu quyết liên quan đến tôi','Quản trị tất cả công việc','Công việc đã xóa'],
         'Cấu hình giao việc'=>['Quyền công việc theo vai trò','Quyền giao việc cho từng người','Cấu hình quy trình phê duyệt'],
     ];
@@ -38,7 +38,7 @@
 @else
 <div class="{{ $taskNavHeadingClass ?? 'nav-section' }}">Công việc & Điều hành</div>
 @foreach($taskNavItems as $item)
-<a href="{{ $item['url'] }}" class="{{ $taskNavLinkClass ?? '' }} {{ $item['active'] ? 'active' : '' }}"><i class="bi bi-{{ $item['icon'] }}"></i><span class="{{ $taskNavLabelClass ?? '' }}">{{ $item['label'] }}</span></a>
+<a href="{{ $item['url'] }}" title="{{ $item['label'] }}" class="{{ $taskNavLinkClass ?? '' }} {{ $item['active'] ? 'active' : '' }}"><i class="bi bi-{{ $item['icon'] }}"></i><span class="{{ $taskNavLabelClass ?? '' }}">{{ $taskNavShortLabels[$item['label']] ?? $item['label'] }}</span>@if(($taskNavIndicatorCounts[$item['label']]??0)>0)<span class="badge bg-danger" title="Có mục chờ xử lý">Chờ {{ $taskNavIndicatorCounts[$item['label']] }}</span>@endif</a>
 @endforeach
 @endif
 @endauth

@@ -148,6 +148,7 @@
                         <a href="{{ route('products.edit', ['product' => $product->id, 'page' => $page, 'perPage' => $perPage]) }}" class="product-name" data-product-id="{{ $product->id }}">
                             {{ $product->name }}
                         </a>
+                        @include('processes.entity-actions',['entity'=>$product,'position'=>'product_list'])
                         <div class="text-muted small">{{ $product->brand->name ?? '' }}{{ ($product->brand->name ?? '') && ($product->category->name ?? '') ? ' / ' : '' }}{{ $product->category->name ?? '' }}</div>
                     </td>
                     <td>

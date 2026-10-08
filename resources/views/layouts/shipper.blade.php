@@ -287,6 +287,11 @@
             </a>
 
             <div class="sp-nav-section">Tài chính</div>
+            <a href="{{ route('shipping-expenses.index') }}" class="sp-nav-link {{ request()->routeIs('shipping-expenses.*') && request('queue','mine')==='mine'?'active':'' }}"><i class="bi bi-cash-stack"></i><span>Quản lý phí ship của tôi</span></a>
+            @if(app(\App\Services\ProcessEngine::class)->isReviewer(auth()->user(),'manager_shipper'))
+            <a href="{{ route('shipping-expenses.index',['queue'=>'coordination']) }}" class="sp-nav-link {{ request()->routeIs('shipping-expenses.*') && request('queue')==='coordination'?'active':'' }}"><i class="bi bi-check2-square"></i><span>Điều phối xác nhận phí</span></a>
+            @endif
+
             <a href="{{ route('shipper.finance-requests.index') }}" class="sp-nav-link {{ request()->routeIs('shipper.finance-requests.*') ? 'active' : '' }}">
                 <i class="bi bi-file-earmark-text"></i> Phiếu yêu cầu
             </a>

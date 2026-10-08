@@ -4,7 +4,7 @@ use App\Models\{User,TaskDelegateConfig};
 use App\Services\TaskMenuService;
 class WebTaskNavigation {
     public static function items(User $user): array {
-        $items=[];
+        $items=[['label'=>'Cần xử lý','url'=>route('process-inbox.index'),'active'=>request()->routeIs('process-inbox.*'),'icon'=>'inbox-fill']];
         $add=function($label,$filter,$icon)use(&$items){$items[]=['label'=>$label,'url'=>route('operating.index',['filter'=>$filter]),'active'=>request()->routeIs('operating.index') && request('filter','mine')===$filter,'icon'=>$icon];};
         $add('Tổng quan công việc','mine','grid');
         $add('Nhận việc / Chưa tiếp nhận','unaccepted','inbox');

@@ -11,7 +11,7 @@
     @stack('styles')
     <style>
         :root {
-            --sidebar-width: 240px;
+            --sidebar-width: 320px;
             --sidebar-collapsed-width: 64px;
             --theme-primary: #0f766e;
             --theme-primary-hover: #115e59;
@@ -65,7 +65,8 @@
             border-left: 3px solid transparent; transition: all .15s;
         }
         .wh-nav-link > i { flex: 0 0 1.15rem; text-align: center; }
-        .wh-nav-label { min-width: 0; }
+        .wh-nav-label { min-width: 0; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .wh-nav-link .badge { flex-shrink:0; white-space:nowrap; }
         .wh-nav-link:hover { color: #fff; background: rgba(255,255,255,.08); border-left-color: var(--theme-accent); }
         .wh-nav-link.active { color: #fff; background: rgba(255,193,7,.16); border-left-color: var(--sidebar-active); }
         .wh-nav-link .badge { margin-left: auto; font-size: .65rem; }
@@ -375,10 +376,10 @@
 
             <div class="wh-nav-section">Tiếp nhận</div>
             <a href="{{ route('warehouse.receiving') }}" class="wh-nav-link {{ request()->routeIs('warehouse.receiving', 'warehouse.transfers.incoming', 'warehouse.inventory-transfers.incoming') ? 'active' : '' }}">
-                <i class="bi bi-box-arrow-in-down"></i><span class="wh-nav-label">Tiếp nhận</span>
+                <i class="bi bi-box-arrow-in-down"></i><span class="wh-nav-label">Tiếp nhận</span>@if(($warehouseMenuCounts['unread']['warehouse.inventory-transfers.incoming']??0)>0)<span class="badge bg-danger" title="Có cập nhật chưa xem">Mới {{ $warehouseMenuCounts['unread']['warehouse.inventory-transfers.incoming'] }}</span>@endif
             </a>
             <a href="{{ route('warehouse.returns') }}" class="wh-nav-link {{ request()->routeIs('warehouse.returns') ? 'active' : '' }}">
-                <i class="bi bi-arrow-return-left"></i><span class="wh-nav-label">Đơn trả về</span>
+                <i class="bi bi-arrow-return-left"></i><span class="wh-nav-label">Đơn trả về</span>@if(($warehouseMenuCounts['unread']['warehouse.returns']??0)>0)<span class="badge bg-danger" title="Có cập nhật chưa xem">Mới {{ $warehouseMenuCounts['unread']['warehouse.returns'] }}</span>@endif
             </a>
             <a href="{{ route('warehouse.stock-in') }}" class="wh-nav-link {{ request()->routeIs('warehouse.stock-in') ? 'active' : '' }}">
                 <i class="bi bi-box-seam"></i><span class="wh-nav-label">Nhập Kho</span>
@@ -415,10 +416,12 @@
 
             <div class="wh-nav-section">Tài chính</div>
             <a href="{{ route('warehouse.finance-requests.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.finance-requests.*') ? 'active' : '' }}">
-                <i class="bi bi-file-earmark-text"></i><span class="wh-nav-label">Phiếu yêu cầu</span>
+                <i class="bi bi-file-earmark-text"></i><span class="wh-nav-label">Phiếu yêu cầu</span>@if(($warehouseMenuCounts['unread']['warehouse.finance-requests.index']??0)>0)<span class="badge bg-danger" title="Có cập nhật chưa xem">Mới {{ $warehouseMenuCounts['unread']['warehouse.finance-requests.index'] }}</span>@endif
             </a>
 
-            @include('layouts.partials.task-sidebar-menu', ['taskNavHeadingClass'=>'wh-nav-section','taskNavLinkClass'=>'wh-nav-link','taskNavLabelClass'=>'wh-nav-label'])
+
+
+            @include('layouts.partials.task-sidebar-menu', ['taskNavHeadingClass'=>'wh-nav-section','taskNavLinkClass'=>'wh-nav-link','taskNavLabelClass'=>'wh-nav-label','taskNavShortLabels'=>['Nhận việc / Chưa tiếp nhận'=>'Chờ nhận việc','Báo cáo đã gửi / Chờ xác nhận'=>'Báo cáo đã gửi','Biểu quyết liên quan đến tôi'=>'Biểu quyết của tôi','Quyền giao việc cho từng người'=>'Quyền giao việc','Cấu hình quy trình phê duyệt'=>'Quy trình duyệt','Tạo công việc / Giao việc'=>'Tạo / Giao việc'],'taskNavIndicatorCounts'=>$warehouseMenuCounts??[]])
             <div class="wh-nav-section">Báo cáo</div>
             <a href="{{ route('warehouse.reports') }}" class="wh-nav-link {{ request()->routeIs('warehouse.reports') ? 'active' : '' }}">
                 <i class="bi bi-graph-up"></i><span class="wh-nav-label">Thống Kê</span>
