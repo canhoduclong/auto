@@ -60,3 +60,10 @@ Hai màn hình hoàn thành đơn (nhanh và chi tiết) có phí ship đề ngh
 API `POST /api/mobile/shipper/orders/{order}/complete-delivery` nhận thêm `shipping_expense_amount` (số nguyên, tùy chọn) và `shipping_expense_note` (tối đa 1.000 ký tự). Có phí thì tạo yêu cầu một đơn qua `ShippingExpenseService`, theo cấu hình quy trình đang áp dụng. Hoàn thành đơn và tạo yêu cầu nằm trong cùng giao dịch; thất bại tạo yêu cầu sẽ hoàn tác hoàn thành đơn. Phí chính thức chưa thay đổi cho đến khi kế toán xác nhận. Yêu cầu xuất hiện trong danh sách yêu cầu và hộp Cần xử lý của người được giao. Ứng dụng cũ không gửi hai trường này vẫn hoàn thành đơn như trước.
 
 Kiểm tra API bằng `php tests/Manual/MobileShippingExpense.php` (dữ liệu kiểm tra luôn rollback). Kiểm tra trường nhập tiền bằng `flutter test test/shipping_expense_fields_test.dart` trong my_app.
+
+
+### Gửi phí theo lộ trình hoàn tất (my_app 1.1.30)
+
+Tab Lộ trình hiển thị nút **Nhập chi phí ship** dưới mỗi lộ trình hoàn tất. Form nhập phí và diễn giải từng đơn, ghi chú chung; gửi tạo một yêu cầu có nhiều đơn. Đơn đã có yêu cầu hoặc thanh toán hiển thị lý do và không gửi trùng.
+
+API GET/POST `/api/mobile/shipper/delivery-schedules/shipping-expenses` nhận `date` định dạng YYYY-MM-DD. GET trả danh sách và điều kiện gửi từng đơn. POST nhận `items` (order_id, amount, note) và note chung, xác thực lộ trình hoàn tất, quyền sở hữu và thành viên lộ trình trước khi dùng ShippingExpenseService.

@@ -69,6 +69,46 @@ try {
     $withoutFee = $makeOrder();
     $invoke($withoutFee, []);
     verifyMobile($withoutFee->fresh()->status === 'completed' && ShippingExpenseClaim::where('shipper_id', $shipper->id)->count() === 1, 'old app can complete without expense field');
+
+    $first = $makeOrder();
+    $first->update(['status' => 'completed']);
+    $second = $makeOrder();
+    $second->update(['status' => 'completed']);
+    ShipperDispatchHistory::create([
+        'schedule_date' => now()->toDateString(),
+        'version' => ((int) ShipperDispatchHistory::whereDate('schedule_date', now()->toDateString())->max('version')) + 1,
+        'route_plan' => [['shipper_id' => $shipper->id, 'routes' => [['orders' => [['order_id' => $first->id], ['order_id' => $second->id]]]]]],
+        'created_by' => $definition->configuration['steps'][0]['user_id'], 'published_at' => now(),
+    ]);
+    $request = Request::create('/api/mobile/shipper/delivery-schedules/shipping-expenses', 'GET', ['date' => now()->toDateString()]);
+    $request->setUserResolver(fn () => $shipper);
+    $app->instance('request', $request);
+    $api = $app->make(ShipperApiController::class);
+    $rows = $api->routeShippingExpenses($request)->getData(true)['data']['orders'];
+    verifyMobile(collect($rows)->firstWhere('id', $first->id)['eligible'] === true, 'completed route exposes eligible orders');
+    verifyMobile(collect($rows)->firstWhere('id', $order->id)['eligible'] === false, 'already submitted order cannot be selected again');
+    $request->merge(['items' => [['order_id' => $first->id, 'amount' => 50000], ['order_id' => $second->id, 'amount' => 70000]]]);
+    $validItems = $request->input('items');
+    $request->merge(['items' => [['order_id' => 2147483647, 'amount' => 1000]]]);
+    try {
+        $api->submitRouteShippingExpenses($request);
+        throw new RuntimeException('Foreign order accepted');
+    } catch (Symfony\Component\HttpKernel\Exception\HttpException $e) {
+        verifyMobile($e->getStatusCode() === 422, 'order outside selected route is rejected');
+    }
+    $request->merge(['items' => $validItems]);
+    $first->update(['status' => 'delivering']);
+    try {
+        $api->submitRouteShippingExpenses($request);
+        throw new RuntimeException('Unfinished route accepted');
+    } catch (Symfony\Component\HttpKernel\Exception\HttpException $e) {
+        verifyMobile($e->getStatusCode() === 422, 'unfinished route cannot submit fees');
+    }
+    $first->update(['status' => 'completed']);
+    $result = $api->submitRouteShippingExpenses($request)->getData(true)['data'];
+    $routeClaim = ShippingExpenseClaim::findOrFail($result['claim_id']);
+    verifyMobile($routeClaim->items()->count() === 2 && (int) $routeClaim->total === 120000, 'route creates one request for multiple orders');
+    verifyMobile($routeClaim->run->current_step === 0 && $routeClaim->run->status === 'running', 'route request reaches coordinator');
 } finally {
     DB::rollBack();
 }

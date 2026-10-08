@@ -1,10 +1,10 @@
 {
-  "version": "1.1.29",
-  "version_code": 72,
+  "version": "1.1.30",
+  "version_code": 73,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản 1.1.29: Shipper nhập phí ship đề nghị và diễn giải khi hoàn thành đơn. Gửi yêu cầu theo quy trình Điều phối → Kế toán xác nhận; định dạng tiền Việt Nam và kiểm soát yêu cầu trùng.",
+  "message": "Bản 1.1.30: Thêm nút Nhập chi phí ship trên từng lộ trình hoàn tất. Nhập phí và diễn giải từng đơn, gửi chung yêu cầu cho điều phối xác nhận; chặn gửi trùng các đơn đã có yêu cầu hoặc thanh toán.",
   "requires_reinstall": false,
-  "sha256": "253b781d7397aa23dc40a2ba2cba370e8a058eb13e182197ae435ea61fb08784"
+  "sha256": "e4833b1a43ca7758b719c53ad06ed0f5aff19a2371c059a92ebc1d250dacd73b"
 }

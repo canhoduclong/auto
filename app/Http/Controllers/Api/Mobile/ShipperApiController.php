@@ -775,6 +775,51 @@ class ShipperApiController extends BaseApiController
         });
     }
 
+    private function completedExpenseRoute(Request $request): array
+    {
+        $request->validate(['date' => 'required|date_format:Y-m-d']);
+        $routes = $this->deliveryScheduleList($request)->getData(true)['data'];
+        $route = collect($routes)->firstWhere('date', $request->input('date'));
+        abort_unless($route && $route['is_completed'], 422, 'Lộ trình chưa hoàn tất hoặc không thuộc Shipper này.');
+        return $route;
+    }
+
+    public function routeShippingExpenses(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $route = $this->completedExpenseRoute($request);
+        $map = app(\App\Services\ShippingExpenseService::class)->assignedOrders($request->user());
+        $orders = Order::with('customer')->whereIn('id', array_column($route['orders'], 'id'))
+            ->where('shipper_id', $request->user()->id)->orderBy('id')->get();
+        $locks = DB::table('shipping_expense_order_locks')->whereIn('order_id', $orders->pluck('id'))->pluck('claim_id', 'order_id');
+        return $this->ok(['date' => $route['date'], 'orders' => $orders->map(fn ($order) => [
+            'id' => $order->id, 'code' => $order->code, 'customer_name' => $order->customer?->name ?? 'Khách hàng',
+            'amount' => (int) $order->shipping_fee,
+            'eligible' => isset($map[$order->id]) && !isset($locks[$order->id]) && !$order->shipping_fee_transaction_id
+                && in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED], true),
+            'claim_id' => $locks[$order->id] ?? null,
+            'unavailable_reason' => isset($locks[$order->id]) ? 'Đã gửi yêu cầu #'.$locks[$order->id]
+                : ($order->shipping_fee_transaction_id ? 'Đã gửi thanh toán' : (!isset($map[$order->id]) ? 'Chưa có lịch sử điều phối hợp lệ' : null)),
+        ])->values()]);
+    }
+
+    public function submitRouteShippingExpenses(Request $request): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $data = $request->validate([
+            'date' => 'required|date_format:Y-m-d', 'items' => 'required|array|min:1|max:100',
+            'items.*.order_id' => 'required|integer|distinct', 'items.*.amount' => 'required|integer|min:0|max:1000000000',
+            'items.*.note' => 'nullable|string|max:1000', 'note' => 'nullable|string|max:2000',
+        ]);
+        $route = $this->completedExpenseRoute($request);
+        $allowed = array_column($route['orders'], 'id');
+        foreach ($data['items'] as $item) {
+            abort_unless(in_array((int)$item['order_id'], $allowed), 422, 'Đơn không thuộc lộ trình này.');
+        }
+        $claim = app(\App\Services\ShippingExpenseService::class)->submit($request->user(), $data);
+        return $this->ok(['claim_id' => $claim->id, 'total' => $claim->total], 'Đã gửi chi phí lộ trình cho điều phối xác nhận.');
+    }
+
     public function uploadProof(Request $request, Order $order): JsonResponse
     {
         $this->ensureShipperRole($request);

@@ -33,6 +33,8 @@ Route::prefix('mobile')->group(function () {
 
         Route::prefix('shipper')->group(function () {
             Route::get('/dashboard', [ShipperApiController::class, 'dashboard']);
+            Route::get('/delivery-schedules/shipping-expenses', [ShipperApiController::class, 'routeShippingExpenses']);
+            Route::post('/delivery-schedules/shipping-expenses', [ShipperApiController::class, 'submitRouteShippingExpenses']);
             Route::get('/delivery-schedules/list', [ShipperApiController::class, 'deliveryScheduleList']);
             Route::get('/delivery-schedules', [ShipperApiController::class, 'deliverySchedules']);
             Route::post('/delivery-schedules/confirm', [ShipperApiController::class, 'confirmDeliverySchedule']);
