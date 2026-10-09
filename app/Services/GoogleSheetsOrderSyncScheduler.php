@@ -62,7 +62,7 @@ class GoogleSheetsOrderSyncScheduler
 
     private function shouldSync(Order $order): bool
     {
-        if ($order->status === Order::STATUS_CANCELLED) {
+        if ($order->status === Order::STATUS_CANCELLED || app(GoogleSheetsOrderService::class)->hasFinalizedTransfer($order)) {
             return true;
         }
 

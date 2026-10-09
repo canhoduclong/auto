@@ -1089,7 +1089,7 @@
                                                                         @disabled($isDeliveryActive && ! $isDeliveryCompleted)
                                                                         aria-label="{{ $isDeliveryCompleted ? 'Chuyển lộ trình' : 'Đổi Shipper' }}"
                                                                         title="{{ $isDeliveryCompleted ? 'Chuyển đơn hoàn thành sang lộ trình Shipper khác' : 'Đổi Shipper' }}">
-                                                                        <i class="bi bi-arrow-left-right" aria-hidden="true"></i>
+                                                                        <i class="bi {{ $isDeliveryCompleted ? 'bi-signpost-split' : 'bi-arrow-left-right' }}" aria-hidden="true"></i>
                                                                     </button>
                                                                     @unless($isDeliveryCompleted || $isDeliveryActive)
                                                                         <form action="{{ route('shipper.unassign-order', [$order->id]) }}" method="POST">

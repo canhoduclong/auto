@@ -503,6 +503,11 @@ class GoogleSheetsOrderService
             return 'Đã xóa';
         }
 
+        // Export completion is a Sheets-only milestone; customer delivery stays unchanged.
+        if ($this->hasFinalizedTransfer($order)) {
+            return 'Hoàn thành';
+        }
+
         return [
             'draft' => 'Bản nháp',
             'pending' => 'Chờ gửi duyệt',
@@ -523,6 +528,18 @@ class GoogleSheetsOrderService
             Order::STATUS_ORDER_CONFIRMED => 'Đã xác nhận',
             Order::STATUS_PACKED => 'Đã đóng gói',
         ][$order->status] ?? (Order::statusOptions()[$order->status] ?? str_replace('_', ' ', (string) $order->status));
+    }
+
+    public function hasFinalizedTransfer(Order $order): bool
+    {
+        return \App\Models\WarehouseDispatchSlipEntry::query()
+            ->whereHas('slip', fn ($query) => $query->where('status', \App\Models\WarehouseDispatchSlip::STATUS_FINALIZED))
+            ->where(function ($query) use ($order): void {
+                $query->whereJsonContains('snapshot->orders', ['id' => (int) $order->id])
+                    ->orWhere('snapshot->order->id', $order->id)
+                    ->orWhereHas('orderTransfer.orders', fn ($orders) => $orders->where('orders.id', $order->id))
+                    ->orWhereHas('warehouseTransfer', fn ($movement) => $movement->where('order_id', $order->id));
+            })->exists();
     }
 
     private function reviewNote(Order $order): string

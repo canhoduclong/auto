@@ -27,6 +27,14 @@ class WarehouseDispatchSlip extends Model
 
     protected static function booted(): void
     {
+        static::updated(function (self $slip): void {
+            if ($slip->wasChanged('status')) {
+                app(\App\Services\GoogleSheetsOrderSyncScheduler::class)->schedule($slip->sheetOrderIds());
+            }
+        });
+        static::deleting(function (self $slip): void {
+            app(\App\Services\GoogleSheetsOrderSyncScheduler::class)->schedule($slip->sheetOrderIds());
+        });
         static::created(function (self $slip): void {
             if ($slip->code) {
                 return;
@@ -36,6 +44,17 @@ class WarehouseDispatchSlip extends Model
                 'code' => 'PXKT-'.$slip->business_date->format('Ymd').'-'.str_pad((string) $slip->id, 5, '0', STR_PAD_LEFT),
             ]);
         });
+    }
+
+    /** Order IDs remain available in the export snapshot after operational reassignment. */
+    public function sheetOrderIds(): array
+    {
+        return $this->entries()->with(['orderTransfer.orders:id,order_transfer_id', 'warehouseTransfer:id,order_id'])
+            ->get()->flatMap(function ($entry) {
+                return collect($entry->snapshot['orders'] ?? [])->pluck('id')
+                    ->merge([$entry->snapshot['order']['id'] ?? null, $entry->warehouseTransfer?->order_id])
+                    ->merge($entry->orderTransfer?->orders->modelKeys() ?? []);
+            })->filter()->map(fn ($id) => (int) $id)->unique()->values()->all();
     }
 
     public function viewers()
