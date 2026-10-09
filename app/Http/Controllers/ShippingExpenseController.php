@@ -112,11 +112,30 @@ class ShippingExpenseController extends Controller
             $order->expense_selectable = ! $order->shipping_fee_transaction_id && ! in_array($order->id, $locked);
         }
 
+        $routeClaims = ShippingExpenseClaim::with('run', 'shipper', 'payment')->whereIn('id', $orders->pluck('expense_claim_id')->filter()->unique())->get()->keyBy('id');
+        $reviewerIds = $routeClaims->flatMap(fn ($claim) => collect($claim->run->configuration['steps'] ?? [])->pluck('user_id'))->filter()->unique();
+        $reviewers = \App\Models\User::whereIn('id', $reviewerIds)->get()->keyBy('id');
         $dispatches = \App\Models\ShipperDispatchHistory::whereIn('id', array_values($map))->get()->keyBy('id');
-        $groups = $orders->groupBy(fn ($order) => $map[$order->id])->map(function ($items, $id) use ($dispatches) {
+        $groups = $orders->groupBy(fn ($order) => $map[$order->id])->map(function ($items, $id) use ($dispatches, $routeClaims, $reviewers) {
             $dispatch = $dispatches->get($id);
 
-            return ['id' => $id, 'date' => $dispatch?->schedule_date?->format('d/m/Y'), 'orders' => $items,
+            $progress = $items->pluck('expense_claim_id')->filter()->unique()->map(function ($claimId) use ($routeClaims, $reviewers) {
+                $claim = $routeClaims->get($claimId);
+                $run = $claim->run;
+                $steps = $run->configuration['steps'] ?? [];
+                $step = $run->step() ?? end($steps) ?: [];
+                $recipient = $reviewers->get($step['user_id'] ?? null)?->name ?? ('Nhóm '.($step['name'] ?? 'người duyệt'));
+                $text = match ($run->status) {
+                    'revision' => $recipient.' yêu cầu điều chỉnh · Chờ '.$claim->shipper?->name.' bổ sung',
+                    'confirmed' => $recipient.' · Đã xác nhận, chốt phí'.($claim->payment_transaction_id ? ' · Đã gửi thanh toán' : ''),
+                    'rejected' => $recipient.' · Đã từ chối',
+                    default => $recipient.' · Chờ '.($step['name'] ?? 'xử lý').' (bước '.($run->current_step + 1).'/'.count($steps).')',
+                };
+
+                return ['id' => $claimId, 'text' => $text, 'needs_revision' => $run->status === 'revision'];
+            })->values();
+
+            return ['progress' => $progress, 'id' => $id, 'date' => $dispatch?->schedule_date?->format('d/m/Y'), 'orders' => $items,
                 'total' => $items->sum('shipping_fee'), 'can_submit' => $items->contains(fn ($order) => $order->expense_selectable)];
         })->values();
         $size = (int) $request->input('per_page', 20);

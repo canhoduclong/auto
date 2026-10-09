@@ -29,7 +29,7 @@ class ProcessInboxController extends Controller
             } elseif ($scope === 'history') {
                 $q->whereHas('events', fn ($e) => $e->where('actor_id', $user->id));
             } else {
-                $q->where('status', 'running')->where(function ($q) use ($user, $roles) {
+                $q->whereIn('status', ['running', 'revision'])->where(function ($q) use ($user, $roles) {
                     $q->where(fn ($q) => $q->where('assignee_mode', 'user')->where('assignee_user_id', $user->id))->orWhere(fn ($q) => $q->where('assignee_mode', 'user_role')->where('assignee_user_id', $user->id)->whereIn(\DB::raw('LOWER(assignee_role)'), $roles))->orWhere(fn ($q) => $q->where('assignee_mode', 'role')->whereIn(\DB::raw('LOWER(assignee_role)'), $roles));
                 })->orWhere(fn ($q) => $q->where('status', 'revision')->where('initiator_id', $user->id));
             }

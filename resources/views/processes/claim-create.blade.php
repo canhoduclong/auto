@@ -55,22 +55,34 @@
     <form method="POST" action="{{ route('shipping-expenses.store') }}" class="process-card" id="shippingExpenseCreate" enctype="multipart/form-data">
         @csrf
         <input type="hidden" name="route_dispatch_id" id="expenseRouteId" disabled>
-        <div class="table-responsive"><table class="process-table shipping-routes-table"><thead><tr><th>Lộ trình</th><th>Số đơn</th><th>Phí hiện tại</th><th>Thao tác</th></tr></thead><tbody>
+        <div class="table-responsive"><table class="process-table shipping-routes-table"><thead><tr><th>Lộ trình</th><th>Ngày</th><th>Số đơn</th><th>Phí hiện tại</th><th>Thao tác</th></tr></thead><tbody>
         @forelse($routes as $route)
             <tr>
-                <td><strong>Lộ trình #{{ $route['id'] }}</strong><div class="text-muted">{{ $route['date'] }}</div></td>
+                <td class="text-nowrap"><strong>Lộ trình #{{ $route['id'] }}</strong></td>
+                <td data-label="Ngày" class="text-nowrap">{{ $route['date'] }}</td>
                 <td data-label="Số đơn">{{ $route['orders']->count() }} đơn</td>
                 <td data-label="Phí hiện tại">{{ number_format($route['total'], 0, ',', '.') }}đ</td>
-                <td><div class="d-flex flex-wrap gap-2">
+                <td><div class="shipping-route-actions">
                     <button type="button" class="btn btn-outline-secondary" data-route-toggle="route-orders-{{ $route['id'] }}" aria-expanded="false">Xem nhanh đơn</button>
-                    <button type="button" class="btn btn-primary" data-route-send="{{ $route['id'] }}" data-route-label="Lộ trình #{{ $route['id'] }} · {{ $route['date'] }}" @disabled(!$definition || !$route['can_submit'])>Gửi xác nhận chi phí ship</button>
+                    @php $revisions = $route['progress']->where('needs_revision', true); @endphp
+                    @foreach($revisions as $revision)
+                        <a class="btn btn-warning" href="{{ route('shipping-expenses.show', $revision['id']) }}">Bổ sung{{ $revisions->count() > 1 ? ' #'.$revision['id'] : '' }}</a>
+                    @endforeach
+                    @if($route['can_submit'])
+                        <button type="button" class="btn btn-primary" data-route-send="{{ $route['id'] }}" data-route-label="Lộ trình #{{ $route['id'] }} · {{ $route['date'] }}" @disabled(!$definition)>Gửi xác nhận chi phí ship</button>
+                    @elseif($revisions->isEmpty())
+                        <span class="shipping-route-sent" role="status">Đã gửi</span>
+                    @endif
+                    @foreach($route['progress'] as $progress)
+                        <div class="shipping-route-progress"><a href="{{ route('shipping-expenses.show', $progress['id']) }}">Phiếu #{{ $progress['id'] }}</a> → {{ $progress['text'] }}</div>
+                    @endforeach
                 </div></td>
             </tr>
-            <tr id="route-orders-{{ $route['id'] }}" data-route-orders="{{ $route['id'] }}" hidden><td colspan="4">
+            <tr id="route-orders-{{ $route['id'] }}" data-route-orders="{{ $route['id'] }}" hidden><td colspan="5">
                 @include('processes.route-expense-orders', ['route' => $route])
             </td></tr>
         @empty
-            <tr><td colspan="4" class="text-center text-muted">Không có lộ trình phù hợp bộ lọc.</td></tr>
+            <tr><td colspan="5" class="text-center text-muted">Không có lộ trình phù hợp bộ lọc.</td></tr>
         @endforelse
         </tbody></table></div>
         <div class="modal fade" id="expenseRequestModal" tabindex="-1" aria-labelledby="expenseRequestTitle" aria-hidden="true">
