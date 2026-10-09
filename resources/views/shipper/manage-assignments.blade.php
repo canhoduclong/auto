@@ -1078,7 +1078,7 @@
                                                                         <i class="bi bi-list-ul"></i>
                                                                     </button>
                                                                     <button type="button"
-                                                                        class="btn btn-sm btn-outline-success js-open-shipper-picker"
+                                                                        class="btn btn-sm {{ $isDeliveryCompleted ? 'btn-outline-warning' : 'btn-outline-success' }} js-open-shipper-picker"
                                                                         data-bs-toggle="modal"
                                                                         data-bs-target="#shipperPickerModal"
                                                                         data-action="{{ $isDeliveryCompleted ? route('shipper.manage-assignments.transfer-completed', $order) : route('shipper.assign-order.selected', $order) }}"
@@ -1087,8 +1087,9 @@
                                                                         data-customer-name="{{ $customerName }}"
                                                                         data-set-default="0"
                                                                         @disabled($isDeliveryActive && ! $isDeliveryCompleted)
+                                                                        aria-label="{{ $isDeliveryCompleted ? 'Chuyển lộ trình' : 'Đổi Shipper' }}"
                                                                         title="{{ $isDeliveryCompleted ? 'Chuyển đơn hoàn thành sang lộ trình Shipper khác' : 'Đổi Shipper' }}">
-                                                                        <i class="bi bi-arrow-left-right"></i>@if($isDeliveryCompleted) <span>Chuyển lộ trình</span> @endif
+                                                                        <i class="bi bi-arrow-left-right" aria-hidden="true"></i>
                                                                     </button>
                                                                     @unless($isDeliveryCompleted || $isDeliveryActive)
                                                                         <form action="{{ route('shipper.unassign-order', [$order->id]) }}" method="POST">
