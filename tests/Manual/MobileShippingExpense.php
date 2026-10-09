@@ -109,6 +109,25 @@ try {
     $routeClaim = ShippingExpenseClaim::findOrFail($result['claim_id']);
     verifyMobile($routeClaim->items()->count() === 2 && (int) $routeClaim->total === 120000, 'route creates one request for multiple orders');
     verifyMobile($routeClaim->run->current_step === 0 && $routeClaim->run->status === 'running', 'route request reaches coordinator');
+
+    $service = app(App\Services\ShippingExpenseService::class);
+    $coordinator = User::findOrFail($definition->configuration['steps'][0]['user_id']);
+    $accountant = User::findOrFail($definition->configuration['steps'][1]['user_id']);
+    $service->act($routeClaim, $coordinator, 'revise', 'Cần bổ sung chi phí thực tế');
+    $request->merge(['claim_id' => $routeClaim->id]);
+    $detail = $api->routeShippingExpenses($request)->getData(true)['data'];
+    verifyMobile((int) $detail['orders'][0]['amount'] === 50000 && count($detail['orders']) === 2, 'revision form returns all saved claim fees');
+    verifyMobile($detail['revision_reason'] === 'Cần bổ sung chi phí thực tế', 'revision form returns reviewer explanation');
+    $list = $api->deliveryScheduleList($request)->getData(true)['data'];
+    $summary = collect($list)->firstWhere('date', now()->toDateString());
+    verifyMobile(collect($summary['shipping_expense_requests'])->firstWhere('id', $routeClaim->id)['status'] === 'revision', 'route card exposes waiting revision state');
+    $request->merge(['items' => [['order_id' => $first->id, 'amount' => 45000], ['order_id' => $second->id, 'amount' => 65000]]]);
+    $api->submitRouteShippingExpenses($request);
+    verifyMobile((int) $routeClaim->fresh()->total === 110000 && $routeClaim->run->fresh()->current_step === 0, 'mobile revision updates existing claim and returns to coordinator');
+    $service->act($routeClaim, $coordinator, 'approve', null);
+    $service->act($routeClaim, $accountant, 'revise', 'Bổ sung cho kế toán');
+    $api->submitRouteShippingExpenses($request);
+    verifyMobile($routeClaim->run->fresh()->current_step === 1, 'accountant correction resubmits directly to accountant');
 } finally {
     DB::rollBack();
 }

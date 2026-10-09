@@ -569,6 +569,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
         // Manager Shipper routes
         Route::middleware('role:manager_shipper,admin')->group(function () {
+            Route::post('/manage-assignments/orders/{order}/transfer-completed', [ShipperDashboardController::class, 'transferCompletedOrder'])->name('manage-assignments.transfer-completed');
             Route::get('/manage-assignments', [ShipperDashboardController::class, 'manageAssignments'])->name('manage-assignments');
             Route::get('/manage-assignments/review', [ShipperDashboardController::class, 'printReviewAssignments'])->name('manage-assignments.review.index');
             Route::post('/manage-assignments/review/print', [ShipperDashboardController::class, 'printAssignmentDocuments'])->name('manage-assignments.review.print');

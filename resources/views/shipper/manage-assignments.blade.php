@@ -1081,14 +1081,14 @@
                                                                         class="btn btn-sm btn-outline-success js-open-shipper-picker"
                                                                         data-bs-toggle="modal"
                                                                         data-bs-target="#shipperPickerModal"
-                                                                        data-action="{{ route('shipper.assign-order.selected', $order) }}"
+                                                                        data-action="{{ $isDeliveryCompleted ? route('shipper.manage-assignments.transfer-completed', $order) : route('shipper.assign-order.selected', $order) }}"
                                                                         data-order-id="{{ $order->id }}"
                                                                         data-order-code="{{ $order->code ?: $order->id }}"
                                                                         data-customer-name="{{ $customerName }}"
                                                                         data-set-default="0"
-                                                                        @disabled($isDeliveryCompleted || $isDeliveryActive)
-                                                                        @if($isDeliveryCompleted || $isDeliveryActive) title="Đơn đã nhận/đang giao, không thể đổi shipper" @endif>
-                                                                        <i class="bi bi-arrow-left-right"></i>
+                                                                        @disabled($isDeliveryActive && ! $isDeliveryCompleted)
+                                                                        title="{{ $isDeliveryCompleted ? 'Chuyển đơn hoàn thành sang lộ trình Shipper khác' : 'Đổi Shipper' }}">
+                                                                        <i class="bi bi-arrow-left-right"></i>@if($isDeliveryCompleted) <span>Chuyển lộ trình</span> @endif
                                                                     </button>
                                                                     @unless($isDeliveryCompleted || $isDeliveryActive)
                                                                         <form action="{{ route('shipper.unassign-order', [$order->id]) }}" method="POST">
@@ -1134,7 +1134,7 @@
                     <input type="hidden" name="shipper_id" id="shipperPickerShipperId">
                     <input type="hidden" name="set_default_shipper" id="shipperPickerSetDefault" value="0">
                     <input type="hidden" id="shipperPickerOrderId">
-                    <input type="hidden" id="shipperPickerTripCode">
+                    <input type="hidden" name="trip_code" id="shipperPickerTripCode">
                     <div id="shipperRoutePicker" class="d-grid gap-2"></div>
                 </form>
             </div>
@@ -2033,6 +2033,10 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
         if (form.id === 'shipperPickerForm') {
+            if (form.action.includes('/transfer-completed') && !confirm('Chuyển đơn đã hoàn thành sang lộ trình của Shipper được chọn để ghi nhận đúng kế toán?')) {
+                event.preventDefault();
+                return;
+            }
             const orderId = document.getElementById('shipperPickerOrderId')?.value;
             const shipperId = document.getElementById('shipperPickerShipperId')?.value;
             const tripCode = document.getElementById('shipperPickerTripCode')?.value;

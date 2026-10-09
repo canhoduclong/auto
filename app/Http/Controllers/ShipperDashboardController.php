@@ -3300,6 +3300,65 @@ class ShipperDashboardController extends Controller
     /**
      * Assign order to specific shipper
      */
+    public function transferCompletedOrder(Request $request, Order $order)
+    {
+        $this->authorizeManagerShipper();
+        $data = $request->validate([
+            'shipper_id' => ['required', 'integer', 'exists:users,id'],
+            'date' => ['required', 'date_format:Y-m-d'],
+            'trip_code' => ['nullable', 'string', 'max:100'],
+        ]);
+        $shipper = User::findOrFail($data['shipper_id']);
+        abort_unless($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper'), 422, 'Người nhận phải có vai trò Shipper.');
+        DB::transaction(function () use ($order, $shipper, $data): void {
+            $order = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            abort_unless(in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED], true), 422, 'Chỉ chuyển lộ trình cho đơn đã giao hoặc hoàn thành.');
+            abort_if((int) $order->shipper_id === (int) $shipper->id, 422, 'Hãy chọn Shipper khác.');
+            abort_if($order->shipping_fee_transaction_id || DB::table('shipping_expense_order_locks')->where('order_id', $order->id)->exists(), 422, 'Đơn đã có phiếu phí ship đang xử lý, đã chốt phí hoặc thanh toán. Cần xử lý phiếu trước khi chuyển lộ trình.');
+            $dispatch = ShipperDispatchHistory::whereDate('schedule_date', $data['date'])
+                ->whereNull('revoked_at')->whereNotNull('published_at')->orderByDesc('version')->orderByDesc('id')->lockForUpdate()->first();
+            abort_unless($dispatch, 422, 'Ngày này chưa có lộ trình đã gửi.');
+            $plans = $dispatch->route_plan;
+            $snapshot = null;
+            foreach ($plans as &$plan) {
+                foreach ($plan['routes'] as &$route) {
+                    $route['orders'] = array_values(array_filter($route['orders'] ?? [], function ($item) use ($order, &$snapshot) {
+                        if ((int) ($item['order_id'] ?? 0) !== (int) $order->id) return true;
+                        $snapshot = $item;
+                        return false;
+                    }));
+                }
+                unset($route);
+            }
+            unset($plan);
+            abort_unless($snapshot, 422, 'Đơn không thuộc lộ trình đã gửi của ngày được chọn.');
+            $targetFound = false;
+            foreach ($plans as &$plan) {
+                if ((int) $plan['shipper_id'] !== (int) $shipper->id) continue;
+                foreach ($plan['routes'] as &$route) {
+                    if (! empty($data['trip_code']) && ($route['code'] ?? '') !== $data['trip_code']) continue;
+                    $route['orders'][] = $snapshot;
+                    $targetFound = true;
+                    break;
+                }
+                unset($route);
+                break;
+            }
+            unset($plan);
+            abort_unless($targetFound, 422, 'Hãy chọn lộ trình đã gửi của Shipper nhận trong ngày này.');
+            $previous = $order->shipper?->name ?? '#'.$order->shipper_id;
+            $order->update(['shipper_id' => $shipper->id]);
+            $newDispatch = $this->archiveDeliverySchedule($data['date'], $plans, 'Chuyển đơn hoàn thành '.$order->code.' từ '.$previous.' sang '.$shipper->name);
+            OrderHistory::create([
+                'order_id' => $order->id, 'action' => 'completed_order_route_transferred',
+                'user_id' => Auth::id(), 'role' => 'manager_shipper',
+                'status_before' => $order->status, 'status_after' => $order->status,
+                'note' => 'Chuyển lộ trình kế toán từ '.$previous.' sang '.$shipper->name.' · Ngày '.$data['date'].' · Lộ trình #'.$newDispatch->id,
+            ]);
+        });
+        return $this->assignmentMutationResponse($request, 'Đã chuyển đơn hoàn thành sang lộ trình của '.$shipper->name.'.');
+    }
+
     public function assignSelectedOrder(Request $request, Order $order)
     {
         $validated = $request->validate([

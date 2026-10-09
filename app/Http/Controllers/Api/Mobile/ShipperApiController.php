@@ -159,6 +159,13 @@ class ShipperApiController extends BaseApiController
     {
         $this->ensureShipperRole($request);
         $shipperId = (int) $request->user()->id;
+        $expenseClaims = \App\Models\ShippingExpenseClaim::with('items', 'run.events', 'shipper')
+            ->where('shipper_id', $shipperId)->latest()->get();
+        $expenseByOrder = [];
+        foreach ($expenseClaims as $claim) {
+            foreach ($claim->items as $item) { $expenseByOrder[$item->order_id] ??= $claim; }
+        }
+        $expenseUsers = User::whereIn('id', $expenseClaims->flatMap(fn ($claim) => collect($claim->run->configuration['steps'] ?? [])->pluck('user_id'))->filter()->unique())->get()->keyBy('id');
         $fromDate = Carbon::today()->subDays(90)->toDateString();
         $toDate = Carbon::today()->addDays(30)->toDateString();
 
@@ -180,7 +187,7 @@ class ShipperApiController extends BaseApiController
             ->pluck('route_date');
         $dates = $orderDates->merge($dispatchesByDate->keys())->filter()->unique()->sortDesc()->values();
 
-        $routes = $dates->map(function (string $date) use ($shipperId, $dispatchesByDate): array {
+        $routes = $dates->map(function (string $date) use ($shipperId, $dispatchesByDate, $expenseByOrder, $expenseUsers): array {
             $dispatch = $dispatchesByDate->get($date);
             $plannedIds = collect($dispatch?->route_plan ?? [])
                 ->first(fn ($plan) => (int) ($plan['shipper_id'] ?? 0) === $shipperId)['routes'] ?? [];
@@ -263,7 +270,23 @@ class ShipperApiController extends BaseApiController
                 $order->setAttribute('is_delivered_in_route', $this->orderWasDelivered($order));
             });
 
+            $routeExpenses = $dateOrders->map(fn ($order) => $expenseByOrder[$order->id] ?? null)->filter()->unique('id');
+            $expenseProgress = $routeExpenses->map(function ($claim) use ($expenseUsers) {
+                $run = $claim->run; $steps = $run->configuration['steps'] ?? [];
+                $step = $run->step() ?? end($steps) ?: [];
+                $person = $expenseUsers->get($step['user_id'] ?? null)?->name ?? ($step['name'] ?? 'Người duyệt');
+                return ['id' => $claim->id, 'status' => $run->status, 'progress' => match ($run->status) {
+                    'revision' => $person.' yêu cầu bổ sung · Chờ Shipper gửi lại',
+                    'confirmed' => $person.' · Đã xác nhận, chốt phí',
+                    'rejected' => $person.' · Đã từ chối',
+                    default => $person.' · Chờ '.($step['name'] ?? 'xử lý').' (bước '.($run->current_step + 1).'/'.count($steps).')'
+                }];
+            })->values();
+            $canSubmitExpense = $dateOrders->contains(fn ($order) => in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED], true)
+                && !$order->shipping_fee_transaction_id && (!isset($expenseByOrder[$order->id]) || $expenseByOrder[$order->id]->run->status === 'rejected'));
             return [
+                'shipping_expense_requests' => $expenseProgress,
+                'can_submit_shipping_expense' => $canSubmitExpense,
                 'date' => $date,
                 'id' => $history?->id,
                 'code' => $this->deliveryScheduleCode($shipperId, $date, $history),
@@ -788,6 +811,14 @@ class ShipperApiController extends BaseApiController
     {
         $this->ensureShipperRole($request);
         $route = $this->completedExpenseRoute($request);
+        if ($request->filled('claim_id')) {
+            $claim = $this->revisionRouteClaim($request, $route);
+            return $this->ok(['date' => $route['date'], 'claim_id' => $claim->id, 'note' => $claim->note,
+                'revision_reason' => $claim->run->events()->where('action', 'revise')->latest('id')->value('note'),
+                'orders' => $claim->items->map(fn ($item) => ['id' => $item->order_id, 'code' => $item->order?->code,
+                    'customer_name' => $item->order?->customer?->name ?? 'Khách hàng', 'eligible' => true,
+                    'amount' => (int)$item->amount, 'note' => $item->note])->values()]);
+        }
         $map = app(\App\Services\ShippingExpenseService::class)->assignedOrders($request->user());
         $orders = Order::with('customer')->whereIn('id', array_column($route['orders'], 'id'))
             ->where('shipper_id', $request->user()->id)->orderBy('id')->get();
@@ -803,6 +834,16 @@ class ShipperApiController extends BaseApiController
         ])->values()]);
     }
 
+    private function revisionRouteClaim(Request $request, array $route): \App\Models\ShippingExpenseClaim
+    {
+        $request->validate(['claim_id' => 'required|integer']);
+        $claim = \App\Models\ShippingExpenseClaim::with('items.order.customer', 'run')->findOrFail($request->claim_id);
+        abort_unless((int)$claim->shipper_id === (int)$request->user()->id, 403, 'Bạn không có quyền bổ sung phiếu này.');
+        abort_unless($claim->run->status === 'revision', 422, 'Phiếu không đang chờ bổ sung.');
+        abort_unless($claim->items->pluck('order_id')->intersect(array_column($route['orders'], 'id'))->isNotEmpty(), 422, 'Phiếu không thuộc lộ trình này.');
+        return $claim;
+    }
+
     public function submitRouteShippingExpenses(Request $request): JsonResponse
     {
         $this->ensureShipperRole($request);
@@ -812,6 +853,11 @@ class ShipperApiController extends BaseApiController
             'items.*.note' => 'nullable|string|max:1000', 'note' => 'nullable|string|max:2000',
         ]);
         $route = $this->completedExpenseRoute($request);
+        if ($request->filled('claim_id')) {
+            $claim = $this->revisionRouteClaim($request, $route);
+            app(\App\Services\ShippingExpenseService::class)->revise($claim, $request->user(), $data);
+            return $this->ok(['claim_id' => $claim->id, 'total' => $claim->fresh()->total], 'Đã gửi bổ sung về đúng người yêu cầu.');
+        }
         $allowed = array_column($route['orders'], 'id');
         foreach ($data['items'] as $item) {
             abort_unless(in_array((int)$item['order_id'], $allowed), 422, 'Đơn không thuộc lộ trình này.');

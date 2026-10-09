@@ -67,3 +67,10 @@ Kiểm tra API bằng `php tests/Manual/MobileShippingExpense.php` (dữ liệu 
 Tab Lộ trình hiển thị nút **Nhập chi phí ship** dưới mỗi lộ trình hoàn tất. Form nhập phí và diễn giải từng đơn, ghi chú chung; gửi tạo một yêu cầu có nhiều đơn. Đơn đã có yêu cầu hoặc thanh toán hiển thị lý do và không gửi trùng.
 
 API GET/POST `/api/mobile/shipper/delivery-schedules/shipping-expenses` nhận `date` định dạng YYYY-MM-DD. GET trả danh sách và điều kiện gửi từng đơn. POST nhận `items` (order_id, amount, note) và note chung, xác thực lộ trình hoàn tất, quyền sở hữu và thành viên lộ trình trước khi dùng ShippingExpenseService.
+
+
+### Trạng thái và bổ sung trên thẻ lộ trình (my_app 1.1.32)
+
+Danh sách lộ trình trả thêm shipping_expense_requests (id, status, progress) và can_submit_shipping_expense. App hiển thị Đã gửi màu xám hoặc Chờ bổ sung màu vàng. Nút Chờ bổ sung mở form kèm claim_id, nạp phí/diễn giải/ghi chú và lý do yêu cầu. Nếu phiếu gồm nhiều lộ trình, trả đầy đủ các đơn của phiếu để không mất dữ liệu.
+
+GET/POST delivery-schedules/shipping-expenses với claim_id xác thực người khởi tạo, trạng thái revision và mối liên hệ với lộ trình. POST dùng ShippingExpenseService.revise để gửi lại đúng bước resume_step của bản quy trình đã chụp.

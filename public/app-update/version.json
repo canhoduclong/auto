@@ -1,10 +1,10 @@
 {
-  "version": "1.1.31",
-  "version_code": 74,
+  "version": "1.1.32",
+  "version_code": 75,
   "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản 1.1.31: Neo nút Gửi xác nhận chi phí ship ở cuối màn hình, chừa khoảng trống với vùng điều hướng hệ thống và đẩy nút lên khi mở bàn phím.",
+  "message": "Bản 1.1.32: Lộ trình hiển thị Đã gửi và người đang xử lý chi phí ship. Phiếu chờ bổ sung có nút màu vàng để sửa phí, diễn giải và gửi lại đúng người yêu cầu.",
   "requires_reinstall": false,
-  "sha256": "ae5b311cf63b0d59a269ee31d944410f162a54d248bc0bdd429c6b8605855e78"
+  "sha256": "ae7afdba63768d1d3bbfbb2c2ce1ecb54136e63d39c0916e87dd0c32addd52d5"
 }

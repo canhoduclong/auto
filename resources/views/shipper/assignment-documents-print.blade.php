@@ -86,7 +86,7 @@
         <div></div>
     </div>
     <table class="items">
-        <thead><tr><th style="width:5%">STT</th><th style="width:11%">Mã hàng</th><th style="width:27%">Tên sản phẩm</th><th style="width:8%">ĐVT</th><th style="width:9%">Số lượng</th><th style="width:11%">Khối lượng</th><th style="width:11%">Thực giao</th><th style="width:9%">Đơn giá</th><th style="width:11%">Thành tiền</th></tr></thead>
+        <thead><tr><th style="width:5%">STT</th><th style="width:11%">Mã hàng</th><th style="width:27%">Tên sản phẩm</th><th style="width:8%">ĐVT</th><th style="width:9%">Số lượng</th><th style="width:11%">Khối lượng thực</th><th style="width:11%">Thực giao</th><th style="width:9%">Đơn giá</th><th style="width:11%">Thành tiền</th></tr></thead>
         <tbody>
         @forelse($order->items as $index => $item)
             @php
