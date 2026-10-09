@@ -1064,6 +1064,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('settings/deploy', [SettingController::class, 'deploy'])->name('settings.deploy')->middleware('role:admin');
         Route::post('settings/push-check', [SettingController::class, 'checkPush'])->name('settings.push-check')->middleware('role:admin');
         Route::post('settings/push', [SettingController::class, 'push'])->name('settings.push')->middleware('role:admin');
+        Route::post('settings/execute-command', [SettingController::class, 'executeCommand'])->name('settings.execute-command')->middleware(['role:admin', 'throttle:6,1']);
         Route::post('settings/artisan', [SettingController::class, 'artisan'])->name('settings.artisan')->middleware('role:admin');
         Route::resource('posts', PostController::class);
         Route::resource('post-categories', PostCategoryController::class);

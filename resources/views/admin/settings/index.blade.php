@@ -126,9 +126,27 @@
         </div>
     </div>
 
+    @if(auth()->user()?->hasRole('admin'))
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body">
+            <h5 class="mb-3"><i class="bi bi-terminal me-2"></i>Thực thi lệnh bảo trì</h5>
+            <form method="POST" action="{{ route('admin.settings.execute-command') }}" onsubmit="this.querySelector('button[type=submit]').disabled = true;">
+                @csrf
+                <label for="maintenance-command" class="form-label">Lệnh Artisan</label>
+                <div class="d-flex flex-column flex-md-row gap-2">
+                    <input id="maintenance-command" name="command" class="form-control font-monospace" value="{{ old('command', 'php artisan shipping-expenses:configure') }}" maxlength="500" required autocomplete="off">
+                    <button type="submit" class="btn btn-primary text-nowrap"><i class="bi bi-play-fill me-1"></i>Thực thi</button>
+                </div>
+                <div class="form-text mt-2">Hỗ trợ: shipping-expenses:configure, view:clear, cache:clear, config:clear, route:clear, optimize:clear, queue:restart.</div>
+                <div class="form-text">Thiết lập người duyệt: <code>php artisan shipping-expenses:configure --coordinator=47 --accountant=18</code> (ID thực tế của tài khoản, áp dụng khi tạo quy trình mới).</div>
+            </form>
+        </div>
+    </div>
+    @endif
+
     @if(session('artisan_output'))
-        <div class="card border-0 shadow-sm mb-3 border-success">
-            <div class="card-header bg-success bg-opacity-10 border-0">
+        <div class="card border-0 shadow-sm mb-3 border-{{ session('artisan_status') === 'error' ? 'danger' : 'success' }}">
+            <div class="card-header bg-{{ session('artisan_status') === 'error' ? 'danger' : 'success' }} bg-opacity-10 border-0">
                 <strong><i class="bi bi-terminal me-1"></i>Kết quả: {{ session('artisan_title') }}</strong>
             </div>
             <div class="card-body">

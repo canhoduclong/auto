@@ -522,6 +522,44 @@ class SettingController extends Controller
         return $host === 'hoanglongtnt.com' || $host === 'www.hoanglongtnt.com';
     }
 
+    public function executeCommand(Request $request)
+    {
+        abort_unless($request->user()?->hasRole('admin'), 403);
+        $data = $request->validate(['command' => ['required', 'string', 'max:500']]);
+        $command = trim($data['command']);
+        $tokens = preg_split('/\s+/', $command);
+        if (array_slice($tokens, 0, 2) === ['php', 'artisan']) $tokens = array_slice($tokens, 2);
+        $name = array_shift($tokens);
+        $allowed = ['shipping-expenses:configure', 'view:clear', 'cache:clear', 'config:clear', 'route:clear', 'optimize:clear', 'queue:restart'];
+        $arguments = [];
+        $valid = in_array($name, $allowed, true);
+        foreach ($tokens as $token) {
+            if ($name !== 'shipping-expenses:configure' || ! preg_match('/^--(coordinator|accountant)=([1-9][0-9]*)$/D', $token, $match) || isset($arguments['--'.$match[1]])) {
+                $valid = false;
+                break;
+            }
+            $arguments['--'.$match[1]] = $match[2];
+        }
+        if (! $valid) return back()->withInput()->withErrors(['command' => 'Lệnh hoặc tham số chưa được hỗ trợ. Chọn một lệnh trong danh sách bên dưới.']);
+        $lock = Cache::lock('admin-settings-command', 120);
+        if (! $lock->get()) return back()->withInput()->withErrors(['command' => 'Đang có lệnh được thực thi. Vui lòng thử lại sau.']);
+        $output = new \Symfony\Component\Console\Output\BufferedOutput();
+        try {
+            $exitCode = \Illuminate\Support\Facades\Artisan::call($name, $arguments, $output);
+        } catch (\Throwable $exception) {
+            report($exception);
+            $output->writeln('Không thực thi được lệnh: '.$exception->getMessage());
+            $exitCode = 1;
+        } finally {
+            $lock->release();
+        }
+        \Illuminate\Support\Facades\Log::info('Admin executed maintenance command', ['user_id' => $request->user()->id, 'command' => $name, 'arguments' => $arguments, 'exit_code' => $exitCode]);
+        return back()->with('artisan_title', $command)
+            ->with('artisan_output', trim($output->fetch()) ?: 'Lệnh đã kết thúc, không có nội dung trả về.')
+            ->with('artisan_status', $exitCode === 0 ? 'success' : 'error')
+            ->with($exitCode === 0 ? 'success' : 'error', $exitCode === 0 ? 'Thực thi lệnh thành công.' : 'Thực thi lệnh thất bại. Xem kết quả bên dưới.');
+    }
+
     public function artisan(Request $request)
     {
         $user = $request->user();
