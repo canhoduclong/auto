@@ -79,9 +79,10 @@ class ShippingExpenseController extends Controller
             ->join('shipping_expense_claims as expense_claim', 'expense_claim.id', '=', 'expense_item.claim_id')
             ->where('expense_claim.shipper_id', $request->user()->id)
             ->selectRaw('expense_item.order_id, MAX(expense_claim.id) as claim_id')->groupBy('expense_item.order_id');
-        $query = Order::with('customer')->select('orders.*', 'expense.id as expense_claim_id', 'expense_run.status as expense_status', 'expense_payment.status as expense_payment_status')
+        $query = Order::with('customer')->select('orders.*', 'expense.id as expense_claim_id', 'expense_run.status as expense_status', 'expense_payment.status as expense_payment_status', 'latest_expense_item.amount as expense_proposed_amount', 'latest_expense_item.note as expense_proposed_note')
             ->leftJoinSub($latest, 'latest_expense', fn ($join) => $join->on('latest_expense.order_id', '=', 'orders.id'))
             ->leftJoin('shipping_expense_claims as expense', 'expense.id', '=', 'latest_expense.claim_id')
+            ->leftJoin('shipping_expense_items as latest_expense_item', fn ($join) => $join->on('latest_expense_item.claim_id', '=', 'expense.id')->on('latest_expense_item.order_id', '=', 'orders.id'))
             ->leftJoin('process_runs as expense_run', 'expense_run.id', '=', 'expense.process_run_id')
             ->leftJoin('transactions as expense_payment', 'expense_payment.id', '=', 'orders.shipping_fee_transaction_id')
             ->whereIn('orders.id', array_keys($map))->where('orders.shipper_id', $request->user()->id)

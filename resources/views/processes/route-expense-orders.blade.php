@@ -15,8 +15,8 @@
                         @endif
                     </td>
                     <td class="text-nowrap">{{ $order->shipping_fee_transaction_id ? (['approved'=>'Đã thanh toán','pending_approval'=>'Chờ duyệt thanh toán','approved_pending_completion'=>'Chờ thanh toán','rejected'=>'Đã từ chối'][$order->expense_payment_status] ?? 'Đã gửi thanh toán') : 'Chưa gửi thanh toán' }}</td>
-                    <td><input type="text" inputmode="numeric" data-money data-expense-input class="form-control text-end" autocomplete="off" name="items[{{ $order->id }}][amount]" value="{{ number_format($order->shipping_fee, 0, ',', '.') }}" disabled required style="min-width:130px"></td>
-                    <td><input data-expense-input class="form-control" name="items[{{ $order->id }}][note]" maxlength="1000" disabled style="min-width:160px"></td>
+                    <td><input type="text" inputmode="numeric" data-money data-expense-input class="form-control text-end" autocomplete="off" name="items[{{ $order->id }}][amount]" value="{{ number_format($order->expense_proposed_amount ?? $order->shipping_fee, 0, ',', '.') }}" disabled required style="min-width:130px"></td>
+                    <td><input data-expense-input class="form-control" name="items[{{ $order->id }}][note]" value="{{ $order->expense_proposed_note }}" maxlength="1000" disabled style="min-width:160px"></td>
                 </tr>
             @empty
                 <tr><td colspan="8" class="text-center text-muted">Không có đơn đã giao phù hợp bộ lọc.</td></tr>
