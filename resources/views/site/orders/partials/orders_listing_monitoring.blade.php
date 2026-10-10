@@ -278,10 +278,9 @@
                             <i class="bi bi-arrow-left-right"></i>Gửi điều chỉnh
                         </a>
                     @endif
-                    @if(!$isTrashView)<a href="{{ route('site.orders.copy', $order->id) }}" class="btn btn-sm btn-outline-secondary" onclick="return confirm('Sao chép đơn {{ $order->code }}?')"><i class="bi bi-files"></i>Sao chép đơn</a>@endif
                     @if(!$isTrashView && $order->customer_id && !$hasSampleDraft)
                         <button class="btn btn-sm btn-outline-primary monitor-add-to-sample" type="button" data-sample-customer-id="{{ $order->customer_id }}" data-sample-url="{{ route('pages.my_order_drafts.add_from_order', $order) }}">
-                            <i class="bi bi-bookmark-plus"></i>Cho vào đơn mẫu
+                            <i class="bi bi-bookmark-plus"></i>Đưa vào đơn mẫu
                         </button>
                     @endif
                     @if($canCancel)<form class="monitor-my-order-cancel" method="POST" action="{{ route('site.orders.cancel', $order) }}" onsubmit="return confirm('Bạn chắc chắn muốn hủy đơn hàng này?');">@csrf<button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-circle"></i>Hủy đơn hàng</button></form>@endif

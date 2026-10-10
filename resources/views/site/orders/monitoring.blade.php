@@ -1122,6 +1122,12 @@
         .monitor-date-form .form-select { grid-column: 1 / -1; width: 100%; }
         .monitor-date-form .form-control { width: 100%; }
     }
+    .monitor-mobile-filters { display: none; }
+    @media (max-width: 767.98px) {
+        .monitor-mobile-filters { display: flex; }
+        .monitor-sidebar.filters-only .monitor-navigation-content { display: none; }
+        .monitor-sidebar:not(.filters-only) .monitor-filter-block { display: none; }
+    }
 </style>
 @endpush
 
@@ -1222,16 +1228,20 @@
     <div class="container monitor-shell">
         <div class="monitor-layout">
             <button type="button" class="monitor-mobile-menu" aria-controls="monitorSidebar" aria-expanded="false">
-                <span class="monitor-mobile-menu-label"><i class="bi bi-list"></i>Bảng điều khiển & bộ lọc</span>
+                <span class="monitor-mobile-menu-label"><i class="bi bi-list"></i>Bảng điều khiển</span>
+                <i class="bi bi-chevron-right" aria-hidden="true"></i>
+            </button>
+            <button type="button" class="monitor-mobile-menu monitor-mobile-filters" aria-controls="monitorSidebar" aria-expanded="false">
+                <span class="monitor-mobile-menu-label"><i class="bi bi-funnel"></i>Bộ lọc</span>
                 <i class="bi bi-chevron-right" aria-hidden="true"></i>
             </button>
             <div class="monitor-sidebar-backdrop" aria-hidden="true"></div>
-            <aside class="monitor-sidebar" id="monitorSidebar" aria-label="Bảng điều khiển và bộ lọc">
+            <aside class="monitor-sidebar" id="monitorSidebar" aria-label="Bảng điều khiển">
                 <div class="monitor-sidebar-mobile-head">
                     <span><i class="bi bi-sliders me-2"></i>Bảng điều khiển</span>
                     <button type="button" class="monitor-sidebar-close" aria-label="Đóng menu"><i class="bi bi-x-lg"></i></button>
                 </div>
-                @include('site.orders.partials.monitor_sidebar_nav')
+                <div class="monitor-navigation-content">@include('site.orders.partials.monitor_sidebar_nav')</div>
 
                 @if($activeTab === 'drafts')
                 @php $draftCustomerQuery = request()->except(['draft_customer_id', 'page']); @endphp
@@ -2630,10 +2640,10 @@
                                                 </button>
                                             </form>
                                         @else
-                                            <a class="btn btn-sm btn-outline-secondary" href="{{ route('site.orders.copy', $order->id) }}"><i class="bi bi-files"></i><span>Sao chép đơn</span></a>
+
                                         @endif
                                         @if($order->customer_id && !in_array((int) $order->customer_id, $sampleDraftCustomerIds ?? [], true))
-                                            <button class="btn btn-sm btn-outline-primary monitor-add-to-sample" type="button" data-sample-customer-id="{{ $order->customer_id }}" data-sample-url="{{ route('pages.my_order_drafts.add_from_order', $order) }}"><i class="bi bi-bookmark-plus"></i><span>Cho vào đơn mẫu</span></button>
+                                            <button class="btn btn-sm btn-outline-primary monitor-add-to-sample" type="button" data-sample-customer-id="{{ $order->customer_id }}" data-sample-url="{{ route('pages.my_order_drafts.add_from_order', $order) }}"><i class="bi bi-bookmark-plus"></i><span>Đưa vào đơn mẫu</span></button>
                                         @endif
                                         @if($canRequestAdjustment)
                                             <button class="btn btn-sm btn-warning monitor-adjustment-open" type="button" data-adjustment-url="{{ route('site.order-adjustments.create', $order) }}" data-adjustment-target="monitorAdjustment{{ $order->id }}"><i class="bi bi-arrow-left-right"></i><span>Gửi yêu cầu điều chỉnh</span></button>
@@ -2806,7 +2816,8 @@
 <script>
 (() => {
     const sidebar = document.getElementById('monitorSidebar');
-    const openButton = document.querySelector('.monitor-mobile-menu');
+    const openButton = document.querySelector('.monitor-mobile-menu:not(.monitor-mobile-filters)');
+    const filterButton = document.querySelector('.monitor-mobile-filters');
     const closeButton = sidebar?.querySelector('.monitor-sidebar-close');
     const backdrop = document.querySelector('.monitor-sidebar-backdrop');
     if (!sidebar || !openButton || !closeButton || !backdrop) return;
@@ -2815,7 +2826,8 @@
         sidebar.classList.toggle('is-open', open);
         backdrop.classList.toggle('is-open', open);
         document.body.classList.toggle('monitor-menu-open', open);
-        openButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+        openButton.setAttribute('aria-expanded', open && !sidebar.classList.contains('filters-only') ? 'true' : 'false');
+        filterButton?.setAttribute('aria-expanded', open && sidebar.classList.contains('filters-only') ? 'true' : 'false');
         sidebar.setAttribute('aria-hidden', open ? 'false' : 'true');
         if (open) closeButton.focus();
     };
@@ -2831,7 +2843,13 @@
         sidebar.removeAttribute('aria-hidden');
     };
 
-    openButton.addEventListener('click', () => setMenuOpen(true));
+    function openPanel(filters) {
+        sidebar.classList.toggle('filters-only', filters);
+        sidebar.querySelector('.monitor-sidebar-mobile-head span').textContent = filters ? 'Bộ lọc' : 'Bảng điều khiển';
+        setMenuOpen(true);
+    }
+    openButton.addEventListener('click', () => openPanel(false));
+    filterButton?.addEventListener('click', () => openPanel(true));
     closeButton.addEventListener('click', () => setMenuOpen(false));
     backdrop.addEventListener('click', () => setMenuOpen(false));
     sidebar.addEventListener('click', event => {
