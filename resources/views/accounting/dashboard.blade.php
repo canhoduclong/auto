@@ -12,7 +12,8 @@
 </div>
 @endif
 
-<div class="acc-card mb-3">
+<details class="acc-card mb-3 accounting-dashboard-filters">
+    <summary class="accounting-filter-toggle"><span><i class="bi bi-funnel me-2"></i>Bộ lọc</span><i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
     <div class="card-body">
         <form method="GET" class="acc-filter">
             <div>
@@ -41,7 +42,7 @@
             </div>
         </form>
     </div>
-</div>
+</details>
 
 <div class="acc-kpi mb-3">
     <div class="item"><div class="label">Tong cong no phai thu</div><div class="value text-danger">{{ number_format($cards['receivable_total'] ?? 0) }} d</div></div>
@@ -52,3 +53,30 @@
     <div class="item"><div class="label">Don qua han thanh toan</div><div class="value text-danger">{{ number_format($cards['overdue_orders'] ?? 0) }}</div></div>
 </div>
 @endsection
+
+@push('styles')
+<style>
+.accounting-filter-toggle { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; cursor: pointer; font-weight: 600; list-style: none; }
+.accounting-filter-toggle::-webkit-details-marker { display: none; }
+.accounting-dashboard-filters[open] .accounting-filter-toggle > i { transform: rotate(180deg); }
+@media (min-width: 768px) {
+    .accounting-filter-toggle { display: none; }
+}
+@media (max-width: 767.98px) {
+    .accounting-dashboard-filters .acc-filter { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .accounting-dashboard-filters input, .accounting-dashboard-filters select { width: 100%; min-width: 0; font-size: 16px; min-height: 44px; }
+    .accounting-dashboard-filters .badge { white-space: normal; line-height: 1.5; }
+}
+</style>
+@endpush
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const panel = document.querySelector('.accounting-dashboard-filters');
+    const desktop = window.matchMedia('(min-width: 768px)');
+    if (!panel) return;
+    panel.open = desktop.matches;
+    desktop.addEventListener('change', function (event) { panel.open = event.matches; });
+});
+</script>
+@endpush
