@@ -1128,6 +1128,13 @@
         .monitor-sidebar.filters-only .monitor-navigation-content { display: none; }
         .monitor-sidebar:not(.filters-only) .monitor-filter-block { display: none; }
     }
+    #monitorOrderFilterSlot:empty { display: none; }
+    @media (max-width: 767.98px) {
+        #monitorOrderFilterSlot .orders-panel { margin-bottom: 0 !important; width: 100%; }
+        #monitorOrderFilterSlot .orders-filter { padding: 14px; }
+        #monitorOrderFilterSlot input, #monitorOrderFilterSlot select { width: 100%; min-width: 0; font-size: 16px; }
+        #monitorOrderFilterSlot .orders-monitor-filter-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    }
 </style>
 @endpush
 
@@ -1242,6 +1249,7 @@
                     <button type="button" class="monitor-sidebar-close" aria-label="Đóng menu"><i class="bi bi-x-lg"></i></button>
                 </div>
                 <div class="monitor-navigation-content">@include('site.orders.partials.monitor_sidebar_nav')</div>
+                <div id="monitorOrderFilterSlot" class="monitor-filter-block"></div>
 
                 @if($activeTab === 'drafts')
                 @php $draftCustomerQuery = request()->except(['draft_customer_id', 'page']); @endphp
@@ -2831,7 +2839,31 @@
         sidebar.setAttribute('aria-hidden', open ? 'false' : 'true');
         if (open) closeButton.focus();
     };
+    const filterSlot = document.getElementById('monitorOrderFilterSlot');
+    let filterPanel = null;
+    let filterPlaceholder = null;
+    function moveOrderFilters() {
+        if (!filterSlot) return;
+        if (!filterPanel) {
+            const filter = document.getElementById('ordersFilterForm');
+            filterPanel = filter?.closest('.orders-panel');
+            if (!filterPanel) return;
+            filterPlaceholder = document.createElement('span');
+            filterPlaceholder.hidden = true;
+            filterPanel.before(filterPlaceholder);
+        }
+        if (window.matchMedia('(max-width: 767.98px)').matches) {
+            if (filterPanel.parentElement !== filterSlot) filterSlot.appendChild(filterPanel);
+        } else if (filterPlaceholder.parentElement && filterPanel.previousSibling !== filterPlaceholder) {
+            filterPlaceholder.after(filterPanel);
+        }
+    }
+    moveOrderFilters();
+    document.addEventListener('DOMContentLoaded', moveOrderFilters);
+    const filterObserver = new MutationObserver(moveOrderFilters);
+    filterObserver.observe(document.querySelector('.monitor-content') || document.body, {childList: true, subtree: true});
     const syncMenuForViewport = () => {
+        moveOrderFilters();
         if (window.matchMedia('(max-width: 767.98px)').matches) {
             setMenuOpen(false);
             return;
@@ -2844,6 +2876,7 @@
     };
 
     function openPanel(filters) {
+        moveOrderFilters();
         sidebar.classList.toggle('filters-only', filters);
         sidebar.querySelector('.monitor-sidebar-mobile-head span').textContent = filters ? 'Bộ lọc' : 'Bảng điều khiển';
         setMenuOpen(true);
