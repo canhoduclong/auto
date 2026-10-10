@@ -4807,12 +4807,24 @@ class WarehouseDashboardController extends Controller
             return back()->with('error', $message);
         }
 
+        try {
+        DB::transaction(function () use ($order, $packingWarehouseId): void {
+        Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+        if (! ($order->skip_auto_cancel && Carbon::parse($order->created_at)->startOfDay()->lt(Carbon::today()))) {
+            $this->reserveOrderStockAtWarehouse($order, $packingWarehouseId);
+            app(\App\Services\PackedInventoryService::class)->seal($order, $packingWarehouseId);
+        }
         app(\App\Services\WarehousePackedOrderService::class)->recalculate($order);
 
         $order->update([
             'status' => Order::STATUS_READY_TO_SHIP,
             'warehouse_id' => $packingWarehouseId,
         ]);
+        });
+        } catch (\RuntimeException $exception) {
+            if ($request->expectsJson()) return response()->json(['ok' => false, 'message' => $exception->getMessage()], 422);
+            return back()->with('error', $exception->getMessage());
+        }
 
         OrderHistory::create([
             'order_id' => $order->id,

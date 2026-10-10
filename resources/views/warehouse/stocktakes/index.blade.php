@@ -197,7 +197,7 @@
                                        class="form-control form-control-sm stocktake-input ms-auto js-counted-value"
                                        value="{{ $oldWeight !== null ? $oldWeight : ($sheetIsWeight && $sheetQuantity !== null ? number_format((float) $sheetQuantity, 3, '.', '') : '') }}"
                                        min="0" step="0.001"
-                                       data-system="{{ number_format((float) $inventory->stocktake_weight_kg, 3, '.', '') }}"
+                                       data-system="{{ number_format((float) $inventory->stocktake_unpacked_weight_kg, 3, '.', '') }}"
                                        data-diff-target="weight-diff-{{ $inventory->id }}"
                                        data-suffix=" kg"
                                        aria-label="Kg thực tế {{ $productName }} {{ $variantName }}">

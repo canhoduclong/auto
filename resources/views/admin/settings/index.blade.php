@@ -130,7 +130,7 @@
     <div class="card border-0 shadow-sm mb-3">
         <div class="card-body">
             <h5 class="mb-3"><i class="bi bi-terminal me-2"></i>Thực thi lệnh bảo trì</h5>
-            <form method="POST" action="{{ route('admin.settings.execute-command') }}" onsubmit="this.querySelector('button[type=submit]').disabled = true;">
+            <form method="POST" action="{{ route('admin.settings.execute-command') }}" data-command-security>
                 @csrf
                 <label for="maintenance-command" class="form-label">Lệnh Artisan</label>
                 <div class="d-flex flex-column flex-md-row gap-2">
@@ -140,6 +140,32 @@
                 <div class="form-text mt-2">Hỗ trợ: shipping-expenses:configure, view:clear, cache:clear, config:clear, route:clear, optimize:clear, queue:restart.</div>
                 <div class="form-text">Thiết lập người duyệt: <code>php artisan shipping-expenses:configure --coordinator=47 --accountant=18</code> (ID thực tế của tài khoản, áp dụng khi tạo quy trình mới).</div>
             </form>
+        </div>
+    </div>
+    @endif
+
+    @if(auth()->user()?->hasRole('admin'))
+    <div class="modal fade" id="commandSecurityModal" tabindex="-1" aria-labelledby="commandSecurityTitle" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="commandSecurityTitle">Xác nhận thực thi lệnh</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button>
+                </div>
+                <form id="commandSecurityConfirmForm">
+                    <div class="modal-body">
+                        <p class="mb-2">Lệnh sẽ thực thi:</p>
+                        <pre id="commandSecurityPreview" class="bg-light rounded p-2 text-wrap"></pre>
+                        <label for="commandSecurityCode" class="form-label">Mã bảo mật</label>
+                        <input id="commandSecurityCode" type="password" class="form-control" required maxlength="1024" autocomplete="current-password">
+                        <div class="form-text">Nhập mật khẩu đăng nhập của admin để xác nhận.</div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Hủy</button>
+                        <button type="submit" class="btn btn-primary">Xác nhận & thực thi</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
     @endif
@@ -173,7 +199,7 @@
                 ['cmd' => 'migrate',        'label' => 'migrate --force',            'icon' => 'bi-database-up',         'color' => 'btn-danger'],
                 ['cmd' => 'queue-restart',  'label' => 'queue:restart',              'icon' => 'bi-arrow-clockwise',     'color' => 'btn-outline-dark'],
             ] as $btn)
-                <form method="POST" action="{{ route('admin.settings.artisan') }}" class="d-inline" onsubmit="return confirm('Chạy lệnh: {{ $btn['label'] }}?')">
+                <form method="POST" action="{{ route('admin.settings.artisan') }}" class="d-inline" data-command-security>
                     @csrf
                     <input type="hidden" name="cmd" value="{{ $btn['cmd'] }}">
                     <button type="submit" class="btn btn-sm {{ $btn['color'] }}">
@@ -784,6 +810,41 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 
+});
+</script>
+@endpush
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const element = document.getElementById('commandSecurityModal');
+    if (!element || typeof bootstrap === 'undefined') return;
+    const modal = bootstrap.Modal.getOrCreateInstance(element);
+    const code = document.getElementById('commandSecurityCode');
+    let pendingForm = null;
+    document.querySelectorAll('form[data-command-security]').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            pendingForm = form;
+            code.value = '';
+            document.getElementById('commandSecurityPreview').textContent = form.querySelector('[name=command]')?.value || form.querySelector('button[type=submit]')?.textContent.trim();
+            modal.show();
+        });
+    });
+    element.addEventListener('shown.bs.modal', function () { code.focus(); });
+    element.addEventListener('hidden.bs.modal', function () { code.value = ''; pendingForm = null; });
+    document.getElementById('commandSecurityConfirmForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!pendingForm || !code.value) return;
+        let input = pendingForm.querySelector('[name=security_code]');
+        if (!input) {
+            input = document.createElement('input'); input.type = 'hidden'; input.name = 'security_code'; pendingForm.appendChild(input);
+        }
+        input.value = code.value;
+        this.querySelector('button[type=submit]').disabled = true;
+        pendingForm.querySelector('button[type=submit]').disabled = true;
+        HTMLFormElement.prototype.submit.call(pendingForm);
+    });
 });
 </script>
 @endpush

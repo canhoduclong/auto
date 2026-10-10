@@ -103,6 +103,8 @@ class WarehouseStocktakeController extends Controller
         foreach ($inventories as $inventory) {
             $packedQuantity = (float) $packedReservations->get((int) $inventory->id, 0);
             $inventory->setAttribute('packed_reserved_quantity', $packedQuantity);
+            $packedWeight = (float) InventoryReservation::where('inventory_id', $inventory->id)->whereNotNull('packed_at')->sum('packed_weight_kg');
+            $inventory->setAttribute('stocktake_unpacked_weight_kg', max(0, (float)$inventory->stocktake_weight_kg - $packedWeight));
             $inventory->setAttribute(
                 'stocktake_unpacked_quantity',
                 max(0, round((float) $inventory->stocktake_quantity - $packedQuantity, 3))
@@ -176,6 +178,7 @@ class WarehouseStocktakeController extends Controller
             ->filter(fn ($row) => $this->hasCountedValue($row, 'counted_quantity')
                 || $this->hasCountedValue($row, 'counted_weight_kg'))
             ->mapWithKeys(function ($row, $inventoryId) {
+                $row['_has_counted_weight'] = $this->hasCountedValue($row, 'counted_weight_kg');
                 $row['_has_counted_quantity'] = $this->hasCountedValue($row, 'counted_quantity');
                 $row['counted_quantity'] = $row['_has_counted_quantity']
                     ? $row['counted_quantity']
@@ -243,7 +246,8 @@ class WarehouseStocktakeController extends Controller
                     : $systemQuantity;
                 $difference = round($countedQuantity - $systemQuantity, 3);
                 $systemWeight = round((float) $balanceAtCount['weight_kg'], 3);
-                $countedWeight = round((float) $row['counted_weight_kg'], 3);
+                $packedWeight = (float) InventoryReservation::where('inventory_id', $inventory->id)->whereNotNull('packed_at')->sum('packed_weight_kg');
+                $countedWeight = $row['_has_counted_weight'] ? round((float) $row['counted_weight_kg'] + $packedWeight, 3) : $systemWeight;
                 $weightDifference = round($countedWeight - $systemWeight, 3);
 
                 $stocktake->items()->create([
@@ -444,7 +448,10 @@ class WarehouseStocktakeController extends Controller
             ->join('order_items', 'order_items.id', '=', 'inventory_reservations.order_item_id')
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->whereIn('inventory_reservations.inventory_id', $inventoryIds->all())
-            ->whereIn('orders.status', [Order::STATUS_PACKED, Order::STATUS_READY_TO_SHIP])
+            ->where(function ($query) {
+                $query->whereNotNull('inventory_reservations.packed_at')
+                    ->orWhereIn('orders.status', [Order::STATUS_PACKED, Order::STATUS_READY_TO_SHIP]);
+            })
             ->whereNull('orders.trash_at')
             ->selectRaw('inventory_reservations.inventory_id, SUM(inventory_reservations.quantity) AS packed_quantity')
             ->groupBy('inventory_reservations.inventory_id')

@@ -522,9 +522,20 @@ class SettingController extends Controller
         return $host === 'hoanglongtnt.com' || $host === 'www.hoanglongtnt.com';
     }
 
+    private function verifyCommandSecurityCode(Request $request): void
+    {
+        $code = $request->input('security_code');
+        if (! is_string($code) || strlen($code) > 1024 || ! \Illuminate\Support\Facades\Hash::check($code, $request->user()->password)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'security_code' => 'Mã bảo mật không đúng. Nhập mật khẩu đăng nhập của admin để xác nhận.',
+            ]);
+        }
+    }
+
     public function executeCommand(Request $request)
     {
         abort_unless($request->user()?->hasRole('admin'), 403);
+        $this->verifyCommandSecurityCode($request);
         $data = $request->validate(['command' => ['required', 'string', 'max:500']]);
         $command = trim($data['command']);
         $tokens = preg_split('/\s+/', $command);
@@ -540,9 +551,9 @@ class SettingController extends Controller
             }
             $arguments['--'.$match[1]] = $match[2];
         }
-        if (! $valid) return back()->withInput()->withErrors(['command' => 'Lệnh hoặc tham số chưa được hỗ trợ. Chọn một lệnh trong danh sách bên dưới.']);
+        if (! $valid) return back()->withInput($request->except('security_code'))->withErrors(['command' => 'Lệnh hoặc tham số chưa được hỗ trợ. Chọn một lệnh trong danh sách bên dưới.']);
         $lock = Cache::lock('admin-settings-command', 120);
-        if (! $lock->get()) return back()->withInput()->withErrors(['command' => 'Đang có lệnh được thực thi. Vui lòng thử lại sau.']);
+        if (! $lock->get()) return back()->withInput($request->except('security_code'))->withErrors(['command' => 'Đang có lệnh được thực thi. Vui lòng thử lại sau.']);
         $output = new \Symfony\Component\Console\Output\BufferedOutput();
         try {
             $exitCode = \Illuminate\Support\Facades\Artisan::call($name, $arguments, $output);
@@ -566,6 +577,8 @@ class SettingController extends Controller
         if (!$user || !$user->hasRole('admin')) {
             abort(403);
         }
+
+        $this->verifyCommandSecurityCode($request);
 
         $allowed = [
             'dump-autoload'       => ['title' => 'composer dump-autoload',     'command' => 'cd /var/www/auto.com && composer dump-autoload --no-interaction 2>&1'],

@@ -16,6 +16,8 @@ class InventoryReservation extends Model
         'reserved_at',
     ];
 
+    protected $casts = ['packed_at' => 'datetime', 'packed_weight_kg' => 'float'];
+
     public function orderItem()
     {
         return $this->belongsTo(OrderItem::class);
