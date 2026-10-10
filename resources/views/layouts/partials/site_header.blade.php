@@ -322,22 +322,72 @@
     }
     
 }
+/* Main site navigation drawer: mobile touch targets and readable groups. */
+@media (max-width: 991.98px) {
+    .offcanvas-menu-wrapper {
+        box-sizing: border-box; width: min(380px, calc(100vw - 28px));
+        left: -400px; padding: 0 16px calc(24px + env(safe-area-inset-bottom));
+        background: #f8fafc; overflow-x: hidden; overscroll-behavior: contain;
+    }
+    .offcanvas-menu-wrapper.active { left: 0; }
+    .site-mobile-nav-head {
+        display: flex; position: sticky; top: 0; z-index: 2;
+        align-items: center; justify-content: space-between; min-height: 64px;
+        margin: 0 -16px 16px; padding: 10px 16px; background: #fff;
+        border-bottom: 1px solid #e2e8f0; font-size: 18px; font-weight: 700; color: #0f172a;
+    }
+    .site-mobile-nav-close { width: 44px; height: 44px; border: 0; border-radius: 50%; background: #eef2f6; color: #334155; }
+    .offcanvas-menu-wrapper .offcanvas__widget { margin-bottom: 20px; }
+    .offcanvas-menu-wrapper .offcanvas__widget ul.list-unstyled { display: grid; gap: 8px; padding: 0; }
+    .offcanvas-menu-wrapper .offcanvas__widget ul.list-unstyled > li { min-width: 0; }
+    .offcanvas-menu-wrapper .offcanvas__widget ul.list-unstyled > li > a {
+        display: flex !important; align-items: flex-start; gap: 12px;
+        padding: 13px 12px !important; min-height: 50px; border-radius: 10px;
+        background: #fff; border: 1px solid #e2e8f0; color: #334155;
+        font-size: 16px; line-height: 1.5; font-weight: 500; text-decoration: none !important;
+    }
+    .offcanvas-menu-wrapper .offcanvas__widget ul.list-unstyled > li > a > i {
+        flex: 0 0 22px; width: 22px; margin: 2px 0 0 !important; font-size: 19px; color: #0f766e; text-align: center;
+    }
+    .offcanvas-menu-wrapper .offcanvas__widget ul.list-unstyled > li > a:hover,
+    .offcanvas-menu-wrapper .offcanvas__widget ul.list-unstyled > li > a.fw-semibold {
+        color: #0f766e; border-color: #9dd4ca; background: #e8f5f1;
+    }
+    .offcanvas-menu-wrapper .offcanvas__widget ul.list-unstyled > li.text-uppercase {
+        padding: 18px 4px 6px !important; font-size: 12px; letter-spacing: .05em; color: #64748b !important;
+    }
+    .offcanvas-menu-wrapper .offcanvas__widget .text-muted.small { overflow-wrap: anywhere; font-size: 13px; }
+    .offcanvas-menu-wrapper .offcanvas__widget button[type=submit] { min-height: 44px; font-size: 15px; text-decoration: none; }
+}
+@media (min-width: 992px) { .site-mobile-nav-head { display: none; } }
+@media (max-width: 991.98px) {
+    .offcanvas-menu-wrapper .site-mobile-account { padding: 16px 12px; border: 1px solid #d9e7e4; border-radius: 14px; background: #edf7f4; }
+    .site-mobile-account > img { flex-shrink: 0; }
+    .site-mobile-account > div { min-width: 0; }
+    .site-mobile-account .fw-semibold { font-size: 16px; line-height: 1.5; color: #134e4a; }
+    .offcanvas-menu-wrapper .offcanvas__widget ul.list-unstyled { gap: 5px; }
+    .offcanvas-menu-wrapper .offcanvas__widget ul.list-unstyled > li > a { border-color: transparent; background: transparent; min-height: 52px; }
+    .offcanvas-menu-wrapper .offcanvas__widget ul.list-unstyled > li > a[aria-current=page] { background: #dff1ec; color: #0f766e; font-weight: 600; border-color: #b8ddd2; }
+    #offcanvas-logout-form { display: block !important; padding-top: 16px; margin-top: 16px; border-top: 1px solid #e2e8f0; }
+    #offcanvas-logout-form button { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px !important; background: #fff1f2; border-radius: 10px; }
+}
 </style>
 
 <div class="offcanvas-menu-overlay"></div>
 <div class="offcanvas-menu-wrapper">
+    <div class="site-mobile-nav-head"><span>Hoàng Long TNT</span><button type="button" class="site-mobile-nav-close" aria-label="Đóng menu" onclick="document.querySelector('.offcanvas-menu-overlay').click()"><i class="bi bi-x-lg" aria-hidden="true"></i></button></div>
     <div class="offcanvas__widget">
         <a href="#"><i class="fa fa-cart-plus"></i></a>
         <a href="#" class="search-switch"><i class="fa fa-search"></i></a>
         <a href="#" class="primary-btn">{{ __('site.add') }}</a>
         @auth
             <div class="mt-3">
-                <div class="d-flex align-items-center gap-2 mb-2">
+                <div class="d-flex align-items-center gap-3 mb-3 site-mobile-account">
                     @php
                         $avatar = Auth::user()->avatar ?? null;
                         $avatarUrl = $avatar ? asset($avatar) : 'https://ui-avatars.com/api/?name=' . urlencode(Auth::user()->name ?? 'U') . '&background=0f766e&color=fff&size=40&bold=true';
                     @endphp
-                    <img src="{{ $avatarUrl }}" alt="avatar" class="rounded-circle" width="36" height="36">
+                    <img src="{{ $avatarUrl }}" alt="avatar" class="rounded-circle" width="44" height="44">
                     <div>
                         <div class="fw-semibold">{{ Auth::user()->name }}</div>
                         <div class="text-muted small">{{ Auth::user()->email }}</div>
@@ -358,9 +408,9 @@
                             $offcanvasFinanceRequestRoute = 'leader.finance-requests.index';
                         }
                     @endphp
-                    <li><a href="{{ route('pages.my_dashboard') }}" class="d-block py-1"><i class="bi bi-speedometer2 me-1"></i> My Dashboard</a></li>
+                    <li><a href="{{ route('pages.my_dashboard') }}" class="d-block py-1"><i class="bi bi-speedometer2 me-1"></i> Bảng điều khiển</a></li>
                     @if(Auth::user()->isSalesFlowRole())
-                        <li><a href="{{ route('pages.hoang_long_profile') }}" class="d-block py-1"><i class="bi bi-file-earmark-person me-1"></i> Hoàng Long TNT Profile</a></li>
+                        <li><a href="{{ route('pages.hoang_long_profile') }}" class="d-block py-1"><i class="bi bi-file-earmark-person me-1"></i> Hồ sơ Hoàng Long TNT</a></li>
                     @endif
                     @if($offcanvasCanCreateDepartmentNotifications)
                         <li><a href="{{ route('department-notifications.index', ['layout' => 'site']) }}" class="d-block py-1"><i class="bi bi-megaphone me-1"></i> Tạo thông báo</a></li>
@@ -370,6 +420,7 @@
                     @foreach(\App\Support\WebTaskNavigation::items(Auth::user()) as $taskMenuItem)
                         <li><a href="{{ $taskMenuItem['url'] }}" class="d-block py-1 {{ $taskMenuItem['active'] ? 'fw-semibold' : '' }}"><i class="bi bi-{{ $taskMenuItem['icon'] }} me-1"></i> {{ $taskMenuItem['label'] }}</a></li>
                     @endforeach
+                    <li class="pt-2 pb-1 text-muted small text-uppercase fw-semibold">Đơn hàng &amp; Kinh doanh</li>
                     @if(Auth::user()->isSalesFlowRole())
                         <li><a href="{{ $offcanvasCanViewMonitoring ? route('pages.my_orders.monitoring', ['tab' => 'drafts']) : route('pages.my_order_drafts') }}" class="d-block py-1"><i class="bi bi-file-earmark-text me-1"></i> Đơn nháp</a></li>
                     @endif
@@ -386,6 +437,7 @@
                     @if($offcanvasFinanceRequestRoute)
                         <li><a href="{{ route($offcanvasFinanceRequestRoute) }}" class="d-block py-1"><i class="bi bi-file-earmark-text me-1"></i> Phiếu yêu cầu</a></li>
                     @endif
+                    <li class="pt-2 pb-1 text-muted small text-uppercase fw-semibold">Khách hàng &amp; Báo cáo</li>
                     <li><a href="{{ route('pages.my_customer') }}" class="d-block py-1"><i class="bi bi-people me-1"></i> {{ __('site.my_customers') }}</a></li>
                     <li><a href="{{ $offcanvasCanViewMonitoring ? route('pages.my_orders.monitoring', ['tab' => 'schedules']) : route('my_customer.schedules.index') }}" class="d-block py-1"><i class="bi bi-calendar2-check me-1"></i> Lịch lên đơn</a></li>
                     @if(Auth::user()->isSalesFlowRole())
@@ -728,3 +780,12 @@
 </header>
 
  
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.offcanvas__widget ul.list-unstyled a[href]').forEach(function (link) {
+        const target = new URL(link.href, location.href);
+        if (target.origin === location.origin && target.pathname === location.pathname && (target.searchParams.get('tab') || '') === (new URL(location.href).searchParams.get('tab') || '')) link.setAttribute('aria-current', 'page');
+    });
+});
+</script>
