@@ -1135,6 +1135,34 @@
         #monitorOrderFilterSlot input, #monitorOrderFilterSlot select { width: 100%; min-width: 0; font-size: 16px; }
         #monitorOrderFilterSlot .orders-monitor-filter-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
     }
+    @media (max-width: 767.98px) {
+        .monitor-sidebar {
+            width: min(calc(100vw - 28px), 380px);
+            padding: 0 16px calc(24px + env(safe-area-inset-bottom));
+            overscroll-behavior: contain;
+            -webkit-overflow-scrolling: touch;
+        }
+        .monitor-sidebar .monitor-sidebar-mobile-head {
+            min-height: 68px; margin: 0 -16px 16px; padding: 12px 16px;
+            font-size: 18px; font-weight: 700;
+        }
+        .monitor-sidebar .monitor-sidebar-close { width: 44px; height: 44px; flex-shrink: 0; }
+        .monitor-sidebar .monitor-tab-nav { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+        .monitor-sidebar .monitor-tab-link {
+            width: 100%; min-width: 0; min-height: 54px; padding: 14px;
+            gap: 12px; font-size: 16px; line-height: 1.4; font-weight: 600; border-radius: 10px;
+        }
+        .monitor-sidebar .monitor-tab-link i { width: 24px; flex: 0 0 24px; font-size: 20px; }
+        .monitor-sidebar .monitor-tab-link > span { white-space: nowrap; min-width: 0; }
+        .monitor-sidebar .monitor-tab-link.active { border-color: #0f766e; background: #e6f4f1; color: #0f766e; }
+        .monitor-sidebar .monitor-filter-title { font-size: 16px; line-height: 1.5; padding: 12px 14px; }
+        .monitor-sidebar .monitor-filter-link { min-height: 48px; padding: 12px 14px; gap: 12px; font-size: 15px; line-height: 1.5; }
+        .monitor-sidebar .monitor-filter-count { flex-shrink: 0; }
+        .monitor-mobile-menu { font-size: 16px; min-height: 50px; padding: 12px 14px; }
+        #monitorOrderFilterSlot .orders-filter h2 { font-size: 18px; }
+        #monitorOrderFilterSlot .orders-filter label { font-size: 15px; margin-bottom: 8px; }
+        #monitorOrderFilterSlot .orders-filter .btn { min-height: 44px; font-size: 15px; }
+    }
 </style>
 @endpush
 
