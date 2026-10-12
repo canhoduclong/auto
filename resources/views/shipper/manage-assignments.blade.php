@@ -2078,9 +2078,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
                 body: new FormData(form),
             });
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                if (response.status === 419 || (response.redirected && new URL(response.url).pathname.includes('login'))) {
+                    throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng tải lại trang và đăng nhập để tiếp tục.');
+                }
+                throw new Error('Máy chủ trả về phản hồi không hợp lệ (HTTP ' + response.status + '). Vui lòng tải lại trang và kiểm tra trạng thái lộ trình trước khi thử lại.');
+            }
             const payload = await response.json();
             if (!response.ok) {
-                throw new Error(payload.message || Object.values(payload.errors || {}).flat()[0] || 'Không thể cập nhật điều phối.');
+                throw new Error(Object.values(payload.errors || {}).flat().join(' ') || payload.message || 'Không thể cập nhật điều phối.');
             }
             document.querySelectorAll('.modal.show').forEach(function (modal) {
                 bootstrap.Modal.getInstance(modal)?.hide();

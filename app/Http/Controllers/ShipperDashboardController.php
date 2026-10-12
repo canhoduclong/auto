@@ -2709,7 +2709,7 @@ class ShipperDashboardController extends Controller
             ->with('success', 'Đã xóa lộ trình cũ khỏi lịch sử.');
     }
 
-    public function autoCompleteShipperRoute(ShipperDispatchHistory $dispatch, User $shipper)
+    public function autoCompleteShipperRoute(Request $request, ShipperDispatchHistory $dispatch, User $shipper)
     {
         $this->authorizeManagerShipper();
         abort_unless($shipper->hasRole(['shipper', 'manager_shipper']) && \App\Models\Setting::enabled('shipper_auto_complete_'.$shipper->id), 403, 'Shipper chưa được Admin bật tính năng hoàn thành tự động.');
@@ -2736,6 +2736,9 @@ class ShipperDashboardController extends Controller
                 }
             }
         });
+        if ($request->expectsJson()) {
+            return $this->assignmentMutationResponse($request, 'Đã xác nhận và hoàn thành các đơn trong lộ trình của shipper.');
+        }
         return redirect()->route('shipper.manage-assignments', ['date' => $dispatch->schedule_date->toDateString()])->with('success', 'Đã xác nhận và hoàn thành các đơn trong lộ trình của shipper.');
     }
 
