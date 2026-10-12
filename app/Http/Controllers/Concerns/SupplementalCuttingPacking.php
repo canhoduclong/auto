@@ -55,12 +55,15 @@ trait SupplementalCuttingPacking
         $preview = [];
         foreach ($context['lines'] as $id => $line) {
             foreach ($line['recipes'] as $recipe) {
+                $recipeError = null;
                 try {
                     $rates = $recipe->cuttingPercentagesForTarget((int) $line['item']->product_id) ?? [];
                 } catch (\RuntimeException $e) {
                     $rates = [];
+                    $recipeError = $e->getMessage();
                 }
                 $preview[$id][$recipe->id] = [
+                    'error' => $recipeError,
                     'yield' => (float) ($rates[$line['item']->product_id] ?? 0),
                     'components' => Product::whereIn('id', array_keys($rates))->get()->filter(fn ($product) => $product->id !== $line['item']->product_id)->map(fn ($product) => ['name' => $product->name, 'rate' => (float) $rates[$product->id]])->values(),
                 ];
@@ -94,8 +97,13 @@ trait SupplementalCuttingPacking
                 $line = $context['lines'][$id] ?? null;
                 $variant = $line ? $line['variants']->firstWhere('id', $row['variant_id'] ?? 0) : null;
                 $recipe = $line ? $line['recipes']->firstWhere('id', $row['recipe_id'] ?? 0) : null;
-                if (! $variant || ! $recipe) {
-                    throw ValidationException::withMessages(['lines' => 'Vui lòng chọn size được phép và định mức pha lóc cho từng sản phẩm nhập bù.']);
+                $name = ($line ? $line['item']->product?->name : null);
+                $name = $name ?: 'Dòng sản phẩm #'.$id;
+                if (! $variant) {
+                    throw ValidationException::withMessages(['lines' => $name.': chưa chọn size được phép đóng. Kiểm tra cơ cấu size đóng hàng; nếu không có size phù hợp, nhờ người quản lý điều chỉnh cấu hình size hoặc cơ cấu đóng hàng trước khi nhập bù.']);
+                }
+                if (! $recipe) {
+                    throw ValidationException::withMessages(['lines' => $name.': chưa chọn định mức pha lóc. Nhờ người quản lý cấu hình sản phẩm nguyên con có định mức tạo ra mặt hàng này, sau đó chọn định mức và lưu lại.']);
                 }
                 $item = $line['item'];
                 $weight = round((float) $row['weight'], 3);

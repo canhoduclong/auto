@@ -5,7 +5,7 @@
 .supplement-wrap{padding:16px;color:#123047;font-size:13px}.supplement-wrap th{font-size:12px;color:#687c8c;white-space:nowrap}.supplement-wrap td{vertical-align:middle}.supplement-wrap .form-control{min-width:68px}.supplement-wrap .btn-primary{background:#0e7974;border-color:#0e7974}.supplement-wrap .measure{display:flex;gap:6px;min-width:135px}.supplement-wrap .measure input{width:78px}.supplement-wrap .thumb{width:42px;height:42px;object-fit:cover;border:1px solid #dee2e6;border-radius:6px}.supplement-wrap .preview-grid{display:grid;grid-template-columns:1fr 2fr;gap:26px;margin-top:24px}.supplement-wrap .section-title{border-bottom:4px solid #111;padding-bottom:6px;margin-bottom:22px}.supplement-wrap .summary-weight{font-weight:700;color:#087d82;white-space:nowrap}.supplement-wrap .table td{padding:10px 8px}.supplement-wrap .saved{color:#087d82}.supplement-wrap .line-variant{min-width:110px;max-width:170px}@media(max-width:650px){.supplement-wrap .preview-grid{grid-template-columns:1fr;gap:10px}.supplement-wrap{padding:10px}}
 </style>
 <div class="supplement-wrap">
-<div id="supplement-errors" class="alert alert-danger" role="alert" hidden></div>
+<div id="supplement-errors" class="alert alert-danger" role="alert" tabindex="-1" style="white-space:pre-line" hidden></div>
 <form method="POST" action="{{ route('warehouse.orders.supplemental-packing.store', $order) }}" id="supplement-form">
 @csrf
 <input type="hidden" name="packing_date" value="{{ request('packing_date', today()->toDateString()) }}">
@@ -35,6 +35,35 @@ const recipes = @json($preview);
 const format = value => Number(value).toLocaleString('vi-VN', {maximumFractionDigits:3});
 const rows = Array.from(document.querySelectorAll('.supplement-line'));
 const states = new Map();
+function showPackingError(message, field) {
+    const error = document.getElementById('supplement-errors');
+    error.textContent = message;
+    error.hidden = false;
+    error.scrollIntoView({behavior:'smooth', block:'start'});
+    if (field) {
+        field.classList.add('is-invalid');
+        field.addEventListener('change', () => field.classList.remove('is-invalid'), {once:true});
+    }
+}
+function validatePackingConfiguration(row) {
+    const variant = row.querySelector('.line-variant');
+    const recipe = row.querySelector('.line-recipe');
+    const name = row.dataset.name;
+    if (!variant.value) {
+        showPackingError(name + ': chưa có size được phép đóng.\nCách xử lý: kiểm tra cơ cấu size đóng hàng. Nếu danh sách size trống, nhờ người quản lý điều chỉnh cấu hình size/cơ cấu đóng hàng, rồi mở lại popup. Chưa thể xác định đây là thiếu tồn kho.', variant);
+        return false;
+    }
+    if (!recipe.value) {
+        showPackingError(name + ': chưa có định mức pha lóc để quy đổi phần nhập bù.\nCách xử lý: nhờ người quản lý khai báo định mức cho sản phẩm nguyên con tạo ra mặt hàng này, sau đó chọn định mức và bấm Lưu. Đây là thiếu cấu hình định mức.', recipe);
+        return false;
+    }
+    const plan = recipes[row.dataset.id]?.[recipe.value];
+    if (!plan || !Number.isFinite(Number(plan.yield)) || Number(plan.yield) <= 0) {
+        showPackingError(name + ': định mức "' + recipe.selectedOptions[0].textContent + '" không hợp lệ.' + (plan?.error ? '\nChi tiết: ' + plan.error : '\nTỷ lệ thu hồi của mặt hàng này phải lớn hơn 0%.') + '\nCách xử lý: nhờ người quản lý kiểm tra tỷ lệ thu hồi và cơ cấu pha lóc của định mức trước khi lưu.', recipe);
+        return false;
+    }
+    return true;
+}
 function renderPreview() {
     const body = document.getElementById('receipt-preview'), equivalent = document.getElementById('equivalents');
     body.replaceChildren(); equivalent.replaceChildren();
@@ -72,7 +101,8 @@ rows.forEach(row=>{
     quantity.addEventListener('input',()=>dirty(true)); weight.addEventListener('input',()=>dirty(true)); variant.addEventListener('change',()=>dirty(false)); recipe.addEventListener('change',()=>dirty(false)); row.querySelector('.line-enabled').addEventListener('change',renderPreview);
     row.querySelectorAll('.save-line').forEach(button=>button.addEventListener('click',()=>{
         if(!quantity.reportValidity() || !weight.reportValidity())return;
-        if(!variant.value || !recipes[row.dataset.id]?.[recipe.value]?.yield){alert('Thiếu size hoặc định mức pha lóc hợp lệ.');return;}
+        if(!validatePackingConfiguration(row))return;
+        document.getElementById('supplement-errors').hidden = true;
         states.set(row,{quantity:Number(quantity.value),weight:Number(weight.value),size:variant.selectedOptions[0].textContent,recipe:recipe.value});
         row.querySelectorAll('.save-line').forEach(b=>b.textContent='Đã lưu');renderPreview();
     })); dirty(true);
@@ -80,7 +110,10 @@ rows.forEach(row=>{
 document.getElementById('supplement-form').addEventListener('submit',async function(event){
     event.preventDefault(); const error=document.getElementById('supplement-errors');error.hidden=true;
     const selected=rows.filter(row=>row.querySelector('.line-enabled').checked);
-    if(!selected.length || selected.some(row=>!states.has(row))){error.textContent='Vui lòng Lưu số liệu cho từng sản phẩm nhập bù.';error.hidden=false;error.scrollIntoView();return;}
+    if(!selected.length){showPackingError('Chưa chọn sản phẩm nhập bù. Hãy đánh dấu ít nhất một mặt hàng cần đóng bù.');return;}
+    if(selected.some(row=>!validatePackingConfiguration(row)))return;
+    const unsaved=selected.filter(row=>!states.has(row));
+    if(unsaved.length){showPackingError('Chưa lưu số liệu: '+unsaved.map(row=>row.dataset.name).join(', ')+'.\nNhập số lượng, khối lượng và bấm Lưu ở từng mặt hàng trước khi Hoàn thành.');return;}
     const button=this.querySelector('[type=submit]');button.disabled=true;
     try {
         const response=await fetch(this.action,{method:'POST',headers:{Accept:'application/json'},body:new FormData(this)});
