@@ -377,7 +377,7 @@
                         <label class="form-label fw-semibold">Nội dung/Lý do <span class="text-danger">*</span></label>
                         <textarea name="note" class="form-control" rows="5" maxlength="1000" placeholder="Mô tả rõ lý do thu/chi, nhà cung cấp, vật tư, ghi chú kế toán...">{{ old('note', $editingRequest?->note) }}</textarea>
                     </div>
-                    @if($isManagerPage || $source === 'accounting')
+                    @if($isManagerPage || in_array($source, ['leader', 'accounting'], true))
                         <div>
                             <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
                                 <label class="form-label fw-semibold mb-0">{{ $source === 'accounting' ? 'Upload chứng từ' : 'Chứng từ đính kèm' }}</label>
@@ -415,11 +415,11 @@
                                     @endforeach
                                 @endif
                                 <div class="input-group request-attachment-row">
-                                    <input type="file" name="attachments[]" class="form-control" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx">
+                                    <input type="file" name="attachments[]" class="form-control" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx,.xls,.xlsx">
                                     <button type="button" class="btn btn-outline-danger remove-request-attachment" title="Bỏ chứng từ"><i class="bi bi-x-lg"></i></button>
                                 </div>
                             </div>
-                            <div class="form-text">Tối đa 10 tệp; mỗi tệp không quá 20MB.</div>
+                            <div class="form-text">Tối đa 10 chứng từ, 20MB/tệp. Hỗ trợ JPG, PNG, WEBP, PDF, Word và Excel. Chọn “Thêm chứng từ” để tải thêm tệp.</div>
                         </div>
                     @else
                         <div>
@@ -708,6 +708,14 @@ document.addEventListener('DOMContentLoaded', function () {
     const addAttachmentButton = document.getElementById('addRequestAttachment');
 
     function bindAttachmentRow(row) {
+        row.querySelector('input[type="file"]')?.addEventListener('change', function () {
+            const file = this.files[0];
+            this.setCustomValidity('');
+            if (file && file.size > 20 * 1024 * 1024) {
+                this.setCustomValidity('Chứng từ “' + file.name + '” vượt quá 20MB. Hãy chọn tệp nhỏ hơn.');
+                this.reportValidity();
+            }
+        });
         row.querySelector('.remove-request-attachment')?.addEventListener('click', function () {
             const rows = attachmentsContainer.querySelectorAll('.request-attachment-row');
             if (rows.length === 1) {
