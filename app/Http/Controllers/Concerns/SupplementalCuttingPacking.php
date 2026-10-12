@@ -32,7 +32,7 @@ trait SupplementalCuttingPacking
         $recipes = Product::where('product_type', Product::TYPE_WHOLE)->whereNotNull('cutting_product_targets')->get();
         $lines = [];
         foreach ($order->items as $item) {
-            if ($item->product?->product_type !== Product::TYPE_CUT) {
+            if (! $item->product?->canSupplementalPack()) {
                 continue;
             }
             $variants = ProductVariant::where('product_id', $item->product_id)->get();
@@ -44,6 +44,8 @@ trait SupplementalCuttingPacking
                 'recipes' => $recipes->filter(fn ($p) => isset($p->cutting_product_targets[$item->product_id]))->values(),
             ];
         }
+
+        if (empty($lines)) throw ValidationException::withMessages(['order' => 'Đơn không có sản phẩm được admin bật Đóng hàng bù.']);
 
         return compact('warehouseId', 'lines');
     }

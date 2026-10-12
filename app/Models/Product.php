@@ -20,6 +20,7 @@ class Product extends Model
         'unit',
         'product_type',
         'allow_adjacent_packing_sizes',
+        'supplemental_packing_enabled',
         'cutting_targets',
         'cutting_product_targets',
         'cutting_percentages',
@@ -31,8 +32,14 @@ class Product extends Model
         'image',
     ];
 
+    public function canSupplementalPack(): bool
+    {
+        return $this->product_type === self::TYPE_CUT && (bool) $this->supplemental_packing_enabled;
+    }
+
     protected $casts = [
         'allow_adjacent_packing_sizes' => 'boolean',
+        'supplemental_packing_enabled' => 'boolean',
         'cutting_targets' => 'array',
         'cutting_product_targets' => 'array',
         'cutting_percentages' => 'array',

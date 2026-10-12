@@ -314,7 +314,17 @@
                             <input type="number" class="form-control" id="cutting_percentage" name="cutting_percentage" min="0" max="100" step="0.001" value="{{ old('cutting_percentage', $product->cutting_percentage) }}" placeholder="Nhập tỷ lệ %">
                             <div class="form-text">Tỷ lệ chung khi sản phẩm được thu hồi làm thành phần phụ, áp dụng cho mọi size nguyên liệu. Thành phần chính tự tính bằng 100% trừ tổng thành phần phụ.</div>
                         </div>
-                        <div class="col-12 mb-3">
+                        @if(auth()->user()?->hasRole('admin'))
+<div class="mb-3 border rounded p-3">
+    <input type="hidden" name="supplemental_packing_enabled" value="0">
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" role="switch" id="supplemental_packing_enabled" name="supplemental_packing_enabled" value="1" @checked(old('supplemental_packing_enabled', $product->supplemental_packing_enabled))>
+        <label class="form-check-label fw-semibold" for="supplemental_packing_enabled">Cho phép đóng hàng bù</label>
+    </div>
+    <div class="form-text">Bật để kho được đóng hàng bù cho sản phẩm pha lóc này. Tắt để ẩn chức năng và chặn nhập bù mới.</div>
+</div>
+@endif
+<div class="col-12 mb-3">
                             <input type="hidden" name="allow_adjacent_packing_sizes" value="0">
                             <label class="form-check-label" for="allow_adjacent_packing_sizes">
                                 <input type="checkbox" class="form-check-input me-2" id="allow_adjacent_packing_sizes" name="allow_adjacent_packing_sizes" value="1" @checked(old('allow_adjacent_packing_sizes', $product->allow_adjacent_packing_sizes))>

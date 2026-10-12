@@ -995,7 +995,7 @@
                                     @endforeach
                                 @endif
 
-                                @if(($orderRoutePrefix ?? 'warehouse') === 'warehouse' && !$orderCardReadonly && $canProcessThisOrder && ($isReadyToPack || $isPacking) && !$isPendingSaleConfirmation && !$isRejectedBySale && !$hasActiveCuttingBatch && $order->items->contains(fn ($item) => $item->product?->product_type === \App\Models\Product::TYPE_CUT))
+                                @if(($orderRoutePrefix ?? 'warehouse') === 'warehouse' && !$orderCardReadonly && $canProcessThisOrder && ($isReadyToPack || $isPacking) && !$isPendingSaleConfirmation && !$isRejectedBySale && !$hasActiveCuttingBatch && $order->items->contains(fn ($item) => $item->product?->canSupplementalPack()))
                                     <a class="btn btn-outline-primary btn-sm js-supplement-popup" href="{{ route('warehouse.orders.supplemental-packing', ['order' => $order, 'packing_date' => $selectedDate ?? today()->toDateString()]) }}">Đóng hàng bù</a>
                                 @endif
 
