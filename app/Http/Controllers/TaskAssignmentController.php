@@ -290,8 +290,9 @@ class TaskAssignmentController extends Controller
         $createRoute = $isFrontRoles ? 'tasks.create' : 'task-assignments.create';
 
         $subTaskAssignees = $this->allowedAssigneesFor($user);
+        $canUploadDocuments = $this->canViewTask($task, $user);
 
-        return view('task_assignments.show', compact('task', 'canAct', 'current', 'myAssignee', 'layout', 'indexRoute', 'showRoute', 'createRoute', 'subTaskAssignees'));
+        return view('task_assignments.show', compact('task', 'canAct', 'current', 'myAssignee', 'layout', 'indexRoute', 'showRoute', 'createRoute', 'subTaskAssignees', 'canUploadDocuments'));
     }
 
     public function updateDebtProgress(Request $request, TaskAssignment $taskAssignment, int $item)
@@ -746,8 +747,7 @@ class TaskAssignmentController extends Controller
     public function uploadDocuments(Request $request, TaskAssignment $taskAssignment)
     {
         $user = $request->user();
-        abort_unless($user->hasRole('admin') || (int)$taskAssignment->created_by === (int)$user->id
-            || $taskAssignment->assignees()->where('user_id',$user->id)->exists(),403);
+        abort_unless($this->canViewTask($taskAssignment, $user), 403, 'Bạn không có quyền bổ sung tài liệu cho công việc này.');
         $data = $request->validate([
             'explanation'=>'required|string|max:2000',
             'documents'=>'required|array|min:1|max:10',
@@ -770,6 +770,27 @@ class TaskAssignmentController extends Controller
             throw $e;
         }
         return redirect()->route('tasks.show',$taskAssignment)->with('success','Đã upload tài liệu và lưu diễn giải vào lịch sử công việc.');
+    }
+
+    public function withdrawDocument(Request $request, TaskAssignment $taskAssignment, TaskCompletionImage $document)
+    {
+        $user = $request->user();
+        abort_unless($this->canViewTask($taskAssignment, $user), 403);
+        abort_unless((int) $document->task_id === (int) $taskAssignment->id, 404);
+        abort_unless((int) $document->uploaded_by === (int) $user->id, 403,
+            'Bạn chỉ có thể thu hồi chứng từ do chính mình tải lên.');
+
+        DB::transaction(function () use ($taskAssignment, $document, $user) {
+            $task = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
+            $file = TaskCompletionImage::whereKey($document->id)->lockForUpdate()->firstOrFail();
+            TaskStatusLog::log($task, $task->status, $user,
+                'Thu hồi chứng từ: '.($file->original_filename ?: basename($file->image_path)));
+            $path = $file->image_path;
+            $file->delete();
+            DB::afterCommit(fn () => Storage::disk('public')->delete($path));
+        });
+
+        return back()->with('success', 'Đã thu hồi chứng từ. Lịch sử thu hồi được lưu trong công việc.');
     }
 
     public function completeForm(TaskAssignment $taskAssignment)

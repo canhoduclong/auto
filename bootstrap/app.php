@@ -20,6 +20,8 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withSchedule(function (Schedule $schedule): void {
+        $schedule->command('system-backup:run')->everyMinute()->withoutOverlapping(120)->runInBackground();
+        $schedule->command('system-backup:run --monthly')->monthlyOn(1, '02:00')->withoutOverlapping(120)->runInBackground();
         $schedule->command('orders:auto-cancel-overdue')->dailyAt('00:05');
         $schedule->command('inventory:reconcile-reservations')->dailyAt('00:10');
         $schedule->command('order-drafts:process-automation')->dailyAt('00:13');
@@ -49,7 +51,7 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     //})
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->dontFlash(['security_code']);
+        $exceptions->dontFlash(['security_code', 'env_content']);
         $exceptions->render(function (\Throwable $exception, Request $request) {
             $isPageExpired = $exception instanceof TokenMismatchException
                 || ($exception instanceof HttpExceptionInterface && $exception->getStatusCode() === 419);

@@ -938,6 +938,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/tasks/{taskAssignment}/subtasks/{child}/recall', [\App\Http\Controllers\TaskAssignmentController::class, 'recallSubTask'])->name('tasks.subtasks.recall');
     Route::post('/tasks/{taskAssignment}/subtasks', [\App\Http\Controllers\TaskAssignmentController::class, 'storeSubTask'])->name('tasks.subtasks.store');
     Route::post('/tasks/{taskAssignment}/debt-progress/{item}', [\App\Http\Controllers\TaskAssignmentController::class, 'updateDebtProgress'])->whereNumber('item')->name('tasks.debt-progress');
+    Route::delete('/tasks/{taskAssignment}/documents/{document}', [\App\Http\Controllers\TaskAssignmentController::class, 'withdrawDocument'])->name('tasks.documents.destroy');
     Route::post('/tasks/{taskAssignment}/documents', [\App\Http\Controllers\TaskAssignmentController::class, 'uploadDocuments'])->name('tasks.documents.store');
     Route::get('/tasks/{taskAssignment}', [\App\Http\Controllers\TaskAssignmentController::class, 'show'])->name('tasks.show');
     Route::post('/tasks/{taskAssignment}/complete', [\App\Http\Controllers\TaskAssignmentController::class, 'completeWithContent'])->name('tasks.complete');
@@ -1059,6 +1060,16 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('hoang-long-profile', [HoangLongProfileController::class, 'edit'])->name('hoang-long-profile.edit')->middleware('role:admin');
         Route::put('hoang-long-profile', [HoangLongProfileController::class, 'update'])->name('hoang-long-profile.update')->middleware('role:admin');
         Route::get('settings', [SettingController::class, 'index'])->name('settings.index');
+        Route::get('settings/environment', [\App\Http\Controllers\Admin\EnvironmentEditorController::class, 'edit'])->middleware('role:admin')->name('environment.edit');
+        Route::put('settings/environment', [\App\Http\Controllers\Admin\EnvironmentEditorController::class, 'update'])->middleware(['role:admin','throttle:10,1'])->name('environment.update');
+        Route::get('backups/encryption-key', [\App\Http\Controllers\Admin\SystemBackupController::class, 'key'])->middleware('role:admin')->name('backups.key');
+        Route::post('backups', [\App\Http\Controllers\Admin\SystemBackupController::class, 'store'])->middleware(['role:admin','throttle:6,1'])->name('backups.store');
+        Route::post('backups/check', [\App\Http\Controllers\Admin\SystemBackupController::class, 'check'])->middleware(['role:admin','throttle:6,1'])->name('backups.check');
+        Route::post('backups/schedule', [\App\Http\Controllers\Admin\SystemBackupController::class, 'schedule'])->middleware('role:admin')->name('backups.schedule');
+        Route::post('backups/{backup}/retry', [\App\Http\Controllers\Admin\SystemBackupController::class, 'retry'])->middleware(['role:admin','throttle:6,1'])->name('backups.retry');
+        Route::get('backups/{backup}/download', [\App\Http\Controllers\Admin\SystemBackupController::class, 'download'])->middleware('role:admin')->name('backups.download');
+        Route::get('backups', [\App\Http\Controllers\Admin\SystemBackupController::class, 'index'])->middleware('role:admin')->name('backups.index');
+        Route::get('backups/restore', [\App\Http\Controllers\Admin\SystemBackupController::class, 'restore'])->middleware('role:admin')->name('backups.restore');
         Route::get('settings/reset-data', [SettingController::class, 'resetDataIndex'])->name('settings.reset-data.index')->middleware('role:admin');
         Route::post('settings', [SettingController::class, 'update'])->name('settings.update');
         Route::post('settings/reset-data', [SettingController::class, 'resetData'])->name('settings.reset-data')->middleware('role:admin');

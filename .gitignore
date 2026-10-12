@@ -70,3 +70,5 @@ readme.txt
 !/tests/Manual/ShippingExpenseWorkflow.php
 
 !/tests/Manual/MobileShippingExpense.php
+
+!/tests/Manual/SystemBackup.php
