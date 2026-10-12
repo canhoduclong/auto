@@ -4,7 +4,7 @@
     <h4 class="mb-2">{{ $mode === 'backup' ? 'Sao lưu hệ thống' : 'Phục hồi hệ thống' }}</h4>
     <p class="text-muted">Sao lưu toàn bộ cơ sở dữ liệu và tài liệu; mã hóa trước khi gửi lên Google Drive.</p>
     @foreach(['success'=>'success','error'=>'danger'] as $key=>$color)
-        @if(session($key))<div class="alert alert-{{ $color }}" role="alert">{{ session($key) }}</div>@endif
+        @if(session($key))<div class="alert alert-{{ $color }}" role="alert" style="white-space: pre-line">{{ session($key) }}</div>@endif
     @endforeach
     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
     <div class="d-flex flex-wrap gap-2 mb-3">

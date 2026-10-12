@@ -12,13 +12,25 @@ use RuntimeException;
 
 class BackupGoogleStorage
 {
-    public static function errorMessage(\Google\Service\Exception $e): string
+    public static function errorMessage(\Google\Service\Exception $e, ?string $service = null): string
     {
+        // API responses can identify the service even without operation context.
+        $details = strtolower($e->getMessage().' '.json_encode($e->getErrors()));
+        $service ??= str_contains($details, 'drive.googleapis.com') || str_contains($details, 'google drive api')
+            ? 'Google Drive API'
+            : ((str_contains($details, 'sheets.googleapis.com') || str_contains($details, 'google sheets api')) ? 'Google Sheets API' : 'Google API');
         foreach ($e->getErrors() as $error) {
-            if (($error['reason'] ?? '') === 'accessNotConfigured') return 'Google Drive/Sheets API chưa bật trong Google Cloud. Bật API tương ứng rồi bấm Thử lại.';
-            if (($error['reason'] ?? '') === 'storageQuotaExceeded') return 'Không đủ dung lượng sở hữu tệp trên Drive. Service account cần Shared Drive; Drive cá nhân cần OAuth.';
+            if (in_array($error['reason'] ?? '', ['accessNotConfigured', 'serviceDisabled'], true)) {
+                return $service.' chưa được bật trong dự án Google Cloud của tài khoản kết nối. Vào Google Cloud → APIs & Services → Library, bật '.$service.' rồi kiểm tra lại.';
+            }
+            if (($error['reason'] ?? '') === 'storageQuotaExceeded') return 'Google Drive: không đủ dung lượng sở hữu tệp. Service account cần Shared Drive; Drive cá nhân cần OAuth.';
         }
-        return 'Google từ chối kết nối/tải lên (HTTP '.$e->getCode().'). Kiểm tra quyền chia sẻ, API Drive/Sheets và dung lượng.';
+        if (str_contains($details, 'service_disabled')) return $service.' chưa được bật trong Google Cloud. Bật '.$service.' rồi kiểm tra lại.';
+        if (str_contains($details, 'insufficient authentication scopes') || str_contains($details, 'access_token_scope_insufficient')) return $service.': token OAuth chưa được cấp đủ phạm vi truy cập. Kết nối OAuth lại với quyền Drive và Sheets.';
+        if ($e->getCode() === 404) return $service.': không tìm thấy tài nguyên hoặc tài khoản chưa được chia sẻ quyền xem. Kiểm tra ID và chia sẻ đúng tài khoản Google.';
+        if ($e->getCode() === 403) return $service.': bị từ chối quyền truy cập (HTTP 403). Kiểm tra quyền chỉnh sửa tài nguyên và quyền của tài khoản Google; đây không phải thông báo API chưa bật.';
+        if ($e->getCode() === 401) return $service.': thông tin xác thực hết hạn hoặc không hợp lệ. Kiểm tra khóa Google hoặc kết nối OAuth lại.';
+        return $service.': kết nối thất bại (HTTP '.$e->getCode().'). Kiểm tra lại kết nối Google.';
     }
 
     private function client(): Client
@@ -45,6 +57,8 @@ class BackupGoogleStorage
     public function check(): array
     {
         $client=$this->client(); $drive=new Drive($client);
+        $errors=[]; $folder=null;
+        try {
         $folder=$drive->files->get(config('system_backup.drive_folder_id'), ['fields'=>'id,mimeType,driveId,capabilities(canAddChildren)','supportsAllDrives'=>true]);
         if ($folder->getMimeType()!=='application/vnd.google-apps.folder' || !$folder->getCapabilities()?->getCanAddChildren()) {
             throw new RuntimeException('Thư mục Drive không hợp lệ hoặc tài khoản chưa có quyền thêm tệp.');
@@ -52,12 +66,17 @@ class BackupGoogleStorage
         if ($client->isUsingApplicationDefaultCredentials() && !$folder->getDriveId() && !config('system_backup.subject')) {
             throw new RuntimeException('Service account cần thư mục trong Shared Drive, hoặc kết nối OAuth để tải lên Drive cá nhân.');
         }
+        } catch (\Google\Service\Exception $e) { $errors[]=self::errorMessage($e,'Google Drive API'); }
+        catch (RuntimeException $e) { $errors[]='Google Drive: '.$e->getMessage(); }
+        try {
         $sheets=new Sheets($client);
         $sheet=$sheets->spreadsheets->get(config('system_backup.spreadsheet_id'),['fields'=>'sheets.properties']);
         $found=false;
         foreach($sheet->getSheets() as $tab) if ($tab->getProperties()->getTitle()==='Backup_Index') $found=true;
         if (!$found) $sheets->spreadsheets->batchUpdate(config('system_backup.spreadsheet_id'),new BatchUpdateSpreadsheetRequest(['requests'=>[['addSheet'=>['properties'=>['title'=>'Backup_Index']]]]]));
         $sheets->spreadsheets_values->update(config('system_backup.spreadsheet_id'),"'Backup_Index'!A1:J1",new ValueRange(['values'=>[['Mã bản sao','Loại','Trạng thái','Bắt đầu','Hoàn tất','Dung lượng byte','SHA256','Drive file ID','Phiên bản','Thông báo']]]),['valueInputOption'=>'RAW']);
+        } catch (\Google\Service\Exception $e) { $errors[]=self::errorMessage($e,'Google Sheets API'); }
+        if ($errors) throw new RuntimeException(implode("\n",$errors));
         return ['folder_id'=>$folder->getId()];
     }
 
@@ -74,11 +93,13 @@ class BackupGoogleStorage
                 throw new RuntimeException('Tệp trên Drive chưa đạt kiểm tra dung lượng/mã kiểm tra.');
             }
             return $result->getId();
-        } finally { $client->setDefer(false); }
+        } catch (\Google\Service\Exception $e) { throw new RuntimeException(self::errorMessage($e,'Google Drive API'), 0, $e); }
+        finally { $client->setDefer(false); }
     }
 
     public function record(SystemBackup $backup, string $status): void
     {
+        try {
         $sheets=new Sheets($this->client());
         $values=[[$backup->code,$backup->type,$status,$backup->started_at?->toIso8601String(),$status==='completed'?now()->toIso8601String():'',$backup->bytes,$backup->sha256,$backup->drive_file_id,$backup->manifest['format_version']??1,$backup->error??'']];
         if ($backup->sheet_row) {
@@ -91,5 +112,6 @@ class BackupGoogleStorage
             if (!preg_match('/![A-Z]+(\d+):/', $response->getUpdates()->getUpdatedRange(),$matches)) throw new RuntimeException('Không xác định được dòng Google Sheets đã ghi.');
             $backup->update(['sheet_row'=>(int)$matches[1]]);
         }
+        } catch (\Google\Service\Exception $e) { throw new RuntimeException(self::errorMessage($e,'Google Sheets API'), 0, $e); }
     }
 }
