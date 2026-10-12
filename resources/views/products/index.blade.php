@@ -124,6 +124,7 @@
                         <th>Loại hình</th>
                         <th class="text-end">Tỷ lệ pha lóc (%)</th>
                         <th>Trạng thái</th>
+                        @if(auth()->user()?->hasRole('admin'))<th class="text-center text-nowrap">Đóng hàng bù</th>@endif
                 
                 <th class="text-center" >
                     <div class="padding-cell">
@@ -209,6 +210,17 @@
                         <span class="badge bg-danger">Đã xóa</span>
                     @endif
                 </td>
+                @if(auth()->user()?->hasRole('admin'))
+                <td class="text-center">
+                    @if($product->product_type === \App\Models\Product::TYPE_CUT)
+                    <div class="form-check form-switch d-inline-flex align-items-center gap-2 mb-0">
+                        <input type="checkbox" class="form-check-input js-supplemental-packing-toggle" role="switch" aria-label="Đóng hàng bù cho {{ $product->name }}" data-url="{{ route('products.supplemental-packing', $product) }}" @checked($product->supplemental_packing_enabled)>
+                        <span class="small js-supplemental-packing-label">{{ $product->supplemental_packing_enabled ? 'Bật' : 'Tắt' }}</span>
+                    </div>
+                    <div class="small text-danger js-supplemental-packing-error mt-1" role="alert"></div>
+                    @else <span class="text-muted">—</span> @endif
+                </td>
+                @endif
                 <td>
                     <div class="d-flex justify-content-end list-actions"> 
                         
@@ -313,6 +325,26 @@
 <script>
     $(function() {
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}';
+
+        document.querySelectorAll('.js-supplemental-packing-toggle').forEach(function (toggle) {
+            toggle.addEventListener('change', async function () {
+                const cell = this.closest('td');
+                const label = cell.querySelector('.js-supplemental-packing-label');
+                const error = cell.querySelector('.js-supplemental-packing-error');
+                const requested = this.checked;
+                this.disabled = true; error.textContent = ''; label.textContent = 'Đang lưu…';
+                try {
+                    const response = await fetch(this.dataset.url, {method:'PATCH', headers:{'Content-Type':'application/json', Accept:'application/json', 'X-CSRF-TOKEN':csrfToken}, body:JSON.stringify({enabled:requested})});
+                    const result = await response.json();
+                    if (!response.ok || !result.ok) throw new Error(Object.values(result.errors || {}).flat().join(' ') || result.message || 'Không lưu được thay đổi.');
+                    this.checked = result.enabled;
+                } catch (exception) {
+                    this.checked = !requested; error.textContent = exception.message;
+                } finally {
+                    this.disabled = false; label.textContent = this.checked ? 'Bật' : 'Tắt';
+                }
+            });
+        });
 
         function setSortControlState(control, disabled) {
             control.querySelectorAll('input, button').forEach((element) => {

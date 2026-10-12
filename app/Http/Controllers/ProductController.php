@@ -24,6 +24,16 @@ use Illuminate\Validation\Rule;
 class ProductController extends Controller
 {
     use AuthorizesRequests;
+    public function toggleSupplementalPacking(Request $request, Product $product)
+    {
+        abort_unless($request->user()?->hasRole('admin'), 403);
+        $this->authorize('update', $product);
+        $data = $request->validate(['enabled' => ['required', 'boolean']]);
+        abort_unless($product->product_type === Product::TYPE_CUT, 422, 'Đóng hàng bù chỉ áp dụng cho sản phẩm pha lóc.');
+        $product->update(['supplemental_packing_enabled' => (bool) $data['enabled']]);
+        return response()->json(['ok' => true, 'enabled' => (bool) $product->supplemental_packing_enabled]);
+    }
+
     public function cuttingRatios(Request $request)
     {
         $this->authorize('viewAny', Product::class);

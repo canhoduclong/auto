@@ -751,6 +751,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('products/export', [\App\Http\Controllers\ProductSpreadsheetController::class, 'export'])->name('products.export')->middleware('role:admin');
     Route::get('products/import-template', [\App\Http\Controllers\ProductSpreadsheetController::class, 'template'])->name('products.import-template')->middleware('role:admin');
     Route::post('products/import', [\App\Http\Controllers\ProductSpreadsheetController::class, 'import'])->name('products.import')->middleware('role:admin');
+    Route::patch('products/{product}/supplemental-packing', [ProductController::class, 'toggleSupplementalPacking'])->name('products.supplemental-packing')->middleware(['auth', 'role:admin']);
     Route::resource('products', ProductController::class)->middleware('permission');
     Route::post('products/{product}/restore', [ProductController::class, 'restore'])->name('products.restore')->middleware('permission');
     Route::get('products/{product}/quick-edit-form', [ProductController::class, 'getQuickEditForm'])->name('products.getQuickEditForm');
