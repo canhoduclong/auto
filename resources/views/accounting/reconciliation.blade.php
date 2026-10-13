@@ -265,10 +265,15 @@
         .recon-inline-detail-row .recon-detail-section { margin-bottom:10px; padding:0; }
         .recon-product-table,.recon-product-table tbody { display:block; width:100%; }
         .recon-product-table thead { display:none; }
-        .recon-product-table tbody tr { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); border-bottom:1px solid #dbe3ec; padding:8px 0; }
-        .recon-product-table tbody td { display:block; padding:6px!important; min-width:0; border:0; font-size:14px; text-align:left!important; overflow-wrap:anywhere; }
-        .recon-product-table tbody td:first-child,.recon-product-table tbody td:last-child { grid-column:1/-1; }
-        .recon-product-table td[data-product-label]:not(:first-child)::before { content:attr(data-product-label); display:block; font-size:12px; color:#64748b; }
+        .recon-product-table tbody tr { display:grid; grid-template-columns:minmax(0,.7fr) minmax(0,.5fr) minmax(0,.9fr) minmax(0,1.15fr) minmax(0,1.3fr); gap:8px 4px; border-bottom:1px solid #dbe3ec; padding:12px 0; }
+        .recon-product-table tbody td { display:block; padding:4px 0!important; min-width:0; border:0; font-size:13px; text-align:left!important; overflow-wrap:anywhere; }
+        .recon-product-table tbody td:first-child { grid-column:1/-1; font-size:15px; padding-bottom:8px!important; }
+        .recon-product-table tbody td:nth-child(5) { display:none; }
+        .recon-product-table tbody td:last-child { text-align:right!important; font-weight:700; }
+        .recon-product-table tbody .recon-product-main-row:has(+ .recon-product-discount-row) { border-bottom:0; padding-bottom:4px; }
+        .recon-product-table tbody .recon-product-discount-row { padding-top:4px; }
+        .recon-product-table td[data-product-label]::before { margin-bottom:4px; white-space:nowrap; }
+        .recon-product-table td[data-product-label]:not(:first-child)::before { content:attr(data-product-label); display:block; font-size:11px; color:#64748b; }
         .recon-detail-totals { width:100%; font-size:14px; }
         .recon-detail-totals .recon-mini-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
     }
@@ -835,8 +840,8 @@ document.addEventListener('DOMContentLoaded', function () {
                             </table>
                         </div>
                         <div class="d-flex justify-content-end"><div class="recon-detail-totals">
-                            <div class="recon-mini-row"><span>Tổng&nbsp;&nbsp; Tiền hàng theo giá áp dụng ngày lên đơn</span><span>${money(order.current_goods_total)}</span></div>
-                            <div class="recon-mini-row text-danger"><span>Tổng&nbsp;&nbsp; Giảm giá sản phẩm</span><span>-${money(order.current_item_discount_total)}</span></div>
+                            <div class="recon-mini-row"><span>Tổng tiền hàng</span><span>${money(order.current_goods_total)}</span></div>
+                            <div class="recon-mini-row text-danger"><span>Tổng giảm giá sản phẩm</span><span>-${money(order.current_item_discount_total)}</span></div>
                             ${Number(order.current_item_increase_total || 0) > 0 ? `<div class="recon-mini-row text-primary"><span>Điều chỉnh tăng sản phẩm</span><span>+${money(order.current_item_increase_total)}</span></div>` : ''}
                             <div class="recon-mini-row"><span>Chiết khấu đơn</span><span class="${order.order_discount_type === 'increase' ? 'text-primary' : 'text-danger'}">${order.order_discount_type === 'increase' ? '+' : '-'}${money(Math.abs(Number(order.extra_discount_total || order.order_discount || 0)))}</span></div>
                             <div class="recon-mini-row"><span>Phí giao hàng thu khách</span><span>${money(order.customer_shipping_fee)}</span></div>
