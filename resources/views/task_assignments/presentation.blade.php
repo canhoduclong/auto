@@ -29,17 +29,24 @@
 .presentation-actions .back-to-task:hover{background:#ffffff15}
 .slide h1{margin:12px 0 20px}.metadata{gap:8px 22px;line-height:1.6}.eyebrow{font-size:12px;letter-spacing:.6px}
 @media(max-width:600px){.presentation-header-inner{padding:12px;flex-wrap:wrap;gap:12px}.presentation-brand{width:100%}.presentation-actions{width:100%;justify-content:flex-end}.brand-mark{width:36px;height:36px}.header-task-title{font-size:15px}.metadata{font-size:13px}}
+.presentation-logo{width:48px;height:48px;object-fit:contain;flex-shrink:0;border-radius:10px;background:#fff;padding:4px}.presentation-brand .brand-caption{margin:4px 0 0;font-size:10px}
+.task-slide-heading{padding:0 0 24px;margin-bottom:28px;border-bottom:1px solid #dce6eb}.task-heading-top{display:flex;flex-wrap:wrap;align-items:center;gap:12px}.task-code{font-size:13px;font-weight:600;color:#64748b;letter-spacing:.4px}.task-state{padding:4px 12px;background:#e7f3ef;border:1px solid #c6e3d9;border-radius:20px;font-size:12px;font-weight:600;color:#164b50}.task-slide-heading h1{margin:14px 0 22px;line-height:1.4}.task-heading-meta{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px 24px}.task-heading-meta>div{border-left:3px solid #d8e8e5;padding-left:12px}.task-heading-meta span{display:block;color:#64748b;font-size:12px;margin-bottom:4px}.task-heading-meta strong{display:block;font-size:14px;font-weight:600;line-height:1.6;color:#334155}.task-heading-recipients{grid-column:1/-1}
+@media(max-width:600px){.task-heading-meta{grid-template-columns:minmax(0,1fr);gap:14px}.presentation-logo{width:42px;height:42px}.task-slide-heading{padding-bottom:20px;margin-bottom:20px}}
 </style>
 </head>
 <body>
+@php
+    $presentationLogoId = \App\Models\Setting::where('key', 'logo')->value('value');
+    $presentationLogo = $presentationLogoId ? \App\Models\Media::find($presentationLogoId) : null;
+@endphp
 <header class="presentation-header">
     <div class="presentation-header-inner">
-        <div class="presentation-brand"><span class="brand-mark" aria-hidden="true">HL</span><div><span class="brand-caption">HOÀNG LONG TNT · TRÌNH CHIẾU</span><strong class="header-task-title">{{ $task->title }}</strong></div></div>
+        <div class="presentation-brand"><img class="presentation-logo" src="{{ $presentationLogo ? asset('storage/'.$presentationLogo->file_path) : asset('img/logo.png') }}" alt="Logo Hoàng Long TNT"><div><strong class="header-task-title">HOÀNG LONG TNT</strong><span class="brand-caption">TRÌNH CHIẾU CÔNG VIỆC</span></div></div>
         <div class="presentation-actions"><button id="fullscreen" type="button">⛶ Toàn màn hình</button><a class="back-to-task" href="{{ url()->current() }}">← Về công việc</a></div>
     </div>
 </header>
 <main class="stage" id="slides">
-<section class="slide active"><div class="eyebrow">Hoàng Long TNT · Công việc</div><h1>{{ $task->title }}</h1><div class="metadata"><p>{{ $task->code }} · {{ $task->operatingStatusLabel() }}</p><p>Người giao: {{ $task->creator?->name ?? '—' }}</p><p>Hạn hoàn thành: {{ $task->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</p><p>Thực hiện: {{ $task->assignees->map(fn($assignee) => $assignee->user?->name)->filter()->join(', ') ?: 'Chưa phân công' }}</p></div><div class="presentation-content">{!! \App\Support\TaskDescription::render($task->description) !!}</div></section>
+<section class="slide active"><div class="task-slide-heading"><div class="task-heading-top"><span class="task-code">{{ $task->code }}</span><span class="task-state">{{ $task->operatingStatusLabel() }}</span></div><h1>{{ $task->title }}</h1><div class="task-heading-meta"><div><span>Người giao việc</span><strong>{{ $task->creator?->name ?? '—' }}</strong></div><div><span>Hạn hoàn thành</span><strong>{{ $task->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</strong></div><div class="task-heading-recipients"><span>Người thực hiện</span><strong>{{ $task->assignees->where('status','!=','cancelled')->map(fn($assignee) => $assignee->user?->name)->filter()->join(', ') ?: 'Chưa phân công' }}</strong></div></div></div><div class="presentation-content">{!! \App\Support\TaskDescription::render($task->description) !!}</div></section>
 @if($checklistProgress ?? null)
 <section class="slide"><div class="eyebrow">Tiến độ theo hạng mục</div><h2>{{ $checklistProgress['percent'] }}% hoàn thành chung</h2><p>{{ $checklistProgress['done'] }}/{{ $checklistProgress['total'] }} hạng mục hoàn thành · {{ $checklistProgress['awaiting'] }} chờ xác nhận</p>
 @foreach($checklistProgress['people'] as $person)<div class="progress-person"><strong>{{ $person['name'] }}</strong> · {{ $person['department'] }}<p>{{ $person['percent'] }}% · {{ $person['done'] }}/{{ $person['total'] }} hạng mục</p></div>@endforeach
