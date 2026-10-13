@@ -56,6 +56,7 @@
 
 /* ── toolbar ── */
 .ds-toolbar { display:flex; gap:10px; align-items:center; flex-wrap:wrap; justify-content:space-between; margin-bottom:10px; }
+.ds-variant-toggle{border:0;background:transparent;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer;min-height:32px;width:100%}.ds-variant-toggle:hover{color:#087f80}.ds-variant-toggle:focus-visible{outline:2px solid #087f80;outline-offset:3px;border-radius:3px}.ds-variant-chevron{display:inline-block;width:12px}
 </style>
 @endpush
 
@@ -397,7 +398,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                 @foreach($productStats as $i => $ps)
                 <div class="ds-prod-row ds-prod-body">
                     <div class="text-muted">{{ $i + 1 }}</div>
-                    <div class="fw-semibold">{{ $ps->product_name }}</div>
+                    <div class="fw-semibold"><button type="button" class="ds-variant-toggle" aria-expanded="false" aria-controls="product-variants-{{ $ps->product_id }}"><span aria-hidden="true" class="ds-variant-chevron">▸</span> {{ $ps->product_name }} <small class="text-muted">({{ ($variantStats[$ps->product_id] ?? collect())->count() }} biến thể)</small></button></div>
                     <div class="text-primary fw-bold">
                         {{ $fmtN((float)$ps->total_qty) }}
                     </div>
@@ -408,6 +409,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                     @include('accounting.partials.sales-average-price', ['stat' => $ps])
                     <div class="text-muted hide-sm">{{ \App\Enums\ProductUnit::tryFrom($ps->product_unit ?? '')?->label() ?? 'Cái' }}</div>
                 </div>
+                <div id="product-variants-{{ $ps->product_id }}" hidden>
                 @foreach(($variantStats[$ps->product_id] ?? collect()) as $variant)
                 <div class="ds-prod-row ds-prod-body" style="background:#f8fafc">
                     <div></div><div class="ps-2"><span class="text-muted">↳</span> {{ $variant->variant_name ?: 'Không có biến thể' }} @if($variant->variant_size)<span class="text-muted">· Size {{ $variant->variant_size }}</span>@endif</div>
@@ -416,6 +418,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                     <div class="hide-sm">{{ \App\Enums\ProductUnit::tryFrom($variant->product_unit ?? '')?->label() ?? 'Cái' }}</div>
                 </div>
                 @endforeach
+                </div>
                 @endforeach
             </div>
             <p class="small text-muted mt-2 mb-0">Giá trung bình = thành tiền sản phẩm / khối lượng hoặc số lượng tính giá, sau điều chỉnh đã duyệt; chưa phân bổ chiết khấu toàn đơn, VAT và phí giao hàng.</p>
@@ -641,6 +644,21 @@ document.getElementById('toggleProdStats')?.addEventListener('click', function (
     this.innerHTML = isHidden
         ? '<i class="bi bi-chevron-contract"></i> Thu gọn'
         : '<i class="bi bi-chevron-expand"></i> Chi tiết';
+});
+</script>
+@endpush
+
+@push('scripts')
+<script>
+document.addEventListener('click', function(event) {
+    const button=event.target.closest('.ds-variant-toggle');
+    if (!button) return;
+    const list=document.getElementById(button.getAttribute('aria-controls'));
+    if (!list) return;
+    const open=button.getAttribute('aria-expanded') !== 'true';
+    list.hidden=!open;
+    button.setAttribute('aria-expanded',String(open));
+    button.querySelector('.ds-variant-chevron').textContent=open?'▾':'▸';
 });
 </script>
 @endpush
