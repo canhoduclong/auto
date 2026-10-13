@@ -54,6 +54,7 @@
 
 
     @stack('styles')
+@include('layouts.partials.mobile_compact_header_styles')
 </head>
 <body class="{{ !empty($isMobileClient) ? 'is-mobile-client' : '' }}">
 
@@ -63,8 +64,7 @@
         </div>
         <div class="mobile-drawer-overlay d-lg-none js-mobile-drawer-overlay"></div>
         <div class="content-wrapper">
-            <div class="navbar navbar-expand-lg navbar-static shadow">
-            @include('layouts.partials.role_switcher', ['roleSwitcherVariant'=>'mobile'])
+            <div class="navbar navbar-expand-lg navbar-static shadow mobile-admin-header">
 
 				<div class="container-fluid">
                     @php
@@ -86,7 +86,9 @@
                         <i class="ph ph-list"></i>
                     </button>
 
+                    @include('layouts.partials.role_switcher', ['roleSwitcherVariant'=>'mobile'])
                     <div class="ms-auto d-flex align-items-center gap-2 py-2">
+                        <span class="mobile-admin-identity"><span class="mobile-header-name">{{ auth()->user()->name }}</span><span class="mobile-header-time">{{ now()->format('d/m/Y H:i') }}</span></span>
                         <!-- Role Switcher Dropdown -->
                         @if($currentUser->roles->count() > 1)
                         <div class="dropdown">

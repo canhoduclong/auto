@@ -35,7 +35,15 @@
                 .offcanvas-menu-wrapper .mobile-role-options{position:static;width:100%;margin-top:8px;box-shadow:none}
             }
         </style>
-        <details class="mobile-role-switcher"><summary>Chuyển vai trò ▾</summary><div class="mobile-role-options">
+        @php
+            $mobileRoleLabel = 'Chuyển vai trò';
+            foreach($roleSwitcherWorkspaces as $workspace) {
+                if ($roleSwitcherActiveWorkspace === $workspace['key'] || ($roleSwitcherActiveWorkspace === '' && in_array($roleSwitcherActiveRole,$workspace['matched_roles'],true))) {
+                    $mobileRoleLabel = $roleSwitcherPresentation[$workspace['key']][0] ?? $workspace['label']; break;
+                }
+            }
+        @endphp
+        <details class="mobile-role-switcher"><summary aria-label="Chuyển vai trò">{{ $mobileRoleLabel }} ▾</summary><div class="mobile-role-options">
             @foreach($roleSwitcherWorkspaces as $roleSwitcherWorkspace)
                 @php
                     $roleSwitcherLabel = $roleSwitcherPresentation[$roleSwitcherWorkspace['key']][0] ?? $roleSwitcherWorkspace['label'];

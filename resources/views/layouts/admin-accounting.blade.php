@@ -74,7 +74,7 @@
 
 @section('content')
     <div class="content pt-3 px-3 px-lg-4">
-        <header class="acc-topbar">
+        <header class="acc-topbar admin-accounting-secondary-header">
             <div>
                 <strong>@yield('title', 'Tài chính')</strong>
                 <div class="text-muted small">@yield('subtitle', 'Khu vực tài chính dành cho quản trị viên')</div>

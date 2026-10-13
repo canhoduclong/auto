@@ -352,6 +352,7 @@
     </style>
     @stack('styles')
     @include('layouts.partials.mobile_accounting')
+@include('layouts.partials.mobile_compact_header_styles')
 </head>
 <body class="{{ !empty($isMobileClient) ? 'is-mobile-client' : '' }}">
 <div class="acc-shell">
@@ -482,7 +483,7 @@
     <div class="mobile-drawer-overlay d-lg-none js-acc-overlay"></div>
 
     <main class="acc-main">
-        <header class="acc-topbar">
+        <header class="acc-topbar mobile-compact-header">
             <div class="d-flex align-items-center gap-2">
                 <button type="button" class="btn btn-light d-lg-none js-acc-toggle" aria-label="Open menu">
                     <i class="bi bi-list"></i>
@@ -494,7 +495,7 @@
             </div>
             <div class="d-flex align-items-center gap-2">
                 @include('layouts.partials.role_switcher')
-                <span class="text-muted small" style="white-space: nowrap;">{{ auth()->user()->name ?? 'Accounting' }} | {{ now()->format('d/m/Y H:i') }}</span>
+                <span class="text-muted small" style="white-space: nowrap;"><span class="mobile-header-name">{{ auth()->user()->name ?? 'Accounting' }}</span><span class="mobile-header-time">{{ now()->format('d/m/Y H:i') }}</span></span>
                 <div class="dropdown">
                     <button class="btn btn-light btn-sm acc-notification-button" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Yêu cầu điều chỉnh chờ Kế toán">
                         <i class="bi bi-bell"></i>
