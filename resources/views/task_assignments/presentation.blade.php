@@ -37,6 +37,11 @@
 @media print{.presentation-print{display:none}}
 .progress-title-group{flex:1;min-width:0}.progress-task-name{font-size:13px;font-weight:600;letter-spacing:.4px;color:#617c84;margin-bottom:10px}.progress-title-group h1{margin-bottom:20px}.progress-slide .progress-person{padding:0 0 20px;margin-bottom:20px}.progress-slide .person-heading{gap:10px;font-size:18px}.progress-slide .status-pill{font-size:12px;padding:3px 8px;border-radius:5px;font-weight:400}.progress-slide .person-heading>span:last-child{font-size:16px}.progress-slide .activity{font-size:14px;margin:12px 0;border-left-width:1px}.progress-slide .task-slide-heading{margin-bottom:24px}
 @media(max-width:600px){.progress-title-group{flex-basis:100%}.progress-slide .person-heading{font-size:16px}}
+.presentation-header-inner{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr)}
+.presentation-actions{justify-self:end}.header-slide-controls{padding:0;gap:12px;color:#fff;font-size:13px}.header-slide-controls button{min-height:36px;padding:7px 12px;font-size:13px}.header-slide-controls #counter{min-width:38px;text-align:center;white-space:nowrap}.presentation-header{position:sticky;top:0;z-index:10}
+@media(max-width:800px){.presentation-header-inner{grid-template-columns:minmax(0,1fr) auto;gap:12px}.presentation-brand{width:auto}.presentation-actions{width:auto;grid-column:1/-1;justify-self:end}.header-slide-controls{gap:8px}.header-slide-controls button{padding:7px 9px}}
+@media(max-width:420px){.presentation-header-inner{grid-template-columns:minmax(0,1fr)}.presentation-brand{grid-column:1}.header-slide-controls{grid-column:1;justify-self:center}.presentation-actions{grid-column:1;justify-self:center}}
+@media print{.presentation-header{position:static}}
 </style>
 </head>
 <body>
@@ -47,6 +52,7 @@
 <header class="presentation-header">
     <div class="presentation-header-inner">
         <div class="presentation-brand"><img class="presentation-logo" src="{{ $presentationLogo ? asset('storage/'.$presentationLogo->file_path) : asset('img/logo.png') }}" alt="Logo Hoàng Long TNT"><div><strong class="header-task-title">HOÀNG LONG TNT</strong><span class="brand-caption">TRÌNH CHIẾU CÔNG VIỆC</span></div></div>
+        <nav class="header-slide-controls" aria-label="Điều khiển trình chiếu"><button id="prev" type="button">← Trước</button><span id="counter" aria-live="polite"></span><button id="next" type="button">Tiếp →</button></nav>
         <div class="presentation-actions"><button id="fullscreen" type="button">⛶ Toàn màn hình</button><a class="back-to-task" href="{{ url()->current() }}">← Về công việc</a></div>
     </div>
 </header>
@@ -72,7 +78,7 @@
 </section>
 @endforeach
 </main>
-<nav aria-label="Điều khiển trình chiếu"><button id="prev" type="button">← Trước</button><span id="counter" aria-live="polite"></span><button id="next" type="button">Tiếp →</button></nav>
+
 <script>
 const slides=[...document.querySelectorAll('#slides>.slide')];let current=0;
 function show(index){current=Math.max(0,Math.min(slides.length-1,index));slides.forEach((slide,i)=>slide.classList.toggle('active',i===current));document.getElementById('counter').textContent=`${current+1} / ${slides.length}`;document.getElementById('prev').disabled=current===0;document.getElementById('next').disabled=current===slides.length-1;window.scrollTo(0,0);}
