@@ -462,11 +462,6 @@ class TaskAssignmentController extends Controller
             ->get();
 
         $allowedAssignees = $this->allowedAssigneesFor($user);
-        $currentAssigneeIds = $task->assignees->pluck('user_id')->map(fn ($id) => (int) $id);
-        $allowedAssignees = User::query()
-            ->whereIn('id', $allowedAssignees->pluck('id')->merge($currentAssigneeIds)->unique()->all())
-            ->orderBy('name')
-            ->get(['id', 'name']);
         $parentId = $task->parent_id;
         $parentTasks = TaskAssignment::query()
             ->where('status', '!=', TaskAssignment::STATUS_COMPLETED)
@@ -1208,18 +1203,6 @@ class TaskAssignmentController extends Controller
     private function allowedAssigneesFor(User $user)
     {
         $delegated = TaskDelegateConfig::allowedAssignees($user);
-        $isPrivileged = $user->hasRole('admin')
-            || $user->hasRole('CEO')
-            || $user->hasRole('manager');
-
-        if ($isPrivileged || (TaskMenuService::canAssignTasks($user) && ! TaskDelegateConfig::where('assigner_id', $user->id)->exists())) {
-            return User::query()
-                ->whereKeyNot($user->id)
-                ->whereNotIn('id', User::hiddenTaskAssigneeIds())
-                ->orderBy('name')
-                ->get(['id', 'name']);
-        }
-
         $hiddenIds = User::hiddenTaskAssigneeIds();
         return $delegated->reject(fn ($assignee) => in_array((int) $assignee->id, $hiddenIds, true))->values();
     }
