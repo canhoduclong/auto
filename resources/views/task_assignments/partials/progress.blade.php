@@ -2,7 +2,7 @@
     $personStatuses = ['pending' => 'Chờ thực hiện', 'in_progress' => 'Đang thực hiện', 'processing' => 'Đang thực hiện', 'completed' => 'Đã báo hoàn thành', 'done' => 'Đã hoàn thành', 'rejected' => 'Không thể thực hiện', 'cancelled' => 'Đã thu hồi / hủy'];
     $delegations = $task->subTasks->where('status','!=','cancelled')->sortBy('due_date')->flatMap(fn ($child) => $child->assignees->map(fn ($assignment) => ['task' => $child, 'assignment' => $assignment]))->groupBy(fn ($entry) => $entry['task']->created_by . ':' . $entry['assignment']->user_id);
 @endphp
-<section class="card shadow-sm mb-3">
+<section class="card shadow-sm mb-3 task-progress-compact">
     <div class="card-header fw-semibold">Tiến độ công việc</div>
     <div class="card-body">
         @php
@@ -19,25 +19,33 @@
                 <div class="task-milestone {{ $point['class'] }}"><span class="task-milestone-dot" aria-hidden="true"></span><strong>{{ $point['label'] }}</strong><br><span class="text-muted">{{ $point['date']?->format('d/m/Y') ?? 'Chưa đặt' }}</span></div>
             @endforeach
         </div>
-        <div class="task-person-columns small text-muted bg-light p-2"><span>Người thực hiện & tiến độ</span><span>Đánh giá</span><span>Trạng thái</span></div>
+
         @foreach($task->assignees->where('status','!=','cancelled') as $assignment)
             <article class="task-person">
-                <div class="task-person-head task-person-columns">
+                <div class="task-person-head">
                     <strong>{{ $loop->iteration }}. {{ $assignment->user?->name ?? 'Người dùng đã xóa' }}</strong>
-                    @include('task_assignments.partials.evaluation', ['ratedTask' => $task, 'ratedAssignment' => $assignment, 'compactEvaluation' => false])
                     <span class="badge bg-{{ $assignment->statusColor() }}">{{ $personStatuses[$assignment->status] ?? $assignment->status }}</span>
+                    @include('task_assignments.partials.evaluation', ['ratedTask' => $task, 'ratedAssignment' => $assignment, 'compactEvaluation' => true])
                 </div>
                 <details class="mt-2">
                     <summary class="small">Chi tiết hoạt động</summary>
                     @forelse($task->statusLogs->where('changed_by', $assignment->user_id)->reject(fn($log)=>str_starts_with((string)$log->reason,'Thu hồi công việc con') || str_starts_with((string)$log->reason,'Đã xóa công việc con'))->sortBy('created_at') as $activity)
-                        @include('task_assignments.partials.activity')
+                        @include('task_assignments.partials.activity', ['hideActivityDocuments' => true])
                     @empty
                         <p class="small text-muted mt-2">Chưa có cập nhật hoạt động.</p>
                     @endforelse
-                    @foreach($task->completionImages->filter(fn($file)=>(int)$file->uploaded_by===(int)$assignment->user_id && !$file->status_log_id) as $personalDocument)
-                        <div class="task-activity"><span class="text-muted">{{ $personalDocument->created_at?->format('d/m/Y H:i') }}</span> · <a class="small" href="{{ $personalDocument->getImageUrl() }}" target="_blank" rel="noopener">Mở / tải tài liệu · {{ $personalDocument->original_filename }}</a></div>
-                    @endforeach
-                    @if($assignment->note)<div class="small">Ghi chú hiện tại: {{ $assignment->note }}</div>@endif
+                    @php
+                        $personDocuments = $task->completionImages->filter(fn($file)=>(int)$file->uploaded_by===(int)$assignment->user_id)
+                            ->merge($task->statusLogs->where('changed_by',$assignment->user_id)->flatMap(fn($log)=>$log->documents))->unique('id');
+                    @endphp
+                    @if($personDocuments->isNotEmpty())
+                    <div class="task-progress-documents">
+                        @foreach($personDocuments as $personalDocument)
+                        <a href="{{ $personalDocument->getImageUrl() }}" target="_blank" rel="noopener" title="{{ $personalDocument->original_filename }}"><span>Mở / tải tài liệu</span><span>{{ $personalDocument->original_filename ?: 'Tài liệu' }}</span></a>
+                        @endforeach
+                    </div>
+                    @endif
+                    @if($assignment->note)<div class="task-progress-note"><u>Ghi chú:</u> <em>{{ $assignment->note }}</em></div>@endif
                 </details>
             </article>
         @endforeach

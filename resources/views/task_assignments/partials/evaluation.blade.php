@@ -1,7 +1,7 @@
 @php $evaluationScore = $ratedAssignment->evaluation_score ?? 0; @endphp
 <div class="evaluation-widget small">
     @if((int) $ratedTask->created_by === (int) auth()->id())
-        <button type="button" class="evaluation-toggle" aria-expanded="false" aria-controls="evaluation-panel-{{ $ratedAssignment->id }}" aria-label="Đánh giá {{ $ratedAssignment->user?->name }}">Đánh giá <span class="evaluation-value">{{ $evaluationScore }}%</span></button>
+        <button type="button" class="evaluation-toggle" aria-expanded="false" aria-controls="evaluation-panel-{{ $ratedAssignment->id }}" aria-label="Đánh giá {{ $ratedAssignment->user?->name }}"><span class="{{ ($compactEvaluation ?? false) ? 'visually-hidden' : '' }}">Đánh giá </span><span class="evaluation-value">{{ $evaluationScore }}%</span></button>
         <form id="evaluation-panel-{{ $ratedAssignment->id }}" hidden method="POST" action="{{ route('tasks.assignees.evaluate', [$ratedTask, $ratedAssignment]) }}" class="evaluation-options">
             @csrf
             <div class="d-flex align-items-center justify-content-between mb-2"><span>Đánh giá {{ $ratedAssignment->user?->name }}</span><output class="evaluation-value">{{ $evaluationScore }}%</output></div>

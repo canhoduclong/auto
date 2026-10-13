@@ -135,7 +135,7 @@ class TaskAssignmentController extends Controller
             'proposal_id' => 'nullable|integer|exists:operating_proposals,id',
             'accountable_user_id' => 'required|integer|exists:users,id',
             'acceptance_due_at' => 'required|date|after:now',
-            'task_type' => 'nullable|in:default,debt_collection',
+            'task_type' => 'nullable|in:default,checklist,debt_collection',
             'debt_items' => 'required_if:task_type,debt_collection|array|max:100',
             'debt_items.*.customer_id' => 'required|integer|exists:customers,id',
             'debt_items.*.sale_id' => 'required|integer|exists:users,id',
@@ -289,14 +289,15 @@ class TaskAssignmentController extends Controller
         $showRoute = $isFrontRoles ? 'tasks.show' : 'task-assignments.show';
         $createRoute = $isFrontRoles ? 'tasks.create' : 'task-assignments.create';
 
-        $subTaskAssignees = $this->allowedAssigneesFor($user);
+        $subTaskAssignees = User::whereKey($this->allowedAssigneesFor($user)->pluck('id'))->with('department:id,name')->orderBy('name')->get(['id', 'name', 'department_id']);
         $canUploadDocuments = $this->canViewTask($task, $user);
+        $checklistProgress = $task->task_type === 'checklist' ? app(\App\Services\TaskChecklistProgress::class)->summarize($task) : null;
 
         if (request()->boolean('presentation')) {
             return view('task_assignments.presentation', compact('task'));
         }
 
-        return view('task_assignments.show', compact('task', 'canAct', 'current', 'myAssignee', 'layout', 'indexRoute', 'showRoute', 'createRoute', 'subTaskAssignees', 'canUploadDocuments'));
+        return view('task_assignments.show', compact('task', 'canAct', 'current', 'myAssignee', 'layout', 'indexRoute', 'showRoute', 'createRoute', 'subTaskAssignees', 'canUploadDocuments', 'checklistProgress'));
     }
 
     public function updateDebtProgress(Request $request, TaskAssignment $taskAssignment, int $item)
@@ -398,6 +399,7 @@ class TaskAssignmentController extends Controller
             $parent = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
             abort_if(in_array($parent->status, [TaskAssignment::STATUS_DONE, TaskAssignment::STATUS_CANCELLED], true), 422, 'Công việc đã hoàn thành hoặc bị hủy.');
             $child = TaskAssignment::create([
+                'task_type' => $parent->task_type === 'checklist' ? 'checklist' : 'default',
                 'work_kind'=>'execution','accountable_user_id'=>$data['accountable_user_id'],'acceptance_due_at'=>$data['acceptance_due_at'],
                 'code' => TaskAssignment::generateCode(), 'title' => $data['title'],
                 'description' => $data['description'] ?? null, 'priority' => $parent->priority,
@@ -487,6 +489,7 @@ class TaskAssignmentController extends Controller
         }
 
         $data = $request->validate([
+            'task_type' => 'nullable|in:default,checklist,debt_collection',
             'title'            => 'required|string|max:255',
             'description'      => 'nullable|string|max:20000',
             'priority'         => 'required|in:low,medium,high,urgent',
@@ -497,6 +500,10 @@ class TaskAssignmentController extends Controller
             'assignee_ids'     => 'required|array|min:1',
             'assignee_ids.*'   => 'required|integer|distinct|exists:users,id',
         ]);
+
+        if (($data['task_type'] ?? $task->task_type) === 'debt_collection' && $task->task_type !== 'debt_collection') {
+            throw \Illuminate\Validation\ValidationException::withMessages(['task_type' => 'Hãy tạo công việc Thu nợ mới để khai báo khách hàng và mục tiêu thu.']);
+        }
 
         if (!empty($data['due_date'])) {
             $data['due_date'] = Carbon::createFromFormat('!Y-m-d', $data['due_date'])->endOfDay()->format('Y-m-d H:i:s');
@@ -528,6 +535,7 @@ class TaskAssignmentController extends Controller
             DB::transaction(function () use ($data, $paths, $task, $user) {
                 // Update task
                 $task->update([
+                    'task_type' => $data['task_type'] ?? $task->task_type,
                     'title'            => $data['title'],
                     'description'      => $data['description'] ?? null,
                     'priority'         => $data['priority'],

@@ -108,5 +108,17 @@
 .evaluation-ticks button.selected { color:#ea7617; font-weight:bold; }
 .evaluation-ticks button.selected span { background:#ea7617; }
 .evaluation-options .evaluation-range { position:absolute; left:6px; bottom:9px; width:calc(100% - 12px); height:12px; margin:0; accent-color:#f58220; cursor:pointer; }
+
+.task-progress-compact .task-person-head > strong{flex:0 1 auto;min-width:0}
+.task-progress-compact .task-person-head{gap:12px 18px}
+.task-progress-compact .task-person-head .badge{white-space:normal}
+.task-progress-compact .evaluation-toggle{padding:0;border:0;background:transparent;color:#087f80}
+.task-progress-compact .evaluation-value{display:inline}
+.task-progress-compact .task-person details{margin-top:18px!important}
+.task-progress-documents{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0}
+.task-progress-documents a{display:flex;flex-direction:column;justify-content:center;width:180px;max-width:100%;min-height:60px;border:1px solid #94a3b8;padding:10px;font-size:12px;text-decoration:none;overflow-wrap:anywhere;color:#087f80;border-radius:4px}
+.task-progress-documents a:hover{background:#edf7f4;border-color:#087f80}
+.task-progress-note{margin-top:14px;color:#64748b;font-size:13px;overflow-wrap:anywhere}
+@media(max-width:575px){.task-progress-compact .task-person-head{gap:8px 12px}.task-progress-documents a{width:calc(50% - 6px)}.task-progress-compact .task-person-head > strong{font-size:14px}}
 </style>
 @endpush

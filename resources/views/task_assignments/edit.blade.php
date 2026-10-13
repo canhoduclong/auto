@@ -52,6 +52,13 @@
                         </div>
 
                         <div class="mb-3">
+                            <label class="form-label fw-semibold" for="edit-task-type">Loại công việc</label>
+                            <select name="task_type" id="edit-task-type" class="form-select mb-2">
+                                @foreach(['default'=>'Thông thường','checklist'=>'Công việc theo hạng mục','debt_collection'=>'Thu nợ'] as $value=>$label)
+                                @if($value !== 'debt_collection' || $task->task_type === 'debt_collection')<option value="{{ $value }}" @selected(old('task_type',$task->task_type ?? 'default') === $value)>{{ $label }}</option>@endif
+                                @endforeach
+                            </select>
+                            @error('task_type')<div class="text-danger">{{ $message }}</div>@enderror
                             <label class="form-label fw-semibold">Mô tả chi tiết</label>
                             <textarea name="description" class="form-control task-description-editor" rows="5" maxlength="20000"
                                       placeholder="Ghi rõ yêu cầu, kết quả cần đạt, ghi chú...">{{ \App\Support\TaskDescription::render(old('description', $task->description)) }}</textarea>

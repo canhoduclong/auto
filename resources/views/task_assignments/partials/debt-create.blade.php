@@ -1,6 +1,6 @@
 <div class="mb-3">
 <label class="form-label" for="task-type">Loại công việc</label>
-<select class="form-select" id="task-type" name="task_type"><option value="default">Mặc định</option><option value="debt_collection" @selected(old('task_type') === 'debt_collection')>Thu nợ</option></select>
+<select class="form-select" id="task-type" name="task_type"><option value="default">Mặc định</option><option value="checklist" @selected(old('task_type') === 'checklist')>Công việc theo hạng mục</option><option value="debt_collection" @selected(old('task_type') === 'debt_collection')>Thu nợ</option></select>
 <div id="debt-editor" class="border rounded p-3 mt-2" hidden>
 <p class="small text-muted">Thêm khách hàng và mục tiêu thu. Sale phụ trách phải được chọn trong danh sách thành viên nhận việc bên dưới. Nhập số tiền bằng đồng.</p>
 <div id="debt-rows"></div><button type="button" class="btn btn-sm btn-outline-primary" id="add-debt">+ Thêm khách hàng</button>

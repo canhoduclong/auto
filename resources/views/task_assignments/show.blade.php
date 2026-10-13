@@ -69,6 +69,7 @@
             </div>
 
             @include('task_assignments.partials.debt-progress')
+            @include('task_assignments.partials.checklist-progress')
             @include('task_assignments.partials.progress')
             <div class="task-action-bar mb-3">
                 @if(!\App\Services\TaskMenuService::isReceiptOnlyShipper(auth()->user()) && !in_array($task->status,['done','cancelled'],true) && (auth()->user()->hasRole('admin') || (int)$task->created_by===(int)auth()->id() || $myAssignee))
@@ -102,10 +103,12 @@
                     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
                     <fieldset class="mb-3" id="child-recipients">
                         <legend class="form-label fs-6">Giao cho <span class="text-danger">*</span></legend>
+                        <label class="form-label small" for="child-department">Lọc người nhận theo bộ phận</label>
+                        <select id="child-department" class="form-select mb-2"><option value="">Tất cả bộ phận</option>@foreach($subTaskAssignees->filter(fn($u)=>$u->department_id)->unique('department_id') as $departmentUser)<option value="{{ $departmentUser->department_id }}">{{ $departmentUser->department?->name ?? 'Bộ phận #'.$departmentUser->department_id }}</option>@endforeach</select>
                         <div class="d-flex flex-wrap gap-2">
                             @foreach($subTaskAssignees as $recipient)
                                 @php $selectedRecipient = in_array((string) $recipient->id, array_map('strval', (array) old('assignee_ids', [])), true); @endphp
-                                <button type="button" class="child-recipient-label" data-recipient-id="{{ $recipient->id }}" aria-pressed="{{ $selectedRecipient ? 'true' : 'false' }}">{{ $recipient->name }}</button>
+                                <button type="button" class="child-recipient-label" data-department-id="{{ $recipient->department_id }}" data-recipient-id="{{ $recipient->id }}" aria-pressed="{{ $selectedRecipient ? 'true' : 'false' }}">{{ $recipient->name }}</button>
                             @endforeach
                         </div>
                         <div data-recipient-inputs></div>
@@ -333,4 +336,8 @@ document.addEventListener('DOMContentLoaded',function(){
     if(panel){ panel.classList.add('show'); document.querySelectorAll('[data-bs-target="'+window.location.hash+'"]').forEach(button=>button.setAttribute('aria-expanded','true')); panel.scrollIntoView({block:'start'}); }
 });
 </script>
+@endpush
+
+@push('scripts')
+<script>document.addEventListener('DOMContentLoaded',()=>{const filter=document.getElementById('child-department');filter?.addEventListener('change',()=>document.querySelectorAll('#child-recipients [data-department-id]').forEach(button=>button.hidden=!!filter.value&&button.dataset.departmentId!==filter.value));});</script>
 @endpush
