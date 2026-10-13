@@ -73,6 +73,6 @@ class SystemBackupController extends Controller
         $serviceAccount = ($credentials['type'] ?? null) === 'service_account'
             ? ($credentials['client_email'] ?? null) : null;
 
-        return view('admin.backups.index', ['mode'=>$mode,'serviceAccount'=>$serviceAccount, 'googleProjectId'=>$credentials['project_id'] ?? null, 'backups'=>SystemBackup::latest()->paginate(20), 'monthlyEnabled'=>Setting::enabled('backup_monthly_enabled',(bool)config('system_backup.monthly_enabled'))]);
+        return view('admin.backups.index', ['mode'=>$mode,'serviceAccount'=>$serviceAccount, 'googleProjectId'=>$credentials['project_id'] ?? null, 'backups'=>SystemBackup::latest()->paginate(20)->withQueryString(), 'monthlyEnabled'=>Setting::enabled('backup_monthly_enabled',(bool)config('system_backup.monthly_enabled'))]);
     }
 }

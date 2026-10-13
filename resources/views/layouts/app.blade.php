@@ -124,6 +124,7 @@
         <div class="mobile-drawer-overlay d-lg-none js-mobile-drawer-overlay"></div>
         <div class="content-wrapper">
             <div class="navbar navbar-expand-lg navbar-static shadow">
+                @include('layouts.partials.role_switcher', ['roleSwitcherVariant'=>'mobile'])
 				<div class="container-fluid">
                     @php
                         $currentUser = auth()->user();

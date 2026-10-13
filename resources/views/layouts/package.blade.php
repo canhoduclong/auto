@@ -220,6 +220,7 @@
                     </ul>
                 </div>
             </div>
+            @include('layouts.partials.role_switcher', ['roleSwitcherVariant'=>'mobile'])
         </header>
         <div class="pkg-content">
             @if(session('success'))

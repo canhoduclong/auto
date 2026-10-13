@@ -121,6 +121,7 @@
                 @endif
                 <span class="text-muted small" style="white-space: nowrap;">{{ auth()->user()->name ?? 'Admin' }} | {{ now()->format('d/m/Y H:i') }}</span>
             </div>
+            @include('layouts.partials.role_switcher', ['roleSwitcherVariant'=>'mobile'])
         </header>
 
         <section class="acc-content">

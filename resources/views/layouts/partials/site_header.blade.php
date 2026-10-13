@@ -393,6 +393,7 @@
                         <div class="text-muted small">{{ Auth::user()->email }}</div>
                     </div>
                 </div>
+                @include('layouts.partials.role_switcher', ['roleSwitcherVariant'=>'mobile'])
                 <ul class="list-unstyled mb-2">
                     @php
                         $offcanvasCanViewMonitoring = Auth::user()->isAdmin() || Auth::user()->isSalesFlowRole() || Auth::user()->hasPermission('orders.monitoring');

@@ -36,8 +36,8 @@ class BackupConfigurationController extends Controller {
     }
     public function callback(Request $request,BackupOAuth $oauth,EnvironmentFileEditor $editor) {
         $pending=$request->session()->pull('backup_oauth');
-        if (!$pending || !hash_equals($pending['state'],(string)$request->query('state')) || time()-$pending['time']>600 || $pending['user_id']!==$request->user()->id || $pending['client_id']!==config('system_backup.oauth_client_id') || ($pending['email']??null)!==strtolower((string)config('system_backup.google_email'))) return redirect()->route('admin.backups.index')->with('error','Phiên kết nối Google không hợp lệ hoặc hết hạn. Bấm Kết nối Google lại.');
-        if ($request->query('error') || !$request->query('code')) return redirect()->route('admin.backups.index')->with('error','Bạn chưa cấp quyền kết nối Google.');
+        if (!$pending || !hash_equals($pending['state'],(string)$request->query('state')) || time()-$pending['time']>600 || $pending['user_id']!==$request->user()->id || $pending['client_id']!==config('system_backup.oauth_client_id') || ($pending['email']??null)!==strtolower((string)config('system_backup.google_email'))) return redirect()->route('admin.backups.index', ['tab'=>'configuration'])->with('error','Phiên kết nối Google không hợp lệ hoặc hết hạn. Bấm Kết nối Google lại.');
+        if ($request->query('error') || !$request->query('code')) return redirect()->route('admin.backups.index', ['tab'=>'configuration'])->with('error','Bạn chưa cấp quyền kết nối Google.');
         try {
             $client=$oauth->client(); $token=$client->fetchAccessTokenWithAuthCode((string)$request->query('code'));
             if (isset($token['error']) || empty($token['id_token'])) throw new \RuntimeException('Không nhận được thông tin xác thực Google.');
@@ -48,8 +48,8 @@ class BackupConfigurationController extends Controller {
             $editor->updateValues(['BACKUP_GOOGLE_MODE'=>'oauth','BACKUP_GOOGLE_OAUTH_REFRESH_TOKEN'=>$refresh,'BACKUP_GOOGLE_OAUTH_CONNECTED_EMAIL'=>$identity['email']]);
             Artisan::call('config:clear');
         } catch (\Throwable $e) {
-            return redirect()->route('admin.backups.index')->with('error',$e instanceof \RuntimeException && !$e instanceof \Google\Service\Exception ? $e->getMessage() : 'Kết nối OAuth thất bại. Kiểm tra Client ID, Client Secret và URL chuyển hướng.');
+            return redirect()->route('admin.backups.index', ['tab'=>'configuration'])->with('error',$e instanceof \RuntimeException && !$e instanceof \Google\Service\Exception ? $e->getMessage() : 'Kết nối OAuth thất bại. Kiểm tra Client ID, Client Secret và URL chuyển hướng.');
         }
-        return redirect()->route('admin.backups.index')->with('success','Đã kết nối Google bằng '.config('system_backup.google_email').'. Bấm Kiểm tra kết nối Google để kiểm tra quyền Drive và Sheets.');
+        return redirect()->route('admin.backups.index', ['tab'=>'configuration'])->with('success','Đã kết nối Google bằng '.config('system_backup.google_email').'. Bấm Kiểm tra kết nối Google để kiểm tra quyền Drive và Sheets.');
     }
 }
