@@ -294,10 +294,32 @@ class TaskAssignmentController extends Controller
         $checklistProgress = $task->task_type === 'checklist' ? app(\App\Services\TaskChecklistProgress::class)->summarize($task) : null;
 
         if (request()->boolean('presentation')) {
-            return view('task_assignments.presentation', compact('task'));
+            return view('task_assignments.presentation', compact('task', 'checklistProgress'));
         }
 
         return view('task_assignments.show', compact('task', 'canAct', 'current', 'myAssignee', 'layout', 'indexRoute', 'showRoute', 'createRoute', 'subTaskAssignees', 'canUploadDocuments', 'checklistProgress'));
+    }
+
+    public function updateDescription(Request $request, TaskAssignment $taskAssignment)
+    {
+        abort_unless($taskAssignment->canBeEditedBy($request->user()), 403);
+        $data = $request->validate([
+            'task_description' => ['nullable', 'string', 'max:20000'],
+            'description_hash' => ['required', 'string', 'size:64'],
+        ]);
+        DB::transaction(function () use ($request, $taskAssignment, $data) {
+            $task = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
+            abort_unless($task->canBeEditedBy($request->user()), 403);
+            if (!hash_equals(hash('sha256', (string) $task->description), $data['description_hash'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['task_description' => 'Nội dung đã được người khác cập nhật. Hãy tải lại trang trước khi lưu.']);
+            }
+            $task->description = $data['task_description'] ?? null;
+            if ($task->isDirty('description')) {
+                $task->save();
+                TaskStatusLog::log($task, $task->status, $request->user(), 'Đã chỉnh sửa nội dung công việc.');
+            }
+        });
+        return back()->with('success', 'Đã lưu nội dung công việc.');
     }
 
     public function updateDebtProgress(Request $request, TaskAssignment $taskAssignment, int $item)

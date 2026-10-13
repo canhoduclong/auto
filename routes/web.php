@@ -940,6 +940,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/tasks/{taskAssignment}/debt-progress/{item}', [\App\Http\Controllers\TaskAssignmentController::class, 'updateDebtProgress'])->whereNumber('item')->name('tasks.debt-progress');
     Route::delete('/tasks/{taskAssignment}/documents/{document}', [\App\Http\Controllers\TaskAssignmentController::class, 'withdrawDocument'])->name('tasks.documents.destroy');
     Route::post('/tasks/{taskAssignment}/documents', [\App\Http\Controllers\TaskAssignmentController::class, 'uploadDocuments'])->name('tasks.documents.store');
+    Route::patch('/tasks/{taskAssignment}/description', [\App\Http\Controllers\TaskAssignmentController::class, 'updateDescription'])->name('tasks.description.update');
     Route::get('/tasks/{taskAssignment}', [\App\Http\Controllers\TaskAssignmentController::class, 'show'])->name('tasks.show');
     Route::post('/tasks/{taskAssignment}/complete', [\App\Http\Controllers\TaskAssignmentController::class, 'completeWithContent'])->name('tasks.complete');
     Route::get('/tasks/{taskAssignment}/complete', [\App\Http\Controllers\TaskAssignmentController::class, 'completeForm'])->name('tasks.complete-form');

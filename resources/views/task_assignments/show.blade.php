@@ -53,12 +53,27 @@
             <div class="card shadow-sm mb-3 task-content-card">
                 <div class="card-header py-2 fw-semibold small text-uppercase text-muted">
                     <i class="ph-file-text me-1"></i>Nội dung công việc
+                    @if($task->canBeEditedBy(auth()->user()))
+                    <button type="button" class="btn btn-sm btn-outline-primary ms-2" data-bs-toggle="collapse" data-bs-target="#task-description-edit" aria-controls="task-description-edit" aria-expanded="{{ $errors->has('task_description') ? 'true' : 'false' }}">Chỉnh sửa nội dung</button>
+                    @endif
                 </div>
                 <div class="card-body">
                     @if($task->parent)
                         <a class="small d-block mb-2" href="{{ route('tasks.show', $task->parent) }}">Công việc chính: {{ $task->parent->title }}</a>
                     @endif
                     @if($task->reject_reason)<div class="alert alert-warning">{{ $task->reject_reason }}</div>@endif
+                    @if($task->canBeEditedBy(auth()->user()))
+                    <div id="task-description-edit" class="collapse {{ $errors->has('task_description') ? 'show' : '' }} mb-3">
+                        <form method="POST" action="{{ route('tasks.description.update', $task) }}">
+                            @csrf @method('PATCH')
+                            <input type="hidden" name="description_hash" value="{{ old('description_hash', hash('sha256', (string)$task->description)) }}">
+                            <label class="form-label" for="task-description-input">Chỉnh nội dung công việc</label>
+                            <textarea id="task-description-input" name="task_description" class="form-control task-description-editor" rows="12" data-editor-height="420" maxlength="20000">{{ \App\Support\TaskDescription::render(old('task_description', $task->description)) }}</textarea>
+                            @error('task_description')<div class="text-danger mt-2" role="alert">{{ $message }}</div>@enderror
+                            <div class="d-flex gap-2 mt-3"><button type="submit" class="btn btn-primary">Lưu nội dung</button><button type="button" class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#task-description-edit">Đóng</button></div>
+                        </form>
+                    </div>
+                    @endif
                     @if($task->description)
                         <div>
                             <div class="task-description">{!! \App\Support\TaskDescription::render($task->description) !!}</div>
