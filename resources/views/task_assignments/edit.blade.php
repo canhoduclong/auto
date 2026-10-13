@@ -62,7 +62,7 @@
                             <label class="form-label fw-semibold">Mô tả chi tiết</label>
                             <textarea name="description" class="form-control task-description-editor" rows="5" maxlength="20000"
                                       placeholder="Ghi rõ yêu cầu, kết quả cần đạt, ghi chú...">{{ \App\Support\TaskDescription::render(old('description', $task->description)) }}</textarea>
-                            <div class="form-text">Dùng tiêu đề 2/3 để chia nội dung thành các trang trình chiếu. Có thể định dạng chữ, danh sách và bảng; lưu thay đổi trước khi trình chiếu.</div>
+                            <div class="form-text">Dùng tiêu đề 2/3 để phân nhóm nội dung trong trang trình chiếu. Có thể định dạng chữ, danh sách và bảng; lưu thay đổi trước khi trình chiếu.</div>
                         </div>
 
                         <div class="row g-3 mb-3">
