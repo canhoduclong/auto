@@ -72,3 +72,5 @@ readme.txt
 !/tests/Manual/MobileShippingExpense.php
 
 !/tests/Manual/SystemBackup.php
+
+!/tests/Manual/BackupOAuth.php

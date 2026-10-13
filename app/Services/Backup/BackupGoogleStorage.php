@@ -19,9 +19,10 @@ class BackupGoogleStorage
         $service ??= str_contains($details, 'drive.googleapis.com') || str_contains($details, 'google drive api')
             ? 'Google Drive API'
             : ((str_contains($details, 'sheets.googleapis.com') || str_contains($details, 'google sheets api')) ? 'Google Sheets API' : 'Google API');
+        $projectNote = preg_match('/project\s+(\d+)/i', $details, $match) ? ' (mã dự án: '.$match[1].')' : '';
         foreach ($e->getErrors() as $error) {
             if (in_array($error['reason'] ?? '', ['accessNotConfigured', 'serviceDisabled'], true)) {
-                return $service.' chưa được bật trong dự án Google Cloud của tài khoản kết nối. Vào Google Cloud → APIs & Services → Library, bật '.$service.' rồi kiểm tra lại.';
+                return $service.' chưa được bật trong dự án Google Cloud của tài khoản kết nối'.$projectNote.'. Vào Google Cloud → APIs & Services → Library, bật '.$service.' rồi kiểm tra lại.';
             }
             if (($error['reason'] ?? '') === 'storageQuotaExceeded') return 'Google Drive: không đủ dung lượng sở hữu tệp. Service account cần Shared Drive; Drive cá nhân cần OAuth.';
         }
@@ -35,6 +36,13 @@ class BackupGoogleStorage
 
     private function client(): Client
     {
+        if (config('system_backup.google_mode')==='oauth') {
+            if (!config('system_backup.google_email') || strtolower((string)config('system_backup.oauth_connected_email'))!==strtolower((string)config('system_backup.google_email')) || !config('system_backup.oauth_refresh_token')) throw new RuntimeException('Chưa kết nối OAuth bằng tài khoản đã cấu hình. Vào cấu hình backup và bấm Kết nối Google.');
+            $client=app(BackupOAuth::class)->client();
+            $token=$client->fetchAccessTokenWithRefreshToken(config('system_backup.oauth_refresh_token'));
+            if (isset($token['error'])) throw new RuntimeException('Kết nối Google đã hết hạn hoặc bị thu hồi. Bấm Kết nối Google lại.');
+            return $client;
+        }
         $path=config('system_backup.credentials') ?: config('services.google_sheets.credentials');
         if (!$path) throw new RuntimeException('Chưa cấu hình tài khoản Google.');
         if (!str_starts_with($path,'/')) $path=base_path($path);

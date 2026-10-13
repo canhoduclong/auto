@@ -1064,6 +1064,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::put('settings/environment', [\App\Http\Controllers\Admin\EnvironmentEditorController::class, 'update'])->middleware(['role:admin','throttle:10,1'])->name('environment.update');
         Route::get('backups/encryption-key', [\App\Http\Controllers\Admin\SystemBackupController::class, 'key'])->middleware('role:admin')->name('backups.key');
         Route::post('backups', [\App\Http\Controllers\Admin\SystemBackupController::class, 'store'])->middleware(['role:admin','throttle:6,1'])->name('backups.store');
+        Route::post('backups/configuration', [\App\Http\Controllers\Admin\BackupConfigurationController::class, 'save'])->middleware('role:admin')->name('backups.configuration');
+        Route::post('backups/oauth/connect', [\App\Http\Controllers\Admin\BackupConfigurationController::class, 'connect'])->middleware('role:admin')->name('backups.oauth.connect');
+        Route::get('backups/oauth/callback', [\App\Http\Controllers\Admin\BackupConfigurationController::class, 'callback'])->middleware('role:admin')->name('backups.oauth.callback');
         Route::post('backups/check', [\App\Http\Controllers\Admin\SystemBackupController::class, 'check'])->middleware(['role:admin','throttle:6,1'])->name('backups.check');
         Route::post('backups/schedule', [\App\Http\Controllers\Admin\SystemBackupController::class, 'schedule'])->middleware('role:admin')->name('backups.schedule');
         Route::post('backups/{backup}/retry', [\App\Http\Controllers\Admin\SystemBackupController::class, 'retry'])->middleware(['role:admin','throttle:6,1'])->name('backups.retry');

@@ -36,7 +36,11 @@ class SystemBackupController extends Controller
     public function schedule(Request $request)
     {
         $request->validate(['enabled'=>'required|boolean']);
-        Setting::set('backup_monthly_enabled',$request->boolean('enabled')?'1':'0');
+        try {
+            app(\App\Services\EnvironmentFileEditor::class)->updateValues(['BACKUP_MONTHLY_ENABLED'=>$request->boolean('enabled')?'true':'false']);
+            \Illuminate\Support\Facades\Artisan::call('config:clear');
+            Setting::set('backup_monthly_enabled',$request->boolean('enabled')?'1':'0');
+        } catch (\RuntimeException $e) { return back()->with('error',$e->getMessage()); }
         return back()->with('success','Đã cập nhật lịch sao lưu hằng tháng.');
     }
 
@@ -69,6 +73,6 @@ class SystemBackupController extends Controller
         $serviceAccount = ($credentials['type'] ?? null) === 'service_account'
             ? ($credentials['client_email'] ?? null) : null;
 
-        return view('admin.backups.index', ['mode'=>$mode,'serviceAccount'=>$serviceAccount, 'backups'=>SystemBackup::latest()->paginate(20), 'monthlyEnabled'=>Setting::enabled('backup_monthly_enabled',(bool)config('system_backup.monthly_enabled'))]);
+        return view('admin.backups.index', ['mode'=>$mode,'serviceAccount'=>$serviceAccount, 'googleProjectId'=>$credentials['project_id'] ?? null, 'backups'=>SystemBackup::latest()->paginate(20), 'monthlyEnabled'=>Setting::enabled('backup_monthly_enabled',(bool)config('system_backup.monthly_enabled'))]);
     }
 }

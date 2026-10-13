@@ -51,7 +51,7 @@ return Application::configure(basePath: dirname(__DIR__))
         //
     //})
     ->withExceptions(function (Exceptions $exceptions): void {
-        $exceptions->dontFlash(['security_code', 'env_content']);
+        $exceptions->dontFlash(['security_code', 'env_content', 'oauth_client_secret']);
         $exceptions->render(function (\Throwable $exception, Request $request) {
             $isPageExpired = $exception instanceof TokenMismatchException
                 || ($exception instanceof HttpExceptionInterface && $exception->getStatusCode() === 419);

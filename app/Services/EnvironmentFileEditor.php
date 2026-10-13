@@ -12,6 +12,21 @@ class EnvironmentFileEditor
         $this->backupDirectory ??= storage_path('app/private/env-editor');
     }
 
+    public function updateValues(array $values): void
+    {
+        $original=$this->read(); $content=$original;
+        foreach ($values as $key=>$value) {
+            if (!preg_match('/^BACKUP_[A-Z0-9_]+$/', $key)) throw new RuntimeException('Chỉ cập nhật cấu hình backup.');
+            $value=(string)$value;
+            if (strpbrk($value,"\r\n\0")!==false) throw new RuntimeException('Giá trị cấu hình không được chứa xuống dòng.');
+            $encoded='"'.str_replace(['\\','"','$'],['\\\\','\\"','\\$'],$value).'"';
+            $pattern='/^'.preg_quote($key,'/').'=[^\r\n]*(?:\r)?$/m';
+            if (preg_match($pattern,$content)) $content=preg_replace_callback($pattern,fn()=>$key.'='.$encoded,$content);
+            else $content=rtrim($content,"\r\n")."\n".$key.'='.$encoded."\n";
+        }
+        $this->save($content,hash('sha256',$original));
+    }
+
     public function read(): string
     {
         if (is_link($this->path) || !is_file($this->path) || !is_readable($this->path)) throw new RuntimeException('Không đọc được tệp .env. Kiểm tra tệp và quyền truy cập của server.');
@@ -30,7 +45,7 @@ class EnvironmentFileEditor
         }
         catch (\Dotenv\Exception\InvalidFileException $e) { throw new RuntimeException('Định dạng .env không hợp lệ. Kiểm tra tên biến, dấu nháy và giá trị có khoảng trắng.'); }
         File::ensureDirectoryExists($this->backupDirectory,0700);
-        $lock=fopen($this->backupDirectory.'/editor.lock','c');
+        $lock=@fopen($this->backupDirectory.'/editor.lock','c');
         if (!$lock) throw new RuntimeException('Không tạo được khóa ghi .env.');
         chmod($this->backupDirectory.'/editor.lock',0600);
         $temporary=null;
@@ -40,7 +55,7 @@ class EnvironmentFileEditor
             if (!hash_equals(hash('sha256',$previous),$expectedHash)) throw new RuntimeException('Tệp .env đã được thay đổi từ lần mở trang. Tải lại nội dung trước khi lưu để tránh ghi đè.');
             if ($content===$previous) return;
             $backup=$this->backupDirectory.'/env-'.date('Ymd-His').'-'.bin2hex(random_bytes(6)).'.bak';
-            $handle=fopen($backup,'x');
+            $handle=@fopen($backup,'x');
             if (!$handle) throw new RuntimeException('Không tạo được bản dự phòng .env.');
             chmod($backup,0600);
             try { if(fwrite($handle,$previous)!==strlen($previous)) throw new RuntimeException('Không ghi đủ bản dự phòng .env.'); }
