@@ -2289,19 +2289,29 @@ class AccountingDashboardController extends Controller
         });
 
         // ── Product stats ──────────────────────────────────────────────
-        $productStats = $makeBase()->select([
+        $statsColumns = [
             'products.id as product_id',
             'products.name as product_name',
             'products.unit as product_unit',
             DB::raw('SUM(COALESCE(adj.adjusted_quantity,  order_items.quantity))         as total_qty'),
             DB::raw("SUM({$effectiveWeightExpr}) as total_weight"),
             DB::raw("SUM({$effTotalExpr})                                                as total_amount"),
-        ])->groupBy('products.id', 'products.name', 'products.unit')
+            DB::raw("SUM(CASE WHEN order_items.is_priced_by_kg = 1 THEN {$effTotalExpr} ELSE 0 END) as kg_amount"),
+            DB::raw("SUM(CASE WHEN order_items.is_priced_by_kg = 1 THEN {$pricingQuantityExpr} ELSE 0 END) as kg_basis"),
+            DB::raw("SUM(CASE WHEN COALESCE(order_items.is_priced_by_kg,0) <> 1 THEN {$effTotalExpr} ELSE 0 END) as unit_amount"),
+            DB::raw("SUM(CASE WHEN COALESCE(order_items.is_priced_by_kg,0) <> 1 THEN {$pricingQuantityExpr} ELSE 0 END) as unit_basis"),
+        ];
+        $productStats = $makeBase()->select($statsColumns)->groupBy('products.id', 'products.name', 'products.unit')
             ->orderByDesc('total_amount')
             ->get();
 
+        $variantStats = $makeBase()->select(array_merge($statsColumns, [
+            'product_variants.id as variant_id', 'product_variants.name as variant_name', 'product_variants.size as variant_size',
+        ]))->groupBy('products.id', 'products.name', 'products.unit', 'product_variants.id', 'product_variants.name', 'product_variants.size')
+            ->orderBy('product_variants.size')->get()->groupBy('product_id');
+
         return view('accounting.daily_sales', compact(
-            'items', 'productStats', 'summary',
+            'items', 'productStats', 'variantStats', 'summary',
             'fromDate', 'toDate', 'saleId', 'customerId',
             'sort', 'perPage', 'sales', 'customers', 'tab', 'completedAdjustments',
         ));

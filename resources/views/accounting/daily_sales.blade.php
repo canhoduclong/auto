@@ -22,11 +22,11 @@
 
 /* ── product stats ── */
 .ds-prod-grid { display:grid; gap:6px; margin-top:8px; }
-.ds-prod-row  { display:grid; grid-template-columns:32px 2fr 80px 80px 100px 60px; gap:6px; border-radius:8px; padding:5px 8px; font-size:.78rem; align-items:center; }
+.ds-prod-row  { display:grid; grid-template-columns:32px minmax(150px,2fr) 80px 80px 100px 120px 60px; gap:6px; border-radius:8px; padding:5px 8px; font-size:.78rem; align-items:center; }
 .ds-prod-head { background:#eef2f7; font-weight:700; font-size:.7rem; text-transform:uppercase; color:#64748b; letter-spacing:.03em; }
 .ds-prod-body { background:#f8fafc; border:1px solid #e5edf7; }
 @media (max-width:768px){
-    .ds-prod-row { grid-template-columns:24px 2fr 60px 60px; }
+    .ds-prod-row { grid-template-columns:24px minmax(0,2fr) 60px 75px; }
     .ds-prod-row .hide-sm { display:none; }
 }
 
@@ -392,7 +392,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                     <div>Số lượng</div>
                     <div class="hide-sm">Khối lượng</div>
                     <div>Thành tiền</div>
-                    <div class="hide-sm">ĐVT</div>
+                    <div class="hide-sm">Giá trung bình</div><div class="hide-sm">ĐVT</div>
                 </div>
                 @foreach($productStats as $i => $ps)
                 <div class="ds-prod-row ds-prod-body">
@@ -405,10 +405,20 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         {{ $fmtN((float)$ps->total_weight) }}
                     </div>
                     <div class="fw-semibold">{{ number_format((float)$ps->total_amount, 0, ',', '.') }}đ</div>
+                    @include('accounting.partials.sales-average-price', ['stat' => $ps])
                     <div class="text-muted hide-sm">{{ \App\Enums\ProductUnit::tryFrom($ps->product_unit ?? '')?->label() ?? 'Cái' }}</div>
                 </div>
+                @foreach(($variantStats[$ps->product_id] ?? collect()) as $variant)
+                <div class="ds-prod-row ds-prod-body" style="background:#f8fafc">
+                    <div></div><div class="ps-2"><span class="text-muted">↳</span> {{ $variant->variant_name ?: 'Không có biến thể' }} @if($variant->variant_size)<span class="text-muted">· Size {{ $variant->variant_size }}</span>@endif</div>
+                    <div>{{ $fmtN((float)$variant->total_qty) }}</div><div class="hide-sm">{{ $fmtN((float)$variant->total_weight) }}</div><div>{{ number_format((float)$variant->total_amount,0,',','.') }}đ</div>
+                    @include('accounting.partials.sales-average-price', ['stat' => $variant])
+                    <div class="hide-sm">{{ \App\Enums\ProductUnit::tryFrom($variant->product_unit ?? '')?->label() ?? 'Cái' }}</div>
+                </div>
+                @endforeach
                 @endforeach
             </div>
+            <p class="small text-muted mt-2 mb-0">Giá trung bình = thành tiền sản phẩm / khối lượng hoặc số lượng tính giá, sau điều chỉnh đã duyệt; chưa phân bổ chiết khấu toàn đơn, VAT và phí giao hàng.</p>
         </div>
     </div>
 </div>
