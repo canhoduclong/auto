@@ -114,6 +114,22 @@
     </style>
 
     @stack('styles')
+<style>
+.app-mobile-identity{display:none}
+@media(max-width:991.98px){
+.app-mobile-admin-header{display:grid!important;grid-template-columns:36px minmax(80px,115px) 36px minmax(0,1fr);align-items:center;gap:8px;padding:10px 12px!important;position:relative;z-index:1030;overflow:visible!important}
+.app-mobile-admin-header>.container-fluid,.app-mobile-admin-header>.container-fluid>.ms-auto{display:contents!important}
+.app-mobile-admin-header .container-fluid>.ms-auto>.dropdown{display:none!important}
+.app-mobile-admin-header .container-fluid>.ms-auto>.app-mobile-notifications{display:block!important;grid-column:3;grid-row:1}
+.app-mobile-admin-header .js-global-mobile-menu-toggle{grid-column:1;grid-row:1;margin:0!important;width:36px;min-height:44px;padding:8px}
+.app-mobile-admin-header .mobile-role-switcher{grid-column:2;grid-row:1;min-width:0}
+.app-mobile-admin-header .mobile-role-switcher summary{font-size:14px;min-height:44px;padding:10px 8px;overflow:hidden;text-overflow:ellipsis}
+.app-mobile-admin-header .app-mobile-identity{display:block;grid-column:4;grid-row:1;min-width:0;font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+.app-mobile-identity small{display:block;font-size:11px;color:#64748b}
+.app-mobile-admin-header .mobile-role-options{left:-44px;right:auto;width:min(320px,calc(100vw - 24px));min-width:0;max-height:60vh;z-index:1060}
+.app-mobile-admin-header .app-mobile-notifications>.dropdown-menu{width:min(360px,calc(100vw - 24px))!important}
+}
+</style>
 </head>
 <body class="{{ !empty($isMobileClient) ? 'is-mobile-client' : '' }}">
 
@@ -123,8 +139,7 @@
         </div>
         <div class="mobile-drawer-overlay d-lg-none js-mobile-drawer-overlay"></div>
         <div class="content-wrapper">
-            <div class="navbar navbar-expand-lg navbar-static shadow">
-                @include('layouts.partials.role_switcher', ['roleSwitcherVariant'=>'mobile'])
+            <div class="navbar navbar-expand-lg navbar-static shadow app-mobile-admin-header">
 				<div class="container-fluid">
                     @php
                         $currentUser = auth()->user();
@@ -166,6 +181,8 @@
                         <i class="ph ph-list"></i>
                     </button>
 
+                    @include('layouts.partials.role_switcher', ['roleSwitcherVariant'=>'mobile'])
+                    <div class="app-mobile-identity"><span>{{ $currentUser?->name }}</span><small>{{ now()->format('d/m/Y H:i') }}</small></div>
                     <div class="ms-auto d-flex align-items-center gap-2 py-2">
                         <div class="dropdown">
                             <button class="btn btn-light btn-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -292,7 +309,7 @@
                                 </div>
                             </div>
 
-                            <div class="dropdown">
+                            <div class="dropdown app-mobile-notifications">
                                 <button class="btn btn-light btn-sm position-relative" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                                     <i class="ph ph-bell"></i>
                                     @if($unreadNotificationsCount > 0)
