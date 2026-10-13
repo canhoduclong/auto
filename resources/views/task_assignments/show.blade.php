@@ -53,7 +53,7 @@
             <div class="card shadow-sm mb-3 task-content-card">
                 <div class="card-header py-2 fw-semibold small text-uppercase text-muted">
                     <i class="ph-file-text me-1"></i>Nội dung công việc
-                    @if($task->canBeEditedBy(auth()->user()))
+                    @if($task->canEditDescriptionBy(auth()->user()))
                     <button type="button" class="btn btn-sm btn-outline-primary ms-2" data-bs-toggle="collapse" data-bs-target="#task-description-edit" aria-controls="task-description-edit" aria-expanded="{{ $errors->has('task_description') ? 'true' : 'false' }}">Chỉnh sửa nội dung</button>
                     @endif
                 </div>
@@ -62,7 +62,7 @@
                         <a class="small d-block mb-2" href="{{ route('tasks.show', $task->parent) }}">Công việc chính: {{ $task->parent->title }}</a>
                     @endif
                     @if($task->reject_reason)<div class="alert alert-warning">{{ $task->reject_reason }}</div>@endif
-                    @if($task->canBeEditedBy(auth()->user()))
+                    @if($task->canEditDescriptionBy(auth()->user()))
                     <div id="task-description-edit" class="collapse {{ $errors->has('task_description') ? 'show' : '' }} mb-3">
                         <form method="POST" action="{{ route('tasks.description.update', $task) }}">
                             @csrf @method('PATCH')

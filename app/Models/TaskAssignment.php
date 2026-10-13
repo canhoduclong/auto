@@ -205,6 +205,16 @@ class TaskAssignment extends Model
         return in_array($this->status, [self::STATUS_PENDING, self::STATUS_PROCESSING, 'in_progress']);
     }
 
+    public function canEditDescriptionBy(?User $user): bool
+    {
+        if (!$user || !in_array($this->status, [self::STATUS_PENDING, self::STATUS_PROCESSING, 'in_progress'], true)) {
+            return false;
+        }
+        return (int) $this->created_by === (int) $user->id
+            || $user->hasRole('admin')
+            || (!$this->work_kind && ($user->hasRole('CEO') || $user->hasRole('manager')));
+    }
+
     public function canBeEditedBy(?User $user): bool
     {
         if (!$user) {

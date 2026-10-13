@@ -302,14 +302,15 @@ class TaskAssignmentController extends Controller
 
     public function updateDescription(Request $request, TaskAssignment $taskAssignment)
     {
-        abort_unless($taskAssignment->canBeEditedBy($request->user()), 403);
+        abort_unless($taskAssignment->canEditDescriptionBy($request->user()), 403);
+        abort_unless($this->canViewTask($taskAssignment, $request->user()), 403);
         $data = $request->validate([
             'task_description' => ['nullable', 'string', 'max:20000'],
             'description_hash' => ['required', 'string', 'size:64'],
         ]);
         DB::transaction(function () use ($request, $taskAssignment, $data) {
             $task = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
-            abort_unless($task->canBeEditedBy($request->user()), 403);
+            abort_unless($task->canEditDescriptionBy($request->user()), 403);
             if (!hash_equals(hash('sha256', (string) $task->description), $data['description_hash'])) {
                 throw \Illuminate\Validation\ValidationException::withMessages(['task_description' => 'Nội dung đã được người khác cập nhật. Hãy tải lại trang trước khi lưu.']);
             }
