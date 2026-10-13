@@ -17,10 +17,27 @@
 .presentation-content h3{font-size:1.2em!important;font-weight:600!important;line-height:1.45!important}
 .presentation-content h4{font-size:1.1em!important;font-weight:600!important;line-height:1.45!important}
 .presentation-content strong,.presentation-content b{font-weight:700!important}
+.presentation-header{padding:0;background:#123e43;border-bottom:1px solid #ffffff20}
+.presentation-header-inner{width:100%;max-width:1280px;margin:auto;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;gap:20px}
+.presentation-brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand-mark{display:grid;place-items:center;flex-shrink:0;width:42px;height:42px;border:1px solid #ffffff60;border-radius:12px;background:#ffffff10;color:#fff;font-weight:700;font-size:17px}
+.brand-caption{display:block;font-size:10px;font-weight:600;letter-spacing:1px;color:#b9d8d9;margin-bottom:4px}
+.header-task-title{display:block;font-size:16px;font-weight:600;line-height:1.4;overflow-wrap:anywhere;color:#fff}
+.presentation-actions{display:flex;align-items:center;gap:10px;flex-shrink:0;font-size:13px}
+.presentation-actions button{border:1px solid #ffffff40;border-radius:8px;background:#fff;color:#123e43;padding:9px 14px}
+.presentation-actions .back-to-task{display:inline-flex;align-items:center;min-height:44px;padding:9px 14px;border:1px solid #ffffff40;border-radius:8px;text-decoration:none;color:#fff;white-space:nowrap}
+.presentation-actions .back-to-task:hover{background:#ffffff15}
+.slide h1{margin:12px 0 20px}.metadata{gap:8px 22px;line-height:1.6}.eyebrow{font-size:12px;letter-spacing:.6px}
+@media(max-width:600px){.presentation-header-inner{padding:12px;flex-wrap:wrap;gap:12px}.presentation-brand{width:100%}.presentation-actions{width:100%;justify-content:flex-end}.brand-mark{width:36px;height:36px}.header-task-title{font-size:15px}.metadata{font-size:13px}}
 </style>
 </head>
 <body>
-<header><span>{{ $task->code }} · {{ $task->title }}</span><button id="fullscreen" type="button">Toàn màn hình</button><a href="{{ url()->current() }}">Về công việc</a></header>
+<header class="presentation-header">
+    <div class="presentation-header-inner">
+        <div class="presentation-brand"><span class="brand-mark" aria-hidden="true">HL</span><div><span class="brand-caption">HOÀNG LONG TNT · TRÌNH CHIẾU</span><strong class="header-task-title">{{ $task->title }}</strong></div></div>
+        <div class="presentation-actions"><button id="fullscreen" type="button">⛶ Toàn màn hình</button><a class="back-to-task" href="{{ url()->current() }}">← Về công việc</a></div>
+    </div>
+</header>
 <main class="stage" id="slides">
 <section class="slide active"><div class="eyebrow">Hoàng Long TNT · Công việc</div><h1>{{ $task->title }}</h1><div class="metadata"><p>{{ $task->code }} · {{ $task->operatingStatusLabel() }}</p><p>Người giao: {{ $task->creator?->name ?? '—' }}</p><p>Hạn hoàn thành: {{ $task->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</p><p>Thực hiện: {{ $task->assignees->map(fn($assignee) => $assignee->user?->name)->filter()->join(', ') ?: 'Chưa phân công' }}</p></div><div class="presentation-content">{!! \App\Support\TaskDescription::render($task->description) !!}</div></section>
 @if($checklistProgress ?? null)
@@ -51,6 +68,6 @@ document.getElementById('prev').onclick=()=>show(current-1);document.getElementB
 document.addEventListener('keydown',event=>{if(event.target.closest('button,a,input,textarea,select'))return;if(['ArrowRight','PageDown'].includes(event.key)){event.preventDefault();show(current+1)}if(['ArrowLeft','PageUp'].includes(event.key)){event.preventDefault();show(current-1)}});show(0);
 
 document.getElementById('fullscreen').onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen()}catch{document.getElementById('fullscreen').textContent='Trình duyệt không hỗ trợ'}};
-document.addEventListener('fullscreenchange',()=>document.getElementById('fullscreen').textContent=document.fullscreenElement?'Thoát toàn màn hình':'Toàn màn hình');
+document.addEventListener('fullscreenchange',()=>document.getElementById('fullscreen').textContent=document.fullscreenElement?'⛶ Thoát toàn màn hình':'⛶ Toàn màn hình');
 </script>
 </body></html>
