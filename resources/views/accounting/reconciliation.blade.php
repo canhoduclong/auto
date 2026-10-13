@@ -253,6 +253,25 @@
         .recon-panel input, .recon-panel select { max-width: 100%; min-width: 0; font-size: 16px; }
         .recon-panel .pagination { flex-wrap: wrap; }
     }
+    @media (max-width: 767.98px) {
+        .recon-mobile-extra { display:none!important; }
+        .recon-inline-detail-row > td { padding:0!important; }
+        .recon-inline-detail-row .recon-detail { margin:0; padding:0; }
+        .recon-inline-detail-row .panel-head { flex-wrap:wrap; gap:8px; padding:10px; }
+        .recon-inline-detail-row .panel-head > span { width:100%; min-width:0; font-size:14px; overflow-wrap:anywhere; }
+        .recon-inline-detail-row .recon-detail-toolbar { width:100%; align-items:center; }
+        .recon-inline-detail-row .recon-detail-toolbar .badge { white-space:nowrap; }
+        .recon-inline-detail-row .js-detail-pin { display:none; }
+        .recon-inline-detail-row .recon-detail-section { margin-bottom:10px; padding:0; }
+        .recon-product-table,.recon-product-table tbody { display:block; width:100%; }
+        .recon-product-table thead { display:none; }
+        .recon-product-table tbody tr { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); border-bottom:1px solid #dbe3ec; padding:8px 0; }
+        .recon-product-table tbody td { display:block; padding:6px!important; min-width:0; border:0; font-size:14px; text-align:left!important; overflow-wrap:anywhere; }
+        .recon-product-table tbody td:first-child,.recon-product-table tbody td:last-child { grid-column:1/-1; }
+        .recon-product-table td[data-product-label]:not(:first-child)::before { content:attr(data-product-label); display:block; font-size:12px; color:#64748b; }
+        .recon-detail-totals { width:100%; font-size:14px; }
+        .recon-detail-totals .recon-mini-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
+    }
     @media (max-width: 360px) {
         .recon-orders-table > tbody > tr:not(.d-none) { grid-template-columns: minmax(0, 1fr); }
         .recon-filter-panel .row > [class*="col-"] { width: 100%; }
@@ -800,7 +819,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     <div class="recon-detail-section">
                         <div class="recon-detail-title">Danh sách sản phẩm</div>
                         <div class="table-responsive">
-                            <table class="table table-sm">
+                            <table class="table table-sm recon-product-table">
                                 <thead>
                                     <tr>
                                         <th>Sản phẩm</th>
@@ -872,6 +891,12 @@ document.addEventListener('DOMContentLoaded', function () {
             </div>
         `;
 
+        const sections = detailBox.querySelectorAll('.js-detail-body > .recon-detail-section');
+        [0, 2, 3, 4].forEach(index => sections[index]?.classList.add('recon-mobile-extra'));
+        detailBox.querySelectorAll('.recon-product-table tbody tr').forEach(productRow => {
+            const labels = ['Sản phẩm', 'Size', 'SL', 'Tổng', 'Khối lượng', 'Đơn giá', 'Thành tiền'];
+            productRow.querySelectorAll('td').forEach((cell, index) => cell.dataset.productLabel = labels[index] || '');
+        });
         const detailPanel = detailBox.querySelector('.recon-panel');
         const detailBody = detailBox.querySelector('.js-detail-body');
         detailBox.querySelector('.js-detail-collapse')?.addEventListener('click', function () {
@@ -879,7 +904,7 @@ document.addEventListener('DOMContentLoaded', function () {
             this.querySelector('i').className = detailBody.classList.contains('d-none') ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
         });
         detailPanel?.addEventListener('mouseenter', function () {
-            if (detailBody.classList.contains('d-none')) detailBody.classList.remove('d-none');
+            if (window.matchMedia('(hover: hover) and (pointer: fine)').matches && detailBody.classList.contains('d-none')) detailBody.classList.remove('d-none');
         });
         detailBox.querySelector('.js-detail-pin')?.addEventListener('click', function () {
             const pinned = detailRow.classList.toggle('is-pinned');

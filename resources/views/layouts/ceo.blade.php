@@ -59,7 +59,7 @@
     </style>
     <style>
         :root {
-            --ceo-sidebar-width: 260px;
+            --ceo-sidebar-width: 320px;
             --ceo-sidebar-bg: #0b1220;
             --ceo-sidebar-strong: #050a14;
             --ceo-primary: #0ea5e9;
@@ -274,12 +274,30 @@
             }
         }
     </style>
+<style>
+.ceo-sidebar-controls{display:flex;gap:6px;margin-left:auto}
+.ceo-sidebar-controls button{border:1px solid #ffffff40;border-radius:7px;background:transparent;color:#fff;width:30px;height:32px}
+.ceo-nav-link{white-space:nowrap;min-width:0}
+.ceo-nav-link i{flex-shrink:0}
+.ceo-nav-link span{min-width:0}
+@media(min-width:993px){
+body.ceo-menu-collapsed{--ceo-sidebar-width:76px}
+body.ceo-menu-collapsed .ceo-brand{padding:12px 8px;flex-wrap:wrap;justify-content:center}
+body.ceo-menu-collapsed .ceo-brand-label,body.ceo-menu-collapsed .ceo-brand .dot,body.ceo-menu-collapsed .ceo-nav-link span,body.ceo-menu-collapsed .ceo-nav>div,body.ceo-menu-collapsed .ceo-nav-footer span{display:none}
+body.ceo-menu-collapsed .ceo-sidebar-controls{margin:0}
+body.ceo-menu-collapsed .ceo-nav-link{justify-content:center;padding:12px 8px}
+body.ceo-menu-collapsed .ceo-task-links{padding:0}
+}
+.ceo-pin[aria-pressed=true]{background:#0f766e}
+@media(max-width:992px){.ceo-collapse{display:none}.ceo-sidebar-controls .ceo-pin{display:none}.ceo-sidebar.mobile-open{width:min(340px,calc(100vw - 20px))}}
+</style>
 </head>
 <body class="{{ !empty($isMobileClient) ? 'is-mobile-client' : '' }}">
     <aside class="ceo-sidebar">
         <div class="ceo-brand">
             <span class="dot"></span>
-            <span>CEO Executive</span>
+            <span class="ceo-brand-label">CEO Executive</span>
+            <div class="ceo-sidebar-controls"><button type="button" class="ceo-collapse" aria-label="Thu gọn menu" aria-expanded="true" title="Thu gọn menu">‹</button><button type="button" class="ceo-pin" aria-label="Ghim menu" aria-pressed="false" title="Ghim menu"><i class="bi bi-pin-angle"></i></button></div>
         </div>
         <nav class="ceo-nav">
             <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em;">Tổng Quan</div>
@@ -487,6 +505,24 @@
             const sidebar = document.querySelector('.ceo-sidebar');
             const toggle = document.querySelector('.js-ceo-toggle');
             const overlay = document.querySelector('.js-ceo-overlay');
+            const collapseButton = document.querySelector('.ceo-collapse');
+            const pinButton = document.querySelector('.ceo-pin');
+            let pinned = false;
+            let collapsed = false;
+            try { pinned=localStorage.getItem('ceo-menu-pinned')==='1'; collapsed=localStorage.getItem('ceo-menu-collapsed')==='1'; } catch(e) {}
+            const renderMenu = () => {
+                document.body.classList.toggle('ceo-menu-collapsed',collapsed && !pinned);
+                collapseButton.setAttribute('aria-expanded',String(!collapsed || pinned));
+                collapseButton.textContent=collapsed && !pinned ? '›' : '‹';
+                collapseButton.title=collapsed && !pinned ? 'Mở rộng menu' : 'Thu gọn menu';
+                pinButton.setAttribute('aria-pressed',String(pinned));
+                pinButton.title=pinned ? 'Bỏ ghim menu' : 'Ghim menu';
+                try { localStorage.setItem('ceo-menu-pinned',pinned?'1':'0'); localStorage.setItem('ceo-menu-collapsed',collapsed?'1':'0'); } catch(e) {}
+            };
+            collapseButton.addEventListener('click',()=>{ if(pinned)pinned=false;collapsed=!collapsed;renderMenu(); });
+            pinButton.addEventListener('click',()=>{pinned=!pinned;if(pinned)collapsed=false;renderMenu();});
+            document.querySelectorAll('.ceo-nav-link').forEach(link=>{link.title=link.textContent.trim();});
+            renderMenu();
 
             if (sidebar && toggle && overlay) {
                 const closeDrawer = function () {
