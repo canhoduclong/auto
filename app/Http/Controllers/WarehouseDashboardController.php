@@ -5148,7 +5148,7 @@ class WarehouseDashboardController extends Controller
         $managedWarehouseId = Auth::user()->warehouse_id ? (int) Auth::user()->warehouse_id : null;
         $resolvedReturnWarehouse = $activeOrderReturn?->warehouse
             ?: $this->resolveReturnWarehouse($order);
-        $returnWarehouseId = $resolvedReturnWarehouse?->id;
+        $returnWarehouseId = $resolvedReturnWarehouse ? (int) $resolvedReturnWarehouse->id : null;
 
         if ($managedWarehouseId && (! $returnWarehouseId || $managedWarehouseId !== $returnWarehouseId)) {
             return back()->with('error', 'Bạn chỉ có thể xác nhận đơn trả về đúng kho mình quản lý.');
@@ -5219,7 +5219,7 @@ class WarehouseDashboardController extends Controller
         $managedWarehouseId = Auth::user()->warehouse_id ? (int) Auth::user()->warehouse_id : null;
         $resolvedReturnWarehouse = $activeOrderReturn?->warehouse
             ?: $this->resolveReturnWarehouse($order);
-        $returnWarehouseId = $resolvedReturnWarehouse?->id;
+        $returnWarehouseId = $resolvedReturnWarehouse ? (int) $resolvedReturnWarehouse->id : null;
 
         if ($managedWarehouseId && (! $returnWarehouseId || $managedWarehouseId !== $returnWarehouseId)) {
             return back()->with('error', 'Bạn chỉ có thể xác nhận đơn trả về đúng kho mình quản lý.');
@@ -5304,7 +5304,7 @@ class WarehouseDashboardController extends Controller
         $managedWarehouseId = Auth::user()->warehouse_id ? (int) Auth::user()->warehouse_id : null;
         $resolvedReturnWarehouse = $activeOrderReturn?->warehouse
             ?: $this->resolveReturnWarehouse($order);
-        $returnWarehouseId = $resolvedReturnWarehouse?->id;
+        $returnWarehouseId = $resolvedReturnWarehouse ? (int) $resolvedReturnWarehouse->id : null;
 
         if ($managedWarehouseId && (! $returnWarehouseId || $managedWarehouseId !== $returnWarehouseId)) {
             return back()->with('error', 'Bạn chỉ có thể xác nhận đơn trả về đúng kho mình quản lý.');
@@ -5474,12 +5474,16 @@ class WarehouseDashboardController extends Controller
 
     protected function resolveActiveOrderReturn(Order $order): ?OrderReturn
     {
-        return OrderReturn::query()
+        $query = OrderReturn::query()
             ->where('order_id', $order->id)
             ->whereIn('status', ['pending_warehouse', 'requested', 'ship_confirmed'])
-            ->with(['warehouse', 'returnItems.productVariant.product'])
-            ->latest('id')
-            ->first();
+            ->with(['warehouse', 'returnItems.productVariant.product']);
+        if (request()->filled('order_return_id')) {
+            request()->validate(['order_return_id' => 'required|integer|min:1']);
+            // Resolve the exact ticket displayed, rather than another return for the same order.
+            return $query->whereKey((int) request('order_return_id'))->firstOrFail();
+        }
+        return $query->latest('id')->first();
     }
 
     protected function resolveReturnWarehouse(Order $order): ?Warehouse

@@ -159,7 +159,7 @@
                             <span class="text-muted small">Không còn thao tác</span>
                         @else
                             <div class="d-flex justify-content-end gap-1 flex-wrap">
-                                     <a href="{{ route('warehouse.returns.weight-entry', ['order' => $order], false) }}"
+                                     <a href="{{ route('warehouse.returns.weight-entry', ['order' => $order, 'order_return_id' => $order->order_return_id], false) }}"
                                class="btn btn-success btn-sm {{ $canConfirm ? '' : 'disabled' }}"
                                title="{{ $canConfirm ? 'Mở form chi tiết để cân lại và xác nhận trả hàng' : 'Đơn này không thuộc kho bạn quản lý' }}">
                                 <i class="bi bi-check2-circle me-1"></i>Xác nhận Trả Hàng

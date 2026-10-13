@@ -37,6 +37,7 @@
 
             <div class="card-body p-0">
                 <form action="{{ route('warehouse.returns.save-weights', ['order' => $order], false) }}" method="POST" id="weight-form">
+                    @if($orderReturn)<input type="hidden" name="order_return_id" value="{{ $orderReturn->id }}">@endif
                     @csrf
                     
                     <div class="table-responsive">
