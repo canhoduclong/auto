@@ -22,9 +22,10 @@
         </div>
         <small class="text-muted">{{ $task->code }} &bull; Tạo bởi {{ $task->creator?->name }} &bull; {{ $task->created_at?->format('d/m/Y H:i') }} · Hạn chót: <strong class="{{ $task->isOverdue() ? 'text-danger' : '' }}">{{ $task->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</strong></small>
     </div>
+    <a href="{{ route($showRoute ?? 'tasks.show', $task) }}?presentation=1" class="btn btn-sm btn-primary" target="_blank" rel="noopener"><i class="ph ph-presentation me-1"></i>Trình chiếu</a>
     @if($task->canBeEditedBy(auth()->user()))
             <a href="{{ route('task-assignments.edit', $task) }}" class="btn btn-sm btn-outline-primary">
-                <i class="ph-pencil me-1"></i> Chinh sua
+                <i class="ph-pencil me-1"></i> Chỉnh sửa nội dung
             </a>
             <form action="{{ route('task-assignments.cancel', $task) }}" method="POST"
                   onsubmit="return confirm('Huy cong viec nay?')" class="d-inline">

@@ -292,6 +292,10 @@ class TaskAssignmentController extends Controller
         $subTaskAssignees = $this->allowedAssigneesFor($user);
         $canUploadDocuments = $this->canViewTask($task, $user);
 
+        if (request()->boolean('presentation')) {
+            return view('task_assignments.presentation', compact('task'));
+        }
+
         return view('task_assignments.show', compact('task', 'canAct', 'current', 'myAssignee', 'layout', 'indexRoute', 'showRoute', 'createRoute', 'subTaskAssignees', 'canUploadDocuments'));
     }
 
