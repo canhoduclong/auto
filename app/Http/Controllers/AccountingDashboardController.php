@@ -1990,6 +1990,9 @@ class AccountingDashboardController extends Controller
 
     public function dailySales(Request $request, bool $printExportList = false)
     {
+        if ($request->routeIs('ceo.*') && $request->input('tab') === 'journal') {
+            return redirect()->to($request->fullUrlWithQuery(['tab' => 'overview']));
+        }
         $tab = (string) $request->input('tab', 'overview');
         if (! in_array($tab, ['overview', 'journal'], true)) {
             $tab = 'overview';

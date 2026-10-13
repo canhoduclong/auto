@@ -325,6 +325,7 @@ body.ceo-menu-collapsed .ceo-task-links{padding:0}
                 <i class="bi bi-bar-chart-line"></i> Thống kê bán hàng
             </a>
 
+
             <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Khách Hàng</div>
             <a href="{{ route('ceo.customers') }}" class="ceo-nav-link {{ request()->routeIs('ceo.customers') ? 'active' : '' }}">
                 <i class="bi bi-people"></i> Khách hàng lớn

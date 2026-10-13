@@ -61,6 +61,7 @@
 
 @section('accounting_content')
 
+@unless(request()->routeIs('ceo.*'))
 <ul class="nav nav-tabs mb-3">
     <li class="nav-item">
         <a class="nav-link {{ $tab === 'overview' ? 'active' : '' }}"
@@ -75,6 +76,7 @@
         </a>
     </li>
 </ul>
+@endunless
 
 {{-- ── Filter ─────────────────────────────────────────────────────── --}}
 <div class="acc-card mb-3">
