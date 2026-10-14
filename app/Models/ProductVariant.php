@@ -61,6 +61,12 @@ class ProductVariant extends Model
         });
     }
  
+    public function taxPercentFor(string $entityType = 'other'): ?string
+    {
+        $column = ProductTaxRate::ENTITY_COLUMNS[$entityType] ?? throw new \InvalidArgumentException('Nhóm pháp nhân không hợp lệ.');
+        return $this->product?->$column;
+    }
+
     public function getTaxPercentAttribute(): ?string
     {
         return $this->product?->tax_percent;

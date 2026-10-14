@@ -13,6 +13,8 @@ class Product extends Model
 
     protected $fillable = [
         'tax_priority',
+        'household_tax_percent',
+        'company_tax_percent',
         'tax_percent',
         'user_id',
         'category_id',
@@ -40,6 +42,8 @@ class Product extends Model
     }
 
     protected $casts = [
+        'household_tax_percent' => 'decimal:2',
+        'company_tax_percent' => 'decimal:2',
         'tax_percent' => 'decimal:2',
         'allow_adjacent_packing_sizes' => 'boolean',
         'supplemental_packing_enabled' => 'boolean',
@@ -161,9 +165,9 @@ class Product extends Model
                     ->with('media');
     }
 
-    public function taxRateAt(\DateTimeInterface|string $date): ?ProductTaxRate
+    public function taxRateAt(\DateTimeInterface|string $date, string $entityType = 'other'): ?ProductTaxRate
     {
-        return $this->taxRates()->where('status','approved')->whereDate('effective_from','<=',$date)
+        return $this->taxRates()->where('entity_type',$entityType)->where('status','approved')->whereDate('effective_from','<=',$date)
             ->orderByDesc('effective_from')->orderByDesc('id')->first();
     }
 

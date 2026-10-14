@@ -8,8 +8,11 @@ class ProductTaxSettingController extends Controller
     {
         $prefix = $request->routeIs('ceo.*') ? 'ceo' : 'accounting';
         $search = trim((string)$request->query('search',''));
+        $entityType=(string)$request->query('entity_type','other');
+        if(!isset(\App\Models\ProductTaxRate::ENTITY_COLUMNS[$entityType]))$entityType='other';
+        $taxColumn=\App\Models\ProductTaxRate::ENTITY_COLUMNS[$entityType];
         $sort = (string)$request->query('sort','name_asc');
-        $sorts = ['name_asc'=>['name','asc'], 'name_desc'=>['name','desc'], 'tax_asc'=>['tax_percent','asc'], 'tax_desc'=>['tax_percent','desc']];
+        $sorts = ['name_asc'=>['name','asc'], 'name_desc'=>['name','desc'], 'tax_asc'=>[$taxColumn,'asc'], 'tax_desc'=>[$taxColumn,'desc']];
         if (!isset($sorts[$sort])) $sort = 'name_asc';
         $perPage = (int)$request->query('per_page',20);
         if (!in_array($perPage,[10,20,50,100],true)) $perPage=20;
@@ -17,16 +20,16 @@ class ProductTaxSettingController extends Controller
         if (!in_array($status,['','configured','unconfigured'],true)) $status='';
         $query = Product::query()->withCount('variants')->with(['taxRates'=>fn($q)=>$q->where('status','draft')->latest('id')])->orderByDesc('tax_priority')
             ->when($search !== '', fn($q) => $q->where('name','like','%'.$search.'%'))
-            ->when($status === 'configured',fn($q)=>$q->whereNotNull('tax_percent'))
-            ->when($status === 'unconfigured',fn($q)=>$q->whereNull('tax_percent'));
-        if (str_starts_with($sort,'tax_')) $query->orderByRaw('tax_percent IS NULL ASC');
+            ->when($status === 'configured',fn($q)=>$q->whereNotNull($taxColumn))
+            ->when($status === 'unconfigured',fn($q)=>$q->whereNull($taxColumn));
+        if (str_starts_with($sort,'tax_')) $query->orderByRaw($taxColumn.' IS NULL ASC');
         $products = $query->orderBy(...$sorts[$sort])->orderBy('id')->paginate($perPage)->withQueryString();
-        return view('products.tax-settings', compact('products','prefix','search','sort','perPage','status'));
+        return view('products.tax-settings', compact('products','prefix','search','sort','perPage','status','entityType'));
 
     }
     public function update(Request $request, Product $product)
     {
-        $data=$request->validate(['tax_percent'=>['nullable','numeric','min:0','max:100','decimal:0,2'],'effective_from'=>['required','date_format:Y-m-d','after_or_equal:today'],'note'=>['nullable','string','max:1000']]);
+        $data=$request->validate(['entity_type'=>['required','in:household,company,other'],'tax_percent'=>['nullable','numeric','min:0','max:100','decimal:0,2'],'effective_from'=>['required','date_format:Y-m-d','after_or_equal:today'],'note'=>['nullable','string','max:1000']]);
         $rate=$product->taxRates()->create($data+['created_by'=>$request->user()->id,'status'=>'draft']);
         return back()->with('success','Đã lưu mức thuế nháp. Bấm Áp dụng để xác nhận ngày hiệu lực.');
     }
