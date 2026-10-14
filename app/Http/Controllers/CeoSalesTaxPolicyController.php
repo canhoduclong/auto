@@ -79,7 +79,7 @@ class CeoSalesTaxPolicyController extends Controller
         return redirect()->route('ceo.sales-tax-policy.edit')->with(
             'success',
             $policyChanged
-                ? 'Đã cập nhật nội dung và tạo phiên bản mới. Các tài khoản áp dụng cần xác nhận lại.'
+                ? 'Đã cập nhật quy định và tạo phiên bản mới. Các tài khoản áp dụng cần xác nhận lại.'
                 : 'Đã cập nhật trạng thái yêu cầu xác nhận.'
         );
     }

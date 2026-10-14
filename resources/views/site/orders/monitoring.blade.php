@@ -680,16 +680,6 @@
     .monitor-priority-legend-copy { min-width: 0; line-height: 1.3; }
     .monitor-priority-legend-copy strong { display: block; color: #1e293b; font-size: .73rem; }
     .monitor-priority-legend-copy span { display: block; color: #64748b; font-size: .67rem; }
-    .monitor-tax-guidance { margin: 0; padding: 14px; border-top: 1px solid #dce6f1; background: #fbfdff; }
-    .monitor-tax-guidance-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 10px; }
-    .monitor-tax-guidance-title { margin: 0; color: #0f172a; font-size: .78rem; font-weight: 800; text-transform: uppercase; }
-    .monitor-tax-guidance-subtitle { color: #64748b; font-size: .68rem; text-align: right; }
-    .monitor-tax-guidance-grid { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 24px; min-height: 38px; padding: 9px 12px; border: 1px solid #dbe5ea; border-radius: 8px; background: #fff; }
-    .monitor-tax-guidance-item { color: #334155; font-size: .72rem; white-space: nowrap; }
-    .monitor-tax-guidance-item strong { color: #1e293b; }
-    .monitor-tax-guidance-rate { margin-left: 3px; color: #047857; font-weight: 800; }
-    .monitor-tax-responsibility { margin: 9px 0 0; padding: 10px 12px; border: 1px solid #fde68a; border-radius: 8px; background: #fffbeb; color: #713f12; font-size: .68rem; line-height: 1.5; }
-    .monitor-tax-responsibility a { color: #92400e; font-weight: 700; }
     .monitor-bulk-actions {
         display: flex;
         flex-wrap: wrap;
@@ -1150,10 +1140,6 @@
         .monitor-product-choice-label { font-size: 0; }
         .monitor-product-choice-label i { font-size: .8rem; }
         .monitor-priority-legend-grid { grid-template-columns: 1fr; }
-        .monitor-tax-guidance-grid { display: grid; grid-template-columns: 1fr; gap: 4px; }
-        .monitor-tax-guidance { padding: 12px; }
-        .monitor-tax-guidance-head { display: block; }
-        .monitor-tax-guidance-subtitle { margin-top: 3px; text-align: left; }
         .leader-adjustment-review-head { flex-direction: column; }
     }
     @media (max-width: 575.98px) {
@@ -2862,17 +2848,6 @@
                                 </div>
                             @endforeach
                         </div>
-                    </section>
-                    <section class="monitor-tax-guidance" aria-labelledby="monitorTaxGuidanceTitle">
-                        <div class="monitor-tax-guidance-head">
-                            <h3 class="monitor-tax-guidance-title" id="monitorTaxGuidanceTitle">Mốc thuế suất cần kiểm tra khi lên đơn</h3>
-                        </div>
-                        <div class="monitor-tax-guidance-grid">
-                            @foreach(config('sales_tax_policy.entity_tax_guidance', []) as $taxGuidance)
-                                <div class="monitor-tax-guidance-item"><strong>{{ $taxGuidance['label'] }}:</strong><span class="monitor-tax-guidance-rate">{{ number_format($taxGuidance['rate'], 0, ',', '.') }}%</span></div>
-                            @endforeach
-                        </div>
-                        <div class="monitor-tax-responsibility"><strong>Sale phải xác định đúng loại khách hàng và áp dụng VAT theo cấu hình sản phẩm đang hiệu lực.</strong> Nếu chưa rõ, chuyển kế toán xử lý; không tự ý bỏ hoặc thay đổi VAT. <a href="{{ route('sales-tax-policy.show') }}">Xem chi tiết quy định</a>.</div>
                     </section>
                 </footer>
         @else
