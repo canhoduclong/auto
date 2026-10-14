@@ -12,6 +12,7 @@ class Product extends Model
     use HasFactory;
 
     protected $fillable = [
+        'tax_percent',
         'user_id',
         'category_id',
         'status',
@@ -38,6 +39,7 @@ class Product extends Model
     }
 
     protected $casts = [
+        'tax_percent' => 'decimal:2',
         'allow_adjacent_packing_sizes' => 'boolean',
         'supplemental_packing_enabled' => 'boolean',
         'cutting_targets' => 'array',

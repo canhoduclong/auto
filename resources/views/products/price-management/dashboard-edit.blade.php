@@ -48,12 +48,12 @@
             @method('PUT')
             <div class="table-responsive">
                 <table class="bulk-price-table">
-                    <thead><tr><th>Sản phẩm</th><th>Giá hiện tại</th><th>Điều chỉnh</th><th>Giá min</th></tr></thead>
+                    <thead><tr><th>Sản phẩm</th><th>Giá hiện tại</th><th>Điều chỉnh</th><th>Giá min</th><th>Thuế áp dụng</th></tr></thead>
                     <tbody>
                     @php($rowIndex = 0)
                     @forelse($products as $product)
                         @if($product['is_mixed'])
-                            <tr class="bulk-price-group"><td colspan="4">{{ $product['name'] }}</td></tr>
+                            <tr class="bulk-price-group"><td colspan="5">{{ $product['name'] }}</td></tr>
                         @endif
                         @foreach($product['rows'] as $row)
                             @php($variantIds = $row['variant_ids'] ?? [$row['id']])
@@ -71,11 +71,12 @@
                                     </div>
                                 </td>
                                 <td><div class="bulk-price-input-wrap"><input class="bulk-price-input" type="text" inputmode="numeric" data-money-input name="rows[{{ $rowIndex }}][min_price]" value="{{ number_format((float) old("rows.$rowIndex.min_price", $row['min_price']), 0, ',', '.') }}" required><span>đ/{{ $row['unit'] }}</span></div></td>
+                                <td class="text-center" style="white-space:nowrap">{{ $row['tax_percent'] !== null ? rtrim(rtrim(number_format((float)$row['tax_percent'], 2, ',', '.'), '0'), ',').'%' : 'Chưa thiết lập' }}</td>
                             </tr>
                             @php($rowIndex++)
                         @endforeach
                     @empty
-                        <tr><td colspan="4" class="text-center text-muted py-4">Chưa có sản phẩm có giá bán.</td></tr>
+                        <tr><td colspan="5" class="text-center text-muted py-4">Chưa có sản phẩm có giá bán.</td></tr>
                     @endforelse
                     </tbody>
                 </table>

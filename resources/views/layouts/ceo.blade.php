@@ -338,6 +338,8 @@ body.ceo-menu-collapsed .ceo-task-links{padding:0}
             </a>
 
             <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Tài Chính</div>
+            <div class="nav-section">Thiết lập tính thuế</div>
+            <a href="{{ route('ceo.tax-settings.products') }}" class="ceo-nav-link {{ request()->routeIs('ceo.tax-settings.*') ? 'active' : '' }}"><i class="bi bi-percent"></i> Thuế sản phẩm</a>
             <a href="{{ route('ceo.revenue') }}" class="ceo-nav-link {{ request()->routeIs('ceo.revenue') ? 'active' : '' }}">
                 <i class="bi bi-currency-dollar"></i> Doanh thu
             </a>

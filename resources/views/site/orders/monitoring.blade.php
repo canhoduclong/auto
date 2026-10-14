@@ -2385,7 +2385,10 @@
                                         </div>
                                     @endforeach
                                 </div>
+                                <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px">
+                                    @include('site.orders.partials.vat-pending-note', ['order' => $order])
                                 <div class="monitor-order-total"><span>Tổng đơn sau phí/chiết khấu</span><strong>{{ number_format((float) $order->total, 0, ',', '.') }}đ</strong></div>
+                                </div>
 
                                 {{-- Lịch sử đã áp dụng là dữ liệu của đơn: Sale, Leader và Manager đều được xem. --}}
                                 @if($completedOrderAdjustments->isNotEmpty())

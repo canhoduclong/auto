@@ -61,6 +61,11 @@ class ProductVariant extends Model
         });
     }
  
+    public function getTaxPercentAttribute(): ?string
+    {
+        return $this->product?->tax_percent;
+    }
+
     public function product()
     {
         return $this->belongsTo(Product::class);

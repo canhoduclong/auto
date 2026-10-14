@@ -210,9 +210,13 @@
                             </tbody>
                         </table>
                     </div>
+                    <div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px;margin-top:5px">
+                        @include('site.orders.partials.vat-pending-note', ['order' => $order])
                     <div class="monitor-my-order-totals">
                         @if(abs($orderAdjustment) > .01)<div class="monitor-my-order-total-line"><span>Điều chỉnh:</span><strong>{{ $orderAdjustment > 0 ? '-' : '+' }}{{ number_format(abs($orderAdjustment), 0, ',', '.') }}đ</strong></div>@endif
                         <div class="monitor-my-order-total-line is-total"><span>Tổng cộng:</span><strong>{{ number_format((float) $order->total, 0, ',', '.') }}đ</strong></div>
+                    </div>
+
                     </div>
 
                     @if($visibleAdjustments->isNotEmpty())

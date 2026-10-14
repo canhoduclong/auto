@@ -32,6 +32,7 @@ class ProductPriceManagementController extends Controller
 
                     return [
                         'id' => (int) $variant->id,
+                        'tax_percent' => $product->tax_percent,
                         'name' => $variant->name ?: ($variant->size ?: $variant->sku ?: 'Biến thể'),
                         'price' => (float) ($rule?->price ?? $variant->final_price ?? 0),
                         'min_price' => (float) ($rule?->min_price ?? 0),
