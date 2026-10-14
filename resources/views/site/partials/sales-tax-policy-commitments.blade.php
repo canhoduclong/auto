@@ -10,6 +10,7 @@
 @endphp
 <div class="{{ !empty($prompt) ? 'tax-policy-commitments' : 'policy-commitments' }}">
 @foreach($commitments as $key => $label)
+    @continue(!empty($excludeFinal) && $key === 'comply')
     <label class="{{ !empty($prompt) ? 'tax-policy-consent' : 'policy-consent' }}">
         <input type="checkbox" name="commitments[{{ $key }}]" value="1" required>
         <span class="{{ $key === 'comply' ? 'fw-bold' : '' }}">{{ $label }}</span>
