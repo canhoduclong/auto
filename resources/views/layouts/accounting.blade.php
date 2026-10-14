@@ -349,7 +349,10 @@
             .acc-content { padding: .9rem; }
             .acc-sidebar-collapse { display: none; }
         }
-    </style>
+    
+.acc-task-group{margin:4px 0}.acc-task-group>summary{display:flex;align-items:center;gap:10px;padding:12px;color:#cbd5e1;cursor:pointer;list-style:none;border-radius:8px;font-size:14px;font-weight:600;min-height:46px}.acc-task-group>summary::-webkit-details-marker{display:none}.acc-task-group>summary:hover,.acc-task-group[open]>summary{background:#ffffff0c;color:#fff}.acc-task-group>summary>i:first-child{font-size:17px;flex-shrink:0}.acc-task-group>summary>span{flex:1;min-width:0}.acc-task-chevron{font-size:11px;transition:transform .15s}.acc-task-group[open] .acc-task-chevron{transform:rotate(180deg)}.acc-task-links{margin:4px 0 10px 15px;padding-left:8px;border-left:1px solid #ffffff20}.acc-task-links a{font-size:13px!important;line-height:1.5;min-height:44px}.acc-task-links a span{min-width:0;overflow-wrap:anywhere}.acc-task-group>summary:focus-visible{outline:2px solid #67e8f9;outline-offset:2px}
+body.acc-sidebar-collapsed .acc-task-group>summary{justify-content:center;padding:12px 0}body.acc-sidebar-collapsed .acc-task-group>summary>span,body.acc-sidebar-collapsed .acc-task-chevron{display:none}body.acc-sidebar-collapsed .acc-task-links{margin:0;padding:0;border:0}
+</style>
     @stack('styles')
     @include('layouts.partials.mobile_accounting')
 @include('layouts.partials.mobile_compact_header_styles')
@@ -470,7 +473,7 @@
             <a href="{{ route('accounting.stocktakes.index') }}" class="{{ request()->routeIs('accounting.stocktakes.*') ? 'active' : '' }}">
                 <i class="bi bi-clipboard2-check"></i> Kiểm kê kho
             </a>
-            @include('layouts.partials.task-sidebar-menu', ['taskNavHeadingClass'=>'nav-section','taskNavLinkClass'=>''])
+            @include('layouts.partials.accounting-task-menu')
         </nav>
 
         <div class="acc-sidebar-footer">
