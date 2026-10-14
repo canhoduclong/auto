@@ -263,6 +263,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::prefix('accounting')->name('accounting.')->middleware('role:account,accountant,accounting,admin')->group(function () {
         Route::get('/tax-settings/products', [\App\Http\Controllers\ProductTaxSettingController::class, 'index'])->name('tax-settings.products');
         Route::patch('/tax-settings/products/{product}', [\App\Http\Controllers\ProductTaxSettingController::class, 'update'])->name('tax-settings.products.update');
+        Route::get('/tax-settings/products/{product}', [\App\Http\Controllers\ProductTaxSettingController::class, 'show'])->name('tax-settings.products.show');
+        Route::patch('/tax-settings/products/{product}/priority', [\App\Http\Controllers\ProductTaxSettingController::class, 'priority'])->name('tax-settings.products.priority');
+        Route::post('/tax-settings/products/{product}/rates/{taxRate}/apply', [\App\Http\Controllers\ProductTaxSettingController::class, 'apply'])->name('tax-settings.products.apply');
         Route::get('/workflow-simulation', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'index'])->name('workflow-simulation.index');
         Route::post('/workflow-simulation/stock-in', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'stockIn'])->name('workflow-simulation.stock-in');
         Route::post('/workflow-simulation/stocktake', [\App\Http\Controllers\AccountingWorkflowSimulationController::class, 'stocktake'])->name('workflow-simulation.stocktake');
@@ -663,6 +666,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::prefix('ceo')->name('ceo.')->middleware('role:ceo,admin')->group(function () {
         Route::get('/tax-settings/products', [\App\Http\Controllers\ProductTaxSettingController::class, 'index'])->name('tax-settings.products');
         Route::patch('/tax-settings/products/{product}', [\App\Http\Controllers\ProductTaxSettingController::class, 'update'])->name('tax-settings.products.update');
+        Route::get('/tax-settings/products/{product}', [\App\Http\Controllers\ProductTaxSettingController::class, 'show'])->name('tax-settings.products.show');
+        Route::patch('/tax-settings/products/{product}/priority', [\App\Http\Controllers\ProductTaxSettingController::class, 'priority'])->name('tax-settings.products.priority');
+        Route::post('/tax-settings/products/{product}/rates/{taxRate}/apply', [\App\Http\Controllers\ProductTaxSettingController::class, 'apply'])->name('tax-settings.products.apply');
         Route::get('/', [CeoDashboardController::class, 'dashboard'])->name('dashboard');
         Route::get('/revenue', [CeoDashboardController::class, 'revenue'])->name('revenue');
         Route::get('/orders', [CeoDashboardController::class, 'orders'])->name('orders');

@@ -12,6 +12,7 @@ class Product extends Model
     use HasFactory;
 
     protected $fillable = [
+        'tax_priority',
         'tax_percent',
         'user_id',
         'category_id',
@@ -159,6 +160,14 @@ class Product extends Model
                     ->where('role', 'gallery')
                     ->with('media');
     }
+
+    public function taxRateAt(\DateTimeInterface|string $date): ?ProductTaxRate
+    {
+        return $this->taxRates()->where('status','approved')->whereDate('effective_from','<=',$date)
+            ->orderByDesc('effective_from')->orderByDesc('id')->first();
+    }
+
+    public function taxRates() { return $this->hasMany(ProductTaxRate::class); }
 
     public function variants()
     {

@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withSchedule(function (Schedule $schedule): void {
+        $schedule->command('products:apply-tax-rates')->everyMinute()->withoutOverlapping();
         $schedule->command('system-backup:run')->everyMinute()->withoutOverlapping(120)->runInBackground();
         $schedule->command('system-backup:run --monthly')->monthlyOn(1, '02:00')->withoutOverlapping(120)->runInBackground();
         $schedule->command('orders:auto-cancel-overdue')->dailyAt('00:05');
