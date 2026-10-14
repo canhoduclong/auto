@@ -680,6 +680,8 @@
     .monitor-priority-legend-copy { min-width: 0; line-height: 1.3; }
     .monitor-priority-legend-copy strong { display: block; color: #1e293b; font-size: .73rem; }
     .monitor-priority-legend-copy span { display: block; color: #64748b; font-size: .67rem; }
+    .monitor-tax-responsibility { margin: 0; padding: 12px 14px; border-top: 1px solid #dce6f1; background: #fffbeb; color: #713f12; font-size: .7rem; line-height: 1.55; }
+    .monitor-tax-responsibility a { color: #92400e; font-weight: 800; text-decoration: underline; }
     .monitor-bulk-actions {
         display: flex;
         flex-wrap: wrap;
@@ -2849,6 +2851,7 @@
                             @endforeach
                         </div>
                     </section>
+                    <div class="monitor-tax-responsibility"><strong>Trách nhiệm của Sale:</strong> Trước khi lên đơn, phải xác định khách hàng thuộc Hộ kinh doanh, Công ty/Hợp tác xã hay Cá nhân/pháp nhân khác; chọn đúng loại khách hàng và cập nhật đúng thuế suất VAT trên đơn theo cấu hình của từng sản phẩm đang hiệu lực. Nếu thông tin chưa rõ, phải chuyển kế toán xử lý và không tự ý bỏ hoặc thay đổi VAT. <a href="{{ route('sales-tax-policy.show') }}">Xem chi tiết quy định</a>.</div>
                 </footer>
         @else
             <div class="monitor-tab-content monitor-tab-{{ $activeTab }}">
