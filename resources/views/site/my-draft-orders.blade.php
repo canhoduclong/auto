@@ -184,6 +184,7 @@
         .draft-automation-modes { grid-template-columns: 1fr; }
         .draft-automation-intro, .draft-automation-footer { flex-direction: column; }
     }
+.draft-vat-total-footer{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 12px;margin-top:6px}.draft-vat-total-footer>.draft-template-total,.draft-vat-total-footer>.draft-edit-total{margin-left:auto;flex:0 0 auto;width:auto}.draft-vat-total-footer>.monitor-vat-pending-note{flex:1;min-width:180px}
 </style>
 @endpush
 
@@ -401,7 +402,10 @@
                                 @if($draftVat > 0 || $draftShipping > 0)
                                     <div class="small text-end text-muted">VAT: {{ number_format($draftVat, 0, ',', '.') }}đ · Phí giao khách: {{ number_format($draftShipping, 0, ',', '.') }}đ</div>
                                 @endif
-                                <div class="draft-template-total"><span>Tổng cộng:</span><strong>{{ number_format($draftTotal, 0, ',', '.') }}đ</strong></div>
+                                <div class="draft-vat-total-footer">
+                                    @include('site.orders.partials.vat-pending-note', ['order' => $draft, 'vatNoteAmount' => $draftVat])
+                                    <div class="draft-template-total"><span>Tổng cộng:</span><strong>{{ number_format($draftTotal, 0, ',', '.') }}đ</strong></div>
+                                </div>
                             </div>
                         </div>
 
@@ -546,7 +550,7 @@
                                         </div>
                                         <div class="draft-product-results"><div class="text-center text-muted py-3">Đang tải danh sách sản phẩm...</div></div>
                                     </div>
-                                    <div class="draft-edit-total"><span>Tổng cộng:</span><strong class="draft-edit-grand-total">{{ number_format($draftTotal, 0, ',', '.') }}đ</strong></div>
+                                    <div class="draft-vat-total-footer"><div class="js-draft-vat-note" @if($draftVat > 0) hidden @endif><div class="monitor-vat-pending-note" style="font-size:12px;line-height:1.5;color:#334155">Ghi chú: Giá chưa bao gồm VAT (chờ kế toán xử lý)</div></div><div class="draft-edit-total"><span>Tổng cộng:</span><strong class="draft-edit-grand-total">{{ number_format($draftTotal, 0, ',', '.') }}đ</strong></div></div>
                                 <details id="draftFees{{ $draft->id }}" class="border rounded p-2 my-2 js-draft-fees" @if($draft->charge_vat || $draft->collect_customer_shipping_fee) open @endif>
                                     <summary class="fw-semibold">Chi phí khác</summary>
                                     <div class="row g-2 mt-1">
@@ -775,9 +779,11 @@ document.addEventListener('DOMContentLoaded', () => {
             row.querySelector('.draft-edit-line-total').textContent = money(lineTotal);
             total += lineTotal;
         });
-        if (editor.querySelector('[name="charge_vat"]')?.checked) {
-            total += Math.round(total * Math.min(100, Math.max(0, Number(editor.querySelector('[name="vat_percent"]').value) || 0))) / 100;
-        }
+        const vatAmount = editor.querySelector('[name="charge_vat"]')?.checked
+            ? Math.round(total * Math.min(100, Math.max(0, Number(editor.querySelector('[name="vat_percent"]').value) || 0))) / 100 : 0;
+        total += vatAmount;
+        const vatNote = editor.querySelector('.js-draft-vat-note');
+        if (vatNote) vatNote.hidden = vatAmount > 0;
         if (editor.querySelector('[name="collect_customer_shipping_fee"]')?.checked) {
             total += Math.max(0, Number(editor.querySelector('[name="customer_shipping_fee"]').value) || 0);
         }
