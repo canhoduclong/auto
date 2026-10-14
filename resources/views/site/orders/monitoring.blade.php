@@ -680,15 +680,15 @@
     .monitor-priority-legend-copy { min-width: 0; line-height: 1.3; }
     .monitor-priority-legend-copy strong { display: block; color: #1e293b; font-size: .73rem; }
     .monitor-priority-legend-copy span { display: block; color: #64748b; font-size: .67rem; }
-    .monitor-tax-guidance { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0; }
-    .monitor-tax-guidance-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 7px; }
+    .monitor-tax-guidance { margin: 0; padding: 14px; border-top: 1px solid #dce6f1; background: #fbfdff; }
+    .monitor-tax-guidance-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 10px; }
     .monitor-tax-guidance-title { margin: 0; color: #0f172a; font-size: .78rem; font-weight: 800; text-transform: uppercase; }
     .monitor-tax-guidance-subtitle { color: #64748b; font-size: .68rem; text-align: right; }
-    .monitor-tax-guidance-grid { display: flex; flex-wrap: wrap; gap: 7px 20px; padding: 8px 10px; border: 1px solid #dbe5ea; border-radius: 8px; background: #fff; }
+    .monitor-tax-guidance-grid { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 24px; min-height: 38px; padding: 9px 12px; border: 1px solid #dbe5ea; border-radius: 8px; background: #fff; }
     .monitor-tax-guidance-item { color: #334155; font-size: .72rem; white-space: nowrap; }
     .monitor-tax-guidance-item strong { color: #1e293b; }
     .monitor-tax-guidance-rate { margin-left: 3px; color: #047857; font-weight: 800; }
-    .monitor-tax-responsibility { margin-top: 7px; padding: 8px 10px; border: 1px solid #fde68a; border-radius: 8px; background: #fffbeb; color: #713f12; font-size: .68rem; line-height: 1.45; }
+    .monitor-tax-responsibility { margin: 9px 0 0; padding: 10px 12px; border: 1px solid #fde68a; border-radius: 8px; background: #fffbeb; color: #713f12; font-size: .68rem; line-height: 1.5; }
     .monitor-tax-responsibility a { color: #92400e; font-weight: 700; }
     .monitor-bulk-actions {
         display: flex;
@@ -1151,6 +1151,7 @@
         .monitor-product-choice-label i { font-size: .8rem; }
         .monitor-priority-legend-grid { grid-template-columns: 1fr; }
         .monitor-tax-guidance-grid { display: grid; grid-template-columns: 1fr; gap: 4px; }
+        .monitor-tax-guidance { padding: 12px; }
         .monitor-tax-guidance-head { display: block; }
         .monitor-tax-guidance-subtitle { margin-top: 3px; text-align: left; }
         .leader-adjustment-review-head { flex-direction: column; }
