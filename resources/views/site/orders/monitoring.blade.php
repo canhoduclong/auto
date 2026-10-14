@@ -680,18 +680,15 @@
     .monitor-priority-legend-copy { min-width: 0; line-height: 1.3; }
     .monitor-priority-legend-copy strong { display: block; color: #1e293b; font-size: .73rem; }
     .monitor-priority-legend-copy span { display: block; color: #64748b; font-size: .67rem; }
-    .monitor-tax-guidance { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #cbd5e1; }
-    .monitor-tax-guidance-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 9px; }
+    .monitor-tax-guidance { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0; }
+    .monitor-tax-guidance-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 7px; }
     .monitor-tax-guidance-title { margin: 0; color: #0f172a; font-size: .78rem; font-weight: 800; text-transform: uppercase; }
     .monitor-tax-guidance-subtitle { color: #64748b; font-size: .68rem; text-align: right; }
-    .monitor-tax-guidance-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
-    .monitor-tax-guidance-item { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 9px 11px; border: 1px solid #dbe5ea; border-radius: 9px; background: #fff; }
-    .monitor-tax-guidance-icon { display: grid; place-items: center; flex: 0 0 31px; width: 31px; height: 31px; border-radius: 8px; background: #ecfdf5; color: #047857; font-size: .9rem; }
-    .monitor-tax-guidance-copy { min-width: 0; }
-    .monitor-tax-guidance-copy strong { display: block; color: #1e293b; font-size: .72rem; }
-    .monitor-tax-guidance-copy span { display: block; margin-top: 1px; color: #047857; font-size: .82rem; font-weight: 800; }
-    .monitor-tax-responsibility { display: flex; align-items: flex-start; gap: 9px; margin-top: 10px; padding: 10px 12px; border: 1px solid #fde68a; border-radius: 9px; background: #fffbeb; color: #713f12; font-size: .7rem; line-height: 1.5; }
-    .monitor-tax-responsibility i { flex: 0 0 auto; margin-top: 1px; color: #d97706; font-size: 1rem; }
+    .monitor-tax-guidance-grid { display: flex; flex-wrap: wrap; gap: 7px 20px; padding: 8px 10px; border: 1px solid #dbe5ea; border-radius: 8px; background: #fff; }
+    .monitor-tax-guidance-item { color: #334155; font-size: .72rem; white-space: nowrap; }
+    .monitor-tax-guidance-item strong { color: #1e293b; }
+    .monitor-tax-guidance-rate { margin-left: 3px; color: #047857; font-weight: 800; }
+    .monitor-tax-responsibility { margin-top: 7px; padding: 8px 10px; border: 1px solid #fde68a; border-radius: 8px; background: #fffbeb; color: #713f12; font-size: .68rem; line-height: 1.45; }
     .monitor-tax-responsibility a { color: #92400e; font-weight: 700; }
     .monitor-bulk-actions {
         display: flex;
@@ -1152,7 +1149,8 @@
         .monitor-adjustment-fee-list { grid-template-columns: 1fr; }
         .monitor-product-choice-label { font-size: 0; }
         .monitor-product-choice-label i { font-size: .8rem; }
-        .monitor-priority-legend-grid, .monitor-tax-guidance-grid { grid-template-columns: 1fr; }
+        .monitor-priority-legend-grid { grid-template-columns: 1fr; }
+        .monitor-tax-guidance-grid { display: grid; grid-template-columns: 1fr; gap: 4px; }
         .monitor-tax-guidance-head { display: block; }
         .monitor-tax-guidance-subtitle { margin-top: 3px; text-align: left; }
         .leader-adjustment-review-head { flex-direction: column; }
@@ -2866,21 +2864,14 @@
                     </section>
                     <section class="monitor-tax-guidance" aria-labelledby="monitorTaxGuidanceTitle">
                         <div class="monitor-tax-guidance-head">
-                            <h3 class="monitor-tax-guidance-title" id="monitorTaxGuidanceTitle"><i class="bi bi-receipt-cutoff me-1"></i>Mốc thuế suất cần kiểm tra khi lên đơn</h3>
-                            <div class="monitor-tax-guidance-subtitle">Hướng dẫn nội bộ theo loại khách hàng; mức thực tế phải đối chiếu cấu hình từng sản phẩm.</div>
+                            <h3 class="monitor-tax-guidance-title" id="monitorTaxGuidanceTitle">Mốc thuế suất cần kiểm tra khi lên đơn</h3>
                         </div>
                         <div class="monitor-tax-guidance-grid">
                             @foreach(config('sales_tax_policy.entity_tax_guidance', []) as $taxGuidance)
-                                <div class="monitor-tax-guidance-item">
-                                    <span class="monitor-tax-guidance-icon"><i class="bi {{ $taxGuidance['icon'] }}"></i></span>
-                                    <div class="monitor-tax-guidance-copy"><strong>{{ $taxGuidance['label'] }}</strong><span>{{ number_format($taxGuidance['rate'], 0, ',', '.') }}%</span></div>
-                                </div>
+                                <div class="monitor-tax-guidance-item"><strong>{{ $taxGuidance['label'] }}:</strong><span class="monitor-tax-guidance-rate">{{ number_format($taxGuidance['rate'], 0, ',', '.') }}%</span></div>
                             @endforeach
                         </div>
-                        <div class="monitor-tax-responsibility">
-                            <i class="bi bi-exclamation-triangle-fill"></i>
-                            <div><strong>Trách nhiệm của Sale:</strong> Trước khi lên đơn, phải xác định khách hàng thuộc Hộ kinh doanh, Công ty/Hợp tác xã hay Cá nhân/pháp nhân khác; chọn đúng loại khách hàng và cập nhật đúng thuế suất VAT trên đơn theo cấu hình sản phẩm đang hiệu lực. Nếu thông tin chưa rõ, phải chuyển kế toán xử lý và không tự ý bỏ hoặc thay đổi VAT. <a href="{{ route('sales-tax-policy.show') }}">Xem quy định sử dụng hệ thống</a>.</div>
-                        </div>
+                        <div class="monitor-tax-responsibility"><strong>Sale phải xác định đúng loại khách hàng và áp dụng VAT theo cấu hình sản phẩm đang hiệu lực.</strong> Nếu chưa rõ, chuyển kế toán xử lý; không tự ý bỏ hoặc thay đổi VAT. <a href="{{ route('sales-tax-policy.show') }}">Xem chi tiết quy định</a>.</div>
                     </section>
                 </footer>
         @else
