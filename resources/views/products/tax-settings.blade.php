@@ -1,17 +1,33 @@
 @extends($prefix === 'ceo' ? 'layouts.ceo' : 'layouts.accounting')
-@section('title','Thiết lập tính thuế')
-@section('subtitle','Cấu hình mức thuế dùng chung cho sản phẩm và các biến thể')
+@section('title','Quản lý thuế suất')
+@section('subtitle','Cấu hình thuế suất VAT dùng chung cho sản phẩm và các biến thể')
+@push('styles')
+<style>
+.tax-panel{background:#fff;border:1px solid #dde5ee;border-radius:14px;overflow:hidden}.tax-heading{padding:22px 24px;border-bottom:1px solid #e7edf3}.tax-heading h5{margin:0 0 6px;font-weight:700}.tax-heading p{margin:0;color:#64748b;font-size:13px}.tax-filters{display:grid;grid-template-columns:minmax(180px,2fr) repeat(2,minmax(140px,1fr)) 110px auto;gap:12px;align-items:end;padding:20px 24px;background:#f8fafc}.tax-filters label{display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:6px}.tax-filters .form-control,.tax-filters .form-select{min-height:40px}.tax-table{margin:0;width:100%}.tax-table th{background:#f1f5f9;font-size:11px;letter-spacing:.4px;text-transform:uppercase;color:#64748b;padding:14px 20px;white-space:nowrap}.tax-table td{padding:14px 20px;border-color:#edf1f5;vertical-align:middle}.tax-product-name{font-weight:600;color:#1e293b}.tax-status{display:inline-block;padding:4px 10px;border-radius:20px;font-size:12px;white-space:nowrap;background:#fff4dc;color:#8a6100}.tax-status.is-set{background:#e7f5ef;color:#166348}.tax-editor{display:flex;align-items:center;gap:10px}.tax-input{position:relative;width:125px}.tax-input input{padding-right:28px;min-height:40px}.tax-input span{position:absolute;right:12px;top:10px;color:#64748b;pointer-events:none}.tax-save{background:#087f72;color:#fff;border:0;border-radius:8px;padding:9px 16px;min-height:40px}.tax-save:hover{background:#06665c}.tax-bottom{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:16px 24px;border-top:1px solid #e7edf3;font-size:13px;color:#64748b}.tax-bottom .pagination{margin:0}.tax-help{padding:14px 24px;background:#f8fafc;font-size:12px;color:#64748b}.tax-table-wrap{overflow-x:auto}
+@media(max-width:900px){.tax-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.tax-filters>div:first-child{grid-column:1/-1}}
+@media(max-width:575px){.tax-heading,.tax-filters,.tax-bottom,.tax-help{padding:16px}.tax-table thead{display:none}.tax-table,.tax-table tbody{display:block}.tax-table tr{display:grid;grid-template-columns:30px minmax(0,1fr);gap:8px;padding:16px;border-bottom:1px solid #e7edf3}.tax-table td{display:block;padding:0;border:0;min-width:0}.tax-table td:nth-child(n+3){grid-column:2}.tax-table td:nth-child(3)::before{content:'Biến thể: ';color:#64748b}.tax-table td:last-child{margin-top:4px}.tax-table-wrap{overflow:visible}.tax-filters .btn{min-height:40px}.tax-editor{flex-wrap:wrap}}
+</style>
+@endpush
 @section('accounting_content')
-<div class="container-fluid py-3">
+<div class="py-3">
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
 @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
-<div class="card"><div class="card-body">
-<h5>Thuế sản phẩm</h5><p class="text-muted">Để trống: chưa thiết lập. Nhập 0: mức thuế 0%. Mức thuế được dùng chung cho toàn bộ biến thể của sản phẩm.</p>
-<form method="GET" class="d-flex gap-2 mb-3"><input name="search" value="{{ $search }}" class="form-control" placeholder="Tìm sản phẩm" aria-label="Tìm sản phẩm"><button class="btn btn-primary">Tìm</button></form>
-<div class="table-responsive"><table class="table align-middle"><thead><tr><th>Sản phẩm</th><th>Số biến thể</th><th>Mức thuế (%)</th></tr></thead><tbody>
-@forelse($products as $product)<tr><td>{{ $product->name }}</td><td>{{ $product->variants_count }}</td><td><form action="{{ route($prefix.'.tax-settings.products.update',$product) }}" method="POST" class="d-flex gap-2" style="min-width:190px">@csrf @method('PATCH')<input type="number" name="tax_percent" min="0" max="100" step="0.01" value="{{ $product->tax_percent }}" placeholder="Chưa thiết lập" aria-label="Thuế của {{ $product->name }}" class="form-control" style="max-width:150px"><button class="btn btn-primary">Lưu</button></form></td></tr>
-@empty<tr><td colspan="3" class="text-center text-muted">Không có sản phẩm.</td></tr>@endforelse
-</tbody></table></div>{{ $products->links() }}
-<p class="small text-muted mb-0">Thiết lập này lưu mức thuế theo sản phẩm; không tự tính lại VAT của các đơn hàng đã tạo.</p>
-</div></div></div>
+<section class="tax-panel">
+<div class="tax-heading"><h5>Thuế suất VAT sản phẩm</h5><p>Một thuế suất VAT dùng chung cho toàn bộ biến thể. Để trống nếu chưa thiết lập; nhập 0 để áp dụng thuế suất 0%.</p></div>
+<form method="GET" class="tax-filters">
+<div><label for="tax-search">Tên sản phẩm</label><input id="tax-search" name="search" value="{{ $search }}" class="form-control" placeholder="Nhập tên sản phẩm…"></div>
+<div><label for="tax-status">Trạng thái</label><select id="tax-status" name="status" class="form-select">@foreach([''=>'Tất cả','configured'=>'Đã thiết lập','unconfigured'=>'Chưa thiết lập'] as $value=>$label)<option value="{{ $value }}" @selected($status===$value)>{{ $label }}</option>@endforeach</select></div>
+<div><label for="tax-sort">Sắp xếp</label><select id="tax-sort" name="sort" class="form-select">@foreach(['name_asc'=>'Tên sản phẩm A → Z','name_desc'=>'Tên sản phẩm Z → A','tax_asc'=>'Thuế thấp → cao','tax_desc'=>'Thuế cao → thấp'] as $value=>$label)<option value="{{ $value }}" @selected($sort===$value)>{{ $label }}</option>@endforeach</select></div>
+<div><label for="tax-per-page">Dòng / trang</label><select id="tax-per-page" name="per_page" class="form-select" onchange="this.form.submit()">@foreach([10,20,50,100] as $size)<option value="{{ $size }}" @selected($perPage===$size)>{{ $size }}</option>@endforeach</select></div>
+<button class="btn btn-primary" style="min-height:40px">Áp dụng</button>
+</form>
+<div class="tax-table-wrap"><table class="table tax-table"><thead><tr><th>STT</th><th>Sản phẩm</th><th>Biến thể</th><th>Thuế suất VAT hiện tại</th><th>Cập nhật thuế suất VAT</th></tr></thead><tbody>
+@forelse($products as $product)
+<tr><td class="text-muted">{{ $products->firstItem()+$loop->index }}</td><td class="tax-product-name">{{ $product->name }}</td><td>{{ $product->variants_count }}</td><td><span class="tax-status {{ $product->tax_percent !== null ? 'is-set' : '' }}">{{ $product->tax_percent !== null ? rtrim(rtrim(number_format((float)$product->tax_percent,2,',','.'),'0'),',').'%' : 'Chưa thiết lập' }}</span></td>
+<td><form action="{{ route($prefix.'.tax-settings.products.update',$product) }}" method="POST" class="tax-editor">@csrf @method('PATCH')<div class="tax-input"><input type="number" name="tax_percent" min="0" max="100" step="0.01" value="{{ $product->tax_percent }}" placeholder="Chưa đặt" aria-label="Thuế của {{ $product->name }}" class="form-control"><span>%</span></div><button class="tax-save">Lưu</button></form></td></tr>
+@empty<tr><td colspan="5" class="text-center text-muted py-4">Không tìm thấy sản phẩm phù hợp.</td></tr>@endforelse
+</tbody></table></div>
+<div class="tax-bottom"><span>Hiển thị {{ $products->firstItem() ?? 0 }}–{{ $products->lastItem() ?? 0 }} / {{ $products->total() }} sản phẩm</span>{{ $products->links() }}</div>
+<div class="tax-help">Mức thuế chưa thiết lập luôn nằm cuối khi sắp xếp theo thuế. Cập nhật tại đây không tự tính lại VAT của đơn hàng đã tạo.</div>
+</section></div>
 @endsection

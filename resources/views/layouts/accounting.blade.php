@@ -410,8 +410,8 @@
                 <i class="bi bi-cash-coin"></i> Quản lý chi phí ship
             </a>
 
-            <div class="nav-section">Thiết lập tính thuế</div>
-            <a href="{{ route('accounting.tax-settings.products') }}" class="acc-nav-link {{ request()->routeIs('accounting.tax-settings.*') ? 'active' : '' }}"><i class="bi bi-percent"></i> Thuế sản phẩm</a>
+            <div class="nav-section">Quản lý thuế suất</div>
+            <a href="{{ route('accounting.tax-settings.products') }}" class="acc-nav-link {{ request()->routeIs('accounting.tax-settings.*') ? 'active' : '' }}"><i class="bi bi-percent"></i> Thuế suất VAT sản phẩm</a>
             <div class="nav-section">Tài chính</div>
             <a href="{{ route('accounting.cashflow') }}" class="{{ request()->routeIs('accounting.cashflow') ? 'active' : '' }}">
                 <i class="bi bi-cash-stack"></i> Thu chi

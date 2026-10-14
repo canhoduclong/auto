@@ -387,6 +387,10 @@
     .monitor-order-fee-kind { padding: 2px 5px; border-radius: 4px; background: #dcfce7; color: #166534; font-size: .58rem; font-weight: 900; }
     .monitor-order-fee-row.is-discount .monitor-order-fee-kind { background: #fee2e2; color: #991b1b; }
     .monitor-order-total { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; padding: 7px 2px 2px; color: #475569; font-size: .68rem; }
+    .monitor-order-total-footer { display:flex; align-items:baseline; justify-content:space-between; gap:6px 12px; padding-top:7px; }
+    .monitor-order-total-footer > .monitor-vat-pending-note { flex:1; min-width:0; margin:0; }
+    .monitor-order-total-footer > .monitor-order-total { flex:0 0 auto; width:auto; margin:0; padding:0; }
+    @media(max-width:575.98px) { .monitor-order-total-footer { flex-wrap:wrap; } .monitor-order-total-footer > .monitor-order-total { margin-left:auto; } }
     .monitor-order-total strong { color: #0f172a; font-size: .86rem; }
     .monitor-applied-adjustments { display: grid; gap: 7px; margin-top: 8px; }
     .monitor-applied-adjustment { padding: 9px 10px; border: 1px solid #bbf7d0; border-left: 4px solid #22c55e; border-radius: 7px; background: #f0fdf4; }
@@ -2385,7 +2389,7 @@
                                         </div>
                                     @endforeach
                                 </div>
-                                <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px">
+                                <div class="monitor-order-total-footer">
                                     @include('site.orders.partials.vat-pending-note', ['order' => $order])
                                 <div class="monitor-order-total"><span>Tổng đơn sau phí/chiết khấu</span><strong>{{ number_format((float) $order->total, 0, ',', '.') }}đ</strong></div>
                                 </div>
