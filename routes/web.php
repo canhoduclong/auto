@@ -664,6 +664,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     });
 
     Route::prefix('ceo')->name('ceo.')->middleware('role:ceo,admin')->group(function () {
+        Route::get('/sales-tax-policy', [\App\Http\Controllers\CeoSalesTaxPolicyController::class, 'edit'])->name('sales-tax-policy.edit');
+        Route::put('/sales-tax-policy', [\App\Http\Controllers\CeoSalesTaxPolicyController::class, 'update'])->name('sales-tax-policy.update');
         Route::get('/tax-settings/products', [\App\Http\Controllers\ProductTaxSettingController::class, 'index'])->name('tax-settings.products');
         Route::patch('/tax-settings/products/{product}', [\App\Http\Controllers\ProductTaxSettingController::class, 'update'])->name('tax-settings.products.update');
         Route::get('/tax-settings/products/{product}', [\App\Http\Controllers\ProductTaxSettingController::class, 'show'])->name('tax-settings.products.show');
@@ -1220,6 +1222,10 @@ Route::get('/variant/{variant:slug}', [PageController::class, 'variantDetail'])-
 
 Route::get('/my-profile', [PageController::class, 'myDashboard'])->name('pages.my_profile')->middleware('auth');
 Route::post('/my-profile', [PageController::class, 'updateProfile'])->name('pages.update_profile')->middleware('auth');
+Route::middleware('auth')->group(function () {
+    Route::get('/noi-quy-thue-va-lap-don', [\App\Http\Controllers\SalesTaxPolicyController::class, 'show'])->name('sales-tax-policy.show');
+    Route::post('/noi-quy-thue-va-lap-don/xac-nhan', [\App\Http\Controllers\SalesTaxPolicyController::class, 'accept'])->name('sales-tax-policy.accept');
+});
 
 // My Orders routes (sale / leader / manager only)
 Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,manager_sale,director,admin'])->group(function () {

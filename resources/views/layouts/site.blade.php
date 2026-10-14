@@ -125,6 +125,7 @@ use App\Models\Setting;
 
     @yield('breadcrumb')
                 @yield('content')
+                @include('site.partials.sales-tax-policy-prompt')
 
     @unless(session('mobile_accounting'))
     @include('layouts.partials.site_footer')

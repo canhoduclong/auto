@@ -256,6 +256,7 @@
         box-shadow: none;
     }
     .monitor-order-main {
+        position: relative;
         min-width: 0;
         padding: 18px 20px 16px;
         border: 1px solid var(--monitor-border);
@@ -2278,6 +2279,7 @@
                         @endphp
                         <article class="monitor-panel monitor-order status-{{ $monitorState }} {{ $canManageOrder ? 'is-mine' : '' }} {{ $isCancelled ? 'is-cancelled' : '' }}" id="monitor-order-{{ $order->id }}" title="{{ $monitorStateLabels[$monitorState] }}">
                             <div class="monitor-order-main">
+                                @include('site.orders.partials.demo-watermark')
                                 <div class="monitor-order-head">
                                     <div class="monitor-order-person">
                                         <div class="monitor-order-number">{{ $order->daily_sequence ?? $loop->iteration }}</div>

@@ -180,11 +180,12 @@
                     @endphp
                     <div class="col-12">
                         <div
-                            class="mc-customer-card border rounded p-3 bg-white"
+                            class="mc-customer-card position-relative border rounded p-3 bg-white"
                             id="my-order-card-{{ $order->id }}"
                             data-order-id="{{ $order->id }}"
                             data-order-sequence="{{ $order->daily_sequence ?? '' }}"
                         >
+                            @include('site.orders.partials.demo-watermark')
                             @php
                                 $formatSignedMoney = static function (float $amount): string {
                                     $prefix = $amount < 0 ? '+' : '-';

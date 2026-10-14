@@ -31,7 +31,7 @@
     .monitor-my-orders-sort-actions { display: flex; flex-wrap: wrap; gap: 6px; }
     .monitor-my-orders-sort .btn { border-radius: 4px; font-size: .72rem; }
     .monitor-my-order { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 14px; align-items: start; }
-    .monitor-my-order-card { min-width: 0; padding: 14px 16px; border: 1px solid #dce6f1; border-radius: 7px; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .06); }
+    .monitor-my-order-card { position: relative; min-width: 0; padding: 14px 16px; border: 1px solid #dce6f1; border-radius: 7px; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .06); }
     .monitor-my-order-card.is-cancelled { border-color: #fecaca; background: #fffafa; }
     .monitor-my-order-card.is-overdue { border-color: #c2410c; background: #fff7ed; }
     .monitor-my-order-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; }
@@ -158,6 +158,7 @@
             @endphp
             <article class="monitor-my-order" id="my-order-card-{{ $order->id }}">
                 <div class="monitor-my-order-card {{ $isCancelled ? 'is-cancelled' : ($isOverdue ? 'is-overdue' : '') }}">
+                    @include('site.orders.partials.demo-watermark')
                     <div class="monitor-my-order-head">
                         <div>
                             <div class="monitor-my-order-name">{{ $order->customer?->name ?? 'Khách hàng' }}</div>

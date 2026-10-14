@@ -35,6 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
         \App\Http\Middleware\ValidateMobileAccountingSession::class,
         \App\Http\Middleware\TrackUserOnlineStatus::class,
         \App\Http\Middleware\SetLocale::class,
+        \App\Http\Middleware\RequireSalesTaxPolicyAcceptance::class,
     ]);
 
     $middleware->alias([

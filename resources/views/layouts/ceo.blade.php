@@ -350,6 +350,9 @@ body.ceo-menu-collapsed .ceo-task-links{padding:0}
             <a href="{{ route('ceo.tax-settings.products') }}" class="ceo-nav-link {{ request()->routeIs('ceo.tax-settings.*') ? 'active' : '' }}">
                 <i class="bi bi-percent"></i> Thuế suất VAT sản phẩm
             </a>
+            <a href="{{ route('ceo.sales-tax-policy.edit') }}" class="ceo-nav-link {{ request()->routeIs('ceo.sales-tax-policy.*') ? 'active' : '' }}">
+                <i class="bi bi-shield-check"></i> Quy định nghiệp vụ nội bộ
+            </a>
 
             <div class="ceo-nav-section">Tài Chính</div>
             <a href="{{ route('ceo.revenue') }}" class="ceo-nav-link {{ request()->routeIs('ceo.revenue') ? 'active' : '' }}">
