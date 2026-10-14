@@ -11,6 +11,8 @@
 @media(max-width:575px){.tax-table td[data-tax-entity]::before{content:attr(data-tax-entity) ': ';font-size:12px;color:#64748b}}
 .tax-entity-editor{min-width:190px}.tax-entity-form{display:grid;gap:7px;margin-top:12px}.tax-entity-form label{font-size:11px;font-weight:600;color:#64748b;margin:0}.tax-entity-form .tax-input{width:100%}.tax-entity-form .form-control{min-height:38px;font-size:13px}.tax-entity-draft{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;border-top:1px dashed #dce5ec;padding-top:10px;margin-top:12px;font-size:12px}.tax-entity-draft form{margin:0}
 @media(max-width:575px){.tax-entity-editor{min-width:0;padding:12px!important;border:1px solid #e7edf3!important;border-radius:8px}.tax-table td[data-tax-entity]::before{display:block;margin-bottom:8px;font-weight:700;color:#164b50}}
+.tax-table td.tax-entity-editor{min-width:120px}.tax-adjust-dialog{border:1px solid #dce5ed;border-radius:16px;padding:0;width:min(900px,calc(100vw - 24px));max-height:90dvh;overflow:auto;color:#1e293b;box-shadow:0 20px 70px #0003}.tax-adjust-dialog::backdrop{background:#0f172a80}.tax-dialog-heading{display:flex;justify-content:space-between;align-items:flex-start;padding:20px 24px;border-bottom:1px solid #e7edf3;gap:16px}.tax-dialog-heading h5{margin:0 0 6px;font-weight:700}.tax-dialog-heading p{margin:0;color:#64748b}.tax-dialog-close{border:0;background:#f1f5f9;border-radius:8px;font-size:26px;line-height:1;width:40px;height:40px}.tax-dialog-hint{padding:16px 24px 0;font-size:13px;color:#64748b}.tax-dialog-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;padding:16px 24px 24px}.tax-dialog-entity{padding:16px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc}.tax-dialog-entity h6{font-weight:700;margin:0 0 6px}.tax-dialog-footer{display:flex;justify-content:flex-end;padding:16px 24px;border-top:1px solid #e7edf3}.tax-dialog-entity .tax-entity-form input{width:100%}.tax-dialog-entity .tax-save{margin-top:6px}
+@media(max-width:650px){.tax-dialog-grid{grid-template-columns:minmax(0,1fr);padding:16px}.tax-dialog-heading{padding:16px}.tax-dialog-hint{padding:16px 16px 0}}
 </style>
 @endpush
 @section('accounting_content')
@@ -27,11 +29,30 @@
 <div><label for="tax-per-page">Dòng / trang</label><select id="tax-per-page" name="per_page" class="form-select" onchange="this.form.submit()">@foreach([10,20,50,100] as $size)<option value="{{ $size }}" @selected($perPage===$size)>{{ $size }}</option>@endforeach</select></div>
 <button class="btn btn-primary" style="min-height:40px">Áp dụng</button>
 </form>
-<div class="tax-table-wrap"><table class="table tax-table"><thead><tr><th>STT</th><th>Sản phẩm</th><th>Biến thể</th><th>Hộ kinh doanh</th><th>Công ty</th><th>Khác</th><th class="text-center">Ưu tiên</th></tr></thead><tbody>
+<div class="tax-table-wrap"><table class="table tax-table"><thead><tr><th>STT</th><th>Sản phẩm</th><th>Biến thể</th><th>Hộ kinh doanh</th><th>Công ty</th><th>Khác</th><th>Thao tác</th><th class="text-center">Ưu tiên</th></tr></thead><tbody>
 @forelse($products as $product)
 <tr><td class="text-muted">{{ $products->firstItem()+$loop->index }}</td><td class="tax-product-name"><a href="{{ route($prefix.'.tax-settings.products.show',$product) }}">{{ $product->name }}</a></td><td>{{ $product->variants_count }}</td>@foreach(\App\Models\ProductTaxRate::ENTITY_COLUMNS as $entity=>$column)
 <td class="tax-entity-editor" data-tax-entity="{{ \App\Models\ProductTaxRate::ENTITY_TYPES[$entity] }}">
     <span class="tax-status {{ $product->$column !== null ? 'is-set' : '' }}">Hiện tại: {{ $product->$column !== null ? rtrim(rtrim(number_format((float)$product->$column,2,',','.'),'0'),',').'%' : 'Chưa thiết lập' }}</span>
+    @foreach($product->taxRates->where('entity_type',$entity) as $rate)
+    <div class="tax-entity-draft"><span>Nháp: {{ $rate->tax_percent === null ? 'Chưa thiết lập' : $rate->tax_percent.'%' }}<br>Từ {{ $rate->effective_from->format('d/m/Y') }}</span><form method="POST" action="{{ route($prefix.'.tax-settings.products.apply',[$product,$rate]) }}">@csrf<button class="btn btn-sm btn-success">Áp dụng</button></form></div>
+    @endforeach
+</td>
+@endforeach
+<td><button type="button" class="btn btn-sm btn-outline-primary" data-tax-dialog="tax-dialog-{{ $product->id }}">Điều chỉnh</button></td><td class="tax-priority-cell"><form method="POST" action="{{ route($prefix.'.tax-settings.products.priority',$product) }}">@csrf @method('PATCH')<input type="hidden" name="tax_priority" value="{{ $product->tax_priority ? 0 : 1 }}"><button type="submit" class="tax-priority-star {{ $product->tax_priority ? 'is-priority' : '' }}" aria-pressed="{{ $product->tax_priority ? 'true' : 'false' }}" aria-label="{{ $product->tax_priority ? 'Bỏ ưu tiên ' : 'Ưu tiên ' }}{{ $product->name }}" title="{{ $product->tax_priority ? 'Bỏ ưu tiên' : 'Đưa lên đầu' }}">{{ $product->tax_priority ? '★' : '☆' }}</button></form></td></tr>
+@empty<tr><td colspan="8" class="text-center text-muted py-4">Không tìm thấy sản phẩm phù hợp.</td></tr>@endforelse
+</tbody></table></div>
+<div class="tax-bottom"><span>Hiển thị {{ $products->firstItem() ?? 0 }}–{{ $products->lastItem() ?? 0 }} / {{ $products->total() }} sản phẩm</span>{{ $products->links() }}</div>
+<div class="tax-help">Sản phẩm ưu tiên luôn ở đầu. Lưu nháp chưa đổi mức thuế hiện tại; Áp dụng xác nhận hiệu lực từ ngày đã chọn. Ngày tương lai được kích hoạt tự động theo lịch hệ thống. Cập nhật tại đây không tự tính lại VAT của đơn hàng đã tạo.</div>
+</section></div>
+
+@foreach($products as $product)
+<dialog id="tax-dialog-{{ $product->id }}" class="tax-adjust-dialog" aria-labelledby="tax-dialog-title-{{ $product->id }}">
+    <div class="tax-dialog-heading"><div><h5 id="tax-dialog-title-{{ $product->id }}">Điều chỉnh thuế suất VAT</h5><p>{{ $product->name }}</p></div><button type="button" class="tax-dialog-close" data-tax-close aria-label="Đóng">×</button></div>
+    <p class="tax-dialog-hint">Mỗi pháp nhân có thuế suất và ngày hiệu lực riêng. Lưu nháp, sau đó bấm Áp dụng trong danh sách để xác nhận.</p>
+    <div class="tax-dialog-grid">
+    @foreach(\App\Models\ProductTaxRate::ENTITY_COLUMNS as $entity=>$column)
+    <section class="tax-dialog-entity"><h6>{{ \App\Models\ProductTaxRate::ENTITY_TYPES[$entity] }}</h6><small class="text-muted">Hiện tại: {{ $product->$column === null ? 'Chưa thiết lập' : $product->$column.'%' }}</small>
     <form action="{{ route($prefix.'.tax-settings.products.update',$product) }}" method="POST" class="tax-entity-form">
         @csrf @method('PATCH')
         <input type="hidden" name="entity_type" value="{{ $entity }}">
@@ -42,15 +63,23 @@
         <input name="note" placeholder="Ghi chú thay đổi" maxlength="1000" class="form-control" aria-label="Ghi chú thuế {{ \App\Models\ProductTaxRate::ENTITY_TYPES[$entity] }}">
         <button class="tax-save">Lưu nháp</button>
     </form>
-    @foreach($product->taxRates->where('entity_type',$entity) as $rate)
-    <div class="tax-entity-draft"><span>Nháp: {{ $rate->tax_percent === null ? 'Chưa thiết lập' : $rate->tax_percent.'%' }}<br>Từ {{ $rate->effective_from->format('d/m/Y') }}</span><form method="POST" action="{{ route($prefix.'.tax-settings.products.apply',[$product,$rate]) }}">@csrf<button class="btn btn-sm btn-success">Áp dụng</button></form></div>
+
+    </section>
     @endforeach
-</td>
+    </div>
+    <div class="tax-dialog-footer"><button type="button" class="btn btn-outline-secondary" data-tax-close>Đóng</button></div>
+</dialog>
 @endforeach
-<td class="tax-priority-cell"><form method="POST" action="{{ route($prefix.'.tax-settings.products.priority',$product) }}">@csrf @method('PATCH')<input type="hidden" name="tax_priority" value="{{ $product->tax_priority ? 0 : 1 }}"><button type="submit" class="tax-priority-star {{ $product->tax_priority ? 'is-priority' : '' }}" aria-pressed="{{ $product->tax_priority ? 'true' : 'false' }}" aria-label="{{ $product->tax_priority ? 'Bỏ ưu tiên ' : 'Ưu tiên ' }}{{ $product->name }}" title="{{ $product->tax_priority ? 'Bỏ ưu tiên' : 'Đưa lên đầu' }}">{{ $product->tax_priority ? '★' : '☆' }}</button></form></td></tr>
-@empty<tr><td colspan="7" class="text-center text-muted py-4">Không tìm thấy sản phẩm phù hợp.</td></tr>@endforelse
-</tbody></table></div>
-<div class="tax-bottom"><span>Hiển thị {{ $products->firstItem() ?? 0 }}–{{ $products->lastItem() ?? 0 }} / {{ $products->total() }} sản phẩm</span>{{ $products->links() }}</div>
-<div class="tax-help">Sản phẩm ưu tiên luôn ở đầu. Lưu nháp chưa đổi mức thuế hiện tại; Áp dụng xác nhận hiệu lực từ ngày đã chọn. Ngày tương lai được kích hoạt tự động theo lịch hệ thống. Cập nhật tại đây không tự tính lại VAT của đơn hàng đã tạo.</div>
-</section></div>
+
 @endsection
+
+@push('scripts')
+<script>
+document.addEventListener('click',event=>{
+ const trigger=event.target.closest('[data-tax-dialog]');
+ if(trigger){const dialog=document.getElementById(trigger.dataset.taxDialog);if(dialog)dialog.showModal();}
+ const close=event.target.closest('[data-tax-close]');
+ if(close)close.closest('dialog').close();
+});
+</script>
+@endpush
