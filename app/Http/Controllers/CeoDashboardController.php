@@ -35,19 +35,47 @@ class CeoDashboardController extends Controller
      */
     public function customerRevenueReport(Request $request, Customer $customer)
     {
-        // Lấy các đơn hàng đã hoàn thành của khách này
-        $orders = Order::query()
+        $data = $request->validate([
+            'from_date' => ['nullable', 'date_format:Y-m-d'],
+            'to_date' => ['nullable', 'date_format:Y-m-d', 'after_or_equal:from_date'],
+        ]);
+
+        $fromDate = $data['from_date'] ?? null;
+        $toDate = $data['to_date'] ?? null;
+        $perPage = (int) $request->input('per_page', 20);
+
+        if (! in_array($perPage, [10, 20, 50, 100], true)) {
+            $perPage = 20;
+        }
+
+        $query = Order::query()
             ->where('customer_id', $customer->id)
-            ->whereIn('status', ['completed', 'delivered'])
+            ->whereIn('status', [Order::STATUS_COMPLETED, Order::STATUS_DELIVERED])
+            ->when($fromDate, fn ($query) => $query->whereDate('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->whereDate('created_at', '<=', $toDate));
+
+        $totalRevenue = (float) (clone $query)->sum('total');
+        $orderCount = (clone $query)->count();
+        $firstOrder = (clone $query)->orderBy('created_at')->orderBy('id')->first();
+        $lastOrder = (clone $query)->orderByDesc('created_at')->orderByDesc('id')->first();
+        $orders = $query
             ->orderByDesc('created_at')
-            ->get();
+            ->orderByDesc('id')
+            ->paginate($perPage)
+            ->withQueryString();
 
-        $totalRevenue = $orders->sum('total_amount');
-        $orderCount = $orders->count();
-        $firstOrder = $orders->last();
-        $lastOrder = $orders->first();
+        return view('ceo.customer_revenue_report', compact(
+            'customer',
+            'orders',
+            'totalRevenue',
+            'orderCount',
+            'firstOrder',
+            'lastOrder',
+            'fromDate',
+            'toDate',
+            'perPage'
+        ));
 
-        return view('ceo.customer_revenue_report', compact('customer', 'orders', 'totalRevenue', 'orderCount', 'firstOrder', 'lastOrder'));
     }
 
     public function __construct()
