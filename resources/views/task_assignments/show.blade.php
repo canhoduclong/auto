@@ -23,6 +23,9 @@
         <small class="text-muted">{{ $task->code }} &bull; Tạo bởi {{ $task->creator?->name }} &bull; {{ $task->created_at?->format('d/m/Y H:i') }} · Hạn chót: <strong class="{{ $task->isOverdue() ? 'text-danger' : '' }}">{{ $task->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</strong></small>
     </div>
     <a href="{{ route($showRoute ?? 'tasks.show', $task) }}?presentation=1" class="btn btn-sm btn-primary" target="_blank" rel="noopener"><i class="ph ph-presentation me-1"></i>Trình chiếu</a>
+    @if((int)$task->created_by === (int)auth()->id() && !in_array($task->status, ['completed', 'done', 'cancelled'], true))
+        <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#extendTaskDeadlineModal"><i class="bi bi-calendar-plus me-1"></i>Gia hạn</button>
+    @endif
     @if($task->canBeEditedBy(auth()->user()))
             <a href="{{ route('task-assignments.edit', $task) }}" class="btn btn-sm btn-outline-primary">
                 <i class="ph-pencil me-1"></i> Chỉnh sửa nội dung
@@ -36,6 +39,31 @@
             </form>
     @endif
 </div>
+
+@if((int)$task->created_by === (int)auth()->id() && !in_array($task->status, ['completed', 'done', 'cancelled'], true))
+@php
+    $minimumExtensionDate = $task->due_date ? $task->due_date->copy()->startOfDay()->addDay() : today();
+    if ($minimumExtensionDate->lt(today())) $minimumExtensionDate = today();
+@endphp
+<div class="modal fade" id="extendTaskDeadlineModal" tabindex="-1" aria-labelledby="extendTaskDeadlineTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered"><form method="POST" action="{{ route('tasks.deadline.extend', $task) }}" class="modal-content">@csrf @method('PATCH')
+        <div class="modal-header"><div><h5 class="modal-title" id="extendTaskDeadlineTitle">Gia hạn ngày hoàn thành</h5><div class="small text-muted mt-1">Hạn hiện tại: <strong>{{ $task->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</strong></div></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Đóng"></button></div>
+        <div class="modal-body">
+            <label for="extendedDueDate" class="form-label">Hạn hoàn thành mới <span class="text-danger">*</span></label>
+            <input id="extendedDueDate" type="date" name="extended_due_date" class="form-control @error('extended_due_date') is-invalid @enderror" min="{{ $minimumExtensionDate->toDateString() }}" value="{{ old('extended_due_date') }}" required>
+            @error('extended_due_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            <label for="extensionReason" class="form-label mt-3">Lý do gia hạn <span class="text-danger">*</span></label>
+            <textarea id="extensionReason" name="extension_reason" rows="3" maxlength="1000" class="form-control @error('extension_reason') is-invalid @enderror" placeholder="Nêu rõ lý do thay đổi hạn hoàn thành" required>{{ old('extension_reason') }}</textarea>
+            @error('extension_reason')<div class="invalid-feedback">{{ $message }}</div>@enderror
+            <div class="form-text mt-2">Người thực hiện sẽ nhận được thông báo về hạn hoàn thành mới.</div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Đóng</button><button class="btn btn-sm btn-warning"><i class="bi bi-calendar-check me-1"></i>Xác nhận gia hạn</button></div>
+    </form></div>
+</div>
+@if($errors->has('extended_due_date') || $errors->has('extension_reason'))
+<script>window.addEventListener('load',function(){const modal=document.getElementById('extendTaskDeadlineModal');if(modal&&window.bootstrap)new bootstrap.Modal(modal).show();});</script>
+@endif
+@endif
 
 <div class="content-body pb-4">
     @if(session('success'))<div class="alert alert-success alert-dismissible fade show">{{ session('success') }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>@endif

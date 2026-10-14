@@ -323,6 +323,54 @@ class TaskAssignmentController extends Controller
         return back()->with('success', 'Đã lưu nội dung công việc.');
     }
 
+    public function extendDeadline(Request $request, TaskAssignment $taskAssignment)
+    {
+        abort_unless((int) $taskAssignment->created_by === (int) $request->user()->id, 403, 'Chỉ người giao việc được gia hạn.');
+        abort_if(in_array($taskAssignment->status, [TaskAssignment::STATUS_COMPLETED, TaskAssignment::STATUS_DONE, TaskAssignment::STATUS_CANCELLED], true), 422, 'Không thể gia hạn công việc đã báo hoàn thành, đã hoàn thành hoặc đã hủy.');
+
+        $data = $request->validate([
+            'extended_due_date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
+            'extension_reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $newDueDate = Carbon::createFromFormat('!Y-m-d', $data['extended_due_date'])->endOfDay();
+        $oldDueDate = $taskAssignment->due_date?->copy();
+        if ($oldDueDate && $newDueDate->toDateString() <= $oldDueDate->toDateString()) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'extended_due_date' => 'Hạn mới phải sau ngày hoàn thành hiện tại.',
+            ]);
+        }
+
+        $task = DB::transaction(function () use ($request, $taskAssignment, $data, $newDueDate) {
+            $task = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $task->created_by === (int) $request->user()->id, 403);
+            abort_if(in_array($task->status, [TaskAssignment::STATUS_COMPLETED, TaskAssignment::STATUS_DONE, TaskAssignment::STATUS_CANCELLED], true), 422, 'Không thể gia hạn công việc đã báo hoàn thành, đã hoàn thành hoặc đã hủy.');
+            $previous = $task->due_date?->copy();
+            if ($previous && $newDueDate->toDateString() <= $previous->toDateString()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['extended_due_date' => 'Hạn mới phải sau ngày hoàn thành hiện tại.']);
+            }
+            $task->update(['due_date' => $newDueDate]);
+            TaskStatusLog::log(
+                $task,
+                $task->status,
+                $request->user(),
+                'Gia hạn hoàn thành: '.($previous?->format('d/m/Y H:i') ?? 'Chưa đặt').' → '.$newDueDate->format('d/m/Y H:i').'. Lý do: '.trim($data['extension_reason'])
+            );
+            return $task;
+        });
+
+        $recipients = User::query()->whereIn('id', $task->assignees()->where('status', '!=', 'cancelled')->pluck('user_id'))->get();
+        if ($recipients->isNotEmpty()) {
+            \Illuminate\Support\Facades\Notification::send($recipients, new \App\Notifications\OperatingNotification(
+                'Công việc được gia hạn',
+                $task->title.' · Hạn mới: '.$task->due_date->format('d/m/Y H:i'),
+                route('tasks.show', $task)
+            ));
+        }
+
+        return back()->with('success', 'Đã gia hạn công việc đến '.$task->due_date->format('d/m/Y H:i').'.');
+    }
+
     public function updateDebtProgress(Request $request, TaskAssignment $taskAssignment, int $item)
     {
         $data = $request->validate(['collected' => 'required|numeric|min:0|max:999999999999', 'note' => 'required|string|max:1000']);
