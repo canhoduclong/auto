@@ -11,7 +11,7 @@ class UserPolicyAcceptance extends Model
 
     protected function casts(): array
     {
-        return ['accepted_at' => 'datetime'];
+        return ['accepted_at' => 'datetime', 'revoked_at' => 'datetime'];
     }
 
     public function user(): BelongsTo

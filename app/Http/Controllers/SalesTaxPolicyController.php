@@ -50,9 +50,25 @@ class SalesTaxPolicyController extends Controller
             'policy_version' => SalesTaxPolicy::version(),
         ], [
             'accepted_at' => now(),
+            'revoked_at' => null,
             'ip_address' => $request->ip(),
             'user_agent' => mb_substr((string) $request->userAgent(), 0, 1000),
         ]);
         return redirect()->intended(route('pages.my_orders.monitoring'))->with('success', 'Bạn đã xác nhận quy định nghiệp vụ nội bộ.');
+    }
+
+    public function revoke(Request $request): RedirectResponse
+    {
+        $acceptance = UserPolicyAcceptance::query()
+            ->where('user_id', $request->user()->id)
+            ->where('policy_key', config('sales_tax_policy.key'))
+            ->where('policy_version', SalesTaxPolicy::version())
+            ->whereNull('revoked_at')
+            ->firstOrFail();
+
+        $acceptance->update(['revoked_at' => now()]);
+
+        return redirect()->route('sales-tax-policy.show')
+            ->with('success', 'Bạn đã hủy xác nhận. Tài khoản hiện ở trạng thái chưa xác nhận.');
     }
 }

@@ -22,6 +22,7 @@ class CeoSalesTaxPolicyController extends Controller
             ->with(['user.roles'])
             ->where('policy_key', config('sales_tax_policy.key'))
             ->where('policy_version', $version)
+            ->whereNull('revoked_at')
             ->latest('accepted_at')
             ->paginate(20);
         $eligibleUsers = User::query()
@@ -30,6 +31,7 @@ class CeoSalesTaxPolicyController extends Controller
         $acceptedUsers = UserPolicyAcceptance::query()
             ->where('policy_key', config('sales_tax_policy.key'))
             ->where('policy_version', $version)
+            ->whereNull('revoked_at')
             ->distinct()->count('user_id');
 
         return view('ceo.sales-tax-policy.edit', compact(

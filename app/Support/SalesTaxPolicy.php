@@ -63,6 +63,7 @@ class SalesTaxPolicy
     {
         return UserPolicyAcceptance::query()->where('user_id', $user->id)
             ->where('policy_key', config('sales_tax_policy.key'))
-            ->where('policy_version', self::version())->exists();
+            ->where('policy_version', self::version())
+            ->whereNull('revoked_at')->exists();
     }
 }

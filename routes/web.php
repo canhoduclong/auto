@@ -1225,6 +1225,7 @@ Route::post('/my-profile', [PageController::class, 'updateProfile'])->name('page
 Route::middleware('auth')->group(function () {
     Route::get('/noi-quy-thue-va-lap-don', [\App\Http\Controllers\SalesTaxPolicyController::class, 'show'])->name('sales-tax-policy.show');
     Route::post('/noi-quy-thue-va-lap-don/xac-nhan', [\App\Http\Controllers\SalesTaxPolicyController::class, 'accept'])->name('sales-tax-policy.accept');
+    Route::delete('/noi-quy-thue-va-lap-don/xac-nhan', [\App\Http\Controllers\SalesTaxPolicyController::class, 'revoke'])->name('sales-tax-policy.revoke');
 });
 
 // My Orders routes (sale / leader / manager only)

@@ -417,6 +417,9 @@
                         <li><a href="{{ route('department-notifications.index', ['layout' => 'site']) }}" class="d-block py-1"><i class="bi bi-megaphone me-1"></i> Tạo thông báo</a></li>
                     @endif
                     <li><a href="{{ route('pages.my_profile') }}" class="d-block py-1"><i class="bi bi-person-circle me-1"></i> {{ __('site.profile') }}</a></li>
+                    @if(Auth::user()->isSalesFlowRole())
+                        <li><a href="{{ route('sales-tax-policy.show') }}" class="d-block py-1"><i class="bi bi-shield-check me-1"></i> Quy định sử dụng hệ thống</a></li>
+                    @endif
                     <li class="pt-2 pb-1 text-muted small text-uppercase fw-semibold">Điều hành &amp; Giao việc</li>
                     @foreach(\App\Support\WebTaskNavigation::items(Auth::user()) as $taskMenuItem)
                         <li><a href="{{ $taskMenuItem['url'] }}" class="d-block py-1 {{ $taskMenuItem['active'] ? 'fw-semibold' : '' }}"><i class="bi bi-{{ $taskMenuItem['icon'] }} me-1"></i> {{ $taskMenuItem['label'] }}</a></li>
@@ -661,6 +664,11 @@
                                         <a class="dropdown-item" href="{{ route('pages.my_profile') }}">
                                             <i class="bi bi-person-circle"></i> {{ __('site.profile') }}
                                         </a>
+                                        @if(Auth::user()->isSalesFlowRole())
+                                            <a class="dropdown-item" href="{{ route('sales-tax-policy.show') }}">
+                                                <i class="bi bi-shield-check"></i> Quy định sử dụng hệ thống
+                                            </a>
+                                        @endif
                                         <div class="dropdown-divider my-0"></div>
                                         <div class="px-3 py-2 text-muted small text-uppercase fw-semibold">Điều hành &amp; Giao việc</div>
                                         @foreach(\App\Support\WebTaskNavigation::items(Auth::user()) as $taskMenuItem)

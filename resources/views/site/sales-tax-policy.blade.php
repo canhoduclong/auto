@@ -57,7 +57,7 @@
                         <div class="policy-submit"><small>Sau khi xác nhận, bạn có thể tiếp tục sử dụng các chức năng nghiệp vụ của tài khoản.</small><button class="btn btn-primary px-4"><i class="bi bi-check2-circle me-1"></i>Xác nhận và tiếp tục</button></div>
                     </form>
                 @else
-                    <div class="policy-accepted d-flex gap-3 align-items-center"><i class="bi bi-patch-check-fill"></i><div><strong class="d-block">Bạn đã xác nhận phiên bản hiện hành</strong><span class="small">Tài khoản được phép tiếp tục thực hiện các hoạt động nghiệp vụ.</span></div></div>
+                    <div class="policy-accepted d-flex flex-wrap gap-3 align-items-center"><i class="bi bi-patch-check-fill"></i><div class="flex-grow-1"><strong class="d-block">Bạn đã xác nhận phiên bản hiện hành</strong><span class="small">Tài khoản được phép tiếp tục thực hiện các hoạt động nghiệp vụ.</span></div><form method="POST" action="{{ route('sales-tax-policy.revoke') }}" onsubmit="return confirm('Bạn chắc chắn muốn hủy xác nhận và đưa tài khoản về trạng thái chưa xác nhận?')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger"><i class="bi bi-arrow-counterclockwise me-1"></i>Hủy xác nhận</button></form></div>
                 @endif
             </article>
         </div>
