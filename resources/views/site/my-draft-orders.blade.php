@@ -115,8 +115,36 @@
     .draft-edit-line-total { font-weight: 900; white-space: nowrap; }
     .draft-edit-total { display: grid; grid-template-columns: auto minmax(100px, auto); justify-content: end; gap: 18px; padding: 9px 6px 20px; color: #0f172a; font-size: .8rem; font-weight: 900; text-align: right; }
     .js-draft-fees { margin: 16px 0 !important; padding: 10px !important; }
-    .js-draft-fees label { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; font-weight: 600; }
-    .js-draft-fees .form-check-input { flex: 0 0 auto; width: 1em; height: 1em; margin: 0; }
+    .js-draft-fees .draft-fee-choice { display: block; margin-bottom: 6px; cursor: pointer; }
+    .draft-fee-choice input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+    }
+    .draft-fee-choice span {
+        display: flex;
+        min-height: 38px;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: #fff;
+        color: #475569;
+        font-size: 12px;
+        font-weight: 800;
+        text-align: center;
+        transition: border-color .15s ease, background-color .15s ease, color .15s ease, box-shadow .15s ease;
+    }
+    .draft-fee-choice input:checked + span {
+        border-color: #0f766e;
+        background: #ecfdf5;
+        color: #0f766e;
+        box-shadow: 0 0 0 2px rgba(15, 118, 110, .08);
+    }
+    .draft-fee-choice input:focus-visible + span { outline: 3px solid rgba(13, 110, 253, .25); outline-offset: 2px; }
     .js-draft-fees .input-group { flex-wrap: nowrap; }
     .js-draft-fees .input-group > .form-control { width: 1%; min-width: 0; }
     .js-draft-packing { padding: 12px !important; }
@@ -555,14 +583,20 @@
                                     <summary class="fw-semibold">Chi phí khác</summary>
                                     <div class="row g-2 mt-1">
                                         <div class="col-md-6">
-                                            <label><input type="checkbox" name="charge_vat" class="form-check-input js-draft-fee" @checked($draft->charge_vat)> Tính VAT</label>
+                                            <label class="draft-fee-choice">
+                                                <input type="checkbox" name="charge_vat" class="js-draft-fee" @checked($draft->charge_vat)>
+                                                <span>Tính VAT</span>
+                                            </label>
                                             <div class="input-group input-group-sm mt-1">
                                                 <input type="number" name="vat_percent" class="form-control js-draft-fee" aria-label="VAT (%)" min="0.01" max="100" step="0.01" value="{{ $draft->vat_percent }}">
                                                 <span class="input-group-text">%</span>
                                             </div>
                                         </div>
                                         <div class="col-md-6">
-                                            <label><input type="checkbox" name="collect_customer_shipping_fee" class="form-check-input js-draft-fee" @checked($draft->collect_customer_shipping_fee)> Thu phí giao hàng của khách</label>
+                                            <label class="draft-fee-choice">
+                                                <input type="checkbox" name="collect_customer_shipping_fee" class="js-draft-fee" @checked($draft->collect_customer_shipping_fee)>
+                                                <span>Thu phí giao hàng của khách</span>
+                                            </label>
                                             <div class="input-group input-group-sm mt-1">
                                                 <input type="number" name="customer_shipping_fee" class="form-control js-draft-fee" aria-label="Phí giao hàng thu khách" min="0.01" max="999999999999.99" step="0.01" value="{{ $draft->customer_shipping_fee }}">
                                                 <span class="input-group-text">đ</span>

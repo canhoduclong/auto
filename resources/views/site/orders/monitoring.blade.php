@@ -458,6 +458,36 @@
     .monitor-inline-edit-title { margin-bottom: 10px; color: #075985; font-size: .82rem; font-weight: 900; text-transform: uppercase; }
     .monitor-edit-picker { margin-bottom: 12px; padding: 12px; border: 1px solid #dce6f1; border-radius: 9px; background: #f8fafc; }
     .monitor-edit-picker-label { color: #334155; font-size: .78rem; font-weight: 900; }
+    .monitor-fee-choice { display: block; margin-top: 10px; cursor: pointer; }
+    .monitor-fee-choice input {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        opacity: 0;
+        pointer-events: none;
+    }
+    .monitor-fee-choice span {
+        display: flex;
+        min-height: 38px;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background: #fff;
+        color: #475569;
+        font-size: .78rem;
+        font-weight: 800;
+        text-align: center;
+        transition: border-color .15s ease, background-color .15s ease, color .15s ease, box-shadow .15s ease;
+    }
+    .monitor-fee-choice input:checked + span {
+        border-color: #0f766e;
+        background: #ecfdf5;
+        color: #0f766e;
+        box-shadow: 0 0 0 2px rgba(15, 118, 110, .08);
+    }
+    .monitor-fee-choice input:focus-visible + span { outline: 3px solid rgba(13, 110, 253, .25); outline-offset: 2px; }
     .monitor-edit-selected-customer { color: #075985; font-size: .82rem; font-weight: 800; }
     .monitor-edit-picker-results { max-height: 280px; margin-top: 8px; overflow: auto; background: #fff; }
     .monitor-edit-product-search {
@@ -1878,10 +1908,10 @@
                             <div id="monitorConfirmItems"></div>
                             <div class="border-top mt-3 pt-3">
                                 <h3 class="mb-2">Chi phí khác <span class="fw-normal text-muted">(nếu có)</span></h3>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input" type="checkbox" id="monitorChargeVat">
-                                    <label class="form-check-label small fw-bold" for="monitorChargeVat">Tính chi phí VAT</label>
-                                </div>
+                                <label class="monitor-fee-choice mb-2" for="monitorChargeVat">
+                                    <input type="checkbox" id="monitorChargeVat">
+                                    <span>Tính chi phí VAT</span>
+                                </label>
                                 <div id="monitorVatFields" class="mb-3" hidden>
                                     <label class="form-label small" for="monitorVatPercent">Thuế VAT (%)</label>
                                     <div class="input-group input-group-sm">
@@ -1890,10 +1920,10 @@
                                     </div>
                                     <div class="form-text">Tiền VAT được tự động tính trên tổng tiền sản phẩm.</div>
                                 </div>
-                                <div class="form-check mb-2">
-                                    <input class="form-check-input" type="checkbox" id="monitorCollectCustomerShippingFee">
-                                    <label class="form-check-label small fw-bold" for="monitorCollectCustomerShippingFee">Thu tiền ship của khách hàng</label>
-                                </div>
+                                <label class="monitor-fee-choice mb-2" for="monitorCollectCustomerShippingFee">
+                                    <input type="checkbox" id="monitorCollectCustomerShippingFee">
+                                    <span>Thu tiền ship của khách hàng</span>
+                                </label>
                                 <div id="monitorCustomerShippingFeeFields" class="mb-2" hidden>
                                     <label class="form-label small" for="monitorCustomerShippingFee">Số tiền thu thêm</label>
                                     <div class="input-group input-group-sm">
@@ -2600,9 +2630,9 @@
                                                     <div class="monitor-edit-picker-label">Chi phí khác</div>
                                                     <div class="mb-3">
                                                         <input type="hidden" name="charge_vat" value="0">
-                                                        <label class="form-check-label" for="editVat{{ $order->id }}">
-                                                            <input type="checkbox" class="form-check-input me-1 monitor-edit-fee" id="editVat{{ $order->id }}" name="charge_vat" value="1" @checked($order->charge_vat)>
-                                                            Tính chi phí VAT
+                                                        <label class="monitor-fee-choice" for="editVat{{ $order->id }}">
+                                                            <input type="checkbox" class="monitor-edit-fee" id="editVat{{ $order->id }}" name="charge_vat" value="1" @checked($order->charge_vat)>
+                                                            <span>Tính chi phí VAT</span>
                                                         </label>
                                                         <div class="input-group input-group-sm mt-2">
                                                             <input type="number" class="form-control monitor-edit-fee" name="vat_percent" aria-label="Thuế VAT (%)" min="0.01" max="100" step="0.01" value="{{ $order->vat_percent > 0 ? $order->vat_percent : '' }}" placeholder="Nhập thuế VAT (%)">
@@ -2611,9 +2641,9 @@
                                                     </div>
                                                     <div>
                                                         <input type="hidden" name="collect_customer_shipping_fee" value="0">
-                                                        <label class="form-check-label" for="editShip{{ $order->id }}">
-                                                            <input type="checkbox" class="form-check-input me-1 monitor-edit-fee" id="editShip{{ $order->id }}" name="collect_customer_shipping_fee" value="1" @checked($order->collect_customer_shipping_fee)>
-                                                            Thu tiền ship của khách hàng
+                                                        <label class="monitor-fee-choice" for="editShip{{ $order->id }}">
+                                                            <input type="checkbox" class="monitor-edit-fee" id="editShip{{ $order->id }}" name="collect_customer_shipping_fee" value="1" @checked($order->collect_customer_shipping_fee)>
+                                                            <span>Thu tiền ship của khách hàng</span>
                                                         </label>
                                                         <div class="input-group input-group-sm mt-2">
                                                             <input type="number" class="form-control monitor-edit-fee" name="customer_shipping_fee" aria-label="Tiền ship thu khách" min="1" max="999999999999.99" step="0.01" value="{{ $order->customer_shipping_fee > 0 ? $order->customer_shipping_fee : '' }}" placeholder="Nhập số tiền">

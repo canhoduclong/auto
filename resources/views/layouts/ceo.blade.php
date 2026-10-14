@@ -166,6 +166,15 @@
             color: #fff;
             box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.38);
         }
+        .ceo-nav-section {
+            margin-top: 8px;
+            padding: 12px 16px;
+            color: #64748b;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .06em;
+            text-transform: uppercase;
+        }
         .ceo-task-group { margin-top: .8rem; }
         .ceo-task-group summary { cursor: pointer; list-style: none; font-weight: 600; }
         .ceo-task-group summary::-webkit-details-marker { display: none; }
@@ -337,9 +346,12 @@ body.ceo-menu-collapsed .ceo-task-links{padding:0}
                 <i class="bi bi-people-fill"></i> Danh sách user
             </a>
 
-            <div style="padding: 12px 16px; font-size: 11px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.06em; margin-top: 8px;">Tài Chính</div>
-            <div class="nav-section">Quản lý thuế suất</div>
-            <a href="{{ route('ceo.tax-settings.products') }}" class="ceo-nav-link {{ request()->routeIs('ceo.tax-settings.*') ? 'active' : '' }}"><i class="bi bi-percent"></i> Thuế suất VAT sản phẩm</a>
+            <div class="ceo-nav-section">Quản lý Thuế</div>
+            <a href="{{ route('ceo.tax-settings.products') }}" class="ceo-nav-link {{ request()->routeIs('ceo.tax-settings.*') ? 'active' : '' }}">
+                <i class="bi bi-percent"></i> Thuế suất VAT sản phẩm
+            </a>
+
+            <div class="ceo-nav-section">Tài Chính</div>
             <a href="{{ route('ceo.revenue') }}" class="ceo-nav-link {{ request()->routeIs('ceo.revenue') ? 'active' : '' }}">
                 <i class="bi bi-currency-dollar"></i> Doanh thu
             </a>
