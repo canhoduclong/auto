@@ -118,6 +118,34 @@ class WarehouseStocktakeController extends Controller
             }
         }
 
+        // Danh sách hiện tại, độc lập với phân trang và mốc lịch sử kiểm kê.
+        $packedOrderReservations = InventoryReservation::query()
+            ->with(['orderItem.order.customer', 'inventory.productVariant.product'])
+            ->where('quantity', '>', 0)
+            ->whereHas('inventory', function ($query) use ($warehouse, $search) {
+                $query->where('warehouse_id', $warehouse->id)
+                    ->when($search !== '', function ($query) use ($search) {
+                        $query->whereHas('productVariant', function ($variant) use ($search) {
+                            $variant->where(function ($match) use ($search) {
+                                $match->where('name', 'like', "%{$search}%")
+                                    ->orWhere('sku', 'like', "%{$search}%")
+                                    ->orWhereHas('product', fn ($product) => $product->where('name', 'like', "%{$search}%"));
+                            });
+                        });
+                    });
+            })
+            ->whereHas('orderItem.order', function ($query) {
+                $query->whereNull('trash_at')
+                    ->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_DELIVERED, Order::STATUS_COMPLETED,
+                        Order::STATUS_RETURNED, Order::STATUS_RETURNED_COMPLETED]);
+            })
+            ->where(function ($query) {
+                $query->whereNotNull('packed_at')
+                    ->orWhereHas('orderItem.order', fn ($order) => $order->whereIn('status', [Order::STATUS_PACKED, Order::STATUS_READY_TO_SHIP]));
+            })
+            ->orderBy('order_item_id')->orderBy('id')
+            ->paginate(30, ['*'], 'packed_page')->withQueryString();
+
         $recentStocktakes = InventoryStocktake::query()
             ->with(['creator:id,name', 'items.productVariant.product:id,name'])
             ->withCount('items')
@@ -143,6 +171,7 @@ class WarehouseStocktakeController extends Controller
             'warehouses',
             'inventories',
             'recentStocktakes',
+            'packedOrderReservations',
             'search',
             'countedAt',
             'inventoryDate',

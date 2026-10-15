@@ -144,4 +144,39 @@ class PackedTransferInventoryTest extends TestCase
         self::assertNotNull(InventoryReservation::first()->packed_at);
     }
 
+    public function test_legacy_reservation_can_use_real_free_stock_in_another_row(): void
+    {
+        DB::table('inventories')->where('id',1)->update(['quantity'=>2]);
+        DB::table('inventories')->insert(['id'=>3,'warehouse_id'=>1,'product_variant_id'=>1,'quantity'=>3,'reserved_quantity'=>0]);
+        $o=$this->order(); $doc=new InventoryDocument; $doc->id=99;
+        DB::transaction(fn()=>(new \ReflectionMethod(ShipperDashboardController::class,'deductStockForAcceptedOrderItem'))->invoke(new ShipperDashboardController,$o,$doc,$o->items->first(),1));
+        self::assertEquals(0,Inventory::find(1)->quantity);
+        self::assertEquals(0,Inventory::find(3)->quantity);
+        self::assertSame(0,InventoryReservation::count());
+        self::assertEquals(-5,DB::table('inventory_movements')->sum('quantity'));
+    }
+    public function test_duplicate_legacy_reservations_export_only_order_quantity(): void
+    {
+        DB::table('inventory_reservations')->insert(['inventory_id'=>1,'order_item_id'=>10,'quantity'=>5,'packed_at'=>now()]);
+        $o=$this->order(); $doc=new InventoryDocument; $doc->id=99;
+        DB::transaction(fn()=>(new \ReflectionMethod(ShipperDashboardController::class,'deductStockForAcceptedOrderItem'))->invoke(new ShipperDashboardController,$o,$doc,$o->items->first(),1));
+        self::assertEquals(0,Inventory::find(1)->quantity);
+        self::assertSame(0,InventoryReservation::count());
+        self::assertEquals(-5,DB::table('inventory_movements')->sum('quantity'));
+    }
+    public function test_short_stock_does_not_take_another_orders_sealed_goods_and_rolls_back(): void
+    {
+        DB::table('inventory_reservations')->insert(['inventory_id'=>1,'order_item_id'=>11,'quantity'=>3,'packed_at'=>now()]);
+        $o=$this->order(); $doc=new InventoryDocument; $doc->id=99;
+        try {
+            DB::transaction(fn()=>(new \ReflectionMethod(ShipperDashboardController::class,'deductStockForAcceptedOrderItem'))->invoke(new ShipperDashboardController,$o,$doc,$o->items->first(),1));
+            self::fail('Short stock accepted');
+        } catch (\RuntimeException $e) {
+            self::assertStringContainsString('Không đủ tồn kho',$e->getMessage());
+        }
+        self::assertEquals(5,Inventory::find(1)->quantity);
+        self::assertEquals(3,InventoryReservation::where('order_item_id',11)->sum('quantity'));
+        self::assertSame(0,DB::table('inventory_movements')->count());
+    }
+
 }

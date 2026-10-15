@@ -2090,42 +2090,32 @@ class ShipperDashboardController extends Controller
                 continue;
             }
 
-            if ($remaining <= 0) {
-                continue;
-            }
-
+            // Legacy reservations can be duplicated or exceed the stock left
+            // on one inventory row. Consume only real stock not held by others,
+            // then let the fallback allocate the balance in this warehouse.
+            $otherReserved = (float) $inventory->reservations()
+                ->where('id', '!=', $reservation->id)->sum('quantity');
+            $deductQty = min(
+                max(0, $remaining),
+                max(0, (int) $reservation->quantity),
+                max(0, (int) floor((float) $inventory->quantity - $otherReserved))
+            );
+            $reservation->delete();
             $inventory->reserved_quantity = $inventory->reservations()->sum('quantity');
-            $deductQty = min($remaining, (int) $reservation->quantity);
-            if ($deductQty <= 0) {
-                continue;
-            }
-
-            if ((int) $inventory->quantity < $deductQty || (int) $inventory->reserved_quantity < $deductQty) {
-                throw new \RuntimeException('Dữ liệu tồn kho đặt trước không hợp lệ khi xuất kho.');
-            }
-
-            $remaining -= $deductQty;
-            $reservation->quantity -= $deductQty;
-
-            if ((int) $reservation->quantity <= 0) {
-                $reservation->delete();
-            } else {
-                $reservation->save();
-            }
-
             $inventory->quantity -= $deductQty;
-            $inventory->reserved_quantity -= $deductQty;
             $inventory->save();
 
-            InventoryMovement::create([
-                'inventory_id' => $inventory->id,
-                'quantity' => -$deductQty,
-                'type' => 'export',
-                'reference_id' => $document->id,
-                'reference_type' => InventoryDocument::class,
-                'user_id' => Auth::id(),
-            ]);
-
+            if ($deductQty > 0) {
+                InventoryMovement::create([
+                    'inventory_id' => $inventory->id,
+                    'quantity' => -$deductQty,
+                    'type' => 'export',
+                    'reference_id' => $document->id,
+                    'reference_type' => InventoryDocument::class,
+                    'user_id' => Auth::id(),
+                ]);
+                $remaining -= $deductQty;
+            }
         }
 
         if ($remaining > 0) {

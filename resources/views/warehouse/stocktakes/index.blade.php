@@ -235,6 +235,8 @@
     @endif
 </div>
 
+@include('warehouse.stocktakes._packed_orders')
+
 <div class="stocktake-card">
     <div class="p-3 border-bottom fw-semibold"><i class="bi bi-clock-history me-1"></i>10 phiếu kiểm kê gần nhất</div>
     <div class="p-3 d-grid gap-2">

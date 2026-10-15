@@ -83,3 +83,9 @@ Shipper lấy hàng điều chuyển phải xuất phần giữ riêng của ch�
 Shipper lấy đi giao tiêu thụ lượng giữ riêng và ghi xuất kho, kể cả đơn nhận từ ngày trước có hàng đã được chốt giữ riêng. Hủy đơn khi hàng còn ở kho giải phóng lượng giữ riêng, không cộng thêm số lượng tồn thực tế. Các cập nhật tồn qua model Inventory bị chặn nếu giảm xuống dưới lượng đã đóng giữ riêng.
 
 Dữ liệu cũ thiếu tồn hoặc thiếu chứng từ phải được đối soát; không tự cộng tồn để vượt lỗi nhận đơn. Không tìm thấy đơn ORD-A58D29DAB8 trong database workspace tại thời điểm kiểm tra, nên chưa sửa dữ liệu riêng của đơn trong ảnh.
+
+## Danh sách hàng đã đóng trong kiểm kê
+
+Trang kiểm kê có mục “Hàng tồn theo đơn đã đóng”, hiển thị mã đơn, khách hàng, sản phẩm/biến thể, SKU, số lượng giữ riêng, kg đã đóng và thời điểm chốt giữ hàng. Đây là dữ liệu hiện tại của kho đang chọn, có lọc theo sản phẩm và phân trang riêng, không phải ảnh chụp tồn theo ngày kiểm kê lịch sử.
+
+Danh sách chỉ xem, nằm ngoài biểu mẫu cập nhật kiểm kê, không có ô sửa hoặc thao tác xóa. Chỉ các lượng giữ hàng còn tồn tại ở kho được hiển thị; đơn đã hủy, đã giao, hoàn tất hoặc đưa vào thùng rác được loại ra. Dữ liệu cũ thiếu kg hoặc thời điểm chốt hiển thị “Chưa ghi nhận”.
