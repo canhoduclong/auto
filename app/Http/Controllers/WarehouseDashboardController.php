@@ -2118,14 +2118,20 @@ class WarehouseDashboardController extends Controller
             ->when($managedWarehouseId, fn ($query) => $query->where('target_warehouse_id', $managedWarehouseId))
             ->whereHas('order')
             ->whereIn('status', [
+                WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                WarehouseTransfer::STATUS_IN_TRANSIT,
                 WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
                 WarehouseTransfer::STATUS_RECEIVED_COMPLETED,
             ])
             ->where(function ($query) use ($selectedDate): void {
-                // Hàng đã được shipper giao phải luôn hiện cho kho đích để tiếp nhận,
+                // Phiếu đang chờ nhận hoặc đang vận chuyển luôn hiện ở kho đích,
                 // kể cả ngày giao của đơn khác ngày đang xem. Chỉ lịch sử hoàn tất
                 // mới tuân theo bộ lọc ngày.
-                $query->where('status', WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE)
+                $query->whereIn('status', [
+                    WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
+                    WarehouseTransfer::STATUS_IN_TRANSIT,
+                    WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+                ])
                     ->orWhere(function ($completedQuery) use ($selectedDate): void {
                         $completedQuery
                             ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
@@ -2162,16 +2168,7 @@ class WarehouseDashboardController extends Controller
             ->latest('id')
             ->get();
 
-        $shipperTransfers = WarehouseTransfer::query()
-            ->with(['order.customer', 'order.items.variant.product', 'sourceWarehouse', 'targetWarehouse', 'shipper'])
-            ->when($managedWarehouseId, fn ($query) => $query->where('target_warehouse_id', $managedWarehouseId))
-            ->whereHas('order')
-            ->where('status', WarehouseTransfer::STATUS_IN_TRANSIT)
-            ->orderByDesc('picked_up_at')
-            ->orderByDesc('id')
-            ->get();
-
-        return view('warehouse.transfers.incoming', compact('transfers', 'inventoryTransfers', 'shipperTransfers', 'managedWarehouseId', 'selectedDate'));
+        return view('warehouse.transfers.incoming', compact('transfers', 'inventoryTransfers', 'managedWarehouseId', 'selectedDate'));
     }
 
     public function pullTransferToWarehouse(Request $request, WarehouseTransfer $transfer)

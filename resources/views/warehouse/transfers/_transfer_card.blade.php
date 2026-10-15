@@ -1,9 +1,13 @@
 @php
     $order = $transfer->order;
     $canConfirm = $transfer->status === 'delivered_waiting_receive';
-    $statusMeta = $canConfirm
-        ? ['Chờ tiếp nhận', 'bg-warning text-dark']
-        : ['Đã tiếp nhận', 'bg-success'];
+    $statusMeta = match ($transfer->status) {
+        'pending_shipper_pickup' => ['Chờ shipper nhận hàng tại kho gửi', 'bg-secondary'],
+        'in_transit' => ['Shipper đã nhận — đang vận chuyển', 'bg-warning text-dark'],
+        'delivered_waiting_receive' => ['Shipper đã bàn giao — chờ nhập kho', 'bg-info text-dark'],
+        'received_completed' => ['Đã tiếp nhận', 'bg-success'],
+        default => ['Chưa xác định', 'bg-secondary'],
+    };
     $sequenceNumber = $transfer->sequence_number ?? ($loop->iteration ?? 1);
     $dispatchSlip = $order?->orderTransfer?->dispatchEntry?->slip;
 @endphp
@@ -103,7 +107,14 @@
             Từ kho: <strong>{{ $transfer->sourceWarehouse?->name ?? '—' }}</strong>, bởi :<strong>{{ $transfer->shipper?->name ?? '—' }}</strong>
         </div>
         <div class="actions">
-        @if($canConfirm)
+        @if($transfer->status === 'in_transit')
+            <form method="POST" action="{{ route('warehouse.transfers.pull-to-warehouse', $transfer) }}"
+                  onsubmit="return confirm('Kéo đơn này từ Shipper về danh sách chờ kho xác nhận?')">
+                @csrf
+                <input type="hidden" name="note" value="Kho chủ động kéo đơn về do shipper chưa bấm giao">
+                <button type="submit" class="btn btn-warning btn-sm"><i class="bi bi-arrow-down-square me-1"></i>Kéo về kho</button>
+            </form>
+        @elseif($canConfirm)
             <div class="d-flex justify-content-end gap-2">
                 <form method="POST" action="{{ route('warehouse.transfers.rollback', $transfer) }}" class="js-rollback-transfer-form">
                     @csrf
@@ -127,7 +138,7 @@
                     </button>
                 </form>
             </div>
-        @else
+        @elseif($transfer->status === 'received_completed')
             <form method="POST" action="{{ route('warehouse.transfers.undo-receipt', $transfer) }}" class="js-undo-transfer-receipt-form">
                 @csrf
                 <input type="hidden" name="undo_note" value="">
@@ -138,7 +149,7 @@
         @endif
         </div>
     </div>
-    @if($transfer->order && auth()->user()?->isAdmin())
+    @if($transfer->status !== 'pending_shipper_pickup' && $transfer->order && auth()->user()?->isAdmin())
         <div class="card-footer bg-white">
             @include('warehouse.transfers._delete_order', ['transfer' => $transfer])
         </div>

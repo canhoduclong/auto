@@ -62,3 +62,14 @@ Chức năng này chỉ dành cho tài khoản có quyền admin, nhằm loại 
 Admin mở mục “Admin: Xóa cứng đơn sai số liệu” trên thẻ đơn, nhập lý do và xác nhận mã đơn trước khi xóa. Thao tác xóa toàn bộ đơn, không chỉ phiếu điều chuyển; hệ thống lưu lý do, người xóa và bản chụp dữ liệu.
 
 Giới hạn hiện tại: việc hoàn tồn khi xóa chưa bao phủ đầy đủ biến động gắn với phiếu xuất/nhập và phiếu điều chuyển. Không coi thao tác xóa là xác nhận hàng thực tế đã trở về kho.
+
+## Tiếp nhận đơn điều chuyển tại kho nhận
+
+Đơn điều chuyển xuất hiện trong danh sách “Hàng được điều chuyển tới” ngay khi kho gửi tạo phiếu, kể cả ngày giao khác ngày đang xem. Luồng thao tác:
+
+1. Chờ shipper nhận hàng tại kho gửi: chỉ hiển thị thông tin, chưa có nút thao tác.
+2. Shipper đã nhận hàng, đang vận chuyển: hiện nút vàng “Kéo về kho”. Kho dùng khi hàng đã đến nhưng shipper chưa bấm bàn giao; thao tác chuyển đơn sang chờ xác nhận nhập kho.
+3. Shipper đã bàn giao: ẩn nút “Kéo về kho”, hiện “Xác nhận nhập vào kho”.
+4. Kho xác nhận nhập: đơn chuyển sang “Đã nhận hàng”; lịch sử đã nhận tuân theo bộ lọc ngày.
+
+Chức năng xóa cứng số liệu sai vẫn chỉ dành cho admin; không hiển thị trên đơn đang chờ shipper nhận tại kho gửi.
