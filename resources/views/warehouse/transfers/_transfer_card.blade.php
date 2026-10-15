@@ -138,4 +138,9 @@
         @endif
         </div>
     </div>
+    @if($transfer->order && auth()->user()?->isAdmin())
+        <div class="card-footer bg-white">
+            @include('warehouse.transfers._delete_order', ['transfer' => $transfer])
+        </div>
+    @endif
 </div>

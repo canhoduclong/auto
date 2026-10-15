@@ -54,3 +54,11 @@ Bản này triển khai ba loại nghiệp vụ và luồng web cốt lõi. Các
 Các migration mới: 2026_10_06_170000_create_operating_votes_and_task_acceptance, 2026_10_06_171000_create_task_code_sequences. Đã chạy trên database workspace app.com. Server khác cần chạy migration trước khi dùng code mới.
 
 Kiểm tra: bài kiểm thử biểu quyết (quyền, hạn, quorum, phiếu trắng, mẫu số, chốt lặp), tiếp nhận/bắt đầu, hồi quy thu hồi/xóa; kiểm tra MySQL trọn luồng, dữ liệu thử được rollback; render trang điều hành trong 8 layout. Chưa có kiểm tra tự động trình duyệt.
+
+## Xóa cứng đơn sai số liệu tại trang Tiếp nhận
+
+Chức năng này chỉ dành cho tài khoản có quyền admin, nhằm loại bỏ đơn có số liệu sai sót. Đơn đã cũ không phải là lý do tự động xóa. Tài khoản kho, shipper và quản lý không có quyền admin không được sử dụng; máy chủ kiểm tra quyền ngay cả khi gửi yêu cầu trực tiếp.
+
+Admin mở mục “Admin: Xóa cứng đơn sai số liệu” trên thẻ đơn, nhập lý do và xác nhận mã đơn trước khi xóa. Thao tác xóa toàn bộ đơn, không chỉ phiếu điều chuyển; hệ thống lưu lý do, người xóa và bản chụp dữ liệu.
+
+Giới hạn hiện tại: việc hoàn tồn khi xóa chưa bao phủ đầy đủ biến động gắn với phiếu xuất/nhập và phiếu điều chuyển. Không coi thao tác xóa là xác nhận hàng thực tế đã trở về kho.

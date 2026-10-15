@@ -2338,7 +2338,7 @@ class ShipperDashboardController extends Controller
             'user',
             'warehouse',
             'warehouseTransfers' => fn ($query) => $query
-                ->with(['sourceWarehouse:id,name', 'targetWarehouse:id,name'])
+                ->with(['sourceWarehouse:id,name', 'targetWarehouse:id,name', 'shipper:id,name'])
                 ->orderByDesc('created_at')
                 ->orderByDesc('id'),
             'histories' => fn ($query) => $query
@@ -2482,7 +2482,8 @@ class ShipperDashboardController extends Controller
     private function attachAssignmentTimelines($orders): void
     {
         foreach ($orders as $order) {
-            $transfers = $order->warehouseTransfers->sortBy('created_at');
+            $order->setAttribute('assignment_location', $this->resolveAssignmentLocation($order));
+            $transfers = $order->warehouseTransfers->where('status', '!=', WarehouseTransfer::STATUS_CANCELLED)->sortBy('created_at');
             $pickedTransfer = $transfers->first(fn (WarehouseTransfer $transfer) => $transfer->picked_up_at !== null
                 || in_array($transfer->status, [WarehouseTransfer::STATUS_IN_TRANSIT, WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE, WarehouseTransfer::STATUS_RECEIVED_COMPLETED], true)
             );
@@ -2527,6 +2528,51 @@ class ShipperDashboardController extends Controller
                 $milestone('Hoàn thành', $isCompleted, $completed?->created_at ?? $order->delivered_at),
             ]);
         }
+    }
+
+    private function resolveAssignmentLocation(Order $order): string
+    {
+        if (in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED], true)) {
+            return 'Đã giao hàng cho khách';
+        }
+
+        if (in_array($order->status, [Order::STATUS_DELIVERING, Order::STATUS_IN_DELIVERY, Order::STATUS_SHIPPING], true)) {
+            return ($order->shipper?->name ?: 'Shipper').' đang giao hàng cho khách';
+        }
+
+        // Chỉ phiếu mới nhất còn hiệu lực phản ánh chặng điều chuyển hiện tại.
+        $transfer = $order->warehouseTransfers
+            ->where('status', '!=', WarehouseTransfer::STATUS_CANCELLED)
+            ->sortByDesc(fn (WarehouseTransfer $transfer) => sprintf(
+                'transfer-%s-%020d', $transfer->created_at?->format('YmdHis.u') ?? '', (int) $transfer->id
+            ))->first();
+        if ($transfer) {
+            $source = $transfer->sourceWarehouse?->name ?: 'kho xuất chưa xác định';
+            $target = $transfer->targetWarehouse?->name ?: 'kho nhận chưa xác định';
+            $driver = $transfer->shipper?->name ?: 'Tài xế chưa được gán';
+            switch ($transfer->status) {
+                case WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP:
+                    return 'Hàng tại '.$source.' — chờ '.$driver.' lấy chuyển đến '.$target;
+                case WarehouseTransfer::STATUS_IN_TRANSIT:
+                    return $driver.' đang vận chuyển từ '.$source.' đến '.$target;
+                case WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE:
+                    return $driver.' đã giao đến '.$target.' — chờ kho xác nhận nhận hàng';
+                case WarehouseTransfer::STATUS_RECEIVED_COMPLETED:
+                    return 'Hàng tại '.$target.' — kho đã nhận';
+            }
+        }
+
+        $warehouse = $order->assignment_origin_warehouse_name ?: $order->warehouse?->name;
+        $location = $warehouse ? ' tại '.$warehouse : ' — chưa xác định kho';
+
+        return match ($order->status) {
+            Order::STATUS_PACKED, Order::STATUS_READY_TO_SHIP => 'Đã đóng hàng'.$location.' — chờ shipper lấy',
+            Order::STATUS_PACKING => 'Đang đóng hàng'.$location,
+            Order::STATUS_RETURNING => 'Đang trả hàng về kho',
+            Order::STATUS_RETURNED, Order::STATUS_RETURNED_COMPLETED => 'Đã trả hàng'.$location,
+            Order::STATUS_OVERDUE_DELIVERY => 'Giao trễ — cần xác nhận vị trí hàng',
+            default => 'Chờ đóng hàng'.$location,
+        };
     }
 
     private function archivedPlannedOrderIdsForDate(string $selectedDate): array

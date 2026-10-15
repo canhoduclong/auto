@@ -785,6 +785,7 @@
                                                 </form>
                                             @endif
                                             <div class="text-muted small">#{{ $order->code ?: $order->id }}</div>
+                                            @include('shipper.partials.assignment-location', ['order' => $order])
                                             <div class="order-meta-line">
                                                 <span><i class="bi bi-person-badge me-1"></i>{{ $saleName }}</span>
                                                 <span><i class="bi bi-box-arrow-up-right me-1"></i>{{ $originName }}</span>
@@ -1052,8 +1053,13 @@
                                                                 </div>
                                                                 <input type="hidden" class="js-order-trip" value="{{ $defaultTripCode }}">
                                                             </td>
-                                                            <td class="trip-origin-cell"><span class="trip-cell-label">Gửi từ:</span>{{ $originName }}</td>
-                                                            <td class="trip-order-address" title="{{ $destination }}"><span class="trip-cell-label">Gửi tới:</span>{{ $destination }}</td>
+                                                            <td class="trip-origin-cell" colspan="2">
+                                                                <div class="d-flex flex-wrap gap-3 border-bottom pb-1 mb-1">
+                                                                    <div><span class="trip-cell-label">Gửi từ:</span>{{ $originName }}</div>
+                                                                    <div class="trip-order-address" title="{{ $destination }}"><span class="trip-cell-label">Gửi tới:</span>{{ $destination }}</div>
+                                                                </div>
+                                                                @include('shipper.partials.assignment-location', ['order' => $order])
+                                                            </td>
                                                             <td>
                                                                 <span class="trip-cell-label">Tiền ship:</span>
                                                                 @include('shipper.partials.order-shipping-fee-editor', [
