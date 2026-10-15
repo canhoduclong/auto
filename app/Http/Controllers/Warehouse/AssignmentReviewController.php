@@ -20,8 +20,11 @@ class AssignmentReviewController extends Controller
     {
         $dispatch = $this->latestDispatch($date);
         $orders = $this->printableOrders($dispatch ? $this->dispatchOrderIds($dispatch) : [], $date);
-        $printed = OrderHistory::whereIn('order_id', $orders->pluck('id')->all())
-            ->where('action', 'warehouse_delivery_note_printed')->distinct()->count('order_id');
+        $lastPrinted = OrderHistory::whereIn('order_id', $orders->pluck('id')->all())
+            ->where('action', 'warehouse_delivery_note_printed')
+            ->selectRaw('order_id, MAX(created_at) AS printed_at')->groupBy('order_id')->pluck('printed_at', 'order_id');
+        $printed = $orders->filter(fn ($order) => isset($lastPrinted[$order->id])
+            && (!$order->updated_at || Carbon::parse($lastPrinted[$order->id])->gte($order->updated_at)))->count();
 
         return ['review_total' => $orders->count(), 'review_printed' => $printed];
     }

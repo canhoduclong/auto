@@ -95,3 +95,9 @@ Danh sách chỉ xem, nằm ngoài biểu mẫu cập nhật kiểm kê, không 
 Sale có thể bấm “Gửi yêu cầu điều chỉnh” trên đơn của mình đã giao hoặc hoàn tất, không cần chờ kế toán xác nhận doanh thu trước. Biểu mẫu hiện có hỗ trợ điều chỉnh sản phẩm, số lượng, khối lượng, đơn giá, phí và bằng chứng. Khi gửi, hệ thống lưu yêu cầu riêng; chưa áp dụng thay đổi vào số liệu đơn. Không gửi thêm khi đơn còn yêu cầu chờ duyệt hoặc đang xử lý.
 
 Trong Đối soát đơn giao hàng, mục “Yêu cầu điều chỉnh đơn đã giao — chờ Kế toán duyệt” hiển thị tất cả yêu cầu tới bước kế toán, độc lập bộ lọc ngày của danh sách đơn. Mở yêu cầu để so sánh đơn đã giao và nội dung đề nghị, xem bằng chứng, duyệt hoặc từ chối có lý do. Điều chỉnh sau giao hàng cần kế toán duyệt thủ công; không tự động duyệt. Nếu phát sinh trả hàng, vẫn phải hoàn tất xử lý kho theo luồng hiện có. Đơn còn điều chỉnh chưa xử lý xong không được xác nhận doanh thu mới.
+
+## Badge cảnh báo công việc kho
+
+Bảy mục Tiến độ công việc có badge đỏ biểu thị số việc cần xử lý hoặc thay đổi cần kiểm tra; không hiện badge khi bằng 0, hiển thị 99+ khi vượt 99. Dòng ghi chú màu đỏ giải thích số việc bên dưới từng mục. Đơn cần đóng tính cả phản hồi thay đổi của sale còn cần kho xem; Review & In ấn nhắc lại khi đơn cập nhật sau lần in gần nhất. Nhiệm vụ được giao lấy dữ liệu thực của người dùng đang đăng nhập.
+
+Badge phản ánh trạng thái công việc, không phải bộ đếm thông báo chưa đọc: mở trang không làm mất badge, xử lý xong mới hết cảnh báo khi tải lại bảng điều khiển. Các nhãn thông báo mẫu cố định trước đây đã được bỏ để tránh báo thay đổi không có thật.

@@ -225,6 +225,8 @@
             $tasks = [
                 [
                     'label' => 'Đơn cần đóng',
+                    'attention' => $stats['packing_attention'] ?? 0,
+                    'changes' => $stats['packing_changes'] ?? 0,
                     'total' => ($stats['ready_to_pack'] ?? 0) + ($stats['packing'] ?? 0) + ($stats['packed'] ?? 0),
                     'done' => $stats['packed'] ?? 0,
                     'route' => route('warehouse.orders', ['date' => $selectedDate->toDateString()]),
@@ -287,11 +289,15 @@
                         $status = $getTaskStatus($task['total'], $task['done']);
                         $badgeClass = $colorMap[$status];
                         $isDone = $status === 'done';
+                        $attention = (int) ($task['attention'] ?? max(0, $task['total'] - $task['done']));
                     @endphp
                     <li class="mb-3" @if(isset($task['key'])) data-task-key="{{ $task['key'] }}" @endif>
                         <div class="d-flex align-items-center mb-1">
                             <span class="task-status-badge {{ $badgeClass }}">{{ $i+1 }}</span>
-                            <span class="fw-semibold flex-grow-1">{{ $task['label'] }}</span>
+                            <span class="fw-semibold flex-grow-1">
+                                {{ $task['label'] }}
+                                @include('warehouse.partials.work-alert-badge', ['count' => $attention])
+                            </span>
                             <span class="ms-2 text-muted small">{{ $task['done'] }}/{{ $task['total'] }}</span>
                             <span class="ms-2 text-primary small">{{ $percent }}%</span>
                             @if($isDone)
@@ -299,6 +305,12 @@
                             @endif
                             <a href="{{ $task['route'] }}" class="btn btn-outline-primary btn-sm ms-3">Chi tiết</a>
                         </div>
+                        @if($attention > 0)
+                            <div class="small text-danger mb-1">
+                                {{ $attention }} việc cần xử lý / kiểm tra
+                                @if(($task['changes'] ?? 0) > 0) · {{ $task['changes'] }} đơn có phản hồi thay đổi từ sale @endif
+                            </div>
+                        @endif
                         <div class="progress" style="height: 18px;">
                             <div class="progress-bar {{ $isDone ? 'bg-success' : ($status === 'inprogress' ? 'bg-warning' : ($status === 'todo' ? 'bg-danger' : 'bg-secondary')) }}" role="progressbar" style="width: {{ $percent }}%; font-size:.98rem;" aria-valuenow="{{ $percent }}" aria-valuemin="0" aria-valuemax="100">{{ $percent }}%</div>
                         </div>
@@ -351,14 +363,7 @@
         </div>
 
         <!-- Listchanges chuyển sang cột trái phía dưới -->
-        <div class="listchanges mb-4">
-            <ul class="list-unstyled mb-0">
-                <li class="mb-3"><i class="bi bi-pencil-square text-primary me-2"></i>Yêu cầu thay đổi đơn hàng từ sale <span class="badge bg-info text-dark">Mới</span></li>
-                <li class="mb-3"><i class="bi bi-chat-dots text-success me-2"></i>Sale trả lời khách hàng <span class="badge bg-success">Đã trả lời</span></li>
-                <li class="mb-3"><i class="bi bi-truck text-warning me-2"></i>Phiếu điều chuyển kho chờ ship nhận <span class="badge bg-warning text-dark">Chờ ship</span></li>
-                <!-- Thêm các nghiệp vụ thực tế tại đây -->
-            </ul>
-        </div>
+
 
     </div>
     <!-- Cột phải: Nghiệp vụ mới nhất -->

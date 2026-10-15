@@ -388,6 +388,22 @@ class WarehouseDashboardController extends Controller
             ->whereDate('picked_up_at', $dateString)->count();
         $stats = array_merge($stats, app(\App\Http\Controllers\Warehouse\AssignmentReviewController::class)->progressCounts($dateString));
 
+        $packingAttention = Order::where('warehouse_id', $managedWarehouseId)->whereNull('trash_at')
+            ->whereNotIn('status', [Order::STATUS_CANCELLED, Order::STATUS_COMPLETED, Order::STATUS_DELIVERED]);
+        $stats['packing_changes'] = (clone $packingAttention)->whereIn('warehouse_adjustment_status', [
+            Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED, Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED,
+        ])->count();
+        $stats['packing_attention'] = (clone $packingAttention)->where(function ($query) {
+            $query->whereIn('status', array_merge(self::READY_TO_PACK_STATUSES, [Order::STATUS_PACKING]))
+                ->orWhereIn('warehouse_adjustment_status', [Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_CONFIRMED, Order::WAREHOUSE_ADJUSTMENT_STATUS_SALE_REJECTED]);
+        })->count();
+        $assignedTasks = \App\Models\TaskAssignee::where('user_id', $currentUser->id)
+            ->whereHas('task', fn ($query) => $query->whereNotIn('status', ['cancelled', 'draft']));
+        $stats['assigned_tasks'] = (clone $assignedTasks)->whereNotIn('status', ['completed', 'done', 'cancelled'])->count();
+        $stats['completed_tasks'] = (clone $assignedTasks)->whereIn('status', ['completed', 'done'])->whereDate('completed_at', $dateString)->count();
+        $stats['returning'] = Order::where('status', Order::STATUS_RETURNING)
+            ->whereHas('returnRecords', fn ($query) => $query->where('warehouse_id', $managedWarehouseId))->count();
+
         $recentPacked = $applyWarehouseScope(Order::with('customer'))
             ->whereIn('status', self::PACKED_STATUSES)
             ->whereDate('updated_at', $dateString)
