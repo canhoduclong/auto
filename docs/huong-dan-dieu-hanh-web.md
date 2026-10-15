@@ -98,6 +98,6 @@ Trong Đối soát đơn giao hàng, mục “Yêu cầu điều chỉnh đơn �
 
 ## Badge cảnh báo công việc kho
 
-Bảy mục Tiến độ công việc có badge đỏ biểu thị số việc cần xử lý hoặc thay đổi cần kiểm tra; không hiện badge khi bằng 0, hiển thị 99+ khi vượt 99. Dòng ghi chú màu đỏ giải thích số việc bên dưới từng mục. Đơn cần đóng tính cả phản hồi thay đổi của sale còn cần kho xem; Review & In ấn nhắc lại khi đơn cập nhật sau lần in gần nhất. Nhiệm vụ được giao lấy dữ liệu thực của người dùng đang đăng nhập.
+Bảy mục Tiến độ công việc có badge đỏ biểu thị số việc cần xử lý hoặc thay đổi cần kiểm tra; không hiện badge khi bằng 0, hiển thị 99+ khi vượt 99. Đơn cần đóng tính cả phản hồi thay đổi của sale còn cần kho xem; Review & In ấn nhắc lại khi đơn cập nhật sau lần in gần nhất. Nhiệm vụ được giao lấy dữ liệu thực của người dùng đang đăng nhập.
 
 Badge phản ánh trạng thái công việc, không phải bộ đếm thông báo chưa đọc: mở trang không làm mất badge, xử lý xong mới hết cảnh báo khi tải lại bảng điều khiển. Các nhãn thông báo mẫu cố định trước đây đã được bỏ để tránh báo thay đổi không có thật.

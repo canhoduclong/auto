@@ -305,12 +305,6 @@
                             @endif
                             <a href="{{ $task['route'] }}" class="btn btn-outline-primary btn-sm ms-3">Chi tiết</a>
                         </div>
-                        @if($attention > 0)
-                            <div class="small text-danger mb-1">
-                                {{ $attention }} việc cần xử lý / kiểm tra
-                                @if(($task['changes'] ?? 0) > 0) · {{ $task['changes'] }} đơn có phản hồi thay đổi từ sale @endif
-                            </div>
-                        @endif
                         <div class="progress" style="height: 18px;">
                             <div class="progress-bar {{ $isDone ? 'bg-success' : ($status === 'inprogress' ? 'bg-warning' : ($status === 'todo' ? 'bg-danger' : 'bg-secondary')) }}" role="progressbar" style="width: {{ $percent }}%; font-size:.98rem;" aria-valuenow="{{ $percent }}" aria-valuemin="0" aria-valuemax="100">{{ $percent }}%</div>
                         </div>
