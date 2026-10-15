@@ -31,6 +31,32 @@ class DeleteHistoricalTransferService
                 if($table==='accounting_sales_entries')$batchIds=$rows->pluck('import_batch_id')->filter()->unique();
                 DB::table($table)->whereIn('order_id',$orders->modelKeys())->delete();
             }
+            // Expense reconciliation has restrictive FKs to orders; remove its
+            // order lines and locks before deleting the selected historical orders.
+            $claimIds=collect();
+            foreach(['shipping_expense_order_locks','shipping_expense_items'] as $table) {
+                if(!Schema::hasTable($table))continue;
+                $rows=DB::table($table)->whereIn('order_id',$orders->modelKeys())->lockForUpdate()->get();
+                $snapshot[$table]=$rows->toArray();
+                $claimIds=$claimIds->merge($rows->pluck('claim_id'));
+                DB::table($table)->whereIn('order_id',$orders->modelKeys())->delete();
+            }
+            if(Schema::hasTable('shipping_expense_claims')) {
+                $claims=DB::table('shipping_expense_claims')->whereIn('id',$claimIds->unique())->lockForUpdate()->get();
+                $snapshot['shipping_expense_claims']=$claims->toArray();
+                foreach($claims as $claim) {
+                    $remaining=DB::table('shipping_expense_items')->where('claim_id',$claim->id);
+                    if(!(clone $remaining)->exists()) {
+                        DB::table('shipping_expense_claims')->where('id',$claim->id)->delete();
+                        if(Schema::hasTable('process_runs')) {
+                            $snapshot['expense_process_runs'][]=DB::table('process_runs')->where('id',$claim->process_run_id)->first();
+                            DB::table('process_runs')->where('id',$claim->process_run_id)->update(['status'=>'cancelled','finished_at'=>now(),'updated_at'=>now()]);
+                        }
+                    } else {
+                        DB::table('shipping_expense_claims')->where('id',$claim->id)->update(['total'=>$remaining->sum('amount'),'updated_at'=>now()]);
+                    }
+                }
+            }
             $itemIds=$orders->flatMap(fn($order)=>$order->items->modelKeys());
             $reservations=InventoryReservation::whereIn('order_item_id',$itemIds)->lockForUpdate()->get();
             $snapshot['reservations']=$reservations->toArray();
@@ -53,7 +79,7 @@ class DeleteHistoricalTransferService
                     'order_total'=>(float)$order->total,'recognized_revenue'=>(float)collect($snapshot['accounting_reconciliations']??[])->firstWhere('order_id',$order->id)?->recognized_revenue,
                     'commission_amount'=>0,'accounting_sales_import_batch_id'=>$order->accounting_sales_import_batch_id,
                     'reason'=>'Dọn lịch sử phiếu #'.$groupId.': '.$reason,
-                    'snapshot'=>json_encode(['order'=>$order->getAttributes(),'items'=>$order->items->toArray(),'preserve_current_inventory'=>true],JSON_UNESCAPED_UNICODE),
+                    'snapshot'=>json_encode(['order'=>$order->getAttributes(),'items'=>$order->items->toArray(),'preserve_current_inventory'=>true,'historical_cleanup'=>true],JSON_UNESCAPED_UNICODE),
                     'deleted_by'=>$actor->id,'deleted_at'=>now(),'created_at'=>now(),'updated_at'=>now(),
                 ]);
                 $order->histories()->delete();

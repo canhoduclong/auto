@@ -141,3 +141,9 @@ Thao tác admin trên phiếu đã tiếp nhận nay là “Xóa phiếu cũ & t
 Giữ nhật ký admin, bản chụp đơn đã xóa và sổ biến động tồn kho để bảo toàn số dư, chứng từ dòng tiền thực thu vẫn theo nghiệp vụ tài chính. Chặn đơn tạo hoặc giao hôm nay và đơn có doanh thu ghi hôm nay. Lỗi liên kết nghiệp vụ sẽ hoàn tác toàn bộ giao dịch. Chức năng không tự chạy xóa dữ liệu; admin chọn phiếu, nhập lý do và xác nhận rõ phạm vi trước khi thực hiện.
 
 Kiểm thử `php tests/Manual/DeleteHistoricalTransfer.php` dùng bảng tạm MySQL để xác minh xóa đơn/phiếu, giao nhận, đối soát/doanh thu, giải phóng giữ chỗ và giữ nguyên tồn thực tế.
+
+## Dọn cả đối soát khi xóa dữ liệu cũ
+
+Dọn phiếu cũ xóa thêm các dòng đối soát phí giao hàng và khóa đơn (`shipping_expense_items`, `shipping_expense_order_locks`) trước khi xóa đơn. Phiếu phí còn đơn khác được tính lại tổng; phiếu phí rỗng bị xóa và tiến trình xử lý tương ứng được kết thúc ở trạng thái hủy. Không thay đổi chứng từ thanh toán thực thu/chi đã ghi sổ.
+
+Bản chụp trong `admin_deleted_orders` được đánh dấu `historical_cleanup`; trang đối soát không cộng các bản ghi này trở lại vào “đơn không còn tồn tại”, số đơn chờ đối soát hoặc doanh thu. Nhận diện cả dấu `preserve_current_inventory` của các lần dọn đã chạy trước đây. Nhật ký admin vẫn được giữ để truy vết, không tính doanh thu. Đây là dọn dữ liệu được chọn, chưa tự thiết lập mốc đầu kỳ; sau khi dọn cần kiểm kê/chốt số dư tại mốc nghiệp vụ đã thống nhất.

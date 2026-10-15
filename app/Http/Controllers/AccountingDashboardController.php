@@ -1087,6 +1087,12 @@ class AccountingDashboardController extends Controller
                 ->whereNotIn('id', $excludedDeletedIds)
                 ->orderByDesc('deleted_at')
                 ->get()
+                ->reject(function ($deleted): bool {
+                    $snapshot=json_decode((string)$deleted->snapshot,true) ?: [];
+                    // Audit tombstones for intentional cleanup must never be
+                    // counted as missing/unreconciled revenue again.
+                    return (bool)($snapshot['historical_cleanup'] ?? $snapshot['preserve_current_inventory'] ?? false);
+                })
                 ->map(function ($deleted) {
                     $snapshot = json_decode((string) $deleted->snapshot, true) ?: [];
                     $attributes = (array) ($snapshot['order'] ?? []);

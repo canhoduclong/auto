@@ -128,7 +128,10 @@ class OrderTransferController extends Controller
                 app(\App\Services\DeleteHistoricalTransferService::class)->delete((int)$id, auth()->user(), trim($data['reason']));
             } catch (\Illuminate\Database\QueryException $exception) {
                 report($exception);
-                return back()->with('error', 'Không thể xóa vì đơn còn liên kết nghiệp vụ cần đối soát. Toàn bộ thao tác đã được hoàn tác.');
+                $constraint = null;
+                preg_match('/CONSTRAINT [`\"]([^`\"]+)[`\"]/', (string)($exception->errorInfo[2] ?? ''), $constraint);
+                $detail = isset($constraint[1]) ? ' Liên kết: '.$constraint[1].'.' : ' Mã lỗi: '.($exception->errorInfo[1] ?? $exception->getCode()).'.';
+                return back()->with('error', 'Chưa thể xóa phiếu. Toàn bộ thao tác đã được hoàn tác.'.$detail);
             }
             return back()->with('success','Đã xóa phiếu cũ và toàn bộ đơn cùng giao nhận, đối soát, doanh thu liên quan. Tồn kho thực tế giữ nguyên.');
         }
