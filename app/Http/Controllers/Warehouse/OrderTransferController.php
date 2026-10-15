@@ -23,6 +23,7 @@ class OrderTransferController extends Controller
         // Lấy user và kho đang quản lý
         $user = auth()->user();
         $warehouseId = $user->isAdmin() ? null : $user->warehouse_id;
+        $request->validate(['from_date' => ['nullable', 'date'], 'to_date' => ['nullable', 'date'], 'search' => ['nullable', 'string', 'max:255']]);
         $search = trim((string) $request->input('search', ''));
         $from = $request->filled('from_date')
             ? Carbon::parse($request->input('from_date'))->toDateString()
@@ -86,8 +87,8 @@ class OrderTransferController extends Controller
             })
             ->orderByDesc('created_at')
             ->orderByDesc('id')
-            ->get()
-            ->map(function (OrderTransfer $transfer) {
+            ->paginate(20, ['*'], 'transfer_page')->withQueryString()
+            ->through(function (OrderTransfer $transfer) {
                 $statuses = $transfer->orders
                     ->map(fn (Order $order) => $order->warehouseTransfers->first()?->status)
                     ->filter()
@@ -103,7 +104,7 @@ class OrderTransferController extends Controller
 
                 return $transfer;
             });
-        $transferGroups = $recentTransfers->groupBy(fn (OrderTransfer $transfer) => $transfer->created_at->toDateString());
+        $transferGroups = $recentTransfers->getCollection()->groupBy(fn (OrderTransfer $transfer) => $transfer->created_at->toDateString());
 
         return view('warehouse.order-transfers', compact(
             'orders',

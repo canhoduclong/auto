@@ -8,6 +8,11 @@
 @section('title', 'Điều chuyển đơn hàng')
 @push('styles')
 <style>
+.transfer-orders-close { display: none; }
+.transfer-orders-details[open] > summary .transfer-orders-close { display: inline; }
+.transfer-orders-details[open] > summary .transfer-orders-open { display: none; }
+.transfer-day-group > summary:hover { background: #e6f3f1; }
+
 .order-transfer-col {
     min-height: 500px;
     background: #f8fafc;
@@ -91,7 +96,9 @@
     </div>
 </div>
 
+@php $transferListOnly = request()->routeIs('warehouse.inventory-transfers.index') && request('tab') === 'orders'; @endphp
 <div class="row g-4">
+    @unless($transferListOnly)
     <div class="col-md-6">
         <div class="order-transfer-col">
             <form method="POST" action="{{ route((request()->routeIs('admin.*') ? 'admin' : 'warehouse').'.order-transfers.store') }}" id="orderTransferForm" class="mb-3">
@@ -145,20 +152,22 @@
             </div>
         </div>
     </div>
-    <div class="col-md-6">
+    @endunless
+    <div class="{{ $transferListOnly ? 'col-12' : 'col-md-6' }}">
         <div class="order-transfer-col">
-            <h5 class="mb-3">Phiếu điều chuyển theo ngày</h5>
+            <h5 class="mb-3">Phiếu điều chuyển theo ngày <span class="badge bg-secondary">{{ $recentTransfers->total() }} phiếu</span></h5>
             @if($transferGroups->isEmpty())
                 <div class="alert alert-info text-center my-4">
                     {{ !empty($search) ? 'Không tìm thấy phiếu điều chuyển phù hợp.' : 'Chưa có phiếu điều chuyển nào.' }}
                 </div>
             @else
                 @foreach($transferGroups as $date => $dayTransfers)
-                    <div class="transfer-day-group">
-                        <div class="transfer-day-head d-flex justify-content-between gap-2">
+                    <details class="transfer-day-group">
+                        <summary class="transfer-day-head d-flex justify-content-between gap-2" style="cursor:pointer;">
+                            <i class="bi bi-chevron-expand" aria-hidden="true"></i>
                             <span>{{ \Illuminate\Support\Carbon::parse($date)->format('d/m/Y') }}</span>
-                            <span>{{ $dayTransfers->count() }} phiếu · {{ $dayTransfers->sum(fn ($transfer) => $transfer->orders->count()) }} đơn</span>
-                        </div>
+                            <span>{{ $dayTransfers->count() }} phiếu · {{ $dayTransfers->sum(fn ($transfer) => $transfer->orders->count()) }} đơn trên trang</span>
+                        </summary>
                         @foreach($dayTransfers as $transfer)
                             <div class="transfer-slip">
                                 <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
@@ -183,6 +192,10 @@
                                     @endif
                                 </div>
 
+                                <details class="border rounded p-2 mb-2 transfer-orders-details">
+                                    <summary class="text-primary fw-semibold" style="cursor:pointer;">
+                                        <span class="transfer-orders-open">Mở danh sách</span><span class="transfer-orders-close">Thu gọn danh sách</span> {{ $transfer->orders->count() }} đơn
+                                    </summary>
                                 @foreach($transfer->orders as $order)
                                     @php
                                         $latestTransfer = $order->warehouseTransfers->first();
@@ -231,6 +244,7 @@
                                     </div>
                                 @endforeach
 
+                                </details>
                                 @if($transfer->can_delete)
                                     <form method="POST" action="{{ route((request()->routeIs('admin.*') ? 'admin' : 'warehouse').'.order-transfers.destroy', $transfer->id) }}"
                                         onsubmit="return confirm('Bạn có chắc muốn xóa phiếu chưa được shipper nhận này?');" class="mt-2">
@@ -247,12 +261,14 @@
                                 @endif
                             </div>
                         @endforeach
-                    </div>
+                    </details>
                 @endforeach
+                <div class="mt-3">{{ $recentTransfers->links() }}</div>
             @endif
         </div>
     </div>
 </div>
+@unless($transferListOnly)
 <script>
 const orderListLeft = document.getElementById('orderListLeft');
 const orderListRight = document.getElementById('orderListRight');
@@ -328,4 +344,5 @@ document.getElementById('orderTransferForm').addEventListener('submit', function
     orderIdsInput.value = ids.join(',');
 });
 </script>
+@endunless
 @endsection
