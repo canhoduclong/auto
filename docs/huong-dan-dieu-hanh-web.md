@@ -73,3 +73,13 @@ Giới hạn hiện tại: việc hoàn tồn khi xóa chưa bao phủ đầy đ
 4. Kho xác nhận nhập: đơn chuyển sang “Đã nhận hàng”; lịch sử đã nhận tuân theo bộ lọc ngày.
 
 Chức năng xóa cứng số liệu sai vẫn chỉ dành cho admin; không hiển thị trên đơn đang chờ shipper nhận tại kho gửi.
+
+## Bảo toàn hàng đã đóng khi điều chuyển và giao hàng
+
+Khi chốt đóng hàng, từng dòng hàng phải có đủ tồn giữ riêng cho đơn và tổng lượng giữ không được vượt tồn thực tế. Tồn khả dụng là tồn thực tế trừ lượng giữ riêng.
+
+Shipper lấy hàng điều chuyển phải xuất phần giữ riêng của chính đơn; không lấy hàng khả dụng khác rồi giữ lại reservation cũ. Kho nhận nhập hàng và giữ riêng lại cho đơn trong cùng giao dịch. Tiếp nhận thường, tiếp nhận Package và xử lý ngoại lệ dùng chung cơ chế này. Phiếu đã xuất không bị trừ tồn nguồn thêm lần nữa. Yêu cầu nhận hoặc nhập lặp được kiểm tra dưới khóa giao dịch.
+
+Shipper lấy đi giao tiêu thụ lượng giữ riêng và ghi xuất kho, kể cả đơn nhận từ ngày trước có hàng đã được chốt giữ riêng. Hủy đơn khi hàng còn ở kho giải phóng lượng giữ riêng, không cộng thêm số lượng tồn thực tế. Các cập nhật tồn qua model Inventory bị chặn nếu giảm xuống dưới lượng đã đóng giữ riêng.
+
+Dữ liệu cũ thiếu tồn hoặc thiếu chứng từ phải được đối soát; không tự cộng tồn để vượt lỗi nhận đơn. Không tìm thấy đơn ORD-A58D29DAB8 trong database workspace tại thời điểm kiểm tra, nên chưa sửa dữ liệu riêng của đơn trong ảnh.

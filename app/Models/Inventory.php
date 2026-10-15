@@ -25,6 +25,17 @@ class Inventory extends Model
         'low_stock_threshold' => 'float',
     ];
 
+    protected static function booted(): void
+    {
+        static::updating(function (Inventory $inventory): void {
+            if (! $inventory->isDirty('quantity')) return;
+            $packed = (float) $inventory->reservations()->whereNotNull('packed_at')->sum('quantity');
+            if ((float) $inventory->quantity < $packed) {
+                throw new \RuntimeException('Không thể giảm tồn kho xuống dưới '.$packed.' hàng đã đóng và giữ riêng cho đơn.');
+            }
+        });
+    }
+
     public function getOnHandAttribute(): float
     {
         return (float) $this->quantity;

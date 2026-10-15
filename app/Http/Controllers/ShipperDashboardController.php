@@ -497,7 +497,9 @@ class ShipperDashboardController extends Controller
                 // its historical business-day stock.
                 // Shipper acceptance only starts delivery; checking/deducting
                 // today's stock again would incorrectly block the old order.
-                if ($isPackedHistoricalException) {
+                $hasSealedStock = InventoryReservation::whereIn('order_item_id', $fresh->items->pluck('id'))
+                    ->whereNotNull('packed_at')->exists();
+                if ($isPackedHistoricalException && ! $hasSealedStock) {
                     $this->releaseReservationsForAcceptedHistoricalOrder($fresh);
 
                     return true;
@@ -1114,6 +1116,11 @@ class ShipperDashboardController extends Controller
 
         try {
             DB::transaction(function () use ($transfer, $order, $validated): void {
+                $transfer = WarehouseTransfer::whereKey($transfer->id)->lockForUpdate()->firstOrFail();
+                if ($transfer->status !== WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP || $transfer->export_document_id) {
+                    throw new \RuntimeException('Phiếu đã được nhận hoặc vừa thay đổi. Vui lòng tải lại.');
+                }
+                Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
                 $document = InventoryDocument::create([
                     'type' => 'export',
                     'document_date' => now()->toDateString(),
@@ -2097,6 +2104,15 @@ class ShipperDashboardController extends Controller
                 throw new \RuntimeException('Dữ liệu tồn kho đặt trước không hợp lệ khi xuất kho.');
             }
 
+            $remaining -= $deductQty;
+            $reservation->quantity -= $deductQty;
+
+            if ((int) $reservation->quantity <= 0) {
+                $reservation->delete();
+            } else {
+                $reservation->save();
+            }
+
             $inventory->quantity -= $deductQty;
             $inventory->reserved_quantity -= $deductQty;
             $inventory->save();
@@ -2110,14 +2126,6 @@ class ShipperDashboardController extends Controller
                 'user_id' => Auth::id(),
             ]);
 
-            $remaining -= $deductQty;
-            $reservation->quantity -= $deductQty;
-
-            if ((int) $reservation->quantity <= 0) {
-                $reservation->delete();
-            } else {
-                $reservation->save();
-            }
         }
 
         if ($remaining > 0) {
@@ -2232,48 +2240,9 @@ class ShipperDashboardController extends Controller
 
     private function deductStockForWarehouseTransferItem(Order $order, InventoryDocument $document, $item, int $warehouseId): void
     {
-        $remaining = (int) ($item->quantity ?? 0);
-
-        $inventories = Inventory::query()
-            ->where('product_variant_id', $item->product_variant_id)
-            ->where('warehouse_id', $warehouseId)
-            ->orderByDesc('quantity')
-            ->lockForUpdate()
-            ->get();
-
-        foreach ($inventories as $inventory) {
-            if ($remaining <= 0) {
-                break;
-            }
-
-            $available = (int) $inventory->quantity - (int) ($inventory->reserved_quantity ?? 0);
-            if ($available <= 0) {
-                continue;
-            }
-
-            $deductQty = min($remaining, $available);
-
-            $inventory->quantity -= $deductQty;
-            $inventory->save();
-
-            InventoryMovement::create([
-                'inventory_id' => $inventory->id,
-                'quantity' => -$deductQty,
-                'type' => 'export',
-                'reference_id' => $document->id,
-                'reference_type' => InventoryDocument::class,
-                'user_id' => Auth::id(),
-            ]);
-
-            $remaining -= $deductQty;
-        }
-
-        // Không kiểm tra tồn kho khả dụng ở flow shipper, giả định đã hợp lệ từ kho xuất.
-        // if ($remaining > 0) {
-        //     throw new \RuntimeException('Không đủ tồn kho khả dụng để điều chuyển cho đơn #' . ($order->code ?: $order->id));
-        // }
-
-        $this->syncVariantStockFromInventories((int) $item->product_variant_id);
+        // Hàng đóng riêng phải xuất từ reservation của chính đơn trước,
+        // không lấy phần khả dụng khác rồi để reservation cũ ở kho gửi.
+        $this->deductStockForAcceptedOrderItem($order, $document, $item, $warehouseId);
     }
 
     private function authorizeWarehouseTransferShipper(WarehouseTransfer $transfer, ?Request $request = null): void

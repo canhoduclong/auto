@@ -1808,11 +1808,11 @@ class WarehouseDashboardController extends Controller
             $physicalVariant = ProductVariant::query()->find($variantId);
             $weight = round($quantity * (float) ($physicalVariant?->effective_kg ?? $item->effective_unit_weight), 3);
 
+            $reservation->delete();
             $inventory->update([
                 'quantity' => max(0, (float) $inventory->quantity - $quantity),
                 'reserved_quantity' => max(0, (float) $inventory->reserved_quantity - $quantity),
             ]);
-            $reservation->delete();
             InventoryMovement::create([
                 'inventory_id' => $inventory->id,
                 'quantity' => -$quantity,
@@ -2250,6 +2250,11 @@ class WarehouseDashboardController extends Controller
 
         try {
             DB::transaction(function () use ($transfer, $order, $validated, $orderItemsById, &$receivedWeights, &$receivedTotalWeight): void {
+                $transfer = WarehouseTransfer::whereKey($transfer->id)->lockForUpdate()->firstOrFail();
+                if ($transfer->status !== WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE || $transfer->import_document_id) {
+                    throw new \RuntimeException('Phiếu đã được tiếp nhận hoặc vừa thay đổi. Vui lòng tải lại.');
+                }
+                Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
                 $document = InventoryDocument::create([
                     'type' => 'import',
                     'document_date' => now()->toDateString(),
@@ -2405,17 +2410,9 @@ class WarehouseDashboardController extends Controller
                     ->lockForUpdate()
                     ->get();
 
+                $restoreReservations = $transferOutMovements->groupBy('inventory_id')
+                    ->map(fn ($rows) => abs((float) $rows->sum('quantity')));
                 $variantIds = collect();
-                foreach ($importMovements->groupBy('inventory_id') as $inventoryId => $movements) {
-                    $quantity = (float) $movements->sum('quantity');
-                    $inventory = Inventory::query()->lockForUpdate()->find($inventoryId);
-                    if (! $inventory || (float) $inventory->quantity < $quantity) {
-                        throw new \RuntimeException('Tồn kho đã được sử dụng, không đủ để gỡ tiếp nhận.');
-                    }
-                    $inventory->decrement('quantity', $quantity);
-                    $variantIds->push((int) $inventory->product_variant_id);
-                }
-
                 $order = $lockedTransfer->order;
                 if ($order) {
                     foreach ($order->items as $item) {
@@ -2441,12 +2438,21 @@ class WarehouseDashboardController extends Controller
                             $sourceInventory = Inventory::query()->lockForUpdate()->findOrFail($sourceInventory->id);
 
                             $targetInventory->decrement('reserved_quantity', (float) $reservation->quantity);
-                            InventoryReservation::create([
-                                'order_item_id' => $item->id,
-                                'inventory_id' => $sourceInventory->id,
-                                'quantity' => $reservation->quantity,
-                                'reserved_at' => now(),
-                            ]);
+                            $restoreQuantity = min((float) $reservation->quantity, (float) $restoreReservations->get($sourceInventory->id, 0));
+                            if ($restoreQuantity > 0) {
+                                $sourceReservation = new InventoryReservation([
+                                    'order_item_id' => $item->id,
+                                    'inventory_id' => $sourceInventory->id,
+                                    'quantity' => $restoreQuantity,
+                                    'reserved_at' => now(),
+                                ]);
+                                $sourceReservation->forceFill([
+                                    'packed_at' => $reservation->packed_at,
+                                    'packed_weight_kg' => $reservation->quantity > 0
+                                        ? (float) $reservation->packed_weight_kg * $restoreQuantity / $reservation->quantity : 0,
+                                ])->save();
+                                $restoreReservations->put($sourceInventory->id, (float) $restoreReservations->get($sourceInventory->id) - $restoreQuantity);
+                            }
                             $reservation->delete();
                         }
                     }
@@ -2455,8 +2461,9 @@ class WarehouseDashboardController extends Controller
                         $quantity = abs((float) $movements->sum('quantity'));
                         $sourceInventory = Inventory::query()->lockForUpdate()->find($inventoryId);
                         if ($sourceInventory) {
-                            $sourceInventory->increment('quantity', $quantity);
-                            $sourceInventory->increment('reserved_quantity', $quantity);
+                            $sourceInventory->quantity += $quantity;
+                            $sourceInventory->reserved_quantity = $sourceInventory->reservations()->sum('quantity');
+                            $sourceInventory->save();
                             $variantIds->push((int) $sourceInventory->product_variant_id);
                         }
                     }
@@ -2465,6 +2472,17 @@ class WarehouseDashboardController extends Controller
                         $order->update(['warehouse_id' => $lockedTransfer->source_warehouse_id]);
                     }
                 }
+
+                foreach ($importMovements->groupBy('inventory_id') as $inventoryId => $movements) {
+                    $quantity = (float) $movements->sum('quantity');
+                    $inventory = Inventory::query()->lockForUpdate()->find($inventoryId);
+                    if (! $inventory || (float) $inventory->quantity < $quantity) {
+                        throw new \RuntimeException('Tồn kho đã được sử dụng, không đủ để gỡ tiếp nhận.');
+                    }
+                    $inventory->decrement('quantity', $quantity);
+                    $variantIds->push((int) $inventory->product_variant_id);
+                }
+
 
                 InventoryMovement::query()->whereIn('id', $importMovements->pluck('id'))->delete();
                 InventoryMovement::query()->whereIn('id', $transferOutMovements->pluck('id'))->delete();
@@ -2518,75 +2536,7 @@ class WarehouseDashboardController extends Controller
         int $targetWarehouseId,
         WarehouseTransfer $transfer
     ): void {
-        foreach ($order->items as $item) {
-            $reservations = InventoryReservation::query()
-                ->where('order_item_id', $item->id)
-                ->whereHas('inventory', fn ($query) => $query->where('warehouse_id', $sourceWarehouseId))
-                ->lockForUpdate()
-                ->get();
-
-            foreach ($reservations as $reservation) {
-                $quantity = (int) $reservation->quantity;
-                if ($quantity <= 0) {
-                    $reservation->delete();
-
-                    continue;
-                }
-
-                $sourceInventory = Inventory::query()->lockForUpdate()->find($reservation->inventory_id);
-                if (! $sourceInventory || (int) $sourceInventory->warehouse_id !== $sourceWarehouseId) {
-                    // Ton kho nguon khong con: bo reservation cu de khong chan tiep nhan
-                    $reservation->delete();
-
-                    continue;
-                }
-
-                // Chi chuyen phan ton kho nguon con du, tranh am kho gay loi 500
-                $movableQuantity = min(
-                    $quantity,
-                    max(0, (int) $sourceInventory->quantity),
-                    max(0, (int) $sourceInventory->reserved_quantity)
-                );
-
-                $targetInventory = Inventory::query()->firstOrCreate(
-                    [
-                        'warehouse_id' => $targetWarehouseId,
-                        'product_variant_id' => $sourceInventory->product_variant_id,
-                    ],
-                    [
-                        'quantity' => 0,
-                        'reserved_quantity' => 0,
-                        'low_stock_threshold' => 5,
-                    ]
-                );
-                $targetInventory = Inventory::query()->lockForUpdate()->findOrFail($targetInventory->id);
-
-                if ($movableQuantity > 0) {
-                    $sourceInventory->decrement('quantity', $movableQuantity);
-                    $sourceInventory->decrement('reserved_quantity', $movableQuantity);
-                }
-                $targetInventory->increment('reserved_quantity', $quantity);
-
-                InventoryReservation::create([
-                    'order_item_id' => $item->id,
-                    'inventory_id' => $targetInventory->id,
-                    'quantity' => $quantity,
-                    'reserved_at' => now(),
-                ]);
-                $reservation->delete();
-
-                if ($movableQuantity > 0) {
-                    InventoryMovement::create([
-                        'inventory_id' => $sourceInventory->id,
-                        'quantity' => -$movableQuantity,
-                        'type' => 'transfer_out',
-                        'reference_id' => $transfer->id,
-                        'reference_type' => WarehouseTransfer::class,
-                        'user_id' => Auth::id(),
-                    ]);
-                }
-            }
-        }
+        app(\App\Services\PackedInventoryService::class)->receiveTransfer($order, $transfer);
     }
 
     public function rollbackIncomingTransfer(Request $request, WarehouseTransfer $transfer)

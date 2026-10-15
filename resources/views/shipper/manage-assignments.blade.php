@@ -810,7 +810,7 @@
                                                 data-order-code="{{ $order->code ?: $order->id }}"
                                                 data-customer-name="{{ $customerName }}"
                                                 data-order-total="{{ $order->total ?? 0 }}"
-                                                data-products="{{ e($productPayload->toJson(JSON_UNESCAPED_UNICODE)) }}">
+                                                data-products="{{ $productPayload->toJson(JSON_UNESCAPED_UNICODE) }}">
                                                 <i class="bi bi-list-ul me-1"></i>Sản phẩm
                                             </button>
                                         </td>
@@ -1078,7 +1078,7 @@
                                                                         data-order-code="{{ $order->code ?: $order->id }}"
                                                                         data-customer-name="{{ $customerName }}"
                                                                         data-order-total="{{ $order->total ?? 0 }}"
-                                                                        data-products="{{ e($productPayload->toJson(JSON_UNESCAPED_UNICODE)) }}">
+                                                                        data-products="{{ $productPayload->toJson(JSON_UNESCAPED_UNICODE) }}">
                                                                         <i class="bi bi-list-ul"></i>
                                                                     </button>
                                                                     <button type="button"
@@ -1884,11 +1884,16 @@ document.addEventListener('DOMContentLoaded', function () {
             const body = document.getElementById('productsPreviewBody');
             const money = new Intl.NumberFormat('vi-VN');
             let products = [];
+            let productsReadFailed = false;
 
             try {
                 products = JSON.parse(productsPreviewButton.dataset.products || '[]');
+                if (!Array.isArray(products)) {
+                    throw new Error('Dữ liệu sản phẩm không hợp lệ');
+                }
             } catch (error) {
                 products = [];
+                productsReadFailed = true;
             }
 
             if (orderInfo) {
@@ -1898,7 +1903,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (body) {
                 if (!products.length) {
-                    body.innerHTML = '<tr><td colspan="5" class="text-muted text-center py-3">Chưa có sản phẩm.</td></tr>';
+                    body.innerHTML = productsReadFailed
+                        ? '<tr><td colspan="5" class="text-danger text-center py-3">Không đọc được dữ liệu sản phẩm. Vui lòng tải lại trang.</td></tr>'
+                        : '<tr><td colspan="5" class="text-muted text-center py-3">Chưa có sản phẩm.</td></tr>';
                 } else {
                     body.innerHTML = products.map(function (item) {
                         const quantity = Number(item.quantity || 0);

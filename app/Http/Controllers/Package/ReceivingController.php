@@ -46,6 +46,9 @@ class ReceivingController extends Controller
         }
 
         DB::transaction(function () use ($transfer, $order) {
+            $transfer = WarehouseTransfer::whereKey($transfer->id)->lockForUpdate()->firstOrFail();
+            abort_unless($transfer->status === WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE && !$transfer->import_document_id, 422, 'Phiếu đã được tiếp nhận hoặc vừa thay đổi.');
+            Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
             $document = $this->createImportDocument(
                 (int) $transfer->target_warehouse_id,
                 'Package tiếp nhận đơn điều chuyển #'.$order->code
@@ -53,6 +56,7 @@ class ReceivingController extends Controller
             foreach ($order->items as $item) {
                 $this->importVariant($document, (int) $item->product_variant_id, (int) $item->quantity, (float) $item->price, $transfer);
             }
+            app(\App\Services\PackedInventoryService::class)->receiveTransfer($order, $transfer);
             $order->update(['warehouse_id' => $transfer->target_warehouse_id]);
             $transfer->update([
                 'status' => WarehouseTransfer::STATUS_RECEIVED_COMPLETED,

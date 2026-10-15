@@ -29,27 +29,7 @@ class ShipperHoldingExceptionService
                     }
                     $weights[] = ['order_item_id'=>$item->id, 'product_variant_id'=>$item->product_variant_id, 'received_weight'=>$item->quantity > 0 ? (float) ($item->packed_weight ?? $item->actual_weight ?? ((float) $item->unit_weight * $item->quantity)) : 0];
                 }
-                // Preserve the normal receiving flow for stock still reserved at the source.
-                foreach ($order->items as $item) {
-                    $reservations = InventoryReservation::where('order_item_id', $item->id)->whereHas('inventory', fn($q) => $q->where('warehouse_id', $transfer->source_warehouse_id))->lockForUpdate()->get();
-                    foreach ($reservations as $reservation) {
-                        $source = Inventory::whereKey($reservation->inventory_id)->lockForUpdate()->firstOrFail();
-                        $quantity = (int) $reservation->quantity;
-                        if ($quantity > 0) {
-                            $movable = min($quantity, max(0, (int) $source->quantity), max(0, (int) $source->reserved_quantity));
-                            if ($movable > 0) {
-                                $source->decrement('quantity', $movable);
-                                InventoryMovement::create(['inventory_id'=>$source->id,'quantity'=>-$movable,'type'=>'transfer_out','reference_type'=>WarehouseTransfer::class,'reference_id'=>$transfer->id,'user_id'=>$actorId]);
-                            }
-                            $target = $this->inventory($transfer->target_warehouse_id, $source->product_variant_id);
-                            InventoryReservation::create(['order_item_id'=>$item->id,'inventory_id'=>$target->id,'quantity'=>$quantity,'reserved_at'=>now()]);
-                            $target->update(['reserved_quantity'=>$target->reservations()->sum('quantity')]);
-                        }
-                        $reservation->delete();
-                        $source->update(['reserved_quantity'=>$source->reservations()->sum('quantity')]);
-                        $this->syncStock($source->product_variant_id);
-                    }
-                }
+                app(PackedInventoryService::class)->receiveTransfer($order, $transfer);
                 $order->update(['warehouse_id'=>$transfer->target_warehouse_id]);
                 $receivedWeight = round(array_sum(array_column($weights, 'received_weight')), 3);
                 $transfer->update(['status'=>WarehouseTransfer::STATUS_RECEIVED_COMPLETED,'delivered_by'=>$actorId,'delivered_at'=>now(),'received_by'=>$actorId,'received_at'=>now(),'import_document_id'=>$document->id,'received_weights'=>$weights,'received_total_weight'=>$receivedWeight,'weight_loss'=>round((float) $transfer->packed_total_weight - $receivedWeight, 3),'shipper_delivery_note'=>'Admin hoàn tất ngoại lệ: '.$reason]);

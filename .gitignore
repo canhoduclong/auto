@@ -74,3 +74,5 @@ readme.txt
 !/tests/Manual/SystemBackup.php
 
 !/tests/Manual/BackupOAuth.php
+
+!/tests/Feature/PackedTransferInventoryTest.php
