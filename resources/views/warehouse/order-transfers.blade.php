@@ -245,15 +245,7 @@
                                 @endforeach
 
                                 </details>
-                                @if($transfer->can_delete)
-                                    <form method="POST" action="{{ route((request()->routeIs('admin.*') ? 'admin' : 'warehouse').'.order-transfers.destroy', $transfer->id) }}"
-                                        onsubmit="return confirm('Bạn có chắc muốn xóa phiếu chưa được shipper nhận này?');" class="mt-2">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="btn btn-outline-danger btn-sm">Xóa phiếu</button>
-                                    </form>
-                                @elseif($transfer->is_completed)
-                                    @if(auth()->user()?->isAdmin())
+                                @if(auth()->user()?->isAdmin())
                                         <form method="POST" action="{{ route((request()->routeIs('admin.*') ? 'admin' : 'warehouse').'.order-transfers.destroy', $transfer->id) }}" class="mt-2"
                                               onsubmit="const reason=prompt('Lý do xóa phiếu cũ và TẤT CẢ đơn (ít nhất 5 ký tự):'); if(!reason || reason.trim().length < 5) return false; this.elements.reason.value=reason.trim(); return confirm('Xóa vĩnh viễn TẤT CẢ đơn, giao nhận, đối soát, doanh thu và hoa hồng thuộc phiếu này? Không hoàn tồn hoặc trừ thêm tồn kho thực tế.');">
                                             @csrf
@@ -262,10 +254,15 @@
                                             <input type="hidden" name="reason" value="">
                                             <button class="btn btn-danger btn-sm">Xóa phiếu cũ &amp; toàn bộ đơn</button>
                                         </form>
-                                    @endif
-                                    <div class="small text-success fw-semibold mt-2">
-                                        Kho chuyển đến đã tiếp nhận hoàn tất.
-                                    </div>
+                                @elseif($transfer->can_delete)
+                                    <form method="POST" action="{{ route((request()->routeIs('admin.*') ? 'admin' : 'warehouse').'.order-transfers.destroy', $transfer->id) }}"
+                                        onsubmit="return confirm('Bạn có chắc muốn xóa phiếu chưa được shipper nhận này?');" class="mt-2">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn-outline-danger btn-sm">Xóa phiếu</button>
+                                    </form>
+                                @elseif($transfer->is_completed)
+                                    <div class="small text-success fw-semibold mt-2">Kho chuyển đến đã tiếp nhận hoàn tất.</div>
                                 @else
                                     <div class="small text-muted mt-2">Phiếu đã bắt đầu vận chuyển nên không còn thao tác tại đây.</div>
                                 @endif

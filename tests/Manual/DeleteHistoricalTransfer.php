@@ -21,7 +21,7 @@ Inventory::create(['warehouse_id'=>$target,'product_variant_id'=>$variant,'quant
 DB::table('inventories')->whereNotIn('id',[999001,999002])->delete();
 $export=InventoryDocument::create(['type'=>'export','warehouse_id'=>$source,'document_date'=>today(),'user_id'=>1,'notes'=>'Test export']);
 $import=InventoryDocument::create(['type'=>'import','warehouse_id'=>$target,'document_date'=>today(),'user_id'=>1,'notes'=>'Test import']);
-WarehouseTransfer::create(['order_id'=>999001,'source_warehouse_id'=>$source,'target_warehouse_id'=>$target,'shipper_id'=>1,'status'=>'received_completed','export_document_id'=>$export->id,'import_document_id'=>$import->id]);
+WarehouseTransfer::create(['order_id'=>999001,'source_warehouse_id'=>$source,'target_warehouse_id'=>$target,'shipper_id'=>1,'status'=>(getenv('TEST_TRANSFER_STATUS') ?: 'received_completed'),'export_document_id'=>$export->id,'import_document_id'=>$import->id]);
 InventoryMovement::create(['inventory_id'=>999001,'quantity'=>-5,'type'=>'export','reference_type'=>InventoryDocument::class,'reference_id'=>$export->id,'user_id'=>1]);
 InventoryMovement::create(['inventory_id'=>999002,'quantity'=>5,'type'=>'import','reference_type'=>InventoryDocument::class,'reference_id'=>$import->id,'user_id'=>1]);
 InventoryReservation::create(['inventory_id'=>999002,'order_item_id'=>999001,'quantity'=>5,'reserved_at'=>now()]);
