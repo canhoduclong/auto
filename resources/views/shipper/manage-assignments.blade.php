@@ -444,9 +444,7 @@
     }
     .trip-order-address {
         color: #475569;
-        min-width: 0;
-        width: 260px;
-        max-width: 320px;
+        min-width: 0; 
         white-space: normal;
         overflow-wrap: anywhere;
         word-break: normal;
