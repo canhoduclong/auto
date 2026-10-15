@@ -151,3 +151,7 @@ Bản chụp trong `admin_deleted_orders` được đánh dấu `historical_clea
 ## Dọn phiếu cũ chưa tiếp nhận
 
 Theo phạm vi dọn dữ liệu cũ đã xác nhận, admin được xóa toàn bộ phiếu và đơn kể cả đang chờ shipper, đang vận chuyển, chờ kho nhận, đã nhận hoặc thiếu bản ghi vận chuyển. Không còn điều kiện bắt buộc tiếp nhận hoàn tất. Nút “Xóa phiếu cũ & toàn bộ đơn” hiển thị cho admin ở mọi trạng thái; vẫn cần lý do và xác nhận, kiểm tra ngày dữ liệu cũ và giữ nguyên tồn kho thực tế. Quyền kho thông thường không được mở rộng.
+
+## Sửa lỗi 1406 khi dọn phiếu cũ
+
+Lý do xóa được giữ nguyên trong cột `admin_deleted_orders.reason` (tối đa 500 ký tự). Mã phiếu lưu riêng ở `snapshot.cleanup_group_id`, tránh ghép tiền tố làm vượt chiều dài cột. Kiểm thử bổ sung: `php tests/Manual/DeleteHistoricalTransfer.php --long-reason` với lý do 500 ký tự tiếng Việt; xác minh không cắt mất lý do và tồn thực tế không thay đổi.
