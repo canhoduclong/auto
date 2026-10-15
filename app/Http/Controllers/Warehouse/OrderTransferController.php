@@ -131,6 +131,9 @@ class OrderTransferController extends Controller
                 $constraint = null;
                 preg_match('/CONSTRAINT [`\"]([^`\"]+)[`\"]/', (string)($exception->errorInfo[2] ?? ''), $constraint);
                 $detail = isset($constraint[1]) ? ' Liên kết: '.$constraint[1].'.' : ' Mã lỗi: '.($exception->errorInfo[1] ?? $exception->getCode()).'.';
+                if ((int)($exception->errorInfo[1] ?? 0) === 1406 && preg_match("/Data too long for column '([a-zA-Z0-9_]+)'/", (string)($exception->errorInfo[2] ?? ''), $column)) {
+                    $detail = ' Nội dung vượt giới hạn cột '.$column[1].' (1406).';
+                }
                 return back()->with('error', 'Chưa thể xóa phiếu. Toàn bộ thao tác đã được hoàn tác.'.$detail);
             }
             return back()->with('success','Đã xóa phiếu cũ và toàn bộ đơn cùng giao nhận, đối soát, doanh thu liên quan. Tồn kho thực tế giữ nguyên.');

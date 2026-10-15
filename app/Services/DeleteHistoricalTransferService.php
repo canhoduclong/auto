@@ -76,8 +76,8 @@ class DeleteHistoricalTransferService
                     'order_id'=>$order->id,'order_code'=>$order->code,'customer_id'=>$order->customer_id,'sale_user_id'=>$order->user_id,
                     'order_total'=>(float)$order->total,'recognized_revenue'=>(float)collect($snapshot['accounting_reconciliations']??[])->firstWhere('order_id',$order->id)?->recognized_revenue,
                     'commission_amount'=>0,'accounting_sales_import_batch_id'=>$order->accounting_sales_import_batch_id,
-                    'reason'=>'Dọn lịch sử phiếu #'.$groupId.': '.$reason,
-                    'snapshot'=>json_encode(['order'=>$order->getAttributes(),'items'=>$order->items->toArray(),'preserve_current_inventory'=>true,'historical_cleanup'=>true],JSON_UNESCAPED_UNICODE),
+                    'reason'=>$reason,
+                    'snapshot'=>json_encode(['order'=>$order->getAttributes(),'items'=>$order->items->toArray(),'preserve_current_inventory'=>true,'historical_cleanup'=>true,'cleanup_group_id'=>$groupId],JSON_UNESCAPED_UNICODE),
                     'deleted_by'=>$actor->id,'deleted_at'=>now(),'created_at'=>now(),'updated_at'=>now(),
                 ]);
                 $order->histories()->delete();

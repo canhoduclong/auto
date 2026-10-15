@@ -42,7 +42,8 @@ DB::table('shipping_expense_order_locks')->insert(['claim_id'=>1,'order_id'=>999
 $short=in_array('--short',$_SERVER['argv']);
 if($short)DB::table('inventories')->where('id',999002)->update(['quantity'=>4]);
 $admin=new class extends App\Models\User {public function isAdmin(){return true;}};$admin->id=1;
-(new App\Services\DeleteHistoricalTransferService)->delete(999001,$admin,'Dọn dữ liệu cũ kiểm thử');
+$deleteReason=in_array('--long-reason',$_SERVER['argv']) ? str_repeat('Ừ',500) : 'Dọn dữ liệu cũ kiểm thử';
+(new App\Services\DeleteHistoricalTransferService)->delete(999001,$admin,$deleteReason);
 if(Inventory::find(999001)->quantity!=95||Inventory::find(999002)->quantity!=5)throw new RuntimeException('Physical stock changed');
 if(Order::find(999001)||OrderTransfer::count()||WarehouseTransfer::count()||DB::table('order_histories')->count())throw new RuntimeException('Orders or group remain');
 if(InventoryReservation::count()||Inventory::find(999002)->reserved_quantity!=0)throw new RuntimeException('Reservations remain');
@@ -51,6 +52,8 @@ if(DB::table('shipping_expense_items')->where('order_id',999001)->exists()||DB::
 if(DB::table('shipping_expense_claims')->where('id',1)->value('total')!=2000)throw new RuntimeException('Shared claim total wrong');
 if(DB::table('shipping_expense_claims')->where('id',2)->exists()||DB::table('process_runs')->where('id',2)->value('status')!=='cancelled')throw new RuntimeException('Empty claim not removed');
 $deleted=DB::table('admin_deleted_orders')->first();
+if($deleted->reason!==$deleteReason)throw new RuntimeException('Deletion reason was truncated or modified');
+if((json_decode($deleted->snapshot,true)['cleanup_group_id']??null)!==999001)throw new RuntimeException('Cleanup group context missing');
 if(!(json_decode($deleted->snapshot,true)['historical_cleanup']??false))throw new RuntimeException('Cleanup audit marker missing');
 if(DB::table('admin_deleted_orders')->count()!=1)throw new RuntimeException('Audit missing');
 // MySQL cannot reuse one temporary table in multiple EXISTS subqueries.
