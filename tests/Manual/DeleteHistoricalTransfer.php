@@ -5,12 +5,12 @@ use Illuminate\Support\Facades\Notification;
 use App\Models\{Order,OrderTransfer,WarehouseTransfer,InventoryDocument,Inventory,InventoryMovement,InventoryReservation};
 $seedOrder=DB::table('orders')->first();$seedItem=DB::table('order_items')->whereNotNull('product_variant_id')->first();
 $warehouses=DB::table('warehouses')->limit(2)->pluck('id');$source=$warehouses[0];$target=$warehouses[1];
-$tables=['orders','order_items','order_transfers','warehouse_transfers','inventories','inventory_reservations','inventory_documents','inventory_movements','order_histories','order_returns','order_adjustments','order_item_packing_size_allocations','warehouse_dispatch_slip_entries','accounting_reconciliations','accounting_sales_entries','order_commissions','admin_events','admin_deleted_orders','shipping_expense_order_locks','shipping_expense_items','shipping_expense_claims','process_runs'];
+$tables=['orders','order_items','order_transfers','warehouse_transfers','inventories','inventory_reservations','inventory_documents','inventory_movements','order_histories','order_returns','order_adjustments','order_item_packing_size_allocations','warehouse_dispatch_slip_entries','accounting_reconciliations','accounting_sales_entries','order_commissions','admin_events','admin_deleted_orders','shipping_expense_order_locks','shipping_expense_items','shipping_expense_claims','process_runs','notifications'];
 foreach($tables as $t){$create=(array)DB::selectOne("SHOW CREATE TABLE `$t`");$sql=$create['Create Table'];$sql=preg_replace('/^CREATE TABLE/','CREATE TEMPORARY TABLE',$sql);$sql=preg_replace('/^  CONSTRAINT .*\n/m','',$sql);$sql=str_replace(",\n)","\n)",$sql);DB::statement($sql);}
-Notification::fake();
+if(!in_array('--real-notifications',$_SERVER['argv'])) Notification::fake();
 try {
 Order::withoutEvents(function()use($seedOrder,$seedItem,$source,$target){
-$attrs=(array)$seedOrder;$attrs['id']=999001;$attrs['code']='TEST-CANCEL-TRANSFER';$attrs['order_transfer_id']=999001;$attrs['warehouse_id']=$target;$attrs['status']='packed';$attrs['created_at']='2020-01-01 08:00:00';$attrs['delivered_at']=null;DB::table('orders')->insert($attrs);
+$attrs=(array)$seedOrder;$attrs['id']=999001;$attrs['code']='TEST-CANCEL-TRANSFER';$attrs['order_transfer_id']=999001;$attrs['warehouse_id']=$target;$attrs['status']='packed';$attrs['created_at']='2020-01-01 08:00:00';$attrs['delivered_at']=null;if(in_array('--real-notifications',$_SERVER['argv']))$attrs['note']=str_repeat('Dữ liệu cũ ',1800);DB::table('orders')->insert($attrs);
 $attrs=(array)$seedItem;$attrs['id']=999001;$attrs['order_id']=999001;$attrs['quantity']=5;DB::table('order_items')->insert($attrs);
 OrderTransfer::create(['shipper_id'=>1,'warehouse_id'=>$target,'created_by'=>1])->forceFill(['id'=>999001])->save();
 // Move the auto-generated group key to the stable fixture ID without model callbacks.
@@ -62,6 +62,12 @@ DB::statement('DROP TEMPORARY TABLE `order_histories`');
 $reconciliation=(new App\Http\Controllers\AccountingDashboardController)->reconciliation(
 Illuminate\Http\Request::create('/accounting/reconciliation?business_date_from=2020-01-01&business_date_to=2020-12-31'));
 if($reconciliation->getData()['missingOrders']->contains(fn($row)=>(int)$row->order_id===999001))throw new RuntimeException('Purged order reappeared in reconciliation');
+if(in_array('--real-notifications',$_SERVER['argv'])) {
+if(!DB::table('notifications')->exists())throw new RuntimeException('Database notifications not exercised');
+if((int)DB::table('notifications')->selectRaw('MAX(OCTET_LENGTH(data)) as bytes')->value('bytes')>=65535)throw new RuntimeException('Notification too large');
+if((int)DB::table('admin_events')->selectRaw('MAX(OCTET_LENGTH(metadata)) as bytes')->value('bytes')<=65535)throw new RuntimeException('Large audit snapshot not exercised');
+echo "Real database notifications fit TEXT; full large audit snapshot retained OK\n";
+}
 echo "Expense locks/items cleared; shared claim recalculated; empty claim removed; cleanup excluded from reconciliation OK\n";
 echo "Historical purge: orders/group and revenue removed; physical stock unchanged; holds released and audit retained OK\n";
 });

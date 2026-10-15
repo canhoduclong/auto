@@ -155,3 +155,9 @@ Theo phạm vi dọn dữ liệu cũ đã xác nhận, admin được xóa toàn
 ## Sửa lỗi 1406 khi dọn phiếu cũ
 
 Lý do xóa được giữ nguyên trong cột `admin_deleted_orders.reason` (tối đa 500 ký tự). Mã phiếu lưu riêng ở `snapshot.cleanup_group_id`, tránh ghép tiền tố làm vượt chiều dài cột. Kiểm thử bổ sung: `php tests/Manual/DeleteHistoricalTransfer.php --long-reason` với lý do 500 ký tự tiếng Việt; xác minh không cắt mất lý do và tồn thực tế không thay đổi.
+
+## Sửa lỗi 1406 tại notifications.data
+
+Khi nhật ký xóa phiếu có bản chụp nhiều đơn, thông báo admin trước đây sao chép toàn bộ metadata vào cột TEXT `notifications.data`, gây tràn 65.535 byte. Thông báo lớn nay chỉ lưu tóm tắt và mã `admin_event_id`; bản chụp đầy đủ vẫn ở `admin_events.metadata`. Thông báo nhỏ giữ nguyên dữ liệu tương thích.
+
+Đã kiểm tra ghi thông báo qua database channel thật vào bảng tạm bằng `php tests/Manual/DeleteHistoricalTransfer.php --real-notifications --long-reason`, với bản chụp lớn hơn 65.535 byte. Toàn bộ thao tác dọn hoàn tất, thông báo nằm trong giới hạn, bản chụp đầy đủ được giữ và tồn thực tế không thay đổi.
