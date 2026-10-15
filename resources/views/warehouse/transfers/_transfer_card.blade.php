@@ -1,10 +1,12 @@
 @php
     $order = $transfer->order;
+    $transferShipperName = $transfer->shipper?->name;
+    $transferShipperLabel = $transferShipperName ? 'Shipper '.$transferShipperName : 'Shipper chưa xác định';
     $canConfirm = $transfer->status === 'delivered_waiting_receive';
     $statusMeta = match ($transfer->status) {
-        'pending_shipper_pickup' => ['Chờ shipper nhận hàng tại kho gửi', 'bg-secondary'],
-        'in_transit' => ['Shipper đã nhận — đang vận chuyển', 'bg-warning text-dark'],
-        'delivered_waiting_receive' => ['Shipper đã bàn giao — chờ nhập kho', 'bg-info text-dark'],
+        'pending_shipper_pickup' => [$transferShipperName ? 'Chờ shipper '.$transferShipperName.' nhận hàng tại kho gửi' : 'Chưa gán shipper — chờ nhận hàng tại kho gửi', 'bg-secondary'],
+        'in_transit' => [$transferShipperLabel.' đã nhận — đang vận chuyển', 'bg-warning text-dark'],
+        'delivered_waiting_receive' => [$transferShipperLabel.' đã bàn giao — chờ nhập kho', 'bg-info text-dark'],
         'received_completed' => ['Đã tiếp nhận', 'bg-success'],
         default => ['Chưa xác định', 'bg-secondary'],
     };
@@ -31,7 +33,7 @@
                 @endif
             </div>
         </div>
-        <span class="badge {{ $statusMeta[1] }}">{{ $statusMeta[0] }}</span>
+        <span class="badge {{ $statusMeta[1] }} text-wrap text-start" style="max-width:260px;line-height:1.4;">{{ $statusMeta[0] }}</span>
     </div>
     <div class="card-body">
         <div class="row g-2 mb-3 small">
@@ -104,7 +106,7 @@
     </div>
     <div class="card-footer bg-white border-top d-flex justify-content-between align-items-center gap-2">
         <div class="byshipper" style="font-size:.8rem;">
-            Từ kho: <strong>{{ $transfer->sourceWarehouse?->name ?? '—' }}</strong>, bởi :<strong>{{ $transfer->shipper?->name ?? '—' }}</strong>
+            Từ kho: <strong>{{ $transfer->sourceWarehouse?->name ?? '—' }}</strong> · Shipper điều chuyển: <strong>{{ $transferShipperName ?: 'Chưa gán shipper' }}</strong>
         </div>
         <div class="actions">
         @if($transfer->status === 'in_transit')
