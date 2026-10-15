@@ -84,3 +84,5 @@ readme.txt
 !/tests/Manual/CancelCompletedTransfer.php
 
 !/tests/Manual/DeleteHistoricalTransfer.php
+
+!/tests/Feature/AdminEventNotificationSizeTest.php
