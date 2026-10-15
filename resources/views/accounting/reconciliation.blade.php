@@ -54,6 +54,9 @@
         : 'bi-arrow-down-up';
 @endphp
 
+@include('accounting.partials.reconciliation-adjustments')
+
+
 @push('styles')
 <style>
     .recon-grid {

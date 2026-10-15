@@ -1183,7 +1183,17 @@ class AccountingDashboardController extends Controller
             ];
         });
 
+        $adjustmentQueue = app(ApprovalService::class)->pendingAccountingAdjustments();
+        $adjustmentPage = max(1, $request->integer('adjustment_page', 1));
+        $adjustmentRows = new \Illuminate\Database\Eloquent\Collection($adjustmentQueue->forPage($adjustmentPage, 10)->values()->all());
+        $adjustmentRows->loadMissing(['items.orderItem.variant.product', 'items.variant.product', 'order.items.variant.product', 'order.additionalFees']);
+        $reconciliationAdjustments = new \Illuminate\Pagination\LengthAwarePaginator(
+            $adjustmentRows, $adjustmentQueue->count(), 10, $adjustmentPage,
+            ['path' => $request->url(), 'query' => $request->query(), 'pageName' => 'adjustment_page']
+        );
+
         return view('accounting.reconciliation', [
+            'reconciliationAdjustments' => $reconciliationAdjustments,
             'businessDateShortcuts' => $businessDateShortcuts,
             'orders' => $orders,
             'stats' => $stats,
@@ -3665,6 +3675,10 @@ class AccountingDashboardController extends Controller
 
         if (! in_array((string) $order->status, ['delivered', 'completed'], true)) {
             return [false, 'Don chua giao thanh cong.'];
+        }
+
+        if ($order->adjustments()->whereIn('status', [OrderAdjustment::STATUS_PENDING_APPROVAL, OrderAdjustment::STATUS_APPROVED])->exists()) {
+            return [false, 'Đơn có yêu cầu điều chỉnh chưa xử lý xong. Vui lòng duyệt hoặc từ chối yêu cầu trước khi xác nhận doanh thu.'];
         }
 
         $pendingReturn = $order->returnRecords

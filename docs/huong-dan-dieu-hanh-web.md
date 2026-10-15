@@ -89,3 +89,9 @@ Dữ liệu cũ thiếu tồn hoặc thiếu chứng từ phải được đối
 Trang kiểm kê có mục “Hàng tồn theo đơn đã đóng”, hiển thị mã đơn, khách hàng, sản phẩm/biến thể, SKU, số lượng giữ riêng, kg đã đóng và thời điểm chốt giữ hàng. Đây là dữ liệu hiện tại của kho đang chọn, có lọc theo sản phẩm và phân trang riêng, không phải ảnh chụp tồn theo ngày kiểm kê lịch sử.
 
 Danh sách chỉ xem, nằm ngoài biểu mẫu cập nhật kiểm kê, không có ô sửa hoặc thao tác xóa. Chỉ các lượng giữ hàng còn tồn tại ở kho được hiển thị; đơn đã hủy, đã giao, hoàn tất hoặc đưa vào thùng rác được loại ra. Dữ liệu cũ thiếu kg hoặc thời điểm chốt hiển thị “Chưa ghi nhận”.
+
+## Sale điều chỉnh đơn sau khi giao hàng
+
+Sale có thể bấm “Gửi yêu cầu điều chỉnh” trên đơn của mình đã giao hoặc hoàn tất, không cần chờ kế toán xác nhận doanh thu trước. Biểu mẫu hiện có hỗ trợ điều chỉnh sản phẩm, số lượng, khối lượng, đơn giá, phí và bằng chứng. Khi gửi, hệ thống lưu yêu cầu riêng; chưa áp dụng thay đổi vào số liệu đơn. Không gửi thêm khi đơn còn yêu cầu chờ duyệt hoặc đang xử lý.
+
+Trong Đối soát đơn giao hàng, mục “Yêu cầu điều chỉnh đơn đã giao — chờ Kế toán duyệt” hiển thị tất cả yêu cầu tới bước kế toán, độc lập bộ lọc ngày của danh sách đơn. Mở yêu cầu để so sánh đơn đã giao và nội dung đề nghị, xem bằng chứng, duyệt hoặc từ chối có lý do. Điều chỉnh sau giao hàng cần kế toán duyệt thủ công; không tự động duyệt. Nếu phát sinh trả hàng, vẫn phải hoàn tất xử lý kho theo luồng hiện có. Đơn còn điều chỉnh chưa xử lý xong không được xác nhận doanh thu mới.

@@ -16,6 +16,16 @@ use App\Enums\OrderStatus;
 
 class AssignmentReviewController extends Controller
 {
+    public function progressCounts(string $date): array
+    {
+        $dispatch = $this->latestDispatch($date);
+        $orders = $this->printableOrders($dispatch ? $this->dispatchOrderIds($dispatch) : [], $date);
+        $printed = OrderHistory::whereIn('order_id', $orders->pluck('id')->all())
+            ->where('action', 'warehouse_delivery_note_printed')->distinct()->count('order_id');
+
+        return ['review_total' => $orders->count(), 'review_printed' => $printed];
+    }
+
     public function index(Request $request)
     {
         $selectedDate = $request->filled('date')

@@ -354,8 +354,8 @@ class WarehouseDashboardController extends Controller
             'completed_tasks' => 0, // Nếu có logic tính thực tế thì thay thế
             'transfers_incoming' => \App\Models\WarehouseTransfer::query()
                 ->where('target_warehouse_id', $managedWarehouseId)
-                ->where('status', \App\Models\WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE)
-                ->count(),
+                ->whereIn('status', [WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP, WarehouseTransfer::STATUS_IN_TRANSIT, WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE])
+                ->whereHas('order')->count(),
             'transfers_completed' => \App\Models\WarehouseTransfer::query()
                 ->where('target_warehouse_id', $managedWarehouseId)
                 ->where('status', \App\Models\WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
@@ -380,6 +380,13 @@ class WarehouseDashboardController extends Controller
                 ->whereDate('counted_at', $dateString)
                 ->count(),
         ];
+
+        $outgoing = WarehouseTransfer::where('source_warehouse_id', $managedWarehouseId)->whereHas('order');
+        $stats['outgoing_pending'] = (clone $outgoing)->where('status', WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP)->count();
+        $stats['outgoing_done'] = (clone $outgoing)
+            ->whereIn('status', [WarehouseTransfer::STATUS_IN_TRANSIT, WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE, WarehouseTransfer::STATUS_RECEIVED_COMPLETED])
+            ->whereDate('picked_up_at', $dateString)->count();
+        $stats = array_merge($stats, app(\App\Http\Controllers\Warehouse\AssignmentReviewController::class)->progressCounts($dateString));
 
         $recentPacked = $applyWarehouseScope(Order::with('customer'))
             ->whereIn('status', self::PACKED_STATUSES)

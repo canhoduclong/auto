@@ -76,3 +76,5 @@ readme.txt
 !/tests/Manual/BackupOAuth.php
 
 !/tests/Feature/PackedTransferInventoryTest.php
+
+!/tests/Feature/DeliveredOrderAdjustmentTest.php

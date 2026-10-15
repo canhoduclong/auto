@@ -80,7 +80,14 @@ class ApprovalService
 
     public function pendingAccountingAdjustments(): Collection
     {
-        return $this->pendingAdjustmentsForRoles($this->financeAccountingRoleSlugs());
+        $withWorkflow = $this->pendingAdjustmentsForRoles($this->financeAccountingRoleSlugs());
+        $withoutWorkflow = OrderAdjustment::query()
+            ->where('status', OrderAdjustment::STATUS_PENDING_APPROVAL)
+            ->whereDoesntHave('approvalSteps')
+            ->whereHas('order', fn ($query) => $query->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED]))
+            ->with($this->adjustmentQueueRelations())->get();
+
+        return $withWorkflow->concat($withoutWorkflow)->unique('id')->sortByDesc('submitted_at')->values();
     }
 
     /**
@@ -469,6 +476,13 @@ class ApprovalService
         }
 
         $sortedSteps = $workflow->steps->sortBy('step_order')->values();
+        // Điều chỉnh sau giao hàng luôn cần Kế toán duyệt thủ công.
+        $order = $adjustment->order;
+        if ($order?->canRequestAdjustment()) {
+            $sortedSteps = $sortedSteps->filter(fn ($step) => in_array(strtolower((string) $step->role_slug), $this->financeAccountingRoleSlugs(), true))->values();
+            if ($sortedSteps->isEmpty()) return false; // Controller fallback requires accountant approval.
+        }
+
 
         DB::transaction(function () use ($adjustment, $sortedSteps): void {
             // Clear any old steps for this adjustment

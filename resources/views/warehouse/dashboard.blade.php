@@ -224,24 +224,41 @@
             @php
             $tasks = [
                 [
-                    'label' => 'Đơn cần đóng gói',
+                    'label' => 'Đơn cần đóng',
                     'total' => ($stats['ready_to_pack'] ?? 0) + ($stats['packing'] ?? 0) + ($stats['packed'] ?? 0),
                     'done' => $stats['packed'] ?? 0,
-                    'route' => route('warehouse.orders'),
+                    'route' => route('warehouse.orders', ['date' => $selectedDate->toDateString()]),
                 ],
                 [
-                    'label' => 'Tiếp nhận đơn & hàng',
+                    'label' => 'Điều chuyển',
+                    'total' => ($stats['outgoing_pending'] ?? 0) + ($stats['outgoing_done'] ?? 0),
+                    'done' => $stats['outgoing_done'] ?? 0,
+                    'route' => route('warehouse.order-transfers'),
+                ],
+                [
+                    'label' => 'Tiếp nhận đơn & Hàng',
                     'total' => ($stats['transfers_incoming'] ?? 0) + ($stats['transfers_completed'] ?? 0) + ($stats['receiving'] ?? 0) + ($stats['received'] ?? 0),
                     'done' => ($stats['transfers_completed'] ?? 0) + ($stats['received'] ?? 0),
-                    'route' => route('warehouse.receiving'),
+                    'route' => route('warehouse.receiving', ['date' => $selectedDate->toDateString()]),
                     'key' => 'incoming-orders',
-                    'show' => ($stats['transfers_incoming'] ?? 0) > 0 || ($stats['receiving'] ?? 0) > 0,
                 ],
                 [
-                    'label' => 'Tiếp nhận đơn hoàn trả',
+                    'label' => 'Tiếp nhận đơn trả về',
                     'total' => ($stats['returning'] ?? 0) + ($stats['returned'] ?? 0),
                     'done' => $stats['returned'] ?? 0,
                     'route' => route('warehouse.returns'),
+                ],
+                [
+                    'label' => 'Review & In ấn',
+                    'total' => $stats['review_total'] ?? 0,
+                    'done' => $stats['review_printed'] ?? 0,
+                    'route' => route('warehouse.assignment-review.index', ['date' => $selectedDate->toDateString()]),
+                ],
+                [
+                    'label' => 'Kiểm kê kho',
+                    'total' => 1,
+                    'done' => min(1, (int) ($stats['stocktakes_completed'] ?? 0)),
+                    'route' => route('warehouse.stocktakes.index', ['inventory_date' => $selectedDate->toDateString()]),
                 ],
                 [
                     'label' => 'Nhiệm vụ được giao',
@@ -249,14 +266,7 @@
                     'done' => $stats['completed_tasks'] ?? 0,
                     'route' => route('tasks.my-tasks'),
                 ],
-                [
-                    'label' => 'Kiểm kê kho',
-                    'total' => 1,
-                    'done' => min(1, (int) ($stats['stocktakes_completed'] ?? 0)),
-                    'route' => route('warehouse.stocktakes.index'),
-                ],
             ];
-            $tasks = array_values(array_filter($tasks, fn ($task) => $task['show'] ?? true));
             $colorMap = [
                 'todo' => 'task-status-todo',
                 'inprogress' => 'task-status-inprogress',

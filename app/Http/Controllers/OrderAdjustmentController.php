@@ -56,7 +56,7 @@ class OrderAdjustmentController extends Controller
                 'approvalSteps.step:id,role_slug,step_order',
                 'approvalSteps.approver:id,name',
             ])
-            ->whereHas('order', fn ($orderQuery) => $orderQuery->where('status', Order::STATUS_COMPLETED));
+            ->whereHas('order', fn ($orderQuery) => $orderQuery->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED]));
 
         if (! $isAdminOrManager) {
             if ($isLeader) {
@@ -305,6 +305,11 @@ class OrderAdjustmentController extends Controller
             : OrderAdjustment::STATUS_DRAFT;
 
         $adjustment = DB::transaction(function () use ($order, $data, $preparedItems, $feeChanges, $orderChanges, $status, $requiresWarehouse, $imagePaths) {
+            $order = Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+            $this->authorizeCreate($order);
+            if ($order->adjustments()->whereIn('status', [OrderAdjustment::STATUS_PENDING_APPROVAL, OrderAdjustment::STATUS_APPROVED])->exists()) {
+                throw ValidationException::withMessages(['adjustment_note' => 'Đơn đang có yêu cầu điều chỉnh chưa xử lý xong. Vui lòng chờ kết quả trước khi gửi thêm.']);
+            }
             $adjustment = OrderAdjustment::create([
                 'order_id' => $order->id,
                 'requested_by' => (int) auth()->id(),
@@ -661,7 +666,7 @@ class OrderAdjustmentController extends Controller
         abort_unless(
             $order->canRequestAdjustment(),
             422,
-            'Chỉ có thể gửi yêu cầu điều chỉnh khi đơn đã hoàn tất, hoặc đã giao và được kế toán xác nhận doanh thu.'
+            'Chỉ có thể gửi yêu cầu điều chỉnh khi đơn đã giao hoặc hoàn tất.'
         );
 
         if ($user->hasRole('admin')) {
