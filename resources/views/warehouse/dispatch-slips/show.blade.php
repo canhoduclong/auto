@@ -22,6 +22,9 @@
             <form method="POST" action="{{ route($dispatchRoutePrefix.'.destroy', $slip) }}" onsubmit="return confirm('Xóa phiếu đang mở này?');">@csrf @method('DELETE')<button class="btn btn-outline-danger">Xóa</button></form>
         @endif
         @include('warehouse.dispatch-slips._admin_delete')
+        @if(auth()->user()?->isAdmin())
+            @include('admin.transport._reassign', ['transportSlip' => $slip, 'transportGroup' => null])
+        @endif
         @if(!$readOnly && request()->routeIs('admin.warehouse-dispatch-slips.*') && $slip->status === 'finalized' && $slip->can_release_for_driver_pickup)
             <form method="POST" action="{{ route($dispatchRoutePrefix.'.unfinalize', $slip) }}" onsubmit="return confirm('Gỡ chốt phiếu để chỉnh sửa lại?');">@csrf<button class="btn btn-warning"><i class="bi bi-unlock me-1"></i>Gỡ chốt</button></form>
         @endif

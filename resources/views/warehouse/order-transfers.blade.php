@@ -1,4 +1,4 @@
-@extends('layouts.warehouse')
+@extends(request()->routeIs('admin.*') ? 'layouts.admin' : 'layouts.warehouse')
 @php
     if (!isset($orders)) {
         echo '<div class="alert alert-danger m-4">Lỗi: Không có biến $orders được truyền vào view. Hãy kiểm tra lại controller hoặc route.</div>';
@@ -59,14 +59,18 @@
 </style>
 @endpush
 @section('content')
+@if(!request()->routeIs('admin.*'))
+    @include('warehouse.transfers._tabs', ['activeTransferTab' => 'orders'])
+@endif
 @include('warehouse.transfers._module_nav')
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
         <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-3">
             <div><h5 class="fw-bold mb-1">Điều chuyển đơn đã đóng gói</h5><div class="small text-muted">Gom đơn theo tài xế và kho nhận như quy trình hiện tại.</div></div>
-            <a href="{{ route('warehouse.transfers.index') }}" class="btn btn-warning fw-semibold"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Lập phiếu xuất kho tổng</a>
+            <a href="{{ route(request()->routeIs('admin.*') ? 'admin.warehouse-dispatch-slips.index' : 'warehouse.transfers.index') }}" class="btn btn-warning fw-semibold"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Lập phiếu xuất kho tổng</a>
         </div>
-        <form method="GET" action="{{ route('warehouse.order-transfers') }}" class="row g-2 align-items-end">
+        <form method="GET" action="{{ request()->routeIs('warehouse.inventory-transfers.index') ? route('warehouse.inventory-transfers.index') : route((request()->routeIs('admin.*') ? 'admin' : 'warehouse').'.order-transfers') }}" class="row g-2 align-items-end">
+            @if(request()->routeIs('warehouse.inventory-transfers.index'))<input type="hidden" name="tab" value="orders">@endif
             <div class="col-lg-3 col-md-4">
                 <label class="form-label small fw-semibold mb-1">Từ ngày</label>
                 <input type="date" name="from_date" value="{{ $from }}" class="form-control">
@@ -81,7 +85,7 @@
             </div>
             <div class="col-lg-2 d-flex gap-2">
                 <button class="btn btn-primary flex-fill" type="submit">Lọc</button>
-                <a href="{{ route('warehouse.order-transfers') }}" class="btn btn-outline-secondary">Đặt lại</a>
+                <a href="{{ request()->routeIs('warehouse.inventory-transfers.index') ? route('warehouse.inventory-transfers.index', ['tab' => 'orders']) : route((request()->routeIs('admin.*') ? 'admin' : 'warehouse').'.order-transfers') }}" class="btn btn-outline-secondary">Đặt lại</a>
             </div>
         </form>
     </div>
@@ -90,7 +94,7 @@
 <div class="row g-4">
     <div class="col-md-6">
         <div class="order-transfer-col">
-            <form method="POST" action="{{ route('warehouse.order-transfers.store') }}" id="orderTransferForm" class="mb-3">
+            <form method="POST" action="{{ route((request()->routeIs('admin.*') ? 'admin' : 'warehouse').'.order-transfers.store') }}" id="orderTransferForm" class="mb-3">
                 @csrf
                 <div class="row g-2 align-items-end">
                     <div class="col-md-5">
@@ -169,10 +173,13 @@
                                         {{ $transfer->status_label }}
                                     </span>
                                 </div>
+                                @if(auth()->user()?->isAdmin())
+                                    @include('admin.transport._reassign', ['transportGroup' => $transfer])
+                                @endif
                                 <div class="small text-muted mb-2">
                                     Tạo lúc {{ $transfer->created_at->format('H:i') }} · {{ $transfer->orders->count() }} đơn
                                     @if($transfer->dispatchEntry?->slip)
-                                        · <a class="text-decoration-none" href="{{ route('warehouse.dispatch-slips.show', $transfer->dispatchEntry->slip) }}"><i class="bi bi-file-earmark-spreadsheet me-1"></i>{{ $transfer->dispatchEntry->slip->code }}</a>
+                                        · <a class="text-decoration-none" href="{{ route((request()->routeIs('admin.*') ? 'admin.warehouse-dispatch-slips' : 'warehouse.dispatch-slips').'.show', $transfer->dispatchEntry->slip) }}"><i class="bi bi-file-earmark-spreadsheet me-1"></i>{{ $transfer->dispatchEntry->slip->code }}</a>
                                     @endif
                                 </div>
 
@@ -208,7 +215,7 @@
                                                     $willRestoreStock = $orderStatus === \App\Models\WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE;
                                                 @endphp
                                                 <form method="POST"
-                                                    action="{{ route('warehouse.order-transfers.orders.detach', [$transfer, $order]) }}"
+                                                    action="{{ route((request()->routeIs('admin.*') ? 'admin' : 'warehouse').'.order-transfers.orders.detach', [$transfer, $order]) }}"
                                                     class="mt-2"
                                                     onsubmit="return confirm('{{ $willRestoreStock
                                                         ? 'Gỡ phiếu điều chuyển hiện tại để chọn shipper khác? Đơn hàng được giữ nguyên và tồn kho nguồn sẽ được hoàn lại.'
@@ -225,7 +232,7 @@
                                 @endforeach
 
                                 @if($transfer->can_delete)
-                                    <form method="POST" action="{{ route('warehouse.order-transfers.destroy', $transfer->id) }}"
+                                    <form method="POST" action="{{ route((request()->routeIs('admin.*') ? 'admin' : 'warehouse').'.order-transfers.destroy', $transfer->id) }}"
                                         onsubmit="return confirm('Bạn có chắc muốn xóa phiếu chưa được shipper nhận này?');" class="mt-2">
                                         @csrf
                                         @method('DELETE')

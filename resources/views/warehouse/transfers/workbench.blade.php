@@ -21,6 +21,7 @@
 </style>
 @endpush
 @section('content')
+@include('warehouse.transfers._tabs', ['activeTransferTab' => 'workbench'])
 <div class="tw" id="transfer-workbench">
 <div class="tw-toolbar justify-content-between"><div><h4 class="mb-1">Điều chuyển kho</h4><span class="tw-help">Kho nguồn: <strong>{{ $sourceWarehouse?->name }}</strong></span></div><a class="btn btn-outline-primary btn-sm" href="{{ route('warehouse.inventory-transfers.incoming') }}">Tiếp nhận điều chuyển ({{ $incomingPendingCount }})</a></div>
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif

@@ -3386,7 +3386,8 @@ class ShipperDashboardController extends Controller
             'date' => 'nullable|date',
         ]);
 
-        abort_if(! $this->isAssignmentAdjustable($order), 422, 'Đơn đã được shipper nhận/đang giao nên không thể đổi shipper.');
+        $adminActiveReassignment = Auth::user()?->isAdmin() && in_array($order->status, $this->activeDeliveryStatuses(), true);
+        abort_if(! $adminActiveReassignment && ! $this->isAssignmentAdjustable($order), 422, 'Đơn đã được shipper nhận/đang giao nên không thể đổi shipper.');
         abort_if(! ($shipper->hasRole('shipper') || $shipper->hasRole('manager_shipper')), 422, 'Người dùng không phải shipper.');
 
         $previousShipper = $order->shipper;

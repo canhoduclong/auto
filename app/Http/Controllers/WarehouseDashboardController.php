@@ -5752,6 +5752,11 @@ class WarehouseDashboardController extends Controller
                 ->with('error', 'Bạn chưa được gán kho quản lý để tạo phiếu điều chuyển.');
         }
 
+        $request->validate(['tab' => ['nullable', 'in:workbench,orders']]);
+        if ($request->input('tab') === 'orders') {
+            return app(\App\Http\Controllers\Warehouse\OrderTransferController::class)->index($request);
+        }
+
         return $this->renderInventoryTransferPage($managedWarehouseId);
     }
 

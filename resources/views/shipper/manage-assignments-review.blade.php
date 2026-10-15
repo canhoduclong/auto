@@ -1,4 +1,4 @@
-@extends('layouts.shipper')
+@extends(auth()->user()?->isAdmin() ? 'layouts.admin' : 'layouts.shipper')
 
 @section('title', !empty($readOnly) ? 'Lịch sử điều phối giao hàng' : 'Xem lại lộ trình giao hàng')
 @section('subtitle', !empty($readOnly) ? 'Chọn ngày để xem lại nguyên trạng lộ trình đã gửi' : 'Kiểm tra các chuyến ghép đơn trước khi gửi shipper xác nhận')

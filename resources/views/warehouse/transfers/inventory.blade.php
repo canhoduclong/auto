@@ -32,6 +32,7 @@
 @endpush
 
 @section('content')
+@include('warehouse.transfers._tabs', ['activeTransferTab' => 'workbench'])
 @include('warehouse.transfers._module_nav')
 <div class="transfer-hero d-flex justify-content-between align-items-start flex-wrap gap-2">
     <div>

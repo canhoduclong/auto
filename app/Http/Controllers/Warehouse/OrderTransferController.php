@@ -22,11 +22,11 @@ class OrderTransferController extends Controller
     {
         // Lấy user và kho đang quản lý
         $user = auth()->user();
-        $warehouseId = $user->warehouse_id;
+        $warehouseId = $user->isAdmin() ? null : $user->warehouse_id;
         $search = trim((string) $request->input('search', ''));
         $from = $request->filled('from_date')
             ? Carbon::parse($request->input('from_date'))->toDateString()
-            : Carbon::today()->subDays(30)->toDateString();
+            : ($request->input('tab') === 'orders' ? '2000-01-01' : Carbon::today()->subDays(30)->toDateString());
         $to = $request->filled('to_date')
             ? Carbon::parse($request->input('to_date'))->toDateString()
             : Carbon::today()->toDateString();
@@ -123,7 +123,7 @@ class OrderTransferController extends Controller
         if ($transfer->dispatchEntry) {
             return back()->with('error', 'Nhóm đơn đã thuộc phiếu xuất kho tổng '.($transfer->dispatchEntry->slip?->code ?: '').'. Hãy xóa phiếu tổng đang mở trước khi xóa nhóm đơn.');
         }
-        $warehouseId = auth()->user()?->warehouse_id ? (int) auth()->user()->warehouse_id : null;
+        $warehouseId = !auth()->user()?->isAdmin() && auth()->user()?->warehouse_id ? (int) auth()->user()->warehouse_id : null;
         if ($warehouseId && !$transfer->orders
             ->flatMap->warehouseTransfers
             ->contains(fn (WarehouseTransfer $warehouseTransfer) => (int) $warehouseTransfer->source_warehouse_id === $warehouseId)) {
@@ -147,7 +147,7 @@ class OrderTransferController extends Controller
             $transfer->delete();
         });
 
-        return redirect()->route('warehouse.order-transfers')->with('success', 'Đã xóa phiếu điều chuyển!');
+        return redirect()->route(request()->routeIs('admin.*') ? 'admin.order-transfers' : 'warehouse.order-transfers')->with('success', 'Đã xóa phiếu điều chuyển!');
     }
 
     public function detachWaitingTransfer(OrderTransfer $transfer, Order $order)
@@ -173,7 +173,7 @@ class OrderTransferController extends Controller
             return back()->with('error', 'Chỉ có thể gỡ phiếu điều chuyển khi đơn đang chờ shipper nhận hoặc chờ kho chuyển đến tiếp nhận.');
         }
 
-        $warehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
+        $warehouseId = !Auth::user()?->isAdmin() && Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
         if ($warehouseId && (int) $warehouseTransfer->source_warehouse_id !== $warehouseId) {
             abort(403, 'Đơn điều chuyển không thuộc kho bạn quản lý.');
         }
@@ -313,7 +313,7 @@ class OrderTransferController extends Controller
         }
 
 
-        $sourceWarehouseId = auth()->user()?->warehouse_id ? (int) auth()->user()->warehouse_id : null;
+        $sourceWarehouseId = !auth()->user()?->isAdmin() && auth()->user()?->warehouse_id ? (int) auth()->user()->warehouse_id : null;
         if ($sourceWarehouseId && $sourceWarehouseId === (int) $data['warehouse_id']) {
             return back()->withErrors(['warehouse_id' => 'Kho nhận phải khác kho đang quản lý.']);
         }
@@ -321,7 +321,7 @@ class OrderTransferController extends Controller
         $orderTransfer = app(\App\Services\WarehouseTransferCreationService::class)
             ->createOrders($sourceWarehouseId, $data, $orderIds);
 
-        return redirect()->route('warehouse.order-transfers')
+        return redirect()->route(request()->routeIs('admin.*') ? 'admin.order-transfers' : 'warehouse.order-transfers')
             ->with('success', 'Đã tạo phiếu điều chuyển mới #' . $orderTransfer->id . '.');
     }
 

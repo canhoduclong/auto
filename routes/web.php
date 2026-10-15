@@ -840,6 +840,15 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('admin/daily-rebuild', [\App\Http\Controllers\AdminDailyRebuildController::class, 'execute'])->name('admin.daily-rebuild.execute')->middleware('role:admin');
     Route::get('admin/google-sheet-inventory-reset', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'resetIndex'])->name('admin.google-sheet-inventory-reset.index')->middleware('role:admin');
     Route::delete('admin/google-sheet-inventory-reset', [\App\Http\Controllers\WarehouseGoogleSheetInventoryController::class, 'resetRange'])->name('admin.google-sheet-inventory-reset.destroy')->middleware('role:admin');
+    Route::prefix('admin/order-transfers')->name('admin.order-transfers')->middleware('role:admin')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'index']);
+        Route::post('/', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'store'])->name('.store');
+        Route::delete('/{id}', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'destroy'])->name('.destroy');
+        Route::post('/{transfer}/orders/{order}/detach', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'detachWaitingTransfer'])->name('.orders.detach');
+        Route::post('/{transfer}/reassign', [\App\Http\Controllers\AdminTransportController::class, 'reassignGroup'])->name('.reassign');
+    });
+    Route::post('admin/warehouse-dispatch-slips/{dispatchSlip}/reassign', [\App\Http\Controllers\AdminTransportController::class, 'reassignSlip'])
+        ->middleware('role:admin')->name('admin.warehouse-dispatch-slips.reassign');
     Route::prefix('admin/warehouse-dispatch-slips')->name('admin.warehouse-dispatch-slips.')->middleware('role:admin')->group(function () {
         Route::get('/', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'index'])->name('index');
         Route::post('/', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'store'])->name('store');

@@ -78,3 +78,5 @@ readme.txt
 !/tests/Feature/PackedTransferInventoryTest.php
 
 !/tests/Feature/DeliveredOrderAdjustmentTest.php
+
+!/tests/Feature/AdminTransportPermissionsTest.php

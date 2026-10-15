@@ -107,3 +107,17 @@ Badge phản ánh trạng thái công việc, không phải bộ đếm thông b
 Trong danh sách và chi tiết phiếu xuất kho tổng, admin có nút “Admin: Xóa phiếu đã xuất”, kể cả phiếu đã có tài xế nhận hoặc kho đích tiếp nhận. Bắt buộc nhập lý do 5–500 ký tự và xác nhận mã phiếu. Máy chủ kiểm tra quyền admin, khóa phiếu trong giao dịch và ghi nhật ký kèm dữ liệu phiếu, các dòng bàn giao trước khi xóa.
 
 Thao tác chỉ xóa phiếu tổng và các dòng liên kết trên phiếu; giữ đơn hàng, phiếu điều chuyển, chứng từ xuất/nhập thực tế và số liệu tồn kho. Đây không phải thao tác hủy xuất hàng hoặc hoàn tồn. Chức năng xóa phiếu đang mở vẫn theo quyền hiện có.
+
+## Quản lý vận chuyển trong admin
+
+Menu admin có Quản lý lộ trình giao hàng, Quản lý điều chuyển, Xử lý hàng ở tài xế và Phiếu xuất kho tổng. Trang lộ trình và lịch sử dùng bố cục admin khi đăng nhập admin. Quản lý điều chuyển xem toàn bộ kho, lập nhóm, gỡ đơn theo trạng thái vận chuyển, xóa nhóm chưa xuất và chuyển tài xế.
+
+Admin được đổi tài xế cho đơn giao khách đang thực hiện mà không xuất kho lần nữa. Đổi tài xế điều chuyển yêu cầu lý do; nếu nhóm nằm trong phiếu xuất tổng thì áp dụng cho các đơn điều chuyển chưa hoàn tất của toàn phiếu, đồng bộ tài xế nhóm và phiếu, ghi lịch sử từng đơn cùng nhật ký admin. Đơn đã nhập kho xong không bị đổi tài xế vận chuyển trong lịch sử.
+
+Phiếu xuất tổng có các chức năng lập, xem, sửa khi đang mở, chốt, gỡ chốt trước khi tài xế nhận, in xuất/nhập, gỡ đơn còn chờ nhận, đổi tài xế và xóa phiếu tổng đã xuất dành cho admin. Hàng đã ở tài xế dùng mục Xử lý hàng ở tài xế để hoàn tất hoặc xác nhận trả kho theo thực tế; không xóa liên kết để tự cộng tồn khi hàng chưa về.
+
+## Tab Điều chuyển đơn
+
+Trang `/warehouse/inventory-transfers` có tab Lập điều chuyển và Điều chuyển đơn (`?tab=orders`). Tab Điều chuyển đơn dùng danh sách nhóm điều chuyển hiện có, hiển thị kho nhận, tài xế, các đơn, trạng thái và phiếu xuất tổng liên quan; hỗ trợ lọc ngày và mã đơn/khách hàng. Mặc định tab này xem lịch sử từ năm 2000 đến hôm nay để không bỏ sót phiếu cũ.
+
+Xóa phiếu xuất tổng không hủy phiếu điều chuyển bên trong. Vì vậy đơn vẫn xuất hiện ở Tiếp nhận. Muốn bỏ điều chuyển, dùng thao tác gỡ đơn hoặc xóa phiếu điều chuyển chưa được shipper nhận; hàng đã vận chuyển hoặc đã nhập kho cần xử lý đúng luồng trạng thái và tồn kho. Không tự hủy điều chuyển khi xóa phiếu tổng.

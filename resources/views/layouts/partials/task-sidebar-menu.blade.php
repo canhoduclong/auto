@@ -24,6 +24,14 @@
         'Cấu hình giao việc'=>['Quyền công việc theo vai trò','Quyền giao việc cho từng người','Cấu hình quy trình phê duyệt'],
     ];
 @endphp
+@if(auth()->user()->isAdmin())
+    @php $taskGroupOpen = collect($taskNavItems)->contains(fn ($item) => $item['active']); @endphp
+    <li class="nav-item nav-item-submenu {{ $taskGroupOpen ? 'nav-item-open' : '' }}">
+        <a href="#admin-task-menu" class="nav-link" aria-controls="admin-task-menu">
+            <i class="ph-list-checks"></i><span>Giao việc</span>
+        </a>
+        <ul id="admin-task-menu" class="nav-group-sub collapse {{ $taskGroupOpen ? 'show' : '' }}" data-submenu-title="Giao việc">
+@endif
 @foreach($taskMenuGroups as $heading=>$labels)
     @php
         $groupItems=collect($taskNavItems)->filter(fn($item)=>in_array($item['label'],$labels,true));
@@ -35,6 +43,10 @@
     @endforeach
     @endif
 @endforeach
+@if(auth()->user()->isAdmin())
+        </ul>
+    </li>
+@endif
 @else
 <div class="{{ $taskNavHeadingClass ?? 'nav-section' }}">Công việc & Điều hành</div>
 @foreach($taskNavItems as $item)

@@ -1,4 +1,4 @@
-@extends('layouts.shipper')
+@extends(auth()->user()?->isAdmin() ? 'layouts.admin' : 'layouts.shipper')
 
 @section('title', 'Gán đơn cho ship')
 @section('subtitle', 'Quản lý gán đơn hàng đến từng người giao')
@@ -1090,7 +1090,7 @@
                                                                         data-order-code="{{ $order->code ?: $order->id }}"
                                                                         data-customer-name="{{ $customerName }}"
                                                                         data-set-default="0"
-                                                                        @disabled($isDeliveryActive && ! $isDeliveryCompleted)
+                                                                        @disabled($isDeliveryActive && ! $isDeliveryCompleted && !auth()->user()?->isAdmin())
                                                                         aria-label="{{ $isDeliveryCompleted ? 'Chuyển lộ trình' : 'Đổi Shipper' }}"
                                                                         title="{{ $isDeliveryCompleted ? 'Chuyển đơn hoàn thành sang lộ trình Shipper khác' : 'Đổi Shipper' }}">
                                                                         <i class="bi {{ $isDeliveryCompleted ? 'bi-signpost-split' : 'bi-arrow-left-right' }}" aria-hidden="true"></i>
