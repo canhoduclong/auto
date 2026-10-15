@@ -101,3 +101,9 @@ Trong Đối soát đơn giao hàng, mục “Yêu cầu điều chỉnh đơn �
 Bảy mục Tiến độ công việc có badge đỏ biểu thị số việc cần xử lý hoặc thay đổi cần kiểm tra; không hiện badge khi bằng 0, hiển thị 99+ khi vượt 99. Đơn cần đóng tính cả phản hồi thay đổi của sale còn cần kho xem; Review & In ấn nhắc lại khi đơn cập nhật sau lần in gần nhất. Nhiệm vụ được giao lấy dữ liệu thực của người dùng đang đăng nhập.
 
 Badge phản ánh trạng thái công việc, không phải bộ đếm thông báo chưa đọc: mở trang không làm mất badge, xử lý xong mới hết cảnh báo khi tải lại bảng điều khiển. Các nhãn thông báo mẫu cố định trước đây đã được bỏ để tránh báo thay đổi không có thật.
+
+## Admin xóa phiếu xuất kho tổng đã xuất
+
+Trong danh sách và chi tiết phiếu xuất kho tổng, admin có nút “Admin: Xóa phiếu đã xuất”, kể cả phiếu đã có tài xế nhận hoặc kho đích tiếp nhận. Bắt buộc nhập lý do 5–500 ký tự và xác nhận mã phiếu. Máy chủ kiểm tra quyền admin, khóa phiếu trong giao dịch và ghi nhật ký kèm dữ liệu phiếu, các dòng bàn giao trước khi xóa.
+
+Thao tác chỉ xóa phiếu tổng và các dòng liên kết trên phiếu; giữ đơn hàng, phiếu điều chuyển, chứng từ xuất/nhập thực tế và số liệu tồn kho. Đây không phải thao tác hủy xuất hàng hoặc hoàn tồn. Chức năng xóa phiếu đang mở vẫn theo quyền hiện có.

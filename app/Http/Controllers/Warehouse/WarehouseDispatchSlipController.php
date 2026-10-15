@@ -581,24 +581,31 @@ class WarehouseDispatchSlipController extends Controller
         return back()->with('success', 'Đã gỡ chốt phiếu '.$dispatchSlip->code.'.');
     }
 
-    public function destroy(WarehouseDispatchSlip $dispatchSlip)
+    public function destroy(Request $request, WarehouseDispatchSlip $dispatchSlip)
     {
         $this->authorizeSource($dispatchSlip);
-        if ($dispatchSlip->status === WarehouseDispatchSlip::STATUS_FINALIZED) {
-            if (! Auth::user()?->hasRole('admin')) {
-                abort(403, 'Chỉ quản trị viên được xóa phiếu đã chốt.');
+        DB::transaction(function () use ($request, $dispatchSlip): void {
+            $locked = WarehouseDispatchSlip::whereKey($dispatchSlip->id)->lockForUpdate()->firstOrFail();
+            if ($locked->status === WarehouseDispatchSlip::STATUS_FINALIZED) {
+                abort_unless(Auth::user()?->isAdmin(), 403, 'Chỉ admin được xóa phiếu đã xuất.');
+                $validated = $request->validate([
+                    'reason' => ['required', 'string', 'min:5', 'max:500'],
+                ]);
+                \App\Services\AdminActivityService::record(
+                    'warehouse_dispatch_slip', 'deleted', $locked, 'Admin xóa phiếu xuất kho đã xuất',
+                    'Xóa phiếu '.$locked->code.'. Lý do: '.$validated['reason'],
+                    ['reason' => $validated['reason'], 'slip' => $locked->getAttributes(),
+                        'entries' => $locked->entries()->get()->toArray()],
+                    route($this->managementRoutePrefix().'.index')
+                );
+            } else {
+                abort_unless($locked->status === WarehouseDispatchSlip::STATUS_DRAFT, 422, 'Trạng thái phiếu không cho phép xóa.');
             }
-            $this->loadSlip($dispatchSlip);
-            if (! $this->canReleaseForDriverPickup($dispatchSlip)) {
-                return back()->with('error', 'Chỉ được xóa phiếu đã chốt khi toàn bộ đơn vẫn đang chờ tài xế đến nhận.');
-            }
-        } elseif ($dispatchSlip->status !== WarehouseDispatchSlip::STATUS_DRAFT) {
-            return back()->with('error', 'Chỉ được xóa phiếu đang mở hoặc phiếu đã chốt chưa có tài xế nhận.');
-        }
-        $dispatchSlip->delete();
+            $locked->delete();
+        });
 
         return redirect()->route($this->managementRoutePrefix().'.index')
-            ->with('success', 'Đã xóa phiếu tổng đang mở '.$dispatchSlip->code.'. Các đơn/hàng trong phiếu đã được trả về danh sách để lập phiếu khác.');
+            ->with('success', 'Đã xóa phiếu tổng '.$dispatchSlip->code.'. Đơn hàng, phiếu điều chuyển và số liệu tồn kho được giữ nguyên.');
     }
 
     public function printExport(WarehouseDispatchSlip $dispatchSlip)
