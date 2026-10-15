@@ -17,8 +17,6 @@ class DeleteHistoricalTransferService
             $this->check($orders->isNotEmpty(), 'Phiếu không còn đơn để xóa.');
             $transfers=WarehouseTransfer::whereIn('order_id',$orders->modelKeys())->lockForUpdate()->get();
             foreach($orders as $order) {
-                $last=$transfers->where('order_id',$order->id)->sortByDesc('id')->first();
-                $this->check($last?->status===WarehouseTransfer::STATUS_RECEIVED_COMPLETED, 'Có đơn chưa tiếp nhận hoàn tất; không phải phiếu lịch sử.');
                 $this->check($order->created_at && $order->created_at->lt(today()) && (!$order->delivered_at || $order->delivered_at->lt(today())), 'Chỉ được dọn đơn cũ trước hôm nay.');
                 if(Schema::hasTable('accounting_sales_entries')) $this->check(!DB::table('accounting_sales_entries')->where('order_id',$order->id)->whereDate('entry_date','>=',today())->exists(), 'Đơn có doanh thu trong kỳ hiện tại hôm nay; cần xử lý riêng.');
             }

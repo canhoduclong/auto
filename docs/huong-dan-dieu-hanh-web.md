@@ -147,3 +147,7 @@ Kiểm thử `php tests/Manual/DeleteHistoricalTransfer.php` dùng bảng tạm 
 Dọn phiếu cũ xóa thêm các dòng đối soát phí giao hàng và khóa đơn (`shipping_expense_items`, `shipping_expense_order_locks`) trước khi xóa đơn. Phiếu phí còn đơn khác được tính lại tổng; phiếu phí rỗng bị xóa và tiến trình xử lý tương ứng được kết thúc ở trạng thái hủy. Không thay đổi chứng từ thanh toán thực thu/chi đã ghi sổ.
 
 Bản chụp trong `admin_deleted_orders` được đánh dấu `historical_cleanup`; trang đối soát không cộng các bản ghi này trở lại vào “đơn không còn tồn tại”, số đơn chờ đối soát hoặc doanh thu. Nhận diện cả dấu `preserve_current_inventory` của các lần dọn đã chạy trước đây. Nhật ký admin vẫn được giữ để truy vết, không tính doanh thu. Đây là dọn dữ liệu được chọn, chưa tự thiết lập mốc đầu kỳ; sau khi dọn cần kiểm kê/chốt số dư tại mốc nghiệp vụ đã thống nhất.
+
+## Dọn phiếu cũ chưa tiếp nhận
+
+Theo phạm vi dọn dữ liệu cũ đã xác nhận, admin được xóa toàn bộ phiếu và đơn kể cả đang chờ shipper, đang vận chuyển, chờ kho nhận, đã nhận hoặc thiếu bản ghi vận chuyển. Không còn điều kiện bắt buộc tiếp nhận hoàn tất. Nút “Xóa phiếu cũ & toàn bộ đơn” hiển thị cho admin ở mọi trạng thái; vẫn cần lý do và xác nhận, kiểm tra ngày dữ liệu cũ và giữ nguyên tồn kho thực tế. Quyền kho thông thường không được mở rộng.
