@@ -136,6 +136,12 @@ class GoogleSheetsJournalService
     private function client(): GoogleClient
     {
         $client = new GoogleClient;
+        // Gioi han thoi gian cho Google. Khong co dong nay, Guzzle cho VO HAN:
+        // mot lan Google treo se chiem het slot php-fpm va lam sap site (su co 504 ngay 15/10/2026).
+        $client->setHttpClient(new \GuzzleHttp\Client([
+            'timeout' => 30,
+            'connect_timeout' => 10,
+        ]));
         $client->setApplicationName((string) config('app.name', 'Hoang Long TNT'));
         $client->setAuthConfig($this->credentialsPath());
         $client->setScopes([Sheets::SPREADSHEETS]);
