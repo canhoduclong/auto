@@ -12,6 +12,13 @@ class AdminTransportController extends Controller
     public function reassignGroup(Request $request, OrderTransfer $transfer)
     {
         abort_unless($request->user()?->isAdmin(), 403);
+        $hasOpenMovement = $transfer->orders->contains(function ($order) {
+            return in_array($order->warehouseTransfers()->latest('id')->value('status'), [
+                WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP, WarehouseTransfer::STATUS_IN_TRANSIT, WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
+            ], true);
+        });
+        abort_unless($hasOpenMovement, 422, 'Phiếu đã hoàn tất hoặc không còn đơn điều chuyển để đổi tài xế.');
+
         if ($transfer->dispatchEntry?->slip) {
             return $this->reassignSlip($request, $transfer->dispatchEntry->slip);
         }

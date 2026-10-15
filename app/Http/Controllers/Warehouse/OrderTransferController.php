@@ -121,6 +121,18 @@ class OrderTransferController extends Controller
     public function destroy($id)
     {
         $transfer = OrderTransfer::with(['orders.warehouseTransfers', 'dispatchEntry.slip'])->findOrFail($id);
+        if (request()->boolean('completed_history')) {
+            abort_unless(auth()->user()?->isAdmin(), 403);
+            $data=request()->validate(['reason'=>['required','string','min:5','max:500']]);
+            try {
+                app(\App\Services\DeleteHistoricalTransferService::class)->delete((int)$id, auth()->user(), trim($data['reason']));
+            } catch (\Illuminate\Database\QueryException $exception) {
+                report($exception);
+                return back()->with('error', 'Không thể xóa vì đơn còn liên kết nghiệp vụ cần đối soát. Toàn bộ thao tác đã được hoàn tác.');
+            }
+            return back()->with('success','Đã xóa phiếu cũ và toàn bộ đơn cùng giao nhận, đối soát, doanh thu liên quan. Tồn kho thực tế giữ nguyên.');
+        }
+
         if ($transfer->dispatchEntry) {
             return back()->with('error', 'Nhóm đơn đã thuộc phiếu xuất kho tổng '.($transfer->dispatchEntry->slip?->code ?: '').'. Hãy xóa phiếu tổng đang mở trước khi xóa nhóm đơn.');
         }

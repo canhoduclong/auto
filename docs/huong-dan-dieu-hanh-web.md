@@ -121,3 +121,23 @@ Phiếu xuất tổng có các chức năng lập, xem, sửa khi đang mở, ch
 Trang `/warehouse/inventory-transfers` có tab Lập điều chuyển và Điều chuyển đơn (`?tab=orders`). Tab Điều chuyển đơn dùng danh sách nhóm điều chuyển hiện có, hiển thị kho nhận, tài xế, các đơn, trạng thái và phiếu xuất tổng liên quan; hỗ trợ lọc ngày và mã đơn/khách hàng. Mặc định tab này xem lịch sử từ năm 2000 đến hôm nay để không bỏ sót phiếu cũ.
 
 Xóa phiếu xuất tổng không hủy phiếu điều chuyển bên trong. Vì vậy đơn vẫn xuất hiện ở Tiếp nhận. Muốn bỏ điều chuyển, dùng thao tác gỡ đơn hoặc xóa phiếu điều chuyển chưa được shipper nhận; hàng đã vận chuyển hoặc đã nhập kho cần xử lý đúng luồng trạng thái và tồn kho. Không tự hủy điều chuyển khi xóa phiếu tổng.
+
+## Hủy toàn bộ phiếu điều chuyển đã tiếp nhận (admin)
+
+Thay thế thao tác xóa phiếu lịch sử bằng “Hủy toàn bộ phiếu & đơn”. Chỉ admin, bắt buộc lý do và xác nhận ảnh hưởng. Toàn bộ đơn trong phiếu chuyển sang Hủy, gỡ tài xế, hủy dữ liệu đóng hàng, giải phóng giữ tồn và về kho gửi ban đầu. Xóa các bản ghi tiếp nhận/điều chuyển, lịch sử giao nhận/đóng hàng, đối soát, doanh thu sale và hoa hồng liên quan; lưu bản chụp trong nhật ký admin và ghi biến động bù để giữ lịch sử tồn kho.
+
+Hoàn tồn dựa trên biến động xuất/nhập đã ghi nhận, không cộng lại số lượng đơn một cách mù quáng. Thiếu chứng từ nhập hoặc không đủ tồn kho nhận để đảo nghiệp vụ thì toàn bộ giao dịch bị hủy. Các đơn có trả hàng hoặc điều chỉnh đã duyệt cần được đối soát chứng từ trước; hệ thống chặn hủy tự động trường hợp này. Không xóa chứng từ dòng tiền đã thực thu chỉ vì hủy doanh thu đơn.
+
+Kiểm thử bằng bảng tạm MySQL: `php tests/Manual/CancelCompletedTransfer.php` và `php tests/Manual/CancelCompletedTransfer.php --short` (hoàn tồn/xóa đối soát-doanh thu và hoàn tác khi thiếu tồn). Bảng nghiệp vụ thật không bị thay đổi.
+
+## Điều chỉnh phạm vi dọn dữ liệu cũ
+
+Theo yêu cầu giữ nguyên số liệu hiện tại, thao tác “Hủy toàn bộ phiếu & đơn” đã được gỡ khỏi giao diện và chặn trên máy chủ. Chưa chạy xóa hoặc hoàn tồn trên dữ liệu thật. Người dùng chọn xóa hẳn lịch sử thay vì lưu trữ; cần chốt cụ thể các bảng lịch sử được xóa và dữ liệu tài chính/tồn kho phải giữ trước khi triển khai thao tác mới.
+
+## Phạm vi chốt cuối: xóa hẳn phiếu cũ và toàn bộ đơn
+
+Thao tác admin trên phiếu đã tiếp nhận nay là “Xóa phiếu cũ & toàn bộ đơn”. Xóa hẳn đơn cùng các liên kết giao nhận, lịch sử đơn, điều chỉnh, đối soát, doanh thu và hoa hồng; cập nhật tổng lô nhập doanh thu liên quan. Không dùng luồng hủy/hoàn tồn trước đó. Không hoàn thêm hoặc trừ thêm số lượng tồn thực tế; reservation cũ bị xóa và tồn giữ chỗ được tính lại, nên tồn khả dụng có thể tăng nếu đơn cũ còn giữ chỗ.
+
+Giữ nhật ký admin, bản chụp đơn đã xóa và sổ biến động tồn kho để bảo toàn số dư, chứng từ dòng tiền thực thu vẫn theo nghiệp vụ tài chính. Chặn đơn tạo hoặc giao hôm nay và đơn có doanh thu ghi hôm nay. Lỗi liên kết nghiệp vụ sẽ hoàn tác toàn bộ giao dịch. Chức năng không tự chạy xóa dữ liệu; admin chọn phiếu, nhập lý do và xác nhận rõ phạm vi trước khi thực hiện.
+
+Kiểm thử `php tests/Manual/DeleteHistoricalTransfer.php` dùng bảng tạm MySQL để xác minh xóa đơn/phiếu, giao nhận, đối soát/doanh thu, giải phóng giữ chỗ và giữ nguyên tồn thực tế.

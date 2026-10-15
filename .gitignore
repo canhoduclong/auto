@@ -80,3 +80,7 @@ readme.txt
 !/tests/Feature/DeliveredOrderAdjustmentTest.php
 
 !/tests/Feature/AdminTransportPermissionsTest.php
+
+!/tests/Manual/CancelCompletedTransfer.php
+
+!/tests/Manual/DeleteHistoricalTransfer.php
