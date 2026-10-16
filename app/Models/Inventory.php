@@ -30,7 +30,14 @@ class Inventory extends Model
         static::updating(function (Inventory $inventory): void {
             if (! $inventory->isDirty('quantity')) return;
             $packed = (float) $inventory->reservations()->whereNotNull('packed_at')->sum('quantity');
-            if ((float) $inventory->quantity < $packed) {
+            $decrease = (float) $inventory->getOriginal('quantity') - (float) $inventory->quantity;
+            $released = max(0, (float) $inventory->getOriginal('reserved_quantity') - (float) $inventory->reserved_quantity);
+            $actualReserved = (float) $inventory->reservations()->sum('quantity');
+            if ((float) $inventory->reserved_quantity + 0.00001 < $actualReserved) $released = 0;
+            // Receiving more goods must not be blocked by an older discrepancy.
+            // Consuming a matching sealed reservation preserves that discrepancy
+            // without spending any other order's goods.
+            if ($decrease > 0 && (float) $inventory->quantity < $packed && $released + 0.00001 < $decrease) {
                 throw new \RuntimeException('Không thể giảm tồn kho xuống dưới '.$packed.' hàng đã đóng và giữ riêng cho đơn.');
             }
         });

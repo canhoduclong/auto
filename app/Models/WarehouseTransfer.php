@@ -53,6 +53,12 @@ class WarehouseTransfer extends Model
         'received_weights' => 'array',
     ];
 
+    public function scopeForReceiving(\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        return $query->whereHas('order', fn ($order) => $order->whereNull('trash_at')
+            ->whereNotIn('status', [Order::STATUS_CANCELLED, 'canceled', Order::STATUS_REJECTED]));
+    }
+
     public function order()
     {
         return $this->belongsTo(Order::class);

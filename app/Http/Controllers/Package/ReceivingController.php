@@ -25,7 +25,7 @@ class ReceivingController extends Controller
         $transfers = WarehouseTransfer::with([
             'order.customer', 'order.items.product', 'order.items.variant.product',
             'sourceWarehouse', 'targetWarehouse', 'shipper',
-        ])->where('target_warehouse_id', $warehouseId)
+        ])->forReceiving()->where('target_warehouse_id', $warehouseId)
             ->whereIn('status', [WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE, WarehouseTransfer::STATUS_RECEIVED_COMPLETED])
             ->orderByRaw("CASE WHEN status = 'delivered_waiting_receive' THEN 0 ELSE 1 END")
             ->latest('id')->get();
@@ -35,6 +35,7 @@ class ReceivingController extends Controller
 
     public function confirmIncomingOrder(WarehouseTransfer $transfer)
     {
+        abort_unless(WarehouseTransfer::whereKey($transfer->id)->forReceiving()->exists(), 422, 'Đơn đã hủy hoặc xóa, không thể tiếp nhận.');
         $this->assertTargetWarehouse((int) $transfer->target_warehouse_id);
         if ($transfer->status !== WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE) {
             return back()->with('error', 'Phiếu điều chuyển không còn chờ tiếp nhận.');

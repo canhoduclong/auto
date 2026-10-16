@@ -161,3 +161,15 @@ Lý do xóa được giữ nguyên trong cột `admin_deleted_orders.reason` (t�
 Khi nhật ký xóa phiếu có bản chụp nhiều đơn, thông báo admin trước đây sao chép toàn bộ metadata vào cột TEXT `notifications.data`, gây tràn 65.535 byte. Thông báo lớn nay chỉ lưu tóm tắt và mã `admin_event_id`; bản chụp đầy đủ vẫn ở `admin_events.metadata`. Thông báo nhỏ giữ nguyên dữ liệu tương thích.
 
 Đã kiểm tra ghi thông báo qua database channel thật vào bảng tạm bằng `php tests/Manual/DeleteHistoricalTransfer.php --real-notifications --long-reason`, với bản chụp lớn hơn 65.535 byte. Toàn bộ thao tác dọn hoàn tất, thông báo nằm trong giới hạn, bản chụp đầy đủ được giữ và tồn thực tế không thay đổi.
+
+## Loại đơn hủy khỏi Tiếp nhận
+
+Đơn đã hủy có thể còn bản ghi điều chuyển chờ shipper của dữ liệu cũ. Trang Tiếp nhận, số đếm dashboard, tiếp nhận Package và API mobile dùng điều kiện chung: đơn còn tồn tại, chưa vào thùng rác, không ở trạng thái cancelled/canceled/rejected. Máy chủ chặn kéo/nhập kho cho các đơn không còn hợp lệ, kể cả gửi yêu cầu trực tiếp. Giữ nguyên dữ liệu và tồn kho; việc xóa hẳn vẫn thực hiện bằng chức năng dọn phiếu cũ đã chọn.
+
+## Hàng đi kèm đơn khi kho nhận tiếp nhận (16/10/2026)
+
+Kho nhận nhập số lượng hàng thực chuyển đi kèm đơn, không yêu cầu tồn có sẵn tại kho nhận để cấp lại cho đơn. Sau khi nhập, reservation được gắn `received_transfer_id`, giữ đúng số lượng và kg tiếp nhận của từng dòng. Dòng giữ hàng trùng của chính đơn được gộp về một dòng đúng lượng; không yêu cầu hàng nhập mới bù thiếu các reservation cũ của đơn khác.
+
+Shipper nhận giao khách xuất từ lượng giữ riêng có nguồn gốc tiếp nhận; cập nhật số tồn và giảm giữ chỗ cùng nhau, không làm thay đổi phần giữ riêng của đơn khác. Hủy đơn khi hàng còn trong kho giải phóng giữ chỗ, không tăng tồn thực tế. Điều chỉnh tồn thủ công không được giảm hàng đã đóng hoặc bỏ khóa bằng cách sửa riêng bộ đếm reserved_quantity.
+
+Migration mới: `2026_10_16_090000_link_received_stock_to_transfer_reservations`. Đã chạy ở workspace; khi triển khai sang máy chủ khác phải chạy migration trước khi dùng mã mới. Phiếu #681 không có trong database workspace nên chưa sửa dữ liệu riêng của phiếu trong ảnh.
