@@ -2095,11 +2095,12 @@ class ShipperDashboardController extends Controller
             // then let the fallback allocate the balance in this warehouse.
             $otherReserved = (float) $inventory->reservations()
                 ->where('id', '!=', $reservation->id)->sum('quantity');
-            $deductQty = min(
-                max(0, $remaining),
-                max(0, (int) $reservation->quantity),
-                max(0, (int) floor((float) $inventory->quantity - $otherReserved))
-            );
+            $inventory->reserved_quantity = $inventory->reservations()->sum('quantity');
+            $inventory->save(); // Synchronize the held balance before consuming it.
+            $stockForThisOrder = $reservation->received_transfer_id
+                ? (float) $inventory->quantity
+                : (float) $inventory->quantity - $otherReserved;
+            $deductQty = min(max(0, $remaining), max(0, (int) $reservation->quantity), max(0, (int) floor($stockForThisOrder)));
             $reservation->delete();
             $inventory->reserved_quantity = $inventory->reservations()->sum('quantity');
             $inventory->quantity -= $deductQty;

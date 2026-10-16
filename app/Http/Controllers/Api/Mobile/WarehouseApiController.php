@@ -77,7 +77,7 @@ class WarehouseApiController extends BaseApiController
             'returned' => 0,
             'assigned_tasks' => 0,
             'completed_tasks' => 0,
-            'transfers_incoming' => WarehouseTransfer::query()
+            'transfers_incoming' => WarehouseTransfer::query()->forReceiving()
                 ->where('target_warehouse_id', $warehouseId)
                 ->whereIn('status', [
                     WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
@@ -85,7 +85,7 @@ class WarehouseApiController extends BaseApiController
                     WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE,
                 ])
                 ->count(),
-            'transfers_completed' => WarehouseTransfer::query()
+            'transfers_completed' => WarehouseTransfer::query()->forReceiving()
                 ->where('target_warehouse_id', $warehouseId)
                 ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
                 ->whereDate('updated_at', $date)
@@ -775,7 +775,7 @@ class WarehouseApiController extends BaseApiController
         $warehouseId = (int) ($request->user()?->warehouse_id ?? 0);
         abort_if($warehouseId <= 0 && ! $request->user()?->hasRole('admin'), 403, 'Tài khoản chưa được gán kho nhận.');
 
-        $transfers = WarehouseTransfer::query()
+        $transfers = WarehouseTransfer::query()->forReceiving()
             ->where('target_warehouse_id', $warehouseId)
             ->where('status', WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE)
             ->get();
@@ -803,6 +803,9 @@ class WarehouseApiController extends BaseApiController
         $user = $request->user();
         if (! $user->hasRole('admin') && (int) $user->warehouse_id !== (int) $transfer->target_warehouse_id) {
             return $this->fail('Bạn chỉ có thể xác nhận hàng về kho mình quản lý.', 403);
+        }
+        if (!WarehouseTransfer::whereKey($transfer->id)->forReceiving()->exists()) {
+            return $this->fail('Đơn đã hủy, đã xóa hoặc ở thùng rác; không thể tiếp nhận.', 422);
         }
         if ($transfer->status === WarehouseTransfer::STATUS_RECEIVED_COMPLETED) {
             return $this->ok(null, 'Phiếu điều chuyển đã nhập kho trước đó.');

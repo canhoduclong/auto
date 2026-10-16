@@ -46,22 +46,19 @@ class PackedInventoryService
 
             $target = Inventory::where('warehouse_id', $transfer->target_warehouse_id)
                 ->where('product_variant_id', $item->product_variant_id)->lockForUpdate()->firstOrFail();
-            $held = $target->reservations()->where('order_item_id', $item->id)->sum('quantity');
-            $needed = (float) $item->quantity - (float) $held;
-            if ($needed < 0 || (float) $target->quantity < (float) $target->reservations()->sum('quantity') + $needed) {
-                throw new \RuntimeException('Kho nhận không đủ hàng để giữ riêng cho đơn; cần đối soát.');
-            }
-            if ($needed > 0) {
-                $reservation = new InventoryReservation([
-                    'inventory_id' => $target->id, 'order_item_id' => $item->id,
-                    'quantity' => $needed, 'reserved_at' => now(),
-                ]);
-                if (Schema::hasColumn('inventory_reservations', 'packed_at')) {
-                    $reservation->forceFill(['packed_at' => now(), 'packed_weight_kg' =>
-                        max(0, (float) ($item->packed_weight ?? $item->actual_weight ?? 0)) * $needed / $item->quantity]);
-                }
-                $reservation->save();
-            }
+            // The caller has imported the goods accompanying this order.
+            // Its reservation does not depend on pre-existing free stock here.
+            $heldRows = $target->reservations()->where('order_item_id', $item->id)->lockForUpdate()->get();
+            $reservation = $heldRows->first() ?: new InventoryReservation([
+                'inventory_id' => $target->id, 'order_item_id' => $item->id, 'reserved_at' => now(),
+            ]);
+            foreach ($heldRows->skip(1) as $duplicate) $duplicate->delete();
+            $weightRow = collect($transfer->received_weights ?? [])->firstWhere('order_item_id', $item->id);
+            $weight = max(0, (float) ($weightRow['received_weight'] ?? $item->packed_weight ?? $item->actual_weight ?? 0));
+            $reservation->quantity = (float) $item->quantity;
+            $reservation->forceFill(['packed_at' => now(), 'packed_weight_kg' => $weight,
+                'received_transfer_id' => $transfer->id]);
+            $reservation->save();
             $target->reserved_quantity = $target->reservations()->sum('quantity');
             $target->save();
             \App\Models\ProductVariant::whereKey($item->product_variant_id)->update([

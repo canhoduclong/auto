@@ -86,3 +86,5 @@ readme.txt
 !/tests/Manual/DeleteHistoricalTransfer.php
 
 !/tests/Feature/AdminEventNotificationSizeTest.php
+
+!/tests/Feature/ReceivingOrderEligibilityTest.php

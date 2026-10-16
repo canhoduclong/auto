@@ -355,9 +355,9 @@ class WarehouseDashboardController extends Controller
             'transfers_incoming' => \App\Models\WarehouseTransfer::query()
                 ->where('target_warehouse_id', $managedWarehouseId)
                 ->whereIn('status', [WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP, WarehouseTransfer::STATUS_IN_TRANSIT, WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE])
-                ->whereHas('order')->count(),
+                ->forReceiving()->count(),
             'transfers_completed' => \App\Models\WarehouseTransfer::query()
-                ->where('target_warehouse_id', $managedWarehouseId)
+                ->forReceiving()->where('target_warehouse_id', $managedWarehouseId)
                 ->where('status', \App\Models\WarehouseTransfer::STATUS_RECEIVED_COMPLETED)
                 ->whereDate('updated_at', $dateString)
                 ->count(),
@@ -2139,7 +2139,7 @@ class WarehouseDashboardController extends Controller
                 'shipper',
             ])
             ->when($managedWarehouseId, fn ($query) => $query->where('target_warehouse_id', $managedWarehouseId))
-            ->whereHas('order')
+            ->forReceiving()
             ->whereIn('status', [
                 WarehouseTransfer::STATUS_PENDING_SHIPPER_PICKUP,
                 WarehouseTransfer::STATUS_IN_TRANSIT,
@@ -2196,6 +2196,7 @@ class WarehouseDashboardController extends Controller
 
     public function pullTransferToWarehouse(Request $request, WarehouseTransfer $transfer)
     {
+        abort_unless(WarehouseTransfer::whereKey($transfer->id)->forReceiving()->exists(), 422, 'Đơn đã hủy, đã xóa hoặc ở thùng rác; không thể tiếp nhận.');
         $managedWarehouseId = $request->user()?->warehouse_id ? (int) $request->user()->warehouse_id : null;
         if ($managedWarehouseId && (int) $transfer->target_warehouse_id !== $managedWarehouseId) {
             abort(403, 'Bạn chỉ có thể kéo đơn về kho mình quản lý.');
@@ -2234,6 +2235,7 @@ class WarehouseDashboardController extends Controller
 
     public function confirmTransferReceipt(Request $request, WarehouseTransfer $transfer)
     {
+        abort_unless(WarehouseTransfer::whereKey($transfer->id)->forReceiving()->exists(), 422, 'Đơn đã hủy, đã xóa hoặc ở thùng rác; không thể tiếp nhận.');
         if ($transfer->status !== WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE) {
             return back()->with('error', 'Phiếu điều chuyển không ở trạng thái chờ tiếp nhận.');
         }
@@ -2278,6 +2280,7 @@ class WarehouseDashboardController extends Controller
                     throw new \RuntimeException('Phiếu đã được tiếp nhận hoặc vừa thay đổi. Vui lòng tải lại.');
                 }
                 Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
+                abort_unless(WarehouseTransfer::whereKey($transfer->id)->forReceiving()->exists(), 422, 'Đơn vừa được hủy hoặc xóa, không thể tiếp nhận.');
                 $document = InventoryDocument::create([
                     'type' => 'import',
                     'document_date' => now()->toDateString(),
@@ -2345,6 +2348,7 @@ class WarehouseDashboardController extends Controller
                     ]);
                 }
 
+                $transfer->received_weights = $receivedWeights;
                 $this->movePackedOrderReservationsToWarehouse(
                     $order,
                     (int) $transfer->source_warehouse_id,

@@ -25,7 +25,7 @@ class PackedTransferInventoryTest extends TestCase
                 $t->double('quantity'); $t->double('reserved_quantity')->default(0);
             } elseif ($name === 'inventory_reservations') {
                 $t->integer('order_item_id'); $t->integer('inventory_id'); $t->double('quantity');
-                $t->timestamp('reserved_at')->nullable(); $t->timestamp('packed_at')->nullable(); $t->double('packed_weight_kg')->nullable();
+                $t->unsignedBigInteger('received_transfer_id')->nullable(); $t->timestamp('reserved_at')->nullable(); $t->timestamp('packed_at')->nullable(); $t->double('packed_weight_kg')->nullable();
             } elseif ($name === 'inventory_movements') {
                 $t->integer('inventory_id'); $t->double('quantity'); $t->string('type');
                 $t->string('reference_type'); $t->integer('reference_id'); $t->integer('user_id')->nullable();
@@ -177,6 +177,56 @@ class PackedTransferInventoryTest extends TestCase
         self::assertEquals(5,Inventory::find(1)->quantity);
         self::assertEquals(3,InventoryReservation::where('order_item_id',11)->sum('quantity'));
         self::assertSame(0,DB::table('inventory_movements')->count());
+    }
+
+    public function test_incoming_order_does_not_require_existing_free_stock_or_cover_old_deficit(): void
+    {
+        DB::table('inventory_reservations')->delete();
+        DB::table('inventories')->where('id',1)->update(['quantity'=>0,'reserved_quantity'=>0]);
+        DB::table('inventories')->where('id',2)->update(['quantity'=>0,'reserved_quantity'=>7]);
+        DB::table('inventory_reservations')->insert(['inventory_id'=>2,'order_item_id'=>11,'quantity'=>7,'packed_at'=>now()]);
+        // These are the five physical goods arriving with this order, not shelf stock.
+        Inventory::find(2)->increment('quantity',5);
+        $o=$this->order(); $this->receive($o);
+        $held=InventoryReservation::where('order_item_id',10)->first();
+        self::assertEquals(5,$held->quantity);
+        self::assertEquals(9,$held->received_transfer_id);
+        self::assertEquals(12,Inventory::find(2)->reserved_quantity);
+        $doc=new InventoryDocument; $doc->id=99;
+        DB::transaction(fn()=>(new \ReflectionMethod(ShipperDashboardController::class,'deductStockForAcceptedOrderItem'))->invoke(new ShipperDashboardController,$o,$doc,$o->items->first(),2));
+        self::assertEquals(0,Inventory::find(2)->quantity);
+        self::assertEquals(7,InventoryReservation::where('order_item_id',11)->sum('quantity'));
+        self::assertSame(0,InventoryReservation::where('order_item_id',10)->count());
+    }
+    public function test_received_order_gets_exactly_one_hold_even_when_legacy_target_holds_are_duplicated(): void
+    {
+        DB::table('inventory_reservations')->delete();
+        foreach([5,5] as $qty)DB::table('inventory_reservations')->insert(['inventory_id'=>2,'order_item_id'=>10,'quantity'=>$qty,'packed_at'=>now()]);
+        $this->receive($this->order());
+        self::assertSame(1,InventoryReservation::where('order_item_id',10)->count());
+        self::assertEquals(5,InventoryReservation::where('order_item_id',10)->sum('quantity'));
+        self::assertEquals(5,Inventory::find(2)->quantity);
+    }
+    public function test_received_weight_is_kept_with_the_order(): void
+    {
+        $o=$this->order();
+        $t=new WarehouseTransfer(['source_warehouse_id'=>1,'target_warehouse_id'=>2,'received_weights'=>[['order_item_id'=>10,'received_weight'=>11.8]]]);$t->id=9;
+        DB::transaction(fn()=>(new PackedInventoryService)->receiveTransfer($o,$t));
+        self::assertEquals(11.8,InventoryReservation::where('order_item_id',10)->value('packed_weight_kg'));
+    }
+
+    public function test_cancel_received_order_releases_arriving_goods_to_available_stock(): void
+    {
+        $o=$this->order();$this->receive($o);
+        DB::transaction(fn()=>(new \ReflectionMethod(\App\Http\Controllers\OrderController::class,'releaseReservedStockForOrder'))->invoke(new \App\Http\Controllers\OrderController,$o));
+        self::assertEquals(5,Inventory::find(2)->quantity);
+        self::assertEquals(0,Inventory::find(2)->reserved_quantity);
+        self::assertEquals(5,Inventory::find(2)->available);
+    }
+    public function test_edit_cannot_bypass_seal_by_resetting_the_reserved_counter(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        Inventory::find(1)->update(['quantity'=>0,'reserved_quantity'=>0]);
     }
 
 }
