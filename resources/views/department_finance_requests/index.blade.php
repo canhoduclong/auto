@@ -67,6 +67,21 @@
     @media (max-width: 479.98px) {
         .finance-request-page .fr-filter form { grid-template-columns: minmax(0, 1fr); }
     }
+    .finance-request-page .fr-list { width:100%; min-width:1040px; table-layout:fixed; font-size:13px; }
+    .finance-request-page .fr-list th { height:40px; font-size:12px; font-weight:600; white-space:nowrap; vertical-align:middle; }
+    .finance-request-page .fr-list th a { display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
+    .finance-request-page .fr-list td { vertical-align:middle; background:#fff; border-color:#edf0f3; }
+    .finance-request-page .fr-list tbody tr:hover td { background:#f8fafc; }
+    .finance-request-page .fr-list-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; font-weight:600; color:#0f172a; }
+    .finance-request-page .fr-list-meta { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:3px; font-size:12px; color:#64748b; }
+    .finance-request-page .fr-list-details { margin-top:4px; color:#64748b; font-size:12px; }
+    .finance-request-page .fr-list-details summary { cursor:pointer; }
+    .finance-request-page .fr-list-details[open] .fr-note { margin-top:6px; white-space:pre-line; overflow-wrap:anywhere; }
+    .finance-request-page .fr-list-actions { display:flex; flex-wrap:nowrap; align-items:center; justify-content:flex-end; gap:4px; }
+    .finance-request-page .fr-list-actions form { margin:0; }
+    .finance-request-page .fr-list .fr-action-icon { width:28px; height:28px; padding:0; display:inline-flex; justify-content:center; align-items:center; }
+    .finance-request-page .fr-list .fr-nowrap { white-space:nowrap; }
+    .finance-request-page .fr-list .fr-handler { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .fr-panel {
         min-width: 0;
         border: 1px solid rgba(148, 163, 184, .24);
@@ -611,7 +626,8 @@
             <div>{{ $requests->links() }}</div>
         </div>
         <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
+            <table class="table align-middle mb-0 fr-list">
+                <colgroup><col style="width:60px"><col><col style="width:78px"><col style="width:130px"><col style="width:125px"><col style="width:130px"><col style="width:110px"><col style="width:{{ $isManagerPage ? '148' : '84' }}px"></colgroup>
                 <thead class="table-light">
                     <tr>
                         <th><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'id', 'direction' => $sort === 'id' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}"># {{ $sort === 'id' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
@@ -621,7 +637,7 @@
                         <th><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'status', 'direction' => $sort === 'status' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}">Trạng thái {{ $sort === 'status' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
                         <th>Người xử lý</th>
                         <th><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'created_at', 'direction' => $sort === 'created_at' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}">Ngày gửi {{ $sort === 'created_at' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
-                        <th class="text-end"></th>
+                        <th class="text-end">Thao tác</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -633,29 +649,22 @@
                         <tr>
                             <td><span class="fr-id-pill">#{{ $requestItem->id }}</span></td>
                             <td>
-                                <div class="mb-1">
-                                    <span class="badge text-bg-light border">
-                                        {{ $requestItem->request_document_title ?: ($requestItem->request_form_type === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu') }}
-                                    </span>
+                                <div class="fr-list-title" title="{{ $requestItem->request_title }}">{{ $requestItem->request_title ?: 'Phiếu yêu cầu' }}</div>
+                                <div class="fr-list-meta" title="{{ $requestItem->request_document_title }} · {{ $requestItem->submitter?->name }} · {{ $requestItem->submitter?->department?->name }}">
+                                    {{ $requestItem->request_document_title ?: 'Phiếu yêu cầu' }} · {{ $requestItem->submitter?->name ?: '—' }}
+                                    @if($requestItem->submitter?->department?->name) · {{ $requestItem->submitter->department->name }}@endif
+                                    @if($requestItem->transactionCategory?->name) · {{ $requestItem->transactionCategory->name }}@endif
                                 </div>
-                                <div class="fw-semibold">{{ $requestItem->request_title ?: 'Phiếu yêu cầu' }}</div>
-                                <div class="small text-muted">{{ $requestItem->transactionCategory?->name ?: '-' }}</div>
-                                <div class="fr-creator-line">
-                                    <span><i class="bi bi-person"></i>{{ $requestItem->submitter?->name ?: '-' }}</span>
-                                    <span><i class="bi bi-diagram-3"></i>{{ $requestItem->submitter?->department?->block?->name ?: $requestItem->submitter?->block?->name ?: 'Chưa gán khối' }}</span>
-                                    <span><i class="bi bi-building"></i>{{ $requestItem->submitter?->department?->name ?: 'Chưa gán phòng ban' }}</span>
-                                </div>
-                                @if($requestItem->note)
-                                    <div class="small text-muted">{{ \Illuminate\Support\Str::limit($requestItem->note, 90) }}</div>
-                                @endif
-                                @if(!empty($requestItem->request_attachments))
-                                    <div class="d-flex flex-wrap gap-1 mt-1">
-                                        @foreach($requestItem->request_attachments as $attachment)
-                                            <a href="{{ asset('storage/' . $attachment['path']) }}" target="_blank" class="badge text-bg-light border text-decoration-none" title="{{ $attachment['name'] ?? 'Chứng từ' }}">
-                                                <i class="bi bi-paperclip"></i>{{ \Illuminate\Support\Str::limit($attachment['name'] ?? 'Chứng từ', 24) }}
-                                            </a>
-                                        @endforeach
-                                    </div>
+                                @if($requestItem->note || !empty($requestItem->request_attachments))
+                                    <details class="fr-list-details">
+                                        <summary>Chi tiết @if(!empty($requestItem->request_attachments)) · {{ count($requestItem->request_attachments) }} chứng từ@endif</summary>
+                                        @if($requestItem->note)<div class="fr-note">{{ $requestItem->note }}</div>@endif
+                                        <div class="d-flex flex-wrap gap-1 mt-1">
+                                            @foreach($requestItem->request_attachments ?: [] as $attachment)
+                                                <a href="{{ asset('storage/'.$attachment['path']) }}" target="_blank" rel="noopener" class="badge text-bg-light border text-decoration-none" title="{{ $attachment['name'] ?? 'Chứng từ' }}"><i class="bi bi-paperclip"></i>{{ \Illuminate\Support\Str::limit($attachment['name'] ?? 'Chứng từ', 24) }}</a>
+                                            @endforeach
+                                        </div>
+                                    </details>
                                 @endif
                             </td>
                             <td>
@@ -663,24 +672,25 @@
                                     {{ $flow === 'in' ? 'Thu' : 'Chi' }}
                                 </span>
                             </td>
-                            <td class="text-end fw-bold">{{ number_format((float) $requestItem->amount) }}đ</td>
+                            <td class="text-end fw-bold fr-nowrap">{{ number_format((float) $requestItem->amount) }}đ</td>
                             <td>
                                 <span class="badge bg-{{ $statusMeta['class'] }}">{{ $statusMeta['label'] }}</span>
                                 @if($requestItem->status === \App\Models\Transaction::STATUS_REJECTED && $requestItem->reject_reason)
                                     <div class="small text-danger mt-1">{{ \Illuminate\Support\Str::limit($requestItem->reject_reason, 80) }}</div>
                                 @endif
                             </td>
-                            <td>
+                            <td class="fr-handler">
                                 @if(in_array($requestItem->status, [\App\Models\Transaction::STATUS_APPROVED, \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION], true))
                                     {{ $requestItem->approver?->name ?: '-' }}
                                 @elseif($requestItem->status === \App\Models\Transaction::STATUS_REJECTED)
                                     {{ $requestItem->rejecter?->name ?: '-' }}
                                 @else
-                                    <span class="text-muted">Đang chờ duyệt</span>
+                                    <span class="text-muted">Chờ xử lý</span>
                                 @endif
                             </td>
-                            <td>{{ $requestItem->created_at?->copy()->timezone(config('app.display_timezone'))->format('d/m/Y H:i') ?: '-' }}</td>
+                            <td class="fr-nowrap"><div>{{ $requestItem->created_at?->copy()->timezone(config('app.display_timezone'))->format('d/m/Y') ?: '—' }}</div><div class="small text-muted">{{ $requestItem->created_at?->copy()->timezone(config('app.display_timezone'))->format('H:i') }}</div></td>
                             <td class="text-end">
+                                <div class="fr-list-actions">
                                 @php
                                     $canEditLeaderRequest = $source === 'leader'
                                         && ((int) $requestItem->submitted_by === (int) auth()->id() || auth()->user()->hasRole('admin'))
@@ -721,6 +731,7 @@
                                 <a href="{{ route($config['route_prefix'] . '.print', $requestItem) }}" target="_blank" class="btn btn-outline-secondary btn-sm fr-action-icon" title="In phiếu">
                                     <i class="bi bi-printer"></i>
                                 </a>
+                                </div>
                             </td>
                         </tr>
                     @empty
@@ -731,9 +742,9 @@
                 </tbody>
             </table>
         </div>
-        <div class="p-3 border-top bg-white">
-            {{ $requests->links() }}
-        </div>
+        @if($requests->hasPages())
+        <div class="px-3 py-2 border-top bg-white">{{ $requests->links() }}</div>
+        @endif
     </div>
         </div>
         @endif
