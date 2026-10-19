@@ -53,6 +53,7 @@ Route::prefix('mobile')->group(function () {
             Route::get('/customers', [ShipperApiController::class, 'customers']);
             Route::get('/delivery-statistics', [ShipperApiController::class, 'deliveryStatistics']);
             Route::post('/orders/{order}/status', [ShipperApiController::class, 'updateStatus']);
+            Route::post('/orders/{order}/undo-complete-delivery', [ShipperApiController::class, 'undoCompleteDelivery']);
             Route::post('/orders/{order}/complete-delivery', [ShipperApiController::class, 'completeDelivery']);
             Route::post('/orders/{order}/upload-proof', [ShipperApiController::class, 'uploadProof']);
             Route::post('/location', [ShipperApiController::class, 'updateLocation']);

@@ -750,6 +750,39 @@ class ShipperApiController extends BaseApiController
         ], 'Cap nhat trang thai thanh cong');
     }
 
+    public function undoCompleteDelivery(Request $request, Order $order): JsonResponse
+    {
+        $this->ensureShipperRole($request);
+        $validated = $request->validate(['reason' => 'required|string|max:500']);
+
+        return DB::transaction(function () use ($request, $order, $validated) {
+            $order = Order::query()->whereKey($order->id)->lockForUpdate()->firstOrFail();
+            abort_unless((int) $order->shipper_id === (int) $request->user()->id, 403, 'Không có quyền thao tác đơn này.');
+            abort_unless(in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED], true), 422, 'Đơn không ở trạng thái hoàn thành.');
+            abort_if($order->accounting_sales_import_batch_id !== null, 422, 'Đơn nhập từ kế toán cần được kế toán xử lý điều chỉnh.');
+            $reconciliations = \App\Models\AccountingReconciliation::query()->where('order_id', $order->id)->lockForUpdate()->get();
+            abort_if($reconciliations->contains('status', 'confirmed'), 422, 'Đơn đã chốt đối soát. Vui lòng liên hệ kế toán để điều chỉnh.');
+            abort_if($order->returnRecords()->exists(), 422, 'Đơn đã có phiếu trả hàng. Vui lòng liên hệ kho để kiểm tra phiếu hiện có.');
+            $before = $order->status;
+            $order->update(['status' => Order::STATUS_DELIVERING, 'delivered_at' => null]);
+            // Pending reconciliation snapshots must be rebuilt after the corrected delivery.
+            foreach ($reconciliations as $reconciliation) {
+                $reconciliation->delete();
+            }
+            OrderHistory::create([
+                'order_id' => $order->id,
+                'action' => 'undo_complete_delivery',
+                'user_id' => $request->user()->id,
+                'role' => 'shipper',
+                'status_before' => $before,
+                'status_after' => Order::STATUS_DELIVERING,
+                'note' => 'Hoàn tác hoàn thành trên ứng dụng: '.$validated['reason'],
+            ]);
+
+            return $this->ok(['order_id' => $order->id, 'status' => $order->status], 'Đã đưa đơn về đang giao. Có thể kiểm kê và lập phiếu trả hàng.');
+        });
+    }
+
     public function completeDelivery(Request $request, Order $order): JsonResponse
     {
         $this->ensureShipperRole($request);
