@@ -54,6 +54,7 @@
 @foreach($orders as $order)
 @php
     $totalQuantity = $order->items->sum('quantity');
+    $vatAmount = app(\App\Services\WarehousePackedOrderService::class)->summary($order, useActualWeight: true)['vat_amount'];
     $totalWeight = $order->items->sum(fn ($item) => $item->effective_priced_by_kg ? (float) ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight ?? 0) : 0);
 @endphp
 <section class="sheet">
@@ -110,6 +111,7 @@
         @else
         <tr><td>Phí vận chuyển</td><td>{{ number_format((float) $order->shipping_fee, 0, ',', '.') }}đ</td></tr>
         @endif
+        <tr><td>VAT</td><td>{{ number_format((float) $vatAmount, 0, ',', '.') }}đ</td></tr>
         <tr><td>Tổng cộng</td><td>{{ number_format((float) $order->total, 0, ',', '.') }}đ</td></tr>
     </table>
     <div class="signatures">
@@ -118,6 +120,9 @@
         <div class="signature">NGƯỜI NHẬN HÀNG<small>(Ký, ghi rõ họ tên)</small><div class="space"></div></div>
         <div class="signature">THỦ KHO<small>(Ký, ghi rõ họ tên)</small><div class="space"></div></div>
     </div>
+    @if((float) $vatAmount == 0)
+        <div style="margin-top:16px;font-size:10px;font-style:italic;">Giá trên chưa bao gồm VAT</div>
+    @endif
 </section>
 @endforeach
 <script>window.addEventListener('load', function () { if (@json($orders->isNotEmpty())) window.print(); });</script>

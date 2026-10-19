@@ -140,6 +140,7 @@ class AuthController extends Controller
 
     private function redirectAfterLogin(Request $request, User $user)
     {
+        $request->session()->put('show_system_testing_notice', true);
         $user->loadMissing(['roles', 'defaultRole']);
         $rolesCount = $user->roles->count();
 

@@ -434,10 +434,10 @@
         @if($packedOrder)
             <tr><td>Khối lượng thực tế</td><td>{{ $documentPackedWeight !== null ? format_kg($documentPackedWeight) : '—' }}</td></tr>
             @if($orderAdjustment != 0)<tr><td>Điều chỉnh đơn</td><td>{{ number_format(-$orderAdjustment, 0, ',', '.') }}đ</td></tr>@endif
-            @if($vatAmount > 0)<tr><td>VAT</td><td>{{ number_format($vatAmount, 0, ',', '.') }}đ</td></tr>@endif
             @if($foamBoxFee > 0)<tr><td>Phí thùng xốp</td><td>{{ number_format($foamBoxFee, 0, ',', '.') }}đ</td></tr>@endif
         @endif
         <tr><td>Phí vận chuyển</td><td>{{ number_format($shippingFee, 0, ',', '.') }}đ</td></tr>
+        @if(!$isImport)<tr><td>VAT</td><td>{{ number_format($vatAmount, 0, ',', '.') }}đ</td></tr>@endif
         <tr><td>Tổng cộng</td><td>{{ number_format($grandTotal, 0, ',', '.') }}đ</td></tr>
     </table>
 
@@ -447,6 +447,9 @@
         <div class="print-signature">NGƯỜI NHẬN HÀNG<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div></div>
         <div class="print-signature">THỦ KHO<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div></div>
     </div>
+    @if(!$isImport && (float) $vatAmount == 0)
+        <div style="margin-top:16px;font-size:10px;font-style:italic;">Giá trên chưa bao gồm VAT</div>
+    @endif
 </div>
 
 @endsection

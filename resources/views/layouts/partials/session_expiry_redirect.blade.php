@@ -1,4 +1,5 @@
 @auth
+@include('layouts.partials.system_testing_notice')
 <script>
 (function () {
     const loginUrl = @json(route('login'));
