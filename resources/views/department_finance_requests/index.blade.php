@@ -98,6 +98,25 @@
         .finance-request-page .fr-list tbody td:nth-child(2) { grid-column:1 / -1; grid-row:1; }
         .finance-request-page .fr-list-actions { justify-content:flex-start; }
     }
+    .finance-request-page .fr-list-toolbar { font-family:inherit; font-size:13px; }
+    .finance-request-page .fr-page-size {
+        flex:0 0 60px; width:60px; min-height:28px; height:28px;
+        padding:3px 22px 3px 8px; border:1px solid #dbe2e8; border-radius:4px;
+        font-family:inherit; font-size:13px; font-weight:400; line-height:20px; color:#334155;
+        background-color:#fff; box-shadow:none;
+    }
+    .finance-request-page .nice-select.fr-page-size {
+        float:none; clear:none; padding-top:0; padding-bottom:0; line-height:26px;
+        background-image:none;
+    }
+    .finance-request-page .nice-select.fr-page-size::after { right:9px; width:5px; height:5px; }
+    .finance-request-page .nice-select.fr-page-size .list { margin-top:4px; min-width:60px; }
+    .finance-request-page .nice-select.fr-page-size .option {
+        min-height:28px; line-height:28px; padding:0 10px; font-size:13px; font-weight:400;
+    }
+    .finance-request-page .fr-page-size:focus {
+        border-color:#0f766e; outline:2px solid rgba(15,118,110,.15); outline-offset:1px;
+    }
     .fr-panel {
         min-width: 0;
         border: 1px solid rgba(148, 163, 184, .24);
@@ -637,7 +656,7 @@
                     @if(is_scalar($value))<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
                 @endforeach
                 <label class="small text-nowrap" for="requests-per-page">Số dòng/trang</label>
-                <select id="requests-per-page" name="per_page" class="form-select form-select-sm" onchange="this.form.submit()">
+                <select id="requests-per-page" name="per_page" class="form-select form-select-sm fr-page-size" onchange="this.form.submit()">
                     @foreach([10,20,50,100] as $size)<option value="{{ $size }}" @selected($perPage === $size)>{{ $size }}</option>@endforeach
                 </select>
                 <span class="small text-muted text-nowrap">{{ $requests->total() }} phiếu</span>
