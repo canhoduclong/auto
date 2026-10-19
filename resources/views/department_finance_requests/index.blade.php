@@ -33,6 +33,9 @@
     $customDocumentTitle = old('request_document_title_custom', in_array($storedDocumentTitle, $standardDocumentTitles, true) ? '' : $storedDocumentTitle);
 @endphp
 <style>
+    .fr-site-container { padding-top:20px; padding-bottom:28px; }
+    .finance-request-page .table-responsive { max-width:100%; overflow-x:auto; }
+    .finance-request-page .fr-main { min-width:0; }
     .finance-request-page {
         width: 100%;
         max-width: none;
@@ -302,6 +305,9 @@
     }
 </style>
 
+@if($config['layout'] === 'layouts.site')
+<div class="container fr-site-container">
+@endif
 <div class="finance-request-page {{ $separateCreatePage && $showCreateForm ? 'manager-create-page' : '' }}">
     @if($errors->any())
         <div class="alert alert-danger border-0 shadow-sm">
@@ -751,6 +757,9 @@
     </div>
 
 </div>
+@if($config['layout'] === 'layouts.site')
+</div>
+@endif
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const requestDocumentTitle = document.getElementById('requestDocumentTitle');

@@ -128,6 +128,23 @@ class EmployeeFinanceRequestTest extends TestCase
         $this->update($transaction);
     }
 
+    public function test_manager_list_and_forms_use_site_container(): void
+    {
+        $transaction = $this->fixture(['request_source' => 'manager']);
+        $request = $this->request('/manager/requests');
+        $html = (new DepartmentFinanceRequestController)->managerIndex($request)->render();
+        self::assertStringContainsString('class="container fr-site-container"', $html);
+        self::assertStringContainsString('fr-list-actions', $html);
+        $request = $this->request('/manager/requests/create');
+        $html = (new DepartmentFinanceRequestController)->managerCreate($request)->render();
+        self::assertStringContainsString('class="container fr-site-container"', $html);
+        self::assertStringContainsString('id="requestItemsTable"', $html);
+        $request = $this->request('/manager/requests/'.$transaction->id.'/edit');
+        $html = (new DepartmentFinanceRequestController)->managerEdit($request, $transaction)->render();
+        self::assertStringContainsString('class="container fr-site-container"', $html);
+        self::assertStringContainsString('id="requestItemsTable"', $html);
+    }
+
     public function test_sorting_precedes_pagination_and_keeps_filters(): void
     {
         for ($i = 1; $i <= 12; $i++) $this->fixture(['amount' => $i * 1000]);
