@@ -34,9 +34,38 @@
 @endphp
 <style>
     .finance-request-page {
-        max-width: 1440px;
-        margin: 0 auto;
-        padding: 0 12px 24px;
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 0 0 16px;
+    }
+    .finance-request-page .fr-workspace {
+        display: grid;
+        grid-template-columns: 240px minmax(0, 1fr);
+        gap: 16px;
+        margin: 0;
+    }
+    .finance-request-page .fr-workspace > * {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        padding: 0;
+        margin: 0;
+    }
+    .finance-request-page .fr-list-toolbar { padding: 10px 14px !important; }
+    .finance-request-page .pagination { margin-bottom: 0; }
+    .finance-request-page .table > :not(caption) > * > * { padding: 10px 12px; }
+    .finance-request-page .fr-filter .fr-title { font-size: 16px; }
+    .finance-request-page .fr-filter .form-label { font-weight: 600; }
+    @media (min-width: 1600px) {
+        .finance-request-page .fr-workspace { grid-template-columns: 250px minmax(0, 1fr); }
+    }
+    @media (max-width: 991.98px) {
+        .finance-request-page .fr-workspace { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+        .finance-request-page .fr-filter form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 479.98px) {
+        .finance-request-page .fr-filter form { grid-template-columns: minmax(0, 1fr); }
     }
     .fr-panel {
         min-width: 0;
@@ -51,7 +80,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        padding: 16px 18px;
+        padding: 12px 14px;
         border-bottom: 1px solid #eef2f7;
         background: #f8fafc;
     }
@@ -68,7 +97,7 @@
     }
     .fr-panel-body {
         min-width: 0;
-        padding: 18px;
+        padding: 14px;
         overflow: hidden;
     }
     .fr-section-label {
@@ -229,7 +258,7 @@
     }
     @media (max-width: 767.98px) {
         .finance-request-page {
-            padding-inline: 8px;
+            padding-inline: 0;
         }
         .fr-panel-head {
             align-items: flex-start;
@@ -267,8 +296,8 @@
         </div>
     @endif
 
-    <div class="row g-3 align-items-start">
-        <aside class="col-12 col-lg-3">
+    <div class="fr-workspace">
+        <aside class="fr-filter">
             <div class="fr-panel">
                 <div class="fr-panel-head"><h2 class="fr-title">Lọc phiếu</h2></div>
                 <div class="fr-panel-body">
@@ -308,7 +337,7 @@
             </div>
         </aside>
         @if(!$separateCreatePage || $showCreateForm)
-        <div class="col-12 col-lg-9">
+        <div class="fr-main">
     <div class="fr-panel">
         <div class="fr-panel-head">
             <div>
@@ -552,7 +581,7 @@
         @endif
 
         @if(!$separateCreatePage || !$showCreateForm)
-        <div class="col-12 col-lg-9">
+        <div class="fr-main">
     <div class="fr-panel">
         <div class="fr-panel-head">
             <div>
@@ -568,7 +597,7 @@
 
             </div>
         </div>
-        <div class="p-3 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div class="fr-list-toolbar border-bottom d-flex flex-wrap align-items-center justify-content-between gap-3">
             <form method="GET" action="{{ route($config['route_prefix'].'.index') }}" class="d-flex align-items-center gap-2">
                 @foreach(request()->except(['page', 'per_page']) as $key => $value)
                     @if(is_scalar($value))<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
