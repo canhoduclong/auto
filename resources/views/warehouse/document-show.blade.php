@@ -38,7 +38,8 @@
     @page { size: A4 portrait; margin: 10mm; }
     body { background: #fff !important; color: #111827 !important; }
     .screen-document, .wh-sidebar, .wh-topbar, .mobile-drawer-overlay { display: none !important; }
-    .stockout-print-sheet { display: block; width: 100%; font: 10px/1.35 Arial, sans-serif; color: #111827; }
+    .stockout-print-sheet { display: block; position: relative; isolation: isolate; width: 100%; font: 10px/1.35 Arial, sans-serif; color: #111827; }
+    .stockout-print-sheet::after { content: "DRAFT"; position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font: 800 100px/1 Arial, sans-serif; letter-spacing: 10px; color: rgba(100,116,139,.12); pointer-events: none; z-index: 1; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .print-company { display: grid; grid-template-columns: 24% 52% 24%; align-items: start; border-bottom: 1px solid #111827; padding-bottom: 6px; }
     .print-logo { max-width: 34mm; max-height: 16mm; object-fit: contain; }
     .print-company-name { font-size: 12px; font-weight: 800; text-transform: uppercase; }
@@ -429,6 +430,10 @@
         </tbody>
     </table>
 
+    <div style="position:relative;break-inside:avoid;">
+        @if(!$isImport && (float) $vatAmount == 0)
+            <div style="position:absolute;top:3px;left:5px;max-width:50%;font-size:10px;font-style:italic;">Giá trên chưa bao gồm VAT</div>
+        @endif
     <table class="print-total">
         <tr><td>Tổng số lượng</td><td>{{ number_format($document->items->sum('quantity')) }}</td></tr>
         @if($packedOrder)
@@ -440,6 +445,7 @@
         @if(!$isImport)<tr><td>VAT</td><td>{{ number_format($vatAmount, 0, ',', '.') }}đ</td></tr>@endif
         <tr><td>Tổng cộng</td><td>{{ number_format($grandTotal, 0, ',', '.') }}đ</td></tr>
     </table>
+    </div>
 
     <div class="print-signatures">
         <div class="print-signature">NGƯỜI LẬP PHIẾU<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div>{{ $document->user?->name }}</div>
@@ -447,9 +453,6 @@
         <div class="print-signature">NGƯỜI NHẬN HÀNG<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div></div>
         <div class="print-signature">THỦ KHO<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div></div>
     </div>
-    @if(!$isImport && (float) $vatAmount == 0)
-        <div style="margin-top:16px;font-size:10px;font-style:italic;">Giá trên chưa bao gồm VAT</div>
-    @endif
 </div>
 
 @endsection

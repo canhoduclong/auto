@@ -7,7 +7,8 @@
         @page { size: A4 portrait; margin: 10mm; }
         * { box-sizing: border-box; }
         body { margin:0; color:#111827; font:10px/1.35 Arial, sans-serif; }
-        .sheet { min-height: 277mm; break-after: page; page-break-after: always; }
+        .sheet { position:relative; isolation:isolate; min-height: 277mm; break-after: page; page-break-after: always; }
+        .sheet::after { content:"DRAFT"; position:absolute; top:42%; left:50%; transform:translate(-50%, -50%) rotate(-30deg); font:800 100px/1 Arial, sans-serif; letter-spacing:10px; color:rgba(100,116,139,.12); pointer-events:none; z-index:1; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
         .sheet:last-child { break-after:auto; page-break-after:auto; }
         .company { display:grid; grid-template-columns:minmax(0, 72%) minmax(0, 28%); align-items:center; gap:8px; padding:0 2mm 6px; }
         .company-brand { display:flex; align-items:center; gap:6mm; min-width:0; }
@@ -102,6 +103,10 @@
         @endforelse
         </tbody>
     </table>
+    <div style="position:relative;break-inside:avoid;">
+        @if((float) $vatAmount == 0)
+            <div style="position:absolute;top:3px;left:5px;max-width:50%;font-size:10px;font-style:italic;">Giá trên chưa bao gồm VAT</div>
+        @endif
     <table class="totals">
         <tr><td>Tổng số lượng</td><td>{{ number_format((float) $totalQuantity, 0, ',', '.') }}</td></tr>
         <tr><td>Khối lượng thực tế</td><td>{{ $totalWeight > 0 ? format_kg($totalWeight) : '—' }}</td></tr>
@@ -114,15 +119,13 @@
         <tr><td>VAT</td><td>{{ number_format((float) $vatAmount, 0, ',', '.') }}đ</td></tr>
         <tr><td>Tổng cộng</td><td>{{ number_format((float) $order->total, 0, ',', '.') }}đ</td></tr>
     </table>
+    </div>
     <div class="signatures">
         <div class="signature">NGƯỜI LẬP PHIẾU<small>(Ký, ghi rõ họ tên)</small><div class="space"></div>{{ $order->user?->name ?? auth()->user()?->name }}</div>
         <div class="signature">NGƯỜI GIAO HÀNG<small>(Ký, ghi rõ họ tên)</small><div class="space"></div></div>
         <div class="signature">NGƯỜI NHẬN HÀNG<small>(Ký, ghi rõ họ tên)</small><div class="space"></div></div>
         <div class="signature">THỦ KHO<small>(Ký, ghi rõ họ tên)</small><div class="space"></div></div>
     </div>
-    @if((float) $vatAmount == 0)
-        <div style="margin-top:16px;font-size:10px;font-style:italic;">Giá trên chưa bao gồm VAT</div>
-    @endif
 </section>
 @endforeach
 <script>window.addEventListener('load', function () { if (@json($orders->isNotEmpty())) window.print(); });</script>
