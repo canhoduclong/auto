@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Cache;
 class OperatingController extends Controller {
     public function index(Request $request){
         $request->validate([
+            'attention'=>'nullable|in:todo,related',
             'filter'=>'nullable|in:mine,received,assigned,unaccepted,working,reported,verification,overdue,history,all,deleted,execution,coordination,votes',
             'kinds'=>'nullable|array', 'kinds.*'=>'required|distinct|in:execution,coordination,vote',
             'q'=>'nullable|string|max:200',
@@ -80,6 +81,15 @@ class OperatingController extends Controller {
         })->when($request->filled('proposal_vote'),fn($q)=>$q->whereHas('votes',fn($v)=>$v->where('user_id',$user->id)->when($request->proposal_vote==='pending',fn($v)=>$v->whereNull('choice'),fn($v)=>$v->whereNotNull('choice'))))
           ->when($request->filled('proposal_from'),fn($q)=>$q->whereDate('created_at','>=',$request->proposal_from))
           ->when($request->filled('proposal_to'),fn($q)=>$q->whereDate('created_at','<=',$request->proposal_to));
+        if ($request->input('attention') === 'todo') {
+            $queue = app(\App\Services\AccountingWorkQueueService::class);
+            $tasks->whereIn('task_assignments.id', $queue->todoTasks($user)->select('task_assignments.id'));
+            $proposals->whereRaw('1=0');
+        } elseif ($request->input('attention') === 'related') {
+            $queue = app(\App\Services\AccountingWorkQueueService::class);
+            $tasks->whereIn('task_assignments.id', $queue->relatedTasks($user)->select('task_assignments.id'));
+            $proposals->whereIn('operating_proposals.id', $queue->relatedProposals($user)->select('operating_proposals.id'));
+        }
         $tasks->where(function($q)use($selectedKinds){
             $q->whereRaw('1=0');
             if(in_array('execution',$selectedKinds,true)) $q->orWhere(fn($k)=>$k->where('work_kind','execution')->orWhereNull('work_kind'));
@@ -97,7 +107,7 @@ class OperatingController extends Controller {
         $sort=$request->input('sort','newest');
         if($sort==='due') $listingQuery->orderByRaw('deadline IS NULL')->orderBy('deadline');
         $listing=$listingQuery->orderBy('created_at',$sort==='oldest'?'asc':'desc')->orderBy('entity_type')->orderByDesc('entity_id')
-            ->paginate((int)$request->input('per_page',20))->appends($request->only(['filter','kinds','kinds_present','q','status','from','to','sort','per_page']));
+            ->paginate((int)$request->input('per_page',20))->appends($request->only(['attention','filter','kinds','kinds_present','q','status','from','to','sort','per_page']));
         $taskModels=TaskAssignment::withTrashed()->with(['creator','assignees.user','approvalSteps'])->whereIn('id',$listing->getCollection()->where('entity_type','task')->pluck('entity_id'))->get()->keyBy('id');
         $proposalModels=OperatingProposal::with(['creator','votes'=>fn($q)=>$q->where('user_id',$user->id)])->withCount(['votes','votes as voted_count'=>fn($q)=>$q->whereNotNull('choice')])
             ->whereIn('id',$listing->getCollection()->where('entity_type','vote')->pluck('entity_id'))->get()->keyBy('id');

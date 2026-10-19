@@ -70,6 +70,7 @@ class AccountingDashboardController extends Controller
             'from' => $from,
             'to' => $to,
             'rangeLabel' => $rangeLabel,
+            'workQueues' => app(\App\Services\AccountingWorkQueueService::class)->dashboard($request->user()),
             'cards' => [
                 'receivable_total' => $receivableTotal,
                 'payable_total' => $payableTotal,
@@ -758,7 +759,7 @@ class AccountingDashboardController extends Controller
             ])
             ->whereNotNull('request_source')
             ->latest('created_at')
-            ->limit(20)
+            ->when(!$request->boolean('work_queue'), fn ($q) => $q->limit(20))
             ->get();
         $approvalService = app(\App\Services\ApprovalService::class);
         $pendingRequests->each(function (Transaction $transaction) use ($approvalService): void {
@@ -773,6 +774,10 @@ class AccountingDashboardController extends Controller
                 ->filter(fn (Transaction $transaction) => $transaction->status === Transaction::STATUS_PENDING_APPROVAL
                     && ($user?->hasRole('admin') || $approvalService->canApproveTransactionStep($transaction, $user)))
                 ->values();
+        }
+
+        if ($request->boolean('work_queue')) {
+            $pendingRequests = app(\App\Services\AccountingWorkQueueService::class)->financeRequests($request->user());
         }
 
         $transactions = (clone $baseQuery)
@@ -924,6 +929,9 @@ class AccountingDashboardController extends Controller
             $businessDateFrom = $businessDateTo = $legacyDateField === 'delivered_at' ? null : $legacyDate;
             $deliveredDateFrom = $deliveredDateTo = $legacyDateField === 'delivered_at' ? $legacyDate : null;
         }
+        if ($request->boolean('work_queue')) {
+            $businessDateFrom = $businessDateTo = $deliveredDateFrom = $deliveredDateTo = null;
+        }
         $businessDate = $businessDateFrom === $businessDateTo ? $businessDateFrom : null;
         $deliveredDate = $deliveredDateFrom === $deliveredDateTo ? $deliveredDateFrom : null;
         $dateField = ($businessDateFrom || $businessDateTo) ? 'business_date' : 'delivered_at';
@@ -1012,6 +1020,11 @@ class AccountingDashboardController extends Controller
             ->when($accountingStatus === 'confirmed', fn ($q) => $q->whereHas('accountingReconciliation', fn ($r) => $r->where('status', AccountingReconciliation::STATUS_CONFIRMED)))
             ->when($accountingStatus === 'pending', fn ($q) => $q->whereDoesntHave('accountingReconciliation', fn ($r) => $r->where('status', AccountingReconciliation::STATUS_CONFIRMED)));
 
+        if ($request->boolean('work_queue')) {
+            $baseQuery->whereIn('status', ['delivered', 'completed'])->whereNull('trash_at')
+                ->whereDoesntHave('accountingReconciliation', fn ($q) => $q->where('status', AccountingReconciliation::STATUS_CONFIRMED));
+        }
+
         $ordersQuery = clone $baseQuery;
         match ($sort) {
             'code' => $ordersQuery->orderBy('orders.code', $sortDirection),
@@ -1077,7 +1090,7 @@ class AccountingDashboardController extends Controller
         ];
 
         $missingOrders = collect();
-        if (Schema::hasTable('admin_deleted_orders')) {
+        if (!$request->boolean('work_queue') && Schema::hasTable('admin_deleted_orders')) {
             $excludedDeletedIds = $canExcludeMissingOrders
                 ? DB::table('accounting_reconciliation_exclusions')
                     ->whereNotNull('deleted_order_id')

@@ -10,6 +10,7 @@
     }
 @endphp
 <form method="GET" action="{{ route('operating.index') }}" class="op-filters" id="operatingFilters">
+    @if(request()->filled('attention'))<input type="hidden" name="attention" value="{{ request('attention') }}">@endif
     <input type="hidden" name="kinds_present" value="1">
     <nav class="d-flex flex-wrap gap-2 mb-3" aria-label="Lọc nhanh công việc">
         @foreach($quickFilters as $key=>$label)

@@ -189,3 +189,15 @@ Migration mới: `2026_10_16_090000_link_received_stock_to_transfer_reservations
 - **Tạo mới** và nút bút chì **Sửa phiếu** mở trang form riêng, vẫn giữ cột lọc.
 - Nhân viên được sửa phiếu do chính mình gửi khi phiếu còn chờ duyệt và chưa có bước duyệt nào được xử lý. Điều kiện được kiểm tra lại khi lưu; phiếu đã xử lý duyệt trong lúc mở form sẽ không bị ghi đè.
 - Lưu sửa cập nhật nội dung và tổng tiền, giữ nguyên người tạo, trạng thái chờ duyệt, các bước duyệt và chứng từ đính kèm hiện có. Quyền quản trị và luồng sửa/gửi lại riêng của Leader/Manager giữ theo chức năng hiện hành.
+
+### Bàn làm việc kế toán
+
+Trang `/accounting` ưu tiên năm nhóm công việc, mỗi nhóm có liên kết mở danh sách và tối đa ba mục gần nhất để xử lý nhanh:
+
+1. **Đơn hoàn thành cần duyệt doanh thu:** đơn đã giao/hoàn thành, chưa xác nhận đối soát; loại đơn đã bỏ vào thùng rác hoặc đã loại khỏi đối soát.
+2. **Yêu cầu đơn hàng:** yêu cầu điều chỉnh đến bước kế toán xử lý theo luồng duyệt hiện hành.
+3. **Yêu cầu tài chính cần xử lý:** phiếu đến lượt người đăng nhập duyệt hoặc đã duyệt và chờ kế toán hoàn tất thu/chi. Phiếu còn chờ Director không được tính vào badge của kế toán.
+4. **Việc cần làm:** công việc được giao cho người đăng nhập còn chờ nhận, đang làm hoặc cần làm lại.
+5. **Việc liên quan tới tôi:** việc do người đăng nhập giao đang chờ xác nhận hoàn thành và biểu quyết còn hạn, chờ người đó trả lời.
+
+Badge tròn đỏ chỉ hiện khi số chờ lớn hơn 0. Đây là số việc cần xử lý, không phải số thông báo chưa đọc. Số chờ tính cả việc tồn từ trước và cập nhật khi tải lại trang; không phụ thuộc bộ lọc kỳ thống kê tài chính. Phần tổng quan tài chính được thu gọn bên dưới.

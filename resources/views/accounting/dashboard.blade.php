@@ -1,9 +1,10 @@
 @extends(accounting_layout())
 
-@section('title', 'Dashboard Ke Toan')
-@section('subtitle', 'Tong quan cong no, thu chi va thanh toan')
+@section('title', 'Bàn làm việc kế toán')
+@section('subtitle', 'Theo dõi công việc chờ xử lý và các yêu cầu liên quan')
 
 @section('accounting_content')
+@include('accounting.work-queues')
 @include('layouts.partials.department_broadcasts')
 @if(request()->routeIs('accounting.*'))
 <div class="d-flex justify-content-end flex-wrap gap-2 mb-3">
@@ -12,6 +13,8 @@
 </div>
 @endif
 
+<details class="mb-3">
+<summary class="acc-overview-toggle">Tổng quan tài chính</summary>
 <details class="acc-card mb-3 accounting-dashboard-filters">
     <summary class="accounting-filter-toggle"><span><i class="bi bi-funnel me-2"></i>Bộ lọc</span><i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
     <div class="card-body">
@@ -52,10 +55,12 @@
     <div class="item"><div class="label">Don chua thanh toan</div><div class="value">{{ number_format($cards['unpaid_orders'] ?? 0) }}</div></div>
     <div class="item"><div class="label">Don qua han thanh toan</div><div class="value text-danger">{{ number_format($cards['overdue_orders'] ?? 0) }}</div></div>
 </div>
+</details>
 @endsection
 
 @push('styles')
 <style>
+.acc-overview-toggle { padding:12px 0; cursor:pointer; font-weight:600; color:#475569; }
 .accounting-filter-toggle { display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; cursor: pointer; font-weight: 600; list-style: none; }
 .accounting-filter-toggle::-webkit-details-marker { display: none; }
 .accounting-dashboard-filters[open] .accounting-filter-toggle > i { transform: rotate(180deg); }

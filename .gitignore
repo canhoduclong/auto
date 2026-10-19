@@ -94,3 +94,5 @@ readme.txt
 !/tests/Feature/LoginNoticeTest.php
 
 !/tests/Feature/EmployeeFinanceRequestTest.php
+
+!/tests/Feature/AccountingWorkQueueTest.php
