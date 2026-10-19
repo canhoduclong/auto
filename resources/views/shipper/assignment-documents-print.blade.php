@@ -123,6 +123,7 @@
     </table>
     </div>
     </div>
+    @include('shared.print-testing-disclaimer')
     <div class="signatures">
         <div class="signature">NGƯỜI LẬP PHIẾU<small>(Ký, ghi rõ họ tên)</small><div class="space"></div>{{ $order->user?->name ?? auth()->user()?->name }}</div>
         <div class="signature">NGƯỜI GIAO HÀNG<small>(Ký, ghi rõ họ tên)</small><div class="space"></div></div>

@@ -92,3 +92,5 @@ readme.txt
 !/tests/Feature/UndoCompleteDeliveryTest.php
 
 !/tests/Feature/LoginNoticeTest.php
+
+!/tests/Feature/EmployeeFinanceRequestTest.php

@@ -181,3 +181,11 @@ Migration mới: `2026_10_16_090000_link_received_stock_to_transfer_reservations
 - Mặc định thông báo nêu thời gian 15/09/2026–30/11/2026 và tiếp tục kiểm thử đến khi có quyết định chính thức.
 - Web hiển thị sau mỗi lần đăng nhập; my_app từ bản 1.1.33 hiển thị sau đăng nhập và khi khôi phục phiên đăng nhập lúc mở app. Nhấn **Đã hiểu** để tiếp tục.
 - Cấu hình mới áp dụng ở lần đăng nhập/mở phiên tiếp theo; không đóng popup đang mở trên thiết bị khác.
+
+### Nhân viên quản lý và sửa phiếu tài chính trước khi duyệt
+
+- Màn hình Phiếu yêu cầu có bộ lọc bên trái: tìm kiếm, loại phiếu, trạng thái, từ ngày và đến ngày gửi.
+- Bên phải là danh sách, nút **Tạo mới**, phân trang và chọn **10 / 20 / 50 / 100 dòng/trang**. Bấm tiêu đề cột để đổi chiều sắp xếp.
+- **Tạo mới** và nút bút chì **Sửa phiếu** mở trang form riêng, vẫn giữ cột lọc.
+- Nhân viên được sửa phiếu do chính mình gửi khi phiếu còn chờ duyệt và chưa có bước duyệt nào được xử lý. Điều kiện được kiểm tra lại khi lưu; phiếu đã xử lý duyệt trong lúc mở form sẽ không bị ghi đè.
+- Lưu sửa cập nhật nội dung và tổng tiền, giữ nguyên người tạo, trạng thái chờ duyệt, các bước duyệt và chứng từ đính kèm hiện có. Quyền quản trị và luồng sửa/gửi lại riêng của Leader/Manager giữ theo chức năng hiện hành.

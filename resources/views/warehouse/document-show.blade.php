@@ -450,6 +450,7 @@
     </div>
 
     </div>
+    @include('shared.print-testing-disclaimer')
     <div class="print-signatures">
         <div class="print-signature">NGƯỜI LẬP PHIẾU<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div>{{ $document->user?->name }}</div>
         <div class="print-signature">NGƯỜI GIAO HÀNG<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div></div>

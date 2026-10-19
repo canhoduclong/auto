@@ -89,6 +89,14 @@ class Transaction extends Model
     public function rejecter() { return $this->belongsTo(User::class, 'rejected_by'); }
     public function transferProofUploader() { return $this->belongsTo(User::class, 'transfer_proof_uploaded_by'); }
 
+    public function canBeEditedBySubmitter(int $userId): bool
+    {
+        return (int) $this->submitted_by === $userId
+            && $this->status === self::STATUS_PENDING_APPROVAL
+            && $this->approved_by === null && $this->approved_at === null
+            && !$this->approvalSteps->contains(fn ($step) => $step->approved_by !== null || $step->status !== 'pending');
+    }
+
     public function approvalSteps()
     {
         return $this->hasMany(ApprovalOrder::class, 'transaction_id');

@@ -85,6 +85,44 @@ class DepartmentFinanceRequestController extends Controller
         });
     }
 
+    public function employeeCreate(Request $request)
+    {
+        return $this->index($request, $request->route('finance_source'), null, true);
+    }
+
+    public function employeeEdit(Request $request, Transaction $transaction)
+    {
+        $source = $request->route('finance_source');
+        $this->authorizeSource($this->config($source));
+        abort_unless($transaction->request_source === $source, 404);
+        abort_unless($transaction->canBeEditedBySubmitter((int) auth()->id()), 403, 'Chỉ được sửa phiếu của mình khi chưa có bước duyệt nào được xử lý.');
+
+        return $this->index($request, $source, $transaction, true);
+    }
+
+    public function employeeUpdate(Request $request, Transaction $transaction)
+    {
+        $source = $request->route('finance_source');
+        $this->authorizeSource($this->config($source));
+        $removedPaths = DB::transaction(function () use ($request, $transaction, $source) {
+            $locked = Transaction::whereKey($transaction->id)->lockForUpdate()->firstOrFail();
+            $locked->setRelation('approvalSteps', $locked->approvalSteps()->lockForUpdate()->get());
+            abort_unless($locked->request_source === $source, 404);
+            abort_unless($locked->canBeEditedBySubmitter((int) auth()->id()), 403, 'Phiếu đã được xử lý duyệt hoặc không thuộc người tạo. Không thể lưu thay đổi.');
+            $request->route()->setParameter('transaction', $locked);
+            $data = $this->validatedRequestData($request, $source);
+            $removed = $data['_removed_attachment_paths'] ?? [];
+            unset($data['_removed_attachment_paths'], $data['status'], $data['submitted_by'], $data['request_source'], $data['request_department']);
+            $locked->update($data);
+
+            return $removed;
+        });
+        $this->deleteUnreferencedRequestAttachments($removedPaths, $transaction->id);
+
+        return redirect()->route($this->config($source)['route_prefix'].'.index')
+            ->with('success', 'Đã cập nhật phiếu #'.$transaction->id.'. Phiếu tiếp tục chờ duyệt.');
+    }
+
     public function warehouseIndex(Request $request)
     {
         return $this->index($request, 'warehouse');
@@ -488,6 +526,20 @@ class DepartmentFinanceRequestController extends Controller
             ? $request->input('form_type')
             : 'all';
         $search = trim((string) $request->input('search'));
+        $filters = $request->validate([
+            'from_date' => 'nullable|date_format:Y-m-d',
+            'to_date' => 'nullable|date_format:Y-m-d'.($request->filled('from_date') ? '|after_or_equal:from_date' : ''),
+            'per_page' => 'nullable|integer|in:10,20,50,100',
+            'sort' => 'nullable|in:id,request_title,type,amount,status,created_at',
+            'direction' => 'nullable|in:asc,desc',
+        ]);
+        $fromDate = $filters['from_date'] ?? null;
+        $toDate = $filters['to_date'] ?? null;
+        $perPage = (int) ($filters['per_page'] ?? 20);
+        $sort = $filters['sort'] ?? 'created_at';
+        $direction = $filters['direction'] ?? 'desc';
+        $showCreateForm = $showCreateForm || $editingRequest !== null;
+
 
         $requests = Transaction::query()
             ->with([
@@ -514,8 +566,11 @@ class DepartmentFinanceRequestController extends Controller
                         ->orWhereHas('submitter', fn ($user) => $user->where('name', 'like', "%{$search}%"));
                 });
             })
-            ->latest()
-            ->paginate(20)
+            ->when($fromDate, fn ($query) => $query->whereDate('created_at', '>=', $fromDate))
+            ->when($toDate, fn ($query) => $query->whereDate('created_at', '<=', $toDate))
+            ->orderBy($sort, $direction)
+            ->orderBy('id', $direction)
+            ->paginate($perPage)
             ->appends($request->query());
 
         $categories = TransactionCategory::active()
@@ -547,6 +602,8 @@ class DepartmentFinanceRequestController extends Controller
             'defaultManagedAccountId' => $defaultManagedAccountId,
             'editingRequest' => $editingRequest,
             'showCreateForm' => $showCreateForm,
+            'fromDate' => $fromDate, 'toDate' => $toDate, 'perPage' => $perPage,
+            'sort' => $sort, 'direction' => $direction,
         ]);
     }
 

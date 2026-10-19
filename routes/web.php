@@ -126,6 +126,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/orders/{order}/reopen-packing', [OrderPackingController::class, 'reopenPacking'])->name('orders.reopen-packing');
         Route::post('/orders/{order}/print-truck-label', [WarehouseDashboardController::class, 'printTruckLabel'])->name('orders.print-truck-label');
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'packageIndex'])->name('finance-requests.index');
+        Route::get('/requests/create', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeCreate'])->defaults('finance_source', 'package')->name('finance-requests.create');
+        Route::get('/requests/{transaction}/edit', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeEdit'])->defaults('finance_source', 'package')->name('finance-requests.edit');
+        Route::put('/requests/{transaction}', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeUpdate'])->defaults('finance_source', 'package')->name('finance-requests.update');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'packageStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'packagePrint'])->name('finance-requests.print');
         Route::get('/orders/{order}', [OrderPackingController::class, 'show'])->name('orders.detail');
@@ -243,6 +246,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     Route::prefix('leader')->name('leader.')->middleware('role:leader,leader_sale,sale_manager,admin')->group(function () {
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'leaderIndex'])->name('finance-requests.index');
+        Route::get('/requests/create', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeCreate'])->defaults('finance_source', 'leader')->name('finance-requests.create');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'leaderStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/edit', [DepartmentFinanceRequestController::class, 'leaderEdit'])->name('finance-requests.edit');
         Route::put('/requests/{transaction}', [DepartmentFinanceRequestController::class, 'leaderUpdate'])->name('finance-requests.update');
@@ -374,6 +378,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/accounts/{account}/withdraw', [\App\Http\Controllers\AccountController::class, 'withdraw'])->name('accounts.withdraw');
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'accountingIndex'])->name('finance-requests.index');
         Route::get('/requests/create', [DepartmentFinanceRequestController::class, 'accountingCreate'])->name('finance-requests.create');
+        Route::get('/requests/{transaction}/edit', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeEdit'])->defaults('finance_source', 'accounting')->name('finance-requests.edit');
+        Route::put('/requests/{transaction}', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeUpdate'])->defaults('finance_source', 'accounting')->name('finance-requests.update');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'accountingStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'accountingPrint'])->name('finance-requests.print');
     });
@@ -516,6 +522,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/inventory/cancel-overdue', [WarehouseDashboardController::class, 'cancelOverdueOrders'])->name('inventory.cancel-overdue');
         Route::get('/products', [WarehouseDashboardController::class, 'products'])->name('products');
         Route::get('/requests', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'warehouseIndex'])->name('finance-requests.index');
+        Route::get('/requests/create', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeCreate'])->defaults('finance_source', 'warehouse')->name('finance-requests.create');
+        Route::get('/requests/{transaction}/edit', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeEdit'])->defaults('finance_source', 'warehouse')->name('finance-requests.edit');
+        Route::put('/requests/{transaction}', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeUpdate'])->defaults('finance_source', 'warehouse')->name('finance-requests.update');
         Route::post('/requests', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'warehouseStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'warehousePrint'])->name('finance-requests.print');
         Route::get('/reports', [WarehouseDashboardController::class, 'reports'])->name('reports');
@@ -540,6 +549,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/conversions', [\App\Http\Controllers\ProcurementController::class, 'storeConversions'])->name('conversions.store');
         Route::get('/warehouse-shipments', [\App\Http\Controllers\ProcurementController::class, 'purchases'])->name('warehouse-shipments.index');
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'procurementIndex'])->name('finance-requests.index');
+        Route::get('/requests/create', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeCreate'])->defaults('finance_source', 'procurement')->name('finance-requests.create');
+        Route::get('/requests/{transaction}/edit', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeEdit'])->defaults('finance_source', 'procurement')->name('finance-requests.edit');
+        Route::put('/requests/{transaction}', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeUpdate'])->defaults('finance_source', 'procurement')->name('finance-requests.update');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'procurementStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'procurementPrint'])->name('finance-requests.print');
     });
@@ -560,6 +572,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/history/{order}', [ShipperDashboardController::class, 'historyDetail'])->name('history-detail');
         Route::get('/customers', [ShipperDashboardController::class, 'customers'])->name('customers');
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'shipperIndex'])->name('finance-requests.index');
+        Route::get('/requests/create', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeCreate'])->defaults('finance_source', 'shipper')->name('finance-requests.create');
+        Route::get('/requests/{transaction}/edit', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeEdit'])->defaults('finance_source', 'shipper')->name('finance-requests.edit');
+        Route::put('/requests/{transaction}', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeUpdate'])->defaults('finance_source', 'shipper')->name('finance-requests.update');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'shipperStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'shipperPrint'])->name('finance-requests.print');
         Route::get('/delivery-statistics', [ShipperDashboardController::class, 'deliveryStatistics'])->name('delivery-statistics');
@@ -643,6 +658,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/cashflow/{transaction}/print', [AccountingDashboardController::class, 'cashflowPrint'])->name('cashflow.print');
         Route::get('/cashflow/{transaction}', [AccountingDashboardController::class, 'cashflowShow'])->name('cashflow.show');
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'directorIndex'])->name('finance-requests.index');
+        Route::get('/requests/create', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeCreate'])->defaults('finance_source', 'director')->name('finance-requests.create');
+        Route::get('/requests/{transaction}/edit', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeEdit'])->defaults('finance_source', 'director')->name('finance-requests.edit');
+        Route::put('/requests/{transaction}', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeUpdate'])->defaults('finance_source', 'director')->name('finance-requests.update');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'directorStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'directorPrint'])->name('finance-requests.print');
         Route::get('/transactions/create', [AccountingDashboardController::class, 'transactionCreate'])->name('transactions.create');
@@ -709,6 +727,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/cashflow/{transaction}/print', [AccountingDashboardController::class, 'cashflowPrint'])->name('cashflow.print');
         Route::get('/cashflow/{transaction}', [AccountingDashboardController::class, 'cashflowShow'])->name('cashflow.show');
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'ceoIndex'])->name('finance-requests.index');
+        Route::get('/requests/create', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeCreate'])->defaults('finance_source', 'ceo')->name('finance-requests.create');
+        Route::get('/requests/{transaction}/edit', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeEdit'])->defaults('finance_source', 'ceo')->name('finance-requests.edit');
+        Route::put('/requests/{transaction}', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeUpdate'])->defaults('finance_source', 'ceo')->name('finance-requests.update');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'ceoStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'ceoPrint'])->name('finance-requests.print');
         Route::get('/transactions/create', [AccountingDashboardController::class, 'transactionCreate'])->name('transactions.create');

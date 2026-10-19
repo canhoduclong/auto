@@ -1,7 +1,7 @@
 @extends($config['layout'])
 
 @section('title', 'Phiếu tài chính')
-@section('subtitle', in_array($source, ['manager', 'accounting'], true) && !($showCreateForm ?? false) ? 'Danh sách phiếu yêu cầu đã gửi' : 'Tạo phiếu yêu cầu thu/chi hoặc phiếu đề nghị thanh toán')
+@section('subtitle', !($showCreateForm ?? false) && !($editingRequest ?? null) ? 'Danh sách phiếu yêu cầu đã gửi' : 'Tạo phiếu yêu cầu thu/chi hoặc phiếu đề nghị thanh toán')
 
 @section($source === 'accounting' ? 'accounting_content' : 'content')
 @php
@@ -14,7 +14,7 @@
     $editingRequest = $editingRequest ?? null;
     $showCreateForm = $showCreateForm ?? false;
     $isManagerPage = $source === 'manager';
-    $separateCreatePage = in_array($source, ['manager', 'accounting'], true);
+    $separateCreatePage = true;
     $selectedFormType = old('request_form_type', $editingRequest?->request_form_type ?? \App\Models\Transaction::REQUEST_FORM_CASH);
     $oldItems = old('items', $editingRequest?->request_items ?? [['content' => '', 'unit' => '', 'quantity' => 1, 'unit_price' => 0]]);
     $selectedMethod = old('method', $editingRequest?->method ?? 'cash');
@@ -268,8 +268,47 @@
     @endif
 
     <div class="row g-3 align-items-start">
+        <aside class="col-12 col-lg-3">
+            <div class="fr-panel">
+                <div class="fr-panel-head"><h2 class="fr-title">Lọc phiếu</h2></div>
+                <div class="fr-panel-body">
+            <form method="GET" action="{{ route($config['route_prefix'] . '.index') }}" class="d-grid gap-3">
+                <div>
+                    <label class="form-label small mb-1">Tìm kiếm</label>
+                    <input type="search" name="search" class="form-control form-control-sm" value="{{ $search }}" placeholder="Mã, tiêu đề, nội dung, người lập">
+                </div>
+                <div>
+                    <label class="form-label small mb-1">Loại chứng từ</label>
+                    <select name="form_type" class="form-select form-select-sm">
+                        <option value="all" @selected($formType === 'all')>Tất cả</option>
+                        <option value="{{ \App\Models\Transaction::REQUEST_FORM_CASH }}" @selected($formType === \App\Models\Transaction::REQUEST_FORM_CASH)>Yêu cầu thu/chi</option>
+                        <option value="{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}" @selected($formType === \App\Models\Transaction::REQUEST_FORM_PAYMENT)>Đề nghị thanh toán</option>
+                        <option value="{{ \App\Models\Transaction::REQUEST_FORM_ADVANCE }}" @selected($formType === \App\Models\Transaction::REQUEST_FORM_ADVANCE)>Đề nghị tạm ứng</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label small mb-1">Trạng thái</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="all" @selected($status === 'all')>Tất cả</option>
+                        <option value="{{ \App\Models\Transaction::STATUS_PENDING_APPROVAL }}" @selected($status === \App\Models\Transaction::STATUS_PENDING_APPROVAL)>Chờ duyệt</option>
+                        <option value="{{ \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION }}" @selected($status === \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION)>Đã duyệt - chờ hoàn thành</option>
+                        <option value="{{ \App\Models\Transaction::STATUS_APPROVED }}" @selected($status === \App\Models\Transaction::STATUS_APPROVED)>Đã duyệt</option>
+                        <option value="{{ \App\Models\Transaction::STATUS_REJECTED }}" @selected($status === \App\Models\Transaction::STATUS_REJECTED)>Từ chối</option>
+                    </select>
+                </div>
+                <div><label class="form-label small mb-1" for="filter-from">Từ ngày</label><input id="filter-from" type="date" name="from_date" value="{{ $fromDate }}" class="form-control form-control-sm"></div>
+                <div><label class="form-label small mb-1" for="filter-to">Đến ngày</label><input id="filter-to" type="date" name="to_date" value="{{ $toDate }}" class="form-control form-control-sm"></div>
+                <input type="hidden" name="sort" value="{{ $sort }}">
+                <input type="hidden" name="direction" value="{{ $direction }}">
+                <input type="hidden" name="per_page" value="{{ $perPage }}">
+                <button class="btn btn-outline-primary btn-sm"><i class="bi bi-funnel me-1"></i>Lọc</button>
+                <a href="{{ route($config['route_prefix'].'.index') }}" class="btn btn-outline-secondary btn-sm">Đặt lại</a>
+            </form>
+                </div>
+            </div>
+        </aside>
         @if(!$separateCreatePage || $showCreateForm)
-        <div class="{{ $separateCreatePage ? 'col-12' : 'col-lg-5' }}">
+        <div class="col-12 col-lg-9">
     <div class="fr-panel">
         <div class="fr-panel-head">
             <div>
@@ -279,7 +318,7 @@
             <span class="badge text-bg-light border px-3 py-2" id="requestJobTitleBadge">{{ $requestJobTitle }}</span>
         </div>
         <div class="fr-panel-body">
-            <form method="POST" action="{{ $editingRequest ? route(($isManagerPage ? 'manager' : 'leader') . '.finance-requests.update', $editingRequest) : route($config['route_prefix'] . '.store') }}" enctype="multipart/form-data">
+            <form method="POST" action="{{ $editingRequest ? route($config['route_prefix'] . '.update', $editingRequest) : route($config['route_prefix'] . '.store') }}" enctype="multipart/form-data">
                 @csrf
                 @if($editingRequest)
                     @method('PUT')
@@ -499,11 +538,9 @@
 
                 <div class="fr-actions">
                     @if($separateCreatePage)
-                        <a href="{{ route($config['route_prefix'] . '.index') }}" class="btn btn-outline-secondary px-4">Hủy</a>
+                        <a href="{{ route($config['route_prefix'] . '.index', request()->query()) }}" class="btn btn-outline-secondary px-4">Hủy</a>
                     @endif
-                    @if($editingRequest && !$isManagerPage)
-                        <a href="{{ route('leader.finance-requests.index') }}" class="btn btn-outline-secondary px-4">Hủy sửa</a>
-                    @endif
+
                     <button type="submit" class="btn btn-primary px-4">
                         <i class="bi bi-{{ $editingRequest ? 'check-lg' : 'send' }} me-1"></i>{{ $editingRequest?->status === \App\Models\Transaction::STATUS_REJECTED ? 'Lưu và gửi lại' : ($editingRequest ? 'Lưu thay đổi' : 'Gửi duyệt') }}
                     </button>
@@ -515,7 +552,7 @@
         @endif
 
         @if(!$separateCreatePage || !$showCreateForm)
-        <div class="{{ $separateCreatePage ? 'col-12' : 'col-lg-7' }}">
+        <div class="col-12 col-lg-9">
     <div class="fr-panel">
         <div class="fr-panel-head">
             <div>
@@ -524,58 +561,44 @@
             </div>
             <div class="d-flex gap-2 align-items-end flex-wrap justify-content-end">
             @if($separateCreatePage)
-                <a href="{{ route($config['route_prefix'] . '.create') }}" class="btn btn-primary btn-sm align-self-end">
+                <a href="{{ route($config['route_prefix'] . '.create', request()->except('page')) }}" class="btn btn-primary btn-sm align-self-end">
                     <i class="bi bi-plus-lg me-1"></i>Tạo mới
                 </a>
             @endif
-            <form method="GET" class="d-flex gap-2 align-items-end flex-wrap">
-                @if($isManagerPage)
-                <div>
-                    <label class="form-label small mb-1">Tìm kiếm</label>
-                    <input type="search" name="search" class="form-control form-control-sm" value="{{ $search }}" placeholder="Mã, tiêu đề, nội dung, người lập">
-                </div>
-                @endif
-                <div>
-                    <label class="form-label small mb-1">Loại chứng từ</label>
-                    <select name="form_type" class="form-select form-select-sm">
-                        <option value="all" @selected($formType === 'all')>Tất cả</option>
-                        <option value="{{ \App\Models\Transaction::REQUEST_FORM_CASH }}" @selected($formType === \App\Models\Transaction::REQUEST_FORM_CASH)>Yêu cầu thu/chi</option>
-                        <option value="{{ \App\Models\Transaction::REQUEST_FORM_PAYMENT }}" @selected($formType === \App\Models\Transaction::REQUEST_FORM_PAYMENT)>Đề nghị thanh toán</option>
-                        <option value="{{ \App\Models\Transaction::REQUEST_FORM_ADVANCE }}" @selected($formType === \App\Models\Transaction::REQUEST_FORM_ADVANCE)>Đề nghị tạm ứng</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="form-label small mb-1">Trạng thái</label>
-                    <select name="status" class="form-select form-select-sm">
-                        <option value="all" @selected($status === 'all')>Tất cả</option>
-                        <option value="{{ \App\Models\Transaction::STATUS_PENDING_APPROVAL }}" @selected($status === \App\Models\Transaction::STATUS_PENDING_APPROVAL)>Chờ duyệt</option>
-                        <option value="{{ \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION }}" @selected($status === \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION)>Đã duyệt - chờ hoàn thành</option>
-                        <option value="{{ \App\Models\Transaction::STATUS_APPROVED }}" @selected($status === \App\Models\Transaction::STATUS_APPROVED)>Đã duyệt</option>
-                        <option value="{{ \App\Models\Transaction::STATUS_REJECTED }}" @selected($status === \App\Models\Transaction::STATUS_REJECTED)>Từ chối</option>
-                    </select>
-                </div>
-                <button class="btn btn-outline-primary btn-sm"><i class="bi bi-funnel me-1"></i>Lọc</button>
-            </form>
+
             </div>
+        </div>
+        <div class="p-3 border-bottom d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <form method="GET" action="{{ route($config['route_prefix'].'.index') }}" class="d-flex align-items-center gap-2">
+                @foreach(request()->except(['page', 'per_page']) as $key => $value)
+                    @if(is_scalar($value))<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif
+                @endforeach
+                <label class="small text-nowrap" for="requests-per-page">Số dòng/trang</label>
+                <select id="requests-per-page" name="per_page" class="form-select form-select-sm" onchange="this.form.submit()">
+                    @foreach([10,20,50,100] as $size)<option value="{{ $size }}" @selected($perPage === $size)>{{ $size }}</option>@endforeach
+                </select>
+                <span class="small text-muted text-nowrap">{{ $requests->total() }} phiếu</span>
+            </form>
+            <div>{{ $requests->links() }}</div>
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th>#</th>
-                        <th>Phiếu</th>
-                        <th>Dòng tiền</th>
-                        <th class="text-end">Số tiền</th>
-                        <th>Trạng thái</th>
+                        <th><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'id', 'direction' => $sort === 'id' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}"># {{ $sort === 'id' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
+                        <th><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'request_title', 'direction' => $sort === 'request_title' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}">Phiếu {{ $sort === 'request_title' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
+                        <th><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'type', 'direction' => $sort === 'type' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}">Dòng tiền {{ $sort === 'type' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
+                        <th class="text-end"><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'amount', 'direction' => $sort === 'amount' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}">Số tiền {{ $sort === 'amount' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
+                        <th><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'status', 'direction' => $sort === 'status' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}">Trạng thái {{ $sort === 'status' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
                         <th>Người xử lý</th>
-                        <th>Ngày gửi</th>
+                        <th><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'created_at', 'direction' => $sort === 'created_at' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}">Ngày gửi {{ $sort === 'created_at' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
                         <th class="text-end"></th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($requests as $requestItem)
                         @php
-                            $flow = $requestItem->transactionCategory?->flow_direction === 'in' ? 'in' : 'out';
+                            $flow = ($requestItem->transactionCategory?->flow_direction ?? ($requestItem->type === 'extra_income' ? 'in' : 'out')) === 'in' ? 'in' : 'out';
                             $statusMeta = $statusLabels[$requestItem->status] ?? ['label' => $requestItem->status, 'class' => 'secondary'];
                         @endphp
                         <tr>
@@ -636,6 +659,9 @@
                                             || ($requestItem->status === \App\Models\Transaction::STATUS_PENDING_APPROVAL
                                                 && !$requestItem->approvalSteps->contains(fn ($step) => $step->approved_by !== null || $step->status !== 'pending')));
                                 @endphp
+                                @if(!in_array($source, ['leader', 'manager'], true) && $requestItem->canBeEditedBySubmitter((int) auth()->id()))
+                                    <a href="{{ route($config['route_prefix'].'.edit', array_merge(request()->query(), ['transaction' => $requestItem->id])) }}" class="btn btn-outline-primary btn-sm fr-action-icon" title="Sửa phiếu"><i class="bi bi-pencil"></i></a>
+                                @endif
                                 @if($canEditLeaderRequest)
                                     <a href="{{ route('leader.finance-requests.edit', $requestItem) }}" class="btn btn-outline-primary btn-sm fr-action-icon" title="{{ $requestItem->status === \App\Models\Transaction::STATUS_REJECTED ? 'Sửa và gửi lại' : 'Sửa phiếu' }}">
                                         <i class="bi bi-pencil"></i>
