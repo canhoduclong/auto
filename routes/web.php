@@ -1082,6 +1082,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::group(['prefix' => 'admin', 'as' => 'admin.'], function () {
         Route::get('hoang-long-profile', [HoangLongProfileController::class, 'edit'])->name('hoang-long-profile.edit')->middleware('role:admin');
         Route::put('hoang-long-profile', [HoangLongProfileController::class, 'update'])->name('hoang-long-profile.update')->middleware('role:admin');
+        Route::get('settings/login-notice', [\App\Http\Controllers\Admin\LoginNoticeController::class, 'edit'])->middleware('role:admin')->name('login-notice.edit');
+        Route::put('settings/login-notice', [\App\Http\Controllers\Admin\LoginNoticeController::class, 'update'])->middleware('role:admin')->name('login-notice.update');
         Route::get('settings', [SettingController::class, 'index'])->name('settings.index');
         Route::get('settings/environment', [\App\Http\Controllers\Admin\EnvironmentEditorController::class, 'edit'])->middleware('role:admin')->name('environment.edit');
         Route::put('settings/environment', [\App\Http\Controllers\Admin\EnvironmentEditorController::class, 'update'])->middleware(['role:admin','throttle:10,1'])->name('environment.update');

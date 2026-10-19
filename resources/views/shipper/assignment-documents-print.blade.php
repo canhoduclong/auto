@@ -8,7 +8,8 @@
         * { box-sizing: border-box; }
         body { margin:0; color:#111827; font:10px/1.35 Arial, sans-serif; }
         .sheet { position:relative; isolation:isolate; min-height: 277mm; break-after: page; page-break-after: always; }
-        .sheet::after { content:"DRAFT"; position:absolute; top:42%; left:50%; transform:translate(-50%, -50%) rotate(-30deg); font:800 100px/1 Arial, sans-serif; letter-spacing:10px; color:rgba(100,116,139,.12); pointer-events:none; z-index:1; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+        .delivery-print-details { position:relative; isolation:isolate; }
+        .delivery-print-details::after { content:"DRAFT"; position:absolute; top:45%; left:50%; transform:translate(-50%, -50%) rotate(-30deg); font:800 100px/1 Arial, sans-serif; letter-spacing:10px; color:rgba(100,116,139,.055); pointer-events:none; z-index:1; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
         .sheet:last-child { break-after:auto; page-break-after:auto; }
         .company { display:grid; grid-template-columns:minmax(0, 72%) minmax(0, 28%); align-items:center; gap:8px; padding:0 2mm 6px; }
         .company-brand { display:flex; align-items:center; gap:6mm; min-width:0; }
@@ -87,6 +88,7 @@
         <div><span class="label">Ghi chú:</span> {{ $order->note ?: '—' }}</div>
         <div></div>
     </div>
+    <div class="delivery-print-details">
     <table class="items">
         <thead><tr><th style="width:5%">STT</th><th style="width:11%">Mã hàng</th><th style="width:27%">Tên sản phẩm</th><th style="width:8%">ĐVT</th><th style="width:9%">Số lượng</th><th style="width:11%">Khối lượng thực</th><th style="width:11%">Thực giao</th><th style="width:9%">Đơn giá</th><th style="width:11%">Thành tiền</th></tr></thead>
         <tbody>
@@ -119,6 +121,7 @@
         <tr><td>VAT</td><td>{{ number_format((float) $vatAmount, 0, ',', '.') }}đ</td></tr>
         <tr><td>Tổng cộng</td><td>{{ number_format((float) $order->total, 0, ',', '.') }}đ</td></tr>
     </table>
+    </div>
     </div>
     <div class="signatures">
         <div class="signature">NGƯỜI LẬP PHIẾU<small>(Ký, ghi rõ họ tên)</small><div class="space"></div>{{ $order->user?->name ?? auth()->user()?->name }}</div>

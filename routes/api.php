@@ -17,6 +17,7 @@ Route::prefix('mobile')->group(function () {
     Route::get('/app-version', [AppVersionController::class, 'show']);
 
     Route::middleware(['mobile.api', 'mobile.api.log', 'throttle:120,1'])->group(function () {
+        Route::get('/auth/login-notice', [AuthApiController::class, 'loginNotice']);
         Route::get('/auth/me', [AuthApiController::class, 'me']);
         Route::post('/auth/logout', [AuthApiController::class, 'logout']);
         Route::post('/auth/refresh', [AuthApiController::class, 'refresh']);

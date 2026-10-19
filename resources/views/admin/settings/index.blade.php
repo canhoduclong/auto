@@ -6,6 +6,7 @@
         <div class="card-body d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2">
             <div>
                 <h2 class="mb-1">Website Settings</h2>
+                @if(auth()->user()->hasRole('admin'))<a class="btn btn-outline-primary my-2" href="{{ route('admin.login-notice.edit') }}">Thông báo đăng nhập — Web & my_app</a>@endif
                 <p class="mb-0">Quản trị cấu hình thương hiệu, hình ảnh hiển thị và thông tin liên hệ từ một màn hình tập trung.</p>
             </div>
             <span class="badge text-bg-light px-3 py-2">Admin Panel</span>

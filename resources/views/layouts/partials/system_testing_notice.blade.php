@@ -1,4 +1,5 @@
-@if(session()->pull('show_system_testing_notice', false))
+@php($loginNotice = app(\App\Services\LoginNoticeService::class)->configuration())
+@if(session()->pull('show_system_testing_notice', false) && $loginNotice['enabled'])
 <style>
     #system-testing-notice { width:min(640px,calc(100% - 32px)); max-height:calc(100dvh - 32px); overflow-y:auto; margin:auto; padding:0; border:0; border-radius:16px; color:#163c3a; background:#fff; box-shadow:0 20px 70px #0004; }
     #system-testing-notice::backdrop { background:rgba(15,23,42,.55); }
@@ -17,14 +18,10 @@
 <dialog id="system-testing-notice" aria-labelledby="system-testing-notice-title" aria-describedby="system-testing-notice-description system-testing-notice-footnote">
     <div class="testing-notice-content">
         <span class="testing-notice-label">TEST / DRAFT — DỮ LIỆU THAM KHẢO</span>
-        <h2 id="system-testing-notice-title">Thông báo giai đoạn kiểm thử hệ thống</h2>
-        <div id="system-testing-notice-description">
-            <p class="testing-notice-period"><strong>Thời gian kiểm thử dự kiến: từ 15/09/2026 đến hết 30/11/2026.</strong><br>Chế độ kiểm thử tiếp tục áp dụng cho đến khi có quyết định chính thức đưa hệ thống vào vận hành.</p>
-            <p>Các đơn hàng, phiếu xuất/nhập kho, doanh thu, công nợ và báo cáo trên hệ thống đang ở trạng thái <strong>kiểm thử / bản nháp (TEST / DRAFT)</strong>, chỉ phục vụ tham khảo, kiểm tra và đối chiếu nội bộ; chưa được xác nhận là số liệu chính thức.</p>
-            <p>Giao dịch thực tế vẫn phải được xử lý theo chứng từ và quy trình chính thức. Vui lòng báo lại các sai lệch hoặc lỗi phát sinh để được kiểm tra, xử lý.</p>
-        </div>
+        <h2 id="system-testing-notice-title">{{ $loginNotice['title'] }}</h2>
+        <div id="system-testing-notice-description" style="white-space:pre-line;font-size:15px;line-height:1.6;">{{ $loginNotice['content'] }}</div>
         <footer class="testing-notice-footer">
-            <p class="testing-notice-footnote" id="system-testing-notice-footnote">Dữ liệu kiểm thử chưa dùng làm căn cứ cho báo cáo chính thức, hạch toán kế toán, lập hóa đơn hoặc kê khai, quyết toán thuế. Số liệu cần được đối chiếu với thực tế, chứng từ gốc và phê duyệt trước khi sử dụng chính thức.</p>
+            <p class="testing-notice-footnote" id="system-testing-notice-footnote">{{ $loginNotice['footer'] }}</p>
             <form method="dialog"><button type="submit" autofocus>Đã hiểu</button></form>
         </footer>
     </div>

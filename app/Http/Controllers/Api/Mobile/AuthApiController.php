@@ -18,6 +18,11 @@ class AuthApiController extends BaseApiController
 {
     use ResolvesMobileRole;
 
+    public function loginNotice(): JsonResponse
+    {
+        return $this->ok(app(\App\Services\LoginNoticeService::class)->configuration());
+    }
+
     public function login(Request $request): JsonResponse
     {
         $validated = $request->validate([

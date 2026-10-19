@@ -90,3 +90,5 @@ readme.txt
 !/tests/Feature/ReceivingOrderEligibilityTest.php
 
 !/tests/Feature/UndoCompleteDeliveryTest.php
+
+!/tests/Feature/LoginNoticeTest.php

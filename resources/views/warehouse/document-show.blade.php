@@ -39,7 +39,8 @@
     body { background: #fff !important; color: #111827 !important; }
     .screen-document, .wh-sidebar, .wh-topbar, .mobile-drawer-overlay { display: none !important; }
     .stockout-print-sheet { display: block; position: relative; isolation: isolate; width: 100%; font: 10px/1.35 Arial, sans-serif; color: #111827; }
-    .stockout-print-sheet::after { content: "DRAFT"; position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font: 800 100px/1 Arial, sans-serif; letter-spacing: 10px; color: rgba(100,116,139,.12); pointer-events: none; z-index: 1; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .stockout-print-details { position:relative; isolation:isolate; }
+    .stockout-print-details::after { content: "DRAFT"; position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font: 800 100px/1 Arial, sans-serif; letter-spacing: 10px; color: rgba(100,116,139,.055); pointer-events: none; z-index: 1; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .print-company { display: grid; grid-template-columns: 24% 52% 24%; align-items: start; border-bottom: 1px solid #111827; padding-bottom: 6px; }
     .print-logo { max-width: 34mm; max-height: 16mm; object-fit: contain; }
     .print-company-name { font-size: 12px; font-weight: 800; text-transform: uppercase; }
@@ -399,6 +400,7 @@
         <div><span class="print-label">Ghi chú:</span> {{ $document->notes ?: '—' }}</div>
     </div>
 
+    <div class="stockout-print-details">
     <table class="print-table">
         <thead><tr>
             <th style="width:5%">STT</th><th style="width:10%">Mã hàng</th><th style="width:25%">Tên sản phẩm</th>
@@ -447,6 +449,7 @@
     </table>
     </div>
 
+    </div>
     <div class="print-signatures">
         <div class="print-signature">NGƯỜI LẬP PHIẾU<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div>{{ $document->user?->name }}</div>
         <div class="print-signature">NGƯỜI GIAO HÀNG<small>(Ký, ghi rõ họ tên)</small><div class="print-sign-space"></div></div>

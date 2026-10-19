@@ -173,3 +173,11 @@ Kho nhận nhập số lượng hàng thực chuyển đi kèm đơn, không yê
 Shipper nhận giao khách xuất từ lượng giữ riêng có nguồn gốc tiếp nhận; cập nhật số tồn và giảm giữ chỗ cùng nhau, không làm thay đổi phần giữ riêng của đơn khác. Hủy đơn khi hàng còn trong kho giải phóng giữ chỗ, không tăng tồn thực tế. Điều chỉnh tồn thủ công không được giảm hàng đã đóng hoặc bỏ khóa bằng cách sửa riêng bộ đếm reserved_quantity.
 
 Migration mới: `2026_10_16_090000_link_received_stock_to_transfer_reservations`. Đã chạy ở workspace; khi triển khai sang máy chủ khác phải chạy migration trước khi dùng mã mới. Phiếu #681 không có trong database workspace nên chưa sửa dữ liệu riêng của phiếu trong ảnh.
+
+### Quản trị thông báo đăng nhập trên web và my_app
+
+- Admin mở **Thông báo đăng nhập** trong menu quản trị hoặc **Cài đặt → Thông báo đăng nhập — Web & my_app** (`/admin/settings/login-notice`).
+- Có thể sửa tiêu đề, nội dung (bao gồm thời gian demo), footer và bật/tắt thông báo. Một cấu hình áp dụng chung cho web và my_app, không cần tạo lại APK khi đổi nội dung.
+- Mặc định thông báo nêu thời gian 15/09/2026–30/11/2026 và tiếp tục kiểm thử đến khi có quyết định chính thức.
+- Web hiển thị sau mỗi lần đăng nhập; my_app từ bản 1.1.33 hiển thị sau đăng nhập và khi khôi phục phiên đăng nhập lúc mở app. Nhấn **Đã hiểu** để tiếp tục.
+- Cấu hình mới áp dụng ở lần đăng nhập/mở phiên tiếp theo; không đóng popup đang mở trên thiết bị khác.
