@@ -22,7 +22,7 @@
             } elseif ($key === 'adjustments') {
                 $rows = $queue['items']->map(fn ($item) => ['title' => 'Yêu cầu #'.$item->id.' · '.($item->order?->code ?: 'Đơn hàng'), 'meta' => $item->order?->customer?->name, 'url' => $queueCard['url'].'&keyword='.$item->id]);
             } elseif ($key === 'finance') {
-                $rows = $queue['items']->map(fn ($item) => ['title' => '#'.$item->id.' · '.($item->request_title ?: 'Phiếu tài chính'), 'meta' => $item->status === \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION ? 'Chờ hoàn tất thu/chi' : 'Chờ duyệt', 'url' => accounting_route('cashflow.show', $item)]);
+                $rows = $queue['items']->map(fn ($item) => ['title' => '#'.$item->id.' · '.($item->request_title ?: 'Phiếu tài chính'), 'meta' => $item->status === \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION ? 'Chờ hoàn tất thu/chi' : 'Chờ duyệt', 'amount' => number_format((float) $item->amount, 0, ',', '.').' đ', 'sender' => $item->submitter?->name ?: 'Chưa xác định', 'url' => accounting_route('cashflow.show', $item)]);
             } elseif ($key === 'todo') {
                 $rows = $queue['items']->map(fn ($item) => ['title' => $item->title, 'meta' => $item->due_date ? 'Hạn: '.$item->due_date->format('d/m/Y') : 'Chưa đặt hạn', 'url' => route('tasks.show', $item)]);
             } else {
@@ -39,7 +39,7 @@
             <p class="acc-work-description">{{ $queueCard['description'] }}</p>
             <div class="acc-work-items">
                 @forelse($rows as $row)
-                    <a href="{{ $row['url'] }}" class="acc-work-item"><span class="acc-work-item-title">{{ $row['title'] }}</span><span class="acc-work-item-meta">{{ $row['meta'] }}</span><i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+                    <a href="{{ $row['url'] }}" class="acc-work-item"><span class="acc-work-item-title">{{ $row['title'] }}</span><span class="acc-work-item-meta">{{ $row['meta'] }}</span>@if(isset($row['amount']))<span class="acc-work-finance-meta"><strong>{{ $row['amount'] }}</strong><span>Từ: {{ $row['sender'] }}</span></span>@endif<i class="bi bi-chevron-right" aria-hidden="true"></i></a>
                 @empty
                     <div class="acc-work-empty"><i class="bi bi-check-circle me-1"></i>Không có công việc chờ xử lý</div>
                 @endforelse
@@ -63,6 +63,8 @@
 .acc-work-item { display:grid; grid-template-columns:minmax(0,1fr) 12px; column-gap:6px; padding:9px 0; border-top:1px solid #f1f5f9; text-decoration:none; color:#334155; }
 .acc-work-item-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; font-weight:600; }
 .acc-work-item-meta { grid-row:2; font-size:12px; color:#64748b; }
+.acc-work-finance-meta { grid-column:1; grid-row:3; display:flex; flex-wrap:wrap; column-gap:12px; row-gap:2px; margin-top:3px; font-size:12px; color:#64748b; overflow-wrap:anywhere; }
+.acc-work-finance-meta strong { color:#163c3a; font-variant-numeric:tabular-nums; }
 .acc-work-item > i { grid-column:2; grid-row:1 / span 2; align-self:center; font-size:11px; }
 .acc-work-item:hover .acc-work-item-title { color:#0f766e; }
 .acc-work-empty { padding:16px 0; font-size:13px; color:#64748b; }
