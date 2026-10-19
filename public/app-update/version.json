@@ -1,10 +1,10 @@
 {
-  "version": "1.1.32",
-  "version_code": 75,
-  "apk_url": "https://hoanglongtnt.com/app-update/app-release.apk",
+  "version": "1.1.34",
+  "version_code": 77,
+  "apk_url": "https://hoanglongtnt.com/app-update/app-release-1.1.34.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản 1.1.32: Lộ trình hiển thị Đã gửi và người đang xử lý chi phí ship. Phiếu chờ bổ sung có nút màu vàng để sửa phí, diễn giải và gửi lại đúng người yêu cầu.",
+  "message": "Bản 1.1.34: Cập nhật ứng dụng shipper và các cải tiến vận hành mới nhất.",
   "requires_reinstall": false,
-  "sha256": "ae7afdba63768d1d3bbfbb2c2ce1ecb54136e63d39c0916e87dd0c32addd52d5"
+  "sha256": "b78cc143061f7f05a3d91ff3f66be4836192d8ec2d7ffb9624e8c331c07d3cde"
 }
