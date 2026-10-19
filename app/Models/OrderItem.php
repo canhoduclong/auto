@@ -115,6 +115,19 @@ class OrderItem extends Model
         return $weight === null ? null : max(0, (float) $weight);
     }
 
+    public function getReconciliationPricingQuantityAttribute(): float
+    {
+        if ((float) ($this->quantity ?? 0) <= 0) {
+            return 0.0;
+        }
+
+        if (! $this->effective_priced_by_kg) {
+            return max(0, (float) $this->quantity);
+        }
+
+        return max(0, (float) ($this->actual_weight ?? $this->packed_weight ?? $this->display_total_value));
+    }
+
     public function getWarehousePackedWeightAttribute(): ?float
     {
         $weight = $this->packed_weight ?? $this->actual_weight;

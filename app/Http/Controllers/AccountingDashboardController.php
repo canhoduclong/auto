@@ -2852,7 +2852,7 @@ class AccountingDashboardController extends Controller
             'user:id,name',
             'shipper:id,name',
             'warehouse:id,name',
-            'items.product:id,name',
+            'items.product:id,name,unit',
             'items.variant:id,name,sku,size',
             'items.variant.priceRules' => fn ($query) => $query
                 ->select('id', 'product_variant_id', 'price', 'start_date', 'end_date')
@@ -2906,8 +2906,8 @@ class AccountingDashboardController extends Controller
             ])->values();
         $discountReason = trim((string) ($pricingChanges->first()['note'] ?? ''));
         $orderPriceDate = ($order->created_at ?: now())->toDateString();
-        $reconciliationItems = $order->items->map(function ($item) use ($order, $orderPriceDate): array {
-            $pricingQuantity = max(0, (float) $item->displayValueForStage((string) $order->status));
+        $reconciliationItems = $order->items->map(function ($item) use ($orderPriceDate): array {
+            $pricingQuantity = $item->reconciliation_pricing_quantity;
             $applicablePriceRule = $item->variant?->priceRules
                 ?->first(fn ($rule) => ($rule->start_date === null || $rule->start_date <= $orderPriceDate)
                     && ($rule->end_date === null || $rule->end_date >= $orderPriceDate));

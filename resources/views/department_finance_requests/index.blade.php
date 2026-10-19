@@ -498,7 +498,7 @@
                         <label class="form-label fw-semibold">Nội dung/Lý do <span class="text-danger">*</span></label>
                         <textarea name="note" class="form-control" rows="5" maxlength="1000" placeholder="Mô tả rõ lý do thu/chi, nhà cung cấp, vật tư, ghi chú kế toán...">{{ old('note', $editingRequest?->note) }}</textarea>
                     </div>
-                    @if($isManagerPage || in_array($source, ['leader', 'accounting'], true))
+                    @if($isManagerPage || in_array($source, ['leader', 'accounting', 'warehouse'], true))
                         <div>
                             <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
                                 <label class="form-label fw-semibold mb-0">{{ $source === 'accounting' ? 'Upload chứng từ' : 'Chứng từ đính kèm' }}</label>
@@ -506,6 +506,9 @@
                                     <i class="bi bi-plus-lg me-1"></i>Thêm chứng từ
                                 </button>
                             </div>
+                            @if($editingRequest?->receipt_image_path)
+                                <div class="small mb-2"><a href="{{ Storage::disk('public')->url($editingRequest->receipt_image_path) }}" target="_blank" rel="noopener"><i class="bi bi-paperclip me-1"></i>Xem chứng từ đã đính kèm trước đây</a></div>
+                            @endif
                             <div id="requestAttachments" class="d-grid gap-2">
                                 @if($editingRequest && !empty($editingRequest->request_attachments))
                                     @foreach($editingRequest->request_attachments as $attachmentIndex => $attachment)
