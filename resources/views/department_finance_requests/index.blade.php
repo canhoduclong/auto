@@ -70,7 +70,7 @@
     @media (max-width: 479.98px) {
         .finance-request-page .fr-filter form { grid-template-columns: minmax(0, 1fr); }
     }
-    .finance-request-page .fr-list { width:100%; min-width:1040px; table-layout:fixed; font-size:13px; }
+    .finance-request-page .fr-list { width:100%; min-width:0; table-layout:fixed; font-size:13px; }
     .finance-request-page .fr-list th { height:40px; font-size:12px; font-weight:600; white-space:nowrap; vertical-align:middle; }
     .finance-request-page .fr-list th a { display:inline-flex; align-items:center; gap:4px; white-space:nowrap; }
     .finance-request-page .fr-list td { vertical-align:middle; background:#fff; border-color:#edf0f3; }
@@ -85,6 +85,19 @@
     .finance-request-page .fr-list .fr-action-icon { width:28px; height:28px; padding:0; display:inline-flex; justify-content:center; align-items:center; }
     .finance-request-page .fr-list .fr-nowrap { white-space:nowrap; }
     .finance-request-page .fr-list .fr-handler { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .finance-request-page .fr-list > :not(caption) > * > * { padding:8px 7px; }
+    .finance-request-page .fr-list .fr-action-icon { width:24px; height:26px; flex:0 0 24px; }
+    .finance-request-page .fr-list-actions { gap:3px; }
+    .finance-request-page .fr-list td .badge { max-width:100%; white-space:normal; line-height:1.3; }
+    .finance-request-page .fr-pagination .btn { padding:3px 7px; font-size:12px; }
+    @media (max-width:767.98px) {
+        .finance-request-page .fr-list, .finance-request-page .fr-list tbody { display:block; }
+        .finance-request-page .fr-list colgroup, .finance-request-page .fr-list thead { display:none; }
+        .finance-request-page .fr-list tbody tr { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); border-bottom:1px solid #e2e8f0; padding:8px; }
+        .finance-request-page .fr-list tbody td { display:block; min-width:0; border:0; text-align:left !important; }
+        .finance-request-page .fr-list tbody td:nth-child(2) { grid-column:1 / -1; grid-row:1; }
+        .finance-request-page .fr-list-actions { justify-content:flex-start; }
+    }
     .fr-panel {
         min-width: 0;
         border: 1px solid rgba(148, 163, 184, .24);
@@ -629,21 +642,21 @@
                 </select>
                 <span class="small text-muted text-nowrap">{{ $requests->total() }} phiếu</span>
             </form>
-            <div>{{ $requests->links() }}</div>
+            <div>@include('department_finance_requests.pagination')</div>
         </div>
         <div class="table-responsive">
             <table class="table align-middle mb-0 fr-list">
-                <colgroup><col style="width:60px"><col><col style="width:78px"><col style="width:130px"><col style="width:125px"><col style="width:130px"><col style="width:110px"><col style="width:{{ $isManagerPage ? '148' : '84' }}px"></colgroup>
+                <colgroup><col style="width:4%"><col style="width:{{ $isManagerPage ? '33' : '39' }}%"><col style="width:12%"><col style="width:11%"><col style="width:10%"><col style="width:10%"><col style="width:{{ $isManagerPage ? '15' : '9' }}%"><col style="width:5%"></colgroup>
                 <thead class="table-light">
                     <tr>
                         <th><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'id', 'direction' => $sort === 'id' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}"># {{ $sort === 'id' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
                         <th><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'request_title', 'direction' => $sort === 'request_title' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}">Phiếu {{ $sort === 'request_title' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
-                        <th><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'type', 'direction' => $sort === 'type' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}">Dòng tiền {{ $sort === 'type' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
                         <th class="text-end"><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'amount', 'direction' => $sort === 'amount' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}">Số tiền {{ $sort === 'amount' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
                         <th><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'status', 'direction' => $sort === 'status' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}">Trạng thái {{ $sort === 'status' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
                         <th>Người xử lý</th>
                         <th><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'created_at', 'direction' => $sort === 'created_at' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}">Ngày gửi {{ $sort === 'created_at' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
                         <th class="text-end">Thao tác</th>
+                        <th><a class="text-reset text-decoration-none" href="{{ request()->fullUrlWithQuery(['sort' => 'type', 'direction' => $sort === 'type' && $direction === 'asc' ? 'desc' : 'asc', 'page' => 1]) }}" title="Dòng tiền">DT {{ $sort === 'type' ? ($direction === 'asc' ? '↑' : '↓') : '↕' }}</a></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -653,7 +666,7 @@
                             $statusMeta = $statusLabels[$requestItem->status] ?? ['label' => $requestItem->status, 'class' => 'secondary'];
                         @endphp
                         <tr>
-                            <td><span class="fr-id-pill">#{{ $requestItem->id }}</span></td>
+                            <td class="small text-muted">{{ $requestItem->id }}</td>
                             <td>
                                 <div class="fr-list-title" title="{{ $requestItem->request_title }}">{{ $requestItem->request_title ?: 'Phiếu yêu cầu' }}</div>
                                 <div class="fr-list-meta" title="{{ $requestItem->request_document_title }} · {{ $requestItem->submitter?->name }} · {{ $requestItem->submitter?->department?->name }}">
@@ -673,11 +686,7 @@
                                     </details>
                                 @endif
                             </td>
-                            <td>
-                                <span class="badge bg-{{ $flow === 'in' ? 'success' : 'danger' }}">
-                                    {{ $flow === 'in' ? 'Thu' : 'Chi' }}
-                                </span>
-                            </td>
+
                             <td class="text-end fw-bold fr-nowrap">{{ number_format((float) $requestItem->amount) }}đ</td>
                             <td>
                                 <span class="badge bg-{{ $statusMeta['class'] }}">{{ $statusMeta['label'] }}</span>
@@ -739,6 +748,11 @@
                                 </a>
                                 </div>
                             </td>
+                            <td>
+                                <span class="badge bg-{{ $flow === 'in' ? 'success' : 'danger' }}">
+                                    {{ $flow === 'in' ? 'Thu' : 'Chi' }}
+                                </span>
+                            </td>
                         </tr>
                     @empty
                         <tr>
@@ -748,9 +762,7 @@
                 </tbody>
             </table>
         </div>
-        @if($requests->hasPages())
-        <div class="px-3 py-2 border-top bg-white">{{ $requests->links() }}</div>
-        @endif
+        <div class="px-3 py-2 border-top bg-white d-flex justify-content-end">@include('department_finance_requests.pagination')</div>
     </div>
         </div>
         @endif
