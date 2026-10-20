@@ -36,6 +36,9 @@
                     <div class="policy-facts">
                         <div class="policy-fact"><i class="bi bi-person"></i><div><small>Người đọc</small><strong>{{ $user?->name }}</strong></div></div>
                         <div class="policy-fact"><i class="bi bi-shield-check"></i><div><small>Trạng thái</small><strong>{{ $accepted ? 'Đã xác nhận' : 'Chưa xác nhận' }}</strong></div></div>
+                        @if($accepted)
+                            <div class="policy-fact"><i class="bi bi-clock-history"></i><div><small>Thời gian xác nhận (GMT+7)</small><strong>{{ $acceptedAt?->format('d/m/Y H:i:s') ?? 'Chưa ghi nhận thời gian' }}</strong></div></div>
+                        @endif
                         <div class="policy-fact"><i class="bi bi-file-text"></i><div><small>Phiên bản</small><strong>{{ $policyVersion }}</strong></div></div>
                         <div class="policy-fact"><i class="bi bi-building"></i><div><small>Đơn vị ban hành</small><strong>{{ $brandName }}</strong></div></div>
                     </div>
@@ -57,7 +60,7 @@
                         <div class="policy-submit"><small>Sau khi xác nhận, bạn có thể tiếp tục sử dụng các chức năng nghiệp vụ của tài khoản.</small><button class="btn btn-primary px-4"><i class="bi bi-check2-circle me-1"></i>Xác nhận và tiếp tục</button></div>
                     </form>
                 @else
-                    <div class="policy-accepted d-flex flex-wrap gap-3 align-items-center"><i class="bi bi-patch-check-fill"></i><div class="flex-grow-1"><strong class="d-block">Bạn đã xác nhận phiên bản hiện hành</strong><span class="small">Tài khoản được phép tiếp tục thực hiện các hoạt động nghiệp vụ.</span></div><form method="POST" action="{{ route('sales-tax-policy.revoke') }}" onsubmit="return confirm('Bạn chắc chắn muốn hủy xác nhận và đưa tài khoản về trạng thái chưa xác nhận?')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger"><i class="bi bi-arrow-counterclockwise me-1"></i>Hủy xác nhận</button></form></div>
+                    <div class="policy-accepted d-flex flex-wrap gap-3 align-items-center"><i class="bi bi-patch-check-fill"></i><div class="flex-grow-1"><strong class="d-block">Bạn đã xác nhận phiên bản hiện hành</strong>@if($acceptedAt)<span class="d-block small mt-1">Thời gian xác nhận: {{ $acceptedAt->format('d/m/Y H:i:s') }} (GMT+7)</span>@endif<span class="small">Tài khoản được phép tiếp tục thực hiện các hoạt động nghiệp vụ.</span></div><form method="POST" action="{{ route('sales-tax-policy.revoke') }}" onsubmit="return confirm('Bạn chắc chắn muốn hủy xác nhận và đưa tài khoản về trạng thái chưa xác nhận?')">@csrf @method('DELETE')<button class="btn btn-sm btn-outline-danger"><i class="bi bi-arrow-counterclockwise me-1"></i>Hủy xác nhận</button></form></div>
                 @endif
             </article>
         </div>

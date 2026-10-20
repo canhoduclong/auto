@@ -17,11 +17,18 @@ class SalesTaxPolicyController extends Controller
     {
         $settings = Cache::remember('settings', 60, fn () => Setting::all()->keyBy('key'));
         $logoId = $settings->get('logo')?->value;
+        $acceptance = UserPolicyAcceptance::query()
+            ->where('user_id', $request->user()->id)
+            ->where('policy_key', config('sales_tax_policy.key'))
+            ->where('policy_version', SalesTaxPolicy::version())
+            ->whereNull('revoked_at')
+            ->first();
 
         return view('site.sales-tax-policy', [
             'settings' => $settings,
             'logoMedia' => $logoId ? Media::find($logoId) : null,
-            'accepted' => SalesTaxPolicy::isAccepted($request->user()),
+            'accepted' => $acceptance !== null,
+            'acceptedAt' => $acceptance?->accepted_at?->timezone(config('app.display_timezone', 'Asia/Ho_Chi_Minh')),
             'policyEnabled' => SalesTaxPolicy::enabled(),
             'policyTitle' => SalesTaxPolicy::title(),
             'policyVersion' => SalesTaxPolicy::version(),
