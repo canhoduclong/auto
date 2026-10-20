@@ -1204,9 +1204,6 @@
 @endpush
 
 @section('content')
-@if(auth()->user()->hasRole(['sale','admin']))
-<div class="container-fluid pt-3"><a class="btn btn-sm btn-outline-primary" href="{{ route('sale-returns.index') }}"><i class="bi bi-arrow-return-left me-1"></i>Theo dõi hoàn trả</a></div>
-@endif
 @php
     $createBusinessDate = auth()->user()?->isAdmin() && $selectedDate < now()->toDateString() ? $selectedDate : now()->toDateString();
     $statusLabels = \App\Models\Order::statusOptions() + [

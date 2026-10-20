@@ -57,6 +57,13 @@
             'url' => route('pages.my_orders.monitoring', ['tab' => 'customers']),
         ],
         [
+            'key' => 'sale_returns',
+            'label' => 'Hoàn trả',
+            'icon' => 'bi-arrow-return-left',
+            'url' => route('sale-returns.index'),
+            'visible' => auth()->user()?->hasRole(['sale', 'admin']) ?? false,
+        ],
+        [
             'key' => 'business_calculator',
             'label' => 'Tính toán',
             'icon' => 'bi-calculator',

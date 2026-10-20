@@ -14,11 +14,17 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\OrderAdjustmentSettlementService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class SaleReturnController extends Controller
 {
+    private function siteSettings()
+    {
+        return Cache::remember('settings', 60, fn () => Setting::all()->keyBy('key'));
+    }
+
     public static function eligibleShippers()
     {
         return User::whereHas('roles', fn ($q) => $q->whereIn('name', ['shipper', 'ship']))
@@ -52,7 +58,7 @@ class SaleReturnController extends Controller
             });
         }
 
-        return view('sale-returns.index', ['returns' => $query->latest()->paginate(20)]);
+        return view('sale-returns.index', ['returns' => $query->latest()->paginate(20), 'settings' => $this->siteSettings()]);
     }
 
     public function create(Order $order)
@@ -60,7 +66,7 @@ class SaleReturnController extends Controller
         $this->owner($order);
         $order->load('items.variant.product', 'items.product', 'customer');
 
-        return view('sale-returns.create', ['order' => $order, 'shippers' => self::eligibleShippers(), 'warehouses' => Warehouse::orderBy('name')->get()]);
+        return view('sale-returns.create', ['order' => $order, 'shippers' => self::eligibleShippers(), 'warehouses' => Warehouse::orderBy('name')->get(), 'settings' => $this->siteSettings()]);
     }
 
     public function store(Request $request, Order $order)
