@@ -200,6 +200,9 @@ class OrderReturnController extends Controller
     public function createForMyOrder(Order $order)
     {
         $this->authorizeReturnCreation($order);
+        if (auth()->user()->hasRole('sale') && in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED], true)) {
+            return redirect()->route('sale-returns.create', $order);
+        }
 
         $order->load(['items.variant.product', 'customer']);
 
@@ -250,6 +253,9 @@ class OrderReturnController extends Controller
         ]);
 
         $order = Order::with(['customer', 'items'])->findOrFail($data['order_id']);
+        if (auth()->user()->hasRole('sale') && in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED], true)) {
+            return app(SaleReturnController::class)->store($request, $order);
+        }
         $this->authorizeReturnCreation($order);
 
         if (! $order->customer_id) {
@@ -263,7 +269,7 @@ class OrderReturnController extends Controller
         $alreadyReturnedByVariant = ReturnItem::query()
             ->whereHas('orderReturn', function ($q) use ($order) {
                 $q->where('order_id', $order->id)
-                    ->whereIn('status', ['requested', 'ship_confirmed', 'warehouse_received']);
+                    ->whereNotIn('status', ['rejected', 'cancelled']);
             })
             ->selectRaw('product_variant_id, SUM(quantity) as qty')
             ->groupBy('product_variant_id')

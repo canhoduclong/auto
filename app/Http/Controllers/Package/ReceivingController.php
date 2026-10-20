@@ -149,6 +149,7 @@ class ReceivingController extends Controller
     public function receiveReturn(OrderReturn $orderReturn)
     {
         $this->assertTargetWarehouse((int) $orderReturn->warehouse_id);
+        abort_if($orderReturn->assigned_shipper_id, 422, 'Phiếu hoàn trả từ sale cần tiếp nhận tại mục Hoàn trả từ sale để chuyển kế toán duyệt.');
         if ($orderReturn->status === 'warehouse_received') {
             return redirect()->route('package.incoming-returns')->with('error', 'Phiếu trả đã được tiếp nhận.');
         }
@@ -166,6 +167,7 @@ class ReceivingController extends Controller
     public function confirmReturn(Request $request, OrderReturn $orderReturn)
     {
         $this->assertTargetWarehouse((int) $orderReturn->warehouse_id);
+        abort_if($orderReturn->assigned_shipper_id, 422, 'Phiếu hoàn trả từ sale cần tiếp nhận tại mục Hoàn trả từ sale để chuyển kế toán duyệt.');
         if ($orderReturn->status === 'warehouse_received') {
             return back()->with('error', 'Phiếu trả đã được tiếp nhận.');
         }

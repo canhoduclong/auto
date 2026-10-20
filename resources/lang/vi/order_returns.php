@@ -46,6 +46,10 @@ return [
         'condition_example' => 'Vi du: moi, tray xuoc nhe...',
     ],
     'statuses' => [
+        'sale_requested' => 'Chờ shipper xác nhận',
+        'sale_in_transit' => 'Chờ kho nhận',
+        'sale_accounting_pending' => 'Kho đã nhận · Chờ kế toán duyệt',
+
         'requested' => 'Cho ship xac nhan',
         'ship_confirmed' => 'Cho kho nhap',
         'warehouse_received' => 'Da nhap kho',

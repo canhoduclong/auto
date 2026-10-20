@@ -46,6 +46,10 @@ return [
         'condition_example' => 'Example: new, slightly scratched...',
     ],
     'statuses' => [
+        'sale_requested' => 'Awaiting shipper confirmation',
+        'sale_in_transit' => 'Awaiting warehouse receipt',
+        'sale_accounting_pending' => 'Received · Awaiting accounting approval',
+
         'requested' => 'Awaiting shipper confirmation',
         'ship_confirmed' => 'Awaiting warehouse receipt',
         'warehouse_received' => 'Received by warehouse',

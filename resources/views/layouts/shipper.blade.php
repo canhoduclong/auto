@@ -296,6 +296,7 @@
                 <i class="bi bi-file-earmark-text"></i> Phiếu yêu cầu
             </a>
 
+            <a class="sp-nav-link" href="{{ route('sale-returns.index') }}"><i class="bi bi-arrow-return-left"></i> Hoàn trả từ sale</a>
             @if(auth()->user()->hasRole('manager_shipper') || auth()->user()->hasRole('admin'))
                 <div class="sp-nav-section">Quản lý ship</div>
                 <a href="{{ route('shipper.manage-assignments') }}" class="sp-nav-link {{ request()->routeIs('shipper.manage-assignments') ? 'active' : '' }}">

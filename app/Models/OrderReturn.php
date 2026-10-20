@@ -11,6 +11,9 @@ class OrderReturn extends Model
 
     protected $fillable = [
         'order_id',
+        'assigned_shipper_id',
+        'accounting_confirmed_by',
+        'accounting_confirmed_at',
         'order_adjustment_id',
         'customer_id',
         'warehouse_id',
@@ -29,6 +32,7 @@ class OrderReturn extends Model
     ];
 
     protected $casts = [
+        'accounting_confirmed_at' => 'datetime',
         'ship_confirmed_at' => 'datetime',
         'warehouse_confirmed_at' => 'datetime',
         'refund_amount' => 'decimal:2',
@@ -38,6 +42,11 @@ class OrderReturn extends Model
     public function order()
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function assignedShipper()
+    {
+        return $this->belongsTo(User::class, 'assigned_shipper_id');
     }
 
     public function adjustment()

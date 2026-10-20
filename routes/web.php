@@ -1063,6 +1063,12 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         ->name('inventory-reservations.recovery-receipt.store')
         ->middleware('role:admin');
     Route::resource('inventory-reservations', InventoryReservationController::class)->middleware('permission');
+    Route::get('/sale-returns', [\App\Http\Controllers\SaleReturnController::class, 'index'])->name('sale-returns.index');
+    Route::get('/my-orders/{order}/sale-return', [\App\Http\Controllers\SaleReturnController::class, 'create'])->name('sale-returns.create');
+    Route::post('/my-orders/{order}/sale-return', [\App\Http\Controllers\SaleReturnController::class, 'store'])->name('sale-returns.store');
+    Route::post('/sale-returns/{orderReturn}/ship', [\App\Http\Controllers\SaleReturnController::class, 'ship'])->name('sale-returns.ship');
+    Route::post('/sale-returns/{orderReturn}/receive', [\App\Http\Controllers\SaleReturnController::class, 'receive'])->name('sale-returns.receive');
+    Route::post('/sale-returns/{orderReturn}/approve', [\App\Http\Controllers\SaleReturnController::class, 'approve'])->name('sale-returns.approve');
     Route::get('/my-orders/{order}/returns/create', [OrderReturnController::class, 'createForMyOrder'])->name('site.order-returns.create');
     Route::post('/my-orders/{order}/returns', [OrderReturnController::class, 'storeForMyOrder'])->name('site.order-returns.store');
     Route::post('order-returns/{orderReturn}/ship-confirm', [OrderReturnController::class, 'shipConfirm'])->name('order-returns.ship-confirm')->middleware('permission');

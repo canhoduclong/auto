@@ -395,6 +395,7 @@ body.acc-sidebar-collapsed .acc-task-group>summary{justify-content:center;paddin
             <a href="{{ route('accounting.daily-sales') }}" class="{{ request()->routeIs('accounting.daily-sales') ? 'active' : '' }}">
                 <i class="bi bi-bar-chart-line"></i> Thống kê bán hàng
             </a>
+<a href="{{ route('sale-returns.index') }}">Duyệt hoàn trả từ sale</a>
             <a href="{{ route('accounting.reconciliation') }}" class="{{ request()->routeIs('accounting.reconciliation') ? 'active' : '' }}">
                 <i class="bi bi-check2-square"></i> Đối soát đơn hàng
             </a>

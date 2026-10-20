@@ -350,6 +350,7 @@
 							</a>
 						</li>
 						@if(auth()->user()?->isAdmin())
+                        <li class="nav-item"><a class="nav-link" href="{{ route('sale-returns.index') }}"><i class="ph-arrow-u-up-left"></i><span>Hoàn trả từ sale</span></a></li>
                         <li class="nav-item"><a href="{{ route('shipper.manage-assignments') }}" class="nav-link{{ request()->routeIs('shipper.manage-assignments*') ? ' active' : '' }}"><i class="ph-path"></i><span>Quản lý lộ trình giao hàng</span></a></li>
                         <li class="nav-item"><a href="{{ route('admin.order-transfers') }}" class="nav-link{{ request()->routeIs('admin.order-transfers*') ? ' active' : '' }}"><i class="ph-truck"></i><span>Quản lý điều chuyển</span></a></li>
                         <li class="nav-item"><a href="{{ route('admin.shipper-holdings.index') }}" class="nav-link"><i class="ph-package"></i><span>Xử lý hàng ở tài xế</span></a></li>

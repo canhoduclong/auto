@@ -378,6 +378,7 @@
             <a href="{{ route('warehouse.receiving') }}" class="wh-nav-link {{ request()->routeIs('warehouse.receiving', 'warehouse.transfers.incoming', 'warehouse.inventory-transfers.incoming') ? 'active' : '' }}">
                 <i class="bi bi-box-arrow-in-down"></i><span class="wh-nav-label">Tiếp nhận</span>@if(($warehouseMenuCounts['unread']['warehouse.inventory-transfers.incoming']??0)>0)<span class="badge bg-danger" title="Có cập nhật chưa xem">Mới {{ $warehouseMenuCounts['unread']['warehouse.inventory-transfers.incoming'] }}</span>@endif
             </a>
+            <a href="{{ route('sale-returns.index') }}" class="wh-nav-link"><i class="bi bi-arrow-return-left"></i><span class="wh-nav-label">Nhận hoàn trả từ sale</span></a>
             <a href="{{ route('warehouse.returns') }}" class="wh-nav-link {{ request()->routeIs('warehouse.returns') ? 'active' : '' }}">
                 <i class="bi bi-arrow-return-left"></i><span class="wh-nav-label">Đơn trả về</span>@if(($warehouseMenuCounts['unread']['warehouse.returns']??0)>0)<span class="badge bg-danger" title="Có cập nhật chưa xem">Mới {{ $warehouseMenuCounts['unread']['warehouse.returns'] }}</span>@endif
             </a>

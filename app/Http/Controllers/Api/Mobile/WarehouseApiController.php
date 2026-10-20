@@ -597,6 +597,9 @@ class WarehouseApiController extends BaseApiController
     public function receiveReturn(Request $request, OrderReturn $orderReturn): JsonResponse
     {
         $this->ensureWarehouseRole($request);
+        if ($orderReturn->assigned_shipper_id) {
+            return $this->fail('Vui lòng tiếp nhận phiếu tại mục Hoàn trả từ sale để chuyển kế toán duyệt.', 422);
+        }
         $user = $request->user();
         $warehouseId = (int) ($orderReturn->warehouse_id ?? 0);
         if ($user->warehouse_id && (int) $user->warehouse_id !== $warehouseId) {
