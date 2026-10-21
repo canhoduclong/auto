@@ -81,13 +81,16 @@ class PackedInventoryService
                 : collect([$item->product_variant_id => $item->quantity]);
             foreach ($requirements as $variantId => $quantity) {
                 $reserved = $rows->filter(fn($row) => (int)$row->inventory->product_variant_id === (int)$variantId)->sum('quantity');
-                if ((float)$reserved !== (float)$quantity) throw new \RuntimeException('Chưa giữ đủ tồn kho riêng cho mặt hàng #'.$item->id.'. Không thể chốt đóng hàng.');
+                if ((float)$reserved !== (float)$quantity) {
+                    $name = $this->variantLabel((int) $variantId);
+                    throw new \RuntimeException('Chưa giữ đủ tồn kho riêng cho mặt hàng '.$name.'. Không thể chốt đóng hàng.');
+                }
             }
             foreach ($rows->pluck('inventory_id')->unique() as $inventoryId) {
                 $inventory = Inventory::whereKey($inventoryId)->lockForUpdate()->firstOrFail();
                 $reserved = (float) $inventory->reservations()->sum('quantity');
                 if ((float) $inventory->quantity < $reserved) {
-                    throw new \RuntimeException('Tồn kho thực tế không đủ cho lượng đã giữ riêng. Không thể chốt đóng hàng.');
+                    throw new \RuntimeException('Tồn kho thực tế không đủ cho mặt hàng '.$this->variantLabel((int) $inventory->product_variant_id).', không đủ lượng đã giữ riêng. Không thể chốt đóng hàng.');
                 }
                 $inventory->reserved_quantity = $reserved;
                 $inventory->save();
@@ -98,4 +101,18 @@ class PackedInventoryService
             }
         }
     }
+
+    private function variantLabel(int $variantId): string
+    {
+        $variant = \App\Models\ProductVariant::with('product:id,name')->find($variantId);
+        if (! $variant) {
+            return 'biến thể #'.$variantId;
+        }
+
+        $parts = array_filter([$variant->product?->name, $variant->name], fn ($value) => trim((string) $value) !== '');
+        $label = implode(' - ', array_unique($parts)) ?: 'Biến thể #'.$variantId;
+
+        return $variant->sku ? $label.' (SKU: '.$variant->sku.')' : $label;
+    }
+
 }
