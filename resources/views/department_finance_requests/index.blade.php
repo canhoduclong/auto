@@ -741,7 +741,7 @@
                                                 && !$requestItem->approvalSteps->contains(fn ($step) => $step->approved_by !== null || $step->status !== 'pending')));
                                 @endphp
                                 @if((int) $requestItem->submitted_by === (int) auth()->id() || auth()->user()->hasRole('admin'))
-                                    <a href="{{ route($config['route_prefix'].'.create', ['copy_from' => $requestItem->id]) }}" class="btn btn-outline-primary btn-sm" title="Nhân bản nội dung để chỉnh sửa và gửi lại"><i class="bi bi-copy me-1"></i>Nhân bản</a>
+                                    <a href="{{ route($config['route_prefix'].'.create', ['copy_from' => $requestItem->id]) }}" class="btn btn-outline-primary btn-sm fr-action-icon" title="Nhân bản nội dung để chỉnh sửa và gửi lại" aria-label="Nhân bản phiếu"><i class="bi bi-copy" aria-hidden="true"></i></a>
                                 @endif
                                 @if(!in_array($source, ['leader', 'manager'], true) && $requestItem->canBeEditedBySubmitter((int) auth()->id()))
                                     <a href="{{ route($config['route_prefix'].'.edit', array_merge(request()->query(), ['transaction' => $requestItem->id])) }}" class="btn btn-outline-primary btn-sm fr-action-icon" title="Sửa phiếu"><i class="bi bi-pencil"></i></a>
