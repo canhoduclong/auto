@@ -19,6 +19,7 @@ class InventoryDocument extends Model
         'document_date',
         'notes',
         'shipping_fee',
+        'vat_amount',
         'user_id',
         'edit_count',
     ];
@@ -26,6 +27,7 @@ class InventoryDocument extends Model
     protected $casts = [
         'document_date' => 'date',
         'shipping_fee' => 'decimal:2',
+        'vat_amount' => 'decimal:2',
         'edit_count' => 'integer',
         'reservation_recovery_quantity' => 'float',
     ];

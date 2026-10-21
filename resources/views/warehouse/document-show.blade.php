@@ -82,7 +82,7 @@
     $packedSummary = $packedOrder ? $packedOrderService->summary($packedOrder, useActualWeight: true) : null;
     $shippingFee = $packedSummary ? $packedSummary['shipping_fee'] : (float) ($document->shipping_fee ?? 0);
     $orderAdjustment = $packedSummary['extra_discount_total'] ?? 0;
-    $vatAmount = $packedOrder ? $packedOrder->resolvedVatAmount(max(0, $itemsSubtotal - $orderAdjustment)) : 0;
+    $vatAmount = $isImport ? (float) $document->vat_amount : ($packedOrder ? $packedOrder->resolvedVatAmount(max(0, $itemsSubtotal - $orderAdjustment)) : 0);
     $foamBoxFee = $packedSummary['foam_box_fee'] ?? 0;
     $grandTotal = max(0, $itemsSubtotal - $orderAdjustment) + $vatAmount + $shippingFee + $foamBoxFee;
     $documentPackedWeight = $documentLines->whereNotNull('weight')->isNotEmpty() ? $documentLines->sum('weight') : null;

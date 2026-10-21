@@ -6373,6 +6373,7 @@ class WarehouseDashboardController extends Controller
                 'warehouse_name' => $document->warehouse?->name ?? 'Kho #'.$document->warehouse_id,
                 'notes' => $document->notes,
                 'shipping_fee' => (float) $document->shipping_fee,
+                'vat_amount' => (float) $document->vat_amount,
                 'edit_count' => $document->edit_count,
                 'max_edits' => $maxEdits,
             ],
@@ -6424,6 +6425,7 @@ class WarehouseDashboardController extends Controller
             'notes' => 'nullable|string|max:1000',
             'edit_notes' => 'nullable|string|max:500',
             'shipping_fee' => 'nullable|numeric|min:0',
+            'vat_amount' => 'nullable|numeric|min:0|max:9999999999999',
             'items' => 'required|array|min:1',
             'items.*.id' => 'required|integer|exists:inventory_document_items,id',
             'items.*.quantity' => 'required|integer|min:0',
@@ -6554,6 +6556,7 @@ class WarehouseDashboardController extends Controller
                 $document->update([
                     'notes' => $validated['notes'] ?? $document->notes,
                     'shipping_fee' => $validated['shipping_fee'] ?? $document->shipping_fee,
+                    'vat_amount' => $validated['vat_amount'] ?? $document->vat_amount,
                     'edit_count' => $document->edit_count + 1,
                 ]);
 
@@ -6598,6 +6601,7 @@ class WarehouseDashboardController extends Controller
             // 'warehouse_id'  => 'required|exists:warehouses,id', // bỏ không nhận từ request
             'supplier_id' => $isImport ? 'required|exists:suppliers,id' : 'nullable|exists:suppliers,id',
             'shipping_fee' => 'nullable|numeric|min:0',
+            'vat_amount' => 'nullable|numeric|min:0|max:9999999999999',
             'notes' => 'nullable|string|max:1000',
             'items' => 'required|array|min:1',
             'items.*.product_variant_id' => 'required|exists:product_variants,id',
@@ -6616,6 +6620,7 @@ class WarehouseDashboardController extends Controller
                     'warehouse_id' => $userWarehouseId,
                     'supplier_id' => $validated['supplier_id'] ?? null,
                     'shipping_fee' => $validated['shipping_fee'] ?? 0,
+                    'vat_amount' => $validated['vat_amount'] ?? 0,
                     'notes' => $validated['notes'] ?? null,
                     'user_id' => Auth::id(),
                 ]);
@@ -7001,7 +7006,7 @@ class WarehouseDashboardController extends Controller
 
         $totals = [
             'supplier_quantity' => $supplierImports->sum(fn ($doc) => $doc->items->sum('quantity')),
-            'supplier_amount' => $supplierImports->sum(fn ($doc) => $doc->items->sum(fn ($item) => $item->import_line_total) + (float) $doc->shipping_fee),
+            'supplier_amount' => $supplierImports->sum(fn ($doc) => $doc->items->sum(fn ($item) => $item->import_line_total) + (float) $doc->shipping_fee + (float) $doc->vat_amount),
             'transfer_quantity' => $inventoryTransfers->sum(fn ($transfer) => $transfer->items->sum('quantity'))
                 + $orderTransfers->sum(fn ($transfer) => $transfer->importDocument?->items->sum('quantity') ?? $transfer->order?->items->sum('quantity') ?? 0),
             'exported_orders' => $exportedOrders->count(),

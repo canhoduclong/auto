@@ -50,6 +50,8 @@
                 <label class="form-label fw-600 small">Phí vận chuyển (đ)</label>
                 <input type="number" name="shipping_fee" class="form-control" min="0" step="1000" value="{{ old('shipping_fee', 0) }}" placeholder="0">
             </div>
+            <div class="col-md-4"><label class="form-label">Chi phí VAT (đ)</label><input type="text" inputmode="numeric" name="vat_amount" class="form-control stock-money-input" value="{{ number_format((float) old('vat_amount', 0), 0, ',', '.') }}"></div>
+
             <div class="col-12">
                 <label class="form-label fw-600 small">Ghi chú</label>
                 <textarea name="notes" class="form-control" rows="2" placeholder="Ghi chú về đợt nhập hàng này…">{{ old('notes') }}</textarea>
@@ -197,6 +199,7 @@
             </div>
         </div>
         
+        <div class="text-end mt-3">Tổng thanh toán (gồm VAT và vận chuyển): <strong id="createGrandTotal">0đ</strong></div>
         <div class="d-flex justify-content-end mt-3">
             <button type="submit" class="btn btn-success fw-semibold">
                 <i class="bi bi-check2-circle me-1"></i>Lưu phiếu nhập kho
@@ -233,6 +236,7 @@
 </div>
 
 @push('scripts')
+@include('warehouse.stock-in.money-inputs')
 <script>
 let productVariants = [];
 let rowIdx = 0;
@@ -323,7 +327,7 @@ function renderRow(idx, data = {}) {
             <input type="number" name="items[${idx}][weight_kg]" class="form-control form-control-sm text-center calculated-weight-input" value="${totalWeight}" min="0" step="0.001" placeholder="Nhập kg thực tế" aria-label="Khối lượng thực nhập (kg)" required>
               
         </td>
-        <td class="align-middle"><input type="number" name="items[${idx}][unit_cost]" class="form-control form-control-sm text-center" min="0" step="1000" value="${price}"></td>
+        <td class="align-middle"><input type="text" inputmode="numeric" name="items[${idx}][unit_cost]" class="form-control form-control-sm text-center stock-money-input" value="${stockInMoneyFormat(price)}"></td>
         <td class="align-middle"><input type="text" name="items[${idx}][note]" class="form-control form-control-sm text-center" value="${data.note ?? ''}"></td>
         <td class="line-total text-end align-middle">${lineTotal}</td>
         <td class="item-actions text-center align-middle">
@@ -397,14 +401,31 @@ function reindexRows() {
     updateSTT();
 }
 
+function updateCreateGrandTotal() {
+    let total = 0;
+    document.querySelectorAll('#stockinRows .item-row').forEach(row => {
+        const qty = Number(row.querySelector('[name*="[quantity]"]')?.value) || 0;
+        const weight = Number(row.querySelector('[name*="[weight_kg]"]')?.value) || 0;
+        const cost = stockInMoneyValue(row.querySelector('[name*="[unit_cost]"]')?.value);
+        const byKg = row.querySelector('.variant-select')?.selectedOptions?.[0]?.dataset.pricedByKg === '1';
+        total += (byKg ? weight : qty) * cost;
+    });
+    total += stockInMoneyValue(document.querySelector('[name="vat_amount"]')?.value) + Number(document.querySelector('[name="shipping_fee"]')?.value || 0);
+    document.getElementById('createGrandTotal').textContent = total.toLocaleString('vi-VN') + 'đ';
+}
+document.addEventListener('input', event => {
+    if (event.target.matches('[name="vat_amount"], [name="shipping_fee"]')) updateCreateGrandTotal();
+});
+
 function updateLineTotal(row) {
     const qty = parseFloat(row.querySelector('input[name*="[quantity]"]').value) || 0;
-    const price = parseFloat(row.querySelector('input[name*="[unit_cost]"]').value) || 0;
+    const price = stockInMoneyValue(row.querySelector('input[name*="[unit_cost]"]').value);
     const select = row.querySelector('.variant-select');
     const selected = select?.selectedOptions?.[0];
     const weightPerUnit = toNumber(selected?.getAttribute('data-weight-per-unit'), 1);
     const totalWeight = toNumber(row.querySelector('.calculated-weight-input')?.value, 0);
     row.querySelector('.line-total').textContent = ((selected?.dataset.pricedByKg === '1' ? totalWeight : qty) * price).toLocaleString('vi-VN');
+    updateCreateGrandTotal();
 }
 
 function updateRowWeight(row) {
@@ -828,6 +849,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (e.target.closest('.btn-remove-row') && row) {
             row.remove();
             reindexRows();
+            updateCreateGrandTotal();
         }
     });
     

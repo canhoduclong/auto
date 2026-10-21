@@ -192,7 +192,7 @@
     </div>
     <div class="col-md-3">
         <div class="doc-stat">
-            <div class="doc-stat-val">{{ number_format($stockInDocuments->flatMap(fn($d)=>$d->items)->sum(fn($i)=>$i->import_line_total)) }}đ</div>
+            <div class="doc-stat-val">{{ number_format($stockInDocuments->sum(fn($d) => $d->items->sum(fn($i) => $i->import_line_total) + (float) $d->vat_amount + (float) $d->shipping_fee)) }}đ</div>
             <div class="doc-stat-lbl">Tổng giá trị nhập</div>
         </div>
     </div>
@@ -274,7 +274,7 @@
                     <span class="badge bg-light text-secondary border">{{ $doc->items->count() }}</span>
                 </td>
                 <td class="text-end fw-700 text-success">{{ number_format($doc->items->sum('quantity')) }}</td>
-                <td class="text-end">{{ number_format($doc->items->sum(fn($i)=>$i->import_line_total)) }}đ</td>
+                <td class="text-end">{{ number_format(($doc->items->sum(fn($i)=>$i->import_line_total) + (float) $doc->vat_amount + (float) $doc->shipping_fee)) }}đ</td>
                 <td class="text-center">
                     @if((int) $doc->edit_count > 0)
                         <a href="{{ route('warehouse.stock-in.show', $doc) }}#edit-history" class="badge bg-warning text-dark text-decoration-none" title="Xem lịch sử chỉnh sửa">
@@ -370,6 +370,8 @@
                             <input type="number" name="shipping_fee" class="form-control" min="0" step="1000"
                                    value="{{ old('shipping_fee', 0) }}" placeholder="0">
                         </div>
+                        <div class="col-md-4"><label class="form-label fw-600 small">Chi phí VAT (đ)</label><input type="text" inputmode="numeric" name="vat_amount" id="vatAmountIn" class="form-control stock-money-input" value="{{ number_format((float) old('vat_amount', 0), 0, ',', '.') }}"></div>
+
                         <div class="col-12">
                             <label class="form-label fw-600 small">Ghi chú</label>
                             <textarea name="notes" class="form-control" rows="2"
@@ -431,7 +433,7 @@
                                     </div>
                                 </div>
                                 <div>
-                                    <input type="number" name="items[0][unit_cost]" class="form-control form-control-sm cost-input" min="0" step="1000" value="0" required>
+                                    <input type="text" inputmode="numeric" name="items[0][unit_cost]" class="form-control form-control-sm cost-input stock-money-input" value="0" required>
                                 </div>
                                 <div class="line-total fw-700" style="font-size:.82rem;color:#059669;">0đ</div>
                                 <div>
@@ -444,7 +446,7 @@
 
                     <div class="d-flex justify-content-end mt-3 gap-4">
                         <div class="text-end">
-                            <div class="text-muted small">Tổng tiền hàng</div>
+                            <div class="text-muted small">Tổng thanh toán (gồm VAT và vận chuyển)</div>
                             <div id="grandTotalIn" class="fw-800" style="font-size:1.1rem;color:#0ea5e9;">0đ</div>
                         </div>
                     </div>
@@ -511,6 +513,10 @@
                                 <label class="form-label fw-600 small">Phí vận chuyển (đ)</label>
                                 <input type="number" name="shipping_fee" id="editShippingFee" class="form-control" min="0" step="1000" value="0">
                             </div>
+                            <div class="col-sm-6 col-lg-4">
+                                <label class="form-label fw-600 small">Chi phí VAT (đ)</label>
+                                <input type="text" inputmode="numeric" name="vat_amount" id="editVatAmount" class="form-control stock-money-input" value="0">
+                            </div>
                             <div class="col-lg-5">
                                 <label class="form-label fw-600 small">Ghi chú phiếu</label>
                                 <input type="text" name="notes" id="editNotes" class="form-control" placeholder="Ghi chú về phiếu nhập…">
@@ -573,6 +579,8 @@
 </div>
 
 @push('scripts')
+@include('warehouse.stock-in.money-inputs')
+<script src="{{ asset('js/stock-in-weight-input.js') }}?v={{ filemtime(public_path('js/stock-in-weight-input.js')) }}"></script>
 <script>
 (function () {
     // ── Create-modal logic ──────────────────────────────────────────────────
@@ -580,7 +588,7 @@
 
     function calcRow(row) {
         const qty  = parseFloat(row.querySelector('.qty-input').value)  || 0;
-        const cost = parseFloat(row.querySelector('.cost-input').value) || 0;
+        const cost = stockInMoneyValue(row.querySelector('.cost-input').value);
         const option = row.querySelector('.variant-select')?.selectedOptions?.[0];
         const basis = option?.dataset.pricedByKg === '1' ? qty * (parseFloat(option.dataset.defaultWeight) || 0) : qty;
         const tot = basis * cost;
@@ -591,6 +599,7 @@
     function calcAll() {
         let total = 0;
         document.querySelectorAll('#itemsContainerIn [data-item-row]').forEach(r => { total += calcRow(r); });
+        total += stockInMoneyValue(document.getElementById('vatAmountIn').value) + Number(document.querySelector('#vatAmountIn').form.querySelector('[name=shipping_fee]').value || 0);
         document.getElementById('grandTotalIn').textContent = total.toLocaleString('vi-VN') + 'đ';
     }
 
@@ -615,6 +624,8 @@
     }
 
     document.getElementById('itemsContainerIn').addEventListener('input', calcAll);
+    document.getElementById('vatAmountIn').addEventListener('input', calcAll);
+    document.getElementById('vatAmountIn').form.querySelector('[name=shipping_fee]').addEventListener('input', calcAll);
     document.getElementById('itemsContainerIn').addEventListener('change', function (e) {
         if (e.target.classList.contains('variant-select')) {
             syncUnitLabel(e.target.closest('[data-item-row]'));
@@ -664,8 +675,8 @@
         let total = 0;
         document.querySelectorAll('#editItemsBody tr[data-item-row]').forEach(function (row) {
             const qty  = parseFloat(row.querySelector('.eq-qty').value)  || 0;
-            const cost = parseFloat(row.querySelector('.eq-cost').value) || 0;
-            const enteredWeight = row.querySelector('.eq-weight').value.trim().replace(',', '.');
+            const cost = stockInMoneyValue(row.querySelector('.eq-cost').value);
+            const enteredWeight = String(stockInWeightValue(row.querySelector('.eq-weight').value));
             row.querySelector('.eq-weight-value').value = enteredWeight;
             const weight = Number(enteredWeight) || 0;
             const line = (row.dataset.pricedByKg === '1' ? weight : qty) * cost;
@@ -673,6 +684,7 @@
 
             total += line;
         });
+        total += stockInMoneyValue(document.getElementById('editVatAmount').value) + Number(document.getElementById('editShippingFee').value || 0);
         document.getElementById('editGrandTotal').textContent = total.toLocaleString('vi-VN') + 'đ';
     }
 
@@ -689,6 +701,8 @@
     }
 
     document.getElementById('editItemsBody').addEventListener('input', calcEditTotal);
+    document.getElementById('editVatAmount').addEventListener('input', calcEditTotal);
+    document.getElementById('editShippingFee').addEventListener('input', calcEditTotal);
 
     // Delegate click on each edit button in table
     document.addEventListener('click', function (e) {
@@ -728,6 +742,7 @@
             document.getElementById('editSupplierName').textContent = doc.supplier_name || '—';
             document.getElementById('editWarehouseName').textContent = doc.warehouse_name || '—';
             document.getElementById('editShippingFee').value        = doc.shipping_fee;
+            document.getElementById('editVatAmount').value = stockInMoneyFormat(doc.vat_amount || 0);
             document.getElementById('editNotes').value              = doc.notes || '';
             document.getElementById('editLimitText').textContent    =
                 'Đã điều chỉnh ' + doc.edit_count + '/' + doc.max_edits + ' lần. ' +
@@ -760,12 +775,12 @@
                         '<input type="text" class="form-control form-control-sm text-center" value="' + escHtml(item.unit_label || 'Cái') + '" readonly tabindex="-1">' +
                     '</td>' +
                     '<td>' +
-                        '<input type="text" inputmode="decimal" class="form-control form-control-sm text-center edit-stock-weight eq-weight" pattern="[0-9]{1,9}([.,][0-9]{1,3})?" value="' + String(Number(item.weight_kg ?? item.quantity * (item.weight_per_unit || 1))).replace('.', ',') + '" placeholder="Nhập kg thực tế" aria-label="Nhập khối lượng thực tế (kg)" title="Nhập kg thực tế, ví dụ 120 hoặc 120,5" required>' +
+                        '<input type="text" inputmode="decimal" class="form-control form-control-sm text-center edit-stock-weight eq-weight" pattern="[0-9.]+(,[0-9]{1,3})?" value="' + stockInWeightFormat(Number(item.weight_kg ?? item.quantity * (item.weight_per_unit || 1))) + '" placeholder="Nhập kg thực tế" aria-label="Nhập khối lượng thực tế (kg)" title="Chỉ nhập số, ví dụ 123 hoặc 1.234,45" required>' +
                         '<input type="hidden" name="items[' + item.id + '][weight_kg]" class="eq-weight-value" value="' + Number(item.weight_kg ?? item.quantity * (item.weight_per_unit || 1)) + '">' +
                     '</td>' +
                     '<td class="text-center">' +
-                        '<input type="number" name="items[' + item.id + '][unit_cost]" class="form-control form-control-sm eq-cost text-center" ' +
-                               'min="0" step="1000" value="' + item.unit_cost + '" required>' +
+                        '<input type="text" inputmode="numeric" name="items[' + item.id + '][unit_cost]" class="form-control form-control-sm eq-cost text-center stock-money-input" ' +
+                               'value="' + stockInMoneyFormat(item.unit_cost) + '" required>' +
                     '</td>' +
                     '<td>' +
                         '<input type="text" name="items[' + item.id + '][note]" class="form-control form-control-sm" maxlength="500" ' +
