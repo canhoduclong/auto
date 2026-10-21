@@ -191,7 +191,7 @@
     </div>
     <div class="col-md-3">
         <div class="doc-stat">
-            <div class="doc-stat-val">{{ number_format($stockInDocuments->flatMap(fn($d)=>$d->items)->sum(fn($i)=>$i->quantity*$i->unit_cost)) }}đ</div>
+            <div class="doc-stat-val">{{ number_format($stockInDocuments->flatMap(fn($d)=>$d->items)->sum(fn($i)=>$i->import_line_total)) }}đ</div>
             <div class="doc-stat-lbl">Tổng giá trị nhập</div>
         </div>
     </div>
@@ -273,7 +273,7 @@
                     <span class="badge bg-light text-secondary border">{{ $doc->items->count() }}</span>
                 </td>
                 <td class="text-end fw-700 text-success">{{ number_format($doc->items->sum('quantity')) }}</td>
-                <td class="text-end">{{ number_format($doc->items->sum(fn($i)=>$i->quantity*$i->unit_cost)) }}đ</td>
+                <td class="text-end">{{ number_format($doc->items->sum(fn($i)=>$i->import_line_total)) }}đ</td>
                 <td class="text-center">
                     @if((int) $doc->edit_count > 0)
                         <a href="{{ route('warehouse.stock-in.show', $doc) }}#edit-history" class="badge bg-warning text-dark text-decoration-none" title="Xem lịch sử chỉnh sửa">
@@ -413,7 +413,7 @@
                                                     ? 'Kg'
                                                     : ($v->product->unit_label ?? 'Cái');
                                             @endphp
-                                            <option value="{{ $v->id }}" data-unit-label="{{ $v->product->unit_label ?? 'Cái' }}" data-default-weight="{{ number_format($defaultWeight, 3, '.', '') }}" data-weight-unit-label="{{ $weightUnitLabel }}">{{ $v->product?->name }} – {{ $v->name }} {{ $v->sku ? '('.$v->sku.')' : '' }} - {{ $v->product->unit_label ?? 'Cái' }}</option>
+                                            <option value="{{ $v->id }}" data-unit-label="{{ $v->product->unit_label ?? 'Cái' }}" data-priced-by-kg="{{ $v->effective_priced_by_kg ? '1' : '0' }}" data-default-weight="{{ number_format($defaultWeight, 3, '.', '') }}" data-weight-unit-label="{{ $weightUnitLabel }}">{{ $v->product?->name }} – {{ $v->name }} {{ $v->sku ? '('.$v->sku.')' : '' }} - {{ $v->product->unit_label ?? 'Cái' }}</option>
                                         @endforeach
                                     </select>
                                 </div>
@@ -530,7 +530,7 @@
                                 <div class="fw-700" style="color:#0f172a;">
                                     <i class="bi bi-list-ul me-1"></i>Danh sách hàng hoá
                                 </div>
-                                <div class="edit-stock-hint">Sản phẩm được giữ nguyên để bảo toàn lịch sử kho. Có thể sửa số lượng, đơn giá và ghi chú.</div>
+                                <div class="edit-stock-hint">Sản phẩm được giữ nguyên để bảo toàn lịch sử kho. Có thể sửa số lượng, khối lượng thực nhập (kg), đơn giá và ghi chú.</div>
                             </div>
                             <div class="small text-muted"><i class="bi bi-arrow-down-up me-1"></i>Cuộn trong bảng để xem toàn bộ sản phẩm</div>
                         </div>
@@ -542,7 +542,7 @@
                                         <th style="width:260px;">Sản phẩm / Biến thể</th>
                                         <th style="width:110px;">Số lượng</th>
                                         <th style="width:90px;">ĐVT</th>
-                                        <th style="width:130px;">Khối lượng</th>
+                                        <th style="width:130px;">Khối lượng (kg)</th>
                                         <th style="width:150px;">Đơn giá nhập (đ)</th>
                                         <th style="width:180px;">Ghi chú</th>
                                         <th style="width:135px;">Thành tiền</th>
@@ -580,7 +580,9 @@
     function calcRow(row) {
         const qty  = parseFloat(row.querySelector('.qty-input').value)  || 0;
         const cost = parseFloat(row.querySelector('.cost-input').value) || 0;
-        const tot  = qty * cost;
+        const option = row.querySelector('.variant-select')?.selectedOptions?.[0];
+        const basis = option?.dataset.pricedByKg === '1' ? qty * (parseFloat(option.dataset.defaultWeight) || 0) : qty;
+        const tot = basis * cost;
         row.querySelector('.line-total').textContent = tot.toLocaleString('vi-VN') + 'đ';
         return tot;
     }
@@ -663,9 +665,10 @@
             const qty  = parseFloat(row.querySelector('.eq-qty').value)  || 0;
             const cost = parseFloat(row.querySelector('.eq-cost').value) || 0;
             const weightPerUnit = parseFloat(row.dataset.weightPerUnit) || 1;
-            const line = qty * cost;
+            const weight = parseFloat(row.querySelector('.eq-weight').value) || 0;
+            const line = (row.dataset.pricedByKg === '1' ? weight : qty) * cost;
             row.querySelector('.eq-line').textContent = line.toLocaleString('vi-VN') + 'đ';
-            row.querySelector('.eq-weight').value = formatEditWeight(qty * weightPerUnit) + ' Kg';
+
             total += line;
         });
         document.getElementById('editGrandTotal').textContent = total.toLocaleString('vi-VN') + 'đ';
@@ -738,6 +741,7 @@
                 const tr = document.createElement('tr');
                 tr.dataset.itemRow = '1';
                 tr.dataset.weightPerUnit = item.weight_per_unit || 1;
+                tr.dataset.pricedByKg = item.is_priced_by_kg ? '1' : '0';
                 tr.innerHTML =
                     '<td class="text-center fw-600">' + (index + 1) + '</td>' +
                     '<td class="edit-stock-product" title="' + escHtml(item.product_name + ' - ' + item.variant_name) + '">' +
@@ -754,7 +758,7 @@
                         '<input type="text" class="form-control form-control-sm text-center" value="' + escHtml(item.unit_label || 'Cái') + '" readonly tabindex="-1">' +
                     '</td>' +
                     '<td>' +
-                        '<input type="text" class="form-control form-control-sm text-center edit-stock-weight eq-weight" value="0 Kg" readonly tabindex="-1">' +
+                        '<input type="number" name="items[' + item.id + '][weight_kg]" class="form-control form-control-sm text-center edit-stock-weight eq-weight" min="0" step="0.001" value="' + Number(item.weight_kg ?? item.quantity * (item.weight_per_unit || 1)) + '" aria-label="Khối lượng thực nhập (kg)" required>' +
                     '</td>' +
                     '<td class="text-center">' +
                         '<input type="number" name="items[' + item.id + '][unit_cost]" class="form-control form-control-sm eq-cost text-center" ' +

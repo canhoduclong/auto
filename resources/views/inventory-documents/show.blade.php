@@ -50,7 +50,7 @@
                             $weightUnitLabel = in_array((string) ($item->productVariant->product->unit ?? 'cai'), ['con', 'cai'], true)
                                 ? 'Kg'
                                 : $unitLabel;
-                            $lineWeight = (float) (($item->productVariant->size ?? 0) * ($item->quantity ?? 0));
+                            $lineWeight = $inventoryDocument->type === 'import' ? $item->import_weight_kg : (float) (($item->productVariant->size ?? 0) * ($item->quantity ?? 0));
                         @endphp
                         <tr>
                             <td>{{ $item->productVariant->product->name }} ({{ $item->productVariant->sku }})</td>
@@ -58,7 +58,7 @@
                             <td>{{ $unitLabel }}</td>
                             <td>{{ number_format($lineWeight, 3, ',', '.') }} {{ $weightUnitLabel }}</td>
                             <td>{{ number_format($item->unit_cost, 2) }}</td>
-                            <td>{{ number_format($item->quantity * $item->unit_cost, 2) }}</td>
+                            <td>{{ number_format(($inventoryDocument->type === 'import' ? $item->import_line_total : $item->quantity * $item->unit_cost), 2) }}</td>
                         </tr>
                     @endforeach
                 </tbody>

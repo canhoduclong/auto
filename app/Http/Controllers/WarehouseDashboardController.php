@@ -932,6 +932,7 @@ class WarehouseDashboardController extends Controller
                 'label' => $label,
                 'unit_label' => $variant->product->unit_label ?? 'Cái',
                 'weight_per_unit' => $weightPerUnit,
+                'is_priced_by_kg' => (bool) $variant->effective_priced_by_kg,
                 'available' => $availableQuantity,
                 'low_stock_threshold' => $lowStockThreshold,
             ];
@@ -6386,6 +6387,8 @@ class WarehouseDashboardController extends Controller
                     'variant_name' => $variant?->name ?? $product?->name ?? 'SP #'.$item->product_variant_id,
                     'sku' => $variant?->sku ?? '',
                     'unit_label' => $product?->unit_label ?? 'Cái',
+                    'weight_kg' => $item->weight_kg !== null ? (float) $item->weight_kg : round((float) $item->quantity * (float) ($variant?->effective_kg ?? 1), 3),
+                    'is_priced_by_kg' => (bool) ($variant?->effective_priced_by_kg ?? false),
                     'weight_per_unit' => (float) ($variant?->effective_kg ?? 1),
                     'quantity' => (int) $item->quantity,
                     'unit_cost' => (float) $item->unit_cost,
@@ -6424,13 +6427,17 @@ class WarehouseDashboardController extends Controller
             'items' => 'required|array|min:1',
             'items.*.id' => 'required|integer|exists:inventory_document_items,id',
             'items.*.quantity' => 'required|integer|min:0',
+            'items.*.weight_kg' => 'nullable|numeric|min:0|max:999999999.999',
             'items.*.unit_cost' => 'required|numeric|min:0',
             'items.*.note' => 'nullable|string|max:500',
         ]);
 
         try {
             DB::transaction(function () use ($validated, $document) {
-                $document->load('items');
+                $document = InventoryDocument::lockForUpdate()->findOrFail($document->id);
+                $maxEdits = (int) \App\Models\Setting::get('stock_in_max_edits', 3);
+                if ($document->edit_count >= $maxEdits) throw new \RuntimeException('Phiếu đã đạt giới hạn điều chỉnh.');
+                $document->load('items.productVariant');
 
                 $itemMap = $document->items->keyBy('id');
 
@@ -6452,8 +6459,11 @@ class WarehouseDashboardController extends Controller
                     $oldNote = (string) ($item->note ?? '');
                     $newNote = trim((string) ($row['note'] ?? ''));
                     $delta = $newQty - $oldQty;
+                    $oldWeight = $item->weight_kg !== null ? (float) $item->weight_kg : round($oldQty * (float) ($item->productVariant?->effective_kg ?? 1), 3);
+                    $newWeight = isset($row['weight_kg']) ? round((float) $row['weight_kg'], 3) : ($oldQty > 0 ? round($oldWeight * $newQty / $oldQty, 3) : 0);
 
-                    if ($delta === 0 && $newCost === $oldCost && $newNote === $oldNote) {
+
+                    if ($delta === 0 && $newCost === $oldCost && $newNote === $oldNote && $newWeight === $oldWeight) {
                         continue; // Nothing changed for this item
                     }
 
@@ -6522,6 +6532,8 @@ class WarehouseDashboardController extends Controller
                     $changes[] = [
                         'item_id' => $item->id,
                         'variant_id' => $item->product_variant_id,
+                        'old_weight_kg' => $oldWeight,
+                        'new_weight_kg' => $newWeight,
                         'old_qty' => $oldQty,
                         'new_qty' => $newQty,
                         'old_cost' => $oldCost,
@@ -6532,6 +6544,7 @@ class WarehouseDashboardController extends Controller
 
                     $item->update([
                         'quantity' => $newQty,
+                        'weight_kg' => $newWeight,
                         'unit_cost' => $newCost,
                         'note' => $newNote !== '' ? $newNote : null,
                     ]);
@@ -6589,6 +6602,7 @@ class WarehouseDashboardController extends Controller
             'items' => 'required|array|min:1',
             'items.*.product_variant_id' => 'required|exists:product_variants,id',
             'items.*.quantity' => 'required|integer|min:1',
+            'items.*.weight_kg' => 'nullable|numeric|min:0|max:999999999.999',
             'items.*.unit_cost' => 'required|numeric|min:0',
             'items.*.note' => 'nullable|string|max:500',
             'items.*.source_price_id' => 'nullable|exists:supplier_product_prices,id',
@@ -6626,6 +6640,7 @@ class WarehouseDashboardController extends Controller
                     $document->items()->create([
                         'product_variant_id' => $itemData['product_variant_id'],
                         'quantity' => $itemData['quantity'],
+                        'weight_kg' => $isImport ? ($itemData['weight_kg'] ?? round((float) $itemData['quantity'] * (float) (ProductVariant::find($itemData['product_variant_id'])?->effective_kg ?? 1), 3)) : null,
                         'unit_cost' => $itemData['unit_cost'],
                         'note' => $itemData['note'] ?? null,
                         'source_price_id' => $sourcePriceId,
@@ -6986,7 +7001,7 @@ class WarehouseDashboardController extends Controller
 
         $totals = [
             'supplier_quantity' => $supplierImports->sum(fn ($doc) => $doc->items->sum('quantity')),
-            'supplier_amount' => $supplierImports->sum(fn ($doc) => $doc->items->sum(fn ($item) => $item->quantity * $item->unit_cost) + (float) $doc->shipping_fee),
+            'supplier_amount' => $supplierImports->sum(fn ($doc) => $doc->items->sum(fn ($item) => $item->import_line_total) + (float) $doc->shipping_fee),
             'transfer_quantity' => $inventoryTransfers->sum(fn ($transfer) => $transfer->items->sum('quantity'))
                 + $orderTransfers->sum(fn ($transfer) => $transfer->importDocument?->items->sum('quantity') ?? $transfer->order?->items->sum('quantity') ?? 0),
             'exported_orders' => $exportedOrders->count(),

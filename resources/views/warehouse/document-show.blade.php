@@ -77,7 +77,7 @@
     $backLabel = $isImport ? 'Danh sách Nhập Kho' : 'Danh sách Xuất Kho';
     $packedOrderService = app(\App\Services\WarehousePackedOrderService::class);
     $packedOrder = !$isImport ? $linkedOrder : null;
-    $documentLines = $document->items->mapWithKeys(fn ($line) => [$line->id => $packedOrderService->documentLine($line, $packedOrder, (float) $document->items->where('product_variant_id', $line->product_variant_id)->sum('quantity'))]);
+    $documentLines = $document->items->mapWithKeys(fn ($line) => [$line->id => $isImport ? ['weight' => $line->import_weight_kg, 'price' => (float) $line->unit_cost, 'total' => $line->import_line_total] : $packedOrderService->documentLine($line, $packedOrder, (float) $document->items->where('product_variant_id', $line->product_variant_id)->sum('quantity'))]);
     $itemsSubtotal = $documentLines->sum('total');
     $packedSummary = $packedOrder ? $packedOrderService->summary($packedOrder, useActualWeight: true) : null;
     $shippingFee = $packedSummary ? $packedSummary['shipping_fee'] : (float) ($document->shipping_fee ?? 0);
@@ -198,7 +198,7 @@
                         $weightUnitLabel = in_array((string) ($item->productVariant?->product?->unit ?? 'cai'), ['con', 'cai'], true)
                             ? 'Kg'
                             : $unitLabel;
-                        $lineWeight = $packedOrder ? $documentLines[$item->id]['weight'] : (float) (($item->productVariant?->size ?? 0) * ($item->quantity ?? 0));
+                        $lineWeight = ($isImport || $packedOrder) ? $documentLines[$item->id]['weight'] : (float) (($item->productVariant?->size ?? 0) * ($item->quantity ?? 0));
                         if ($unitLabel === 'Cái') { $lineWeight = null; }
                     @endphp
                     <tr>
@@ -412,7 +412,7 @@
         @forelse($document->items as $i => $item)
             @php
                 $unitLabel = $item->productVariant?->product?->unit_label ?? 'Cái';
-                $lineWeight = $packedOrder ? $documentLines[$item->id]['weight'] : (float) (($item->productVariant?->size ?? 0) * ($item->quantity ?? 0));
+                $lineWeight = ($isImport || $packedOrder) ? $documentLines[$item->id]['weight'] : (float) (($item->productVariant?->size ?? 0) * ($item->quantity ?? 0));
                         if ($unitLabel === 'Cái') { $lineWeight = null; }
             @endphp
             <tr>

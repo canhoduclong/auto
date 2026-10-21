@@ -282,17 +282,24 @@ function findVariant(variantId) {
     return productVariants.find(v => String(v.id) === String(variantId));
 }
 
+function variantPricedByKg(variant) {
+    const unit = String(variant?.product?.unit ?? variant?.unit_label ?? '').toLowerCase();
+    if (['cai', 'cái', 'bo', 'bộ', 'banh', 'bánh'].includes(unit)) return false;
+    const value = variant?.is_priced_by_kg ?? variant?.product?.is_priced_by_kg ?? true;
+    return value !== false && value !== 0 && value !== '0';
+}
+
 function renderRow(idx, data = {}) {
     let options = '<option value="">-- Chọn sản phẩm --</option>';
     productVariants.forEach(v => {
         const variantId = v.id ?? v.variant_id;
         const weightPerUnit = toNumber(v.weight_per_unit, variantWeightPerUnit(v));
-        options += `<option value="${variantId}" data-unit="${v.unit_label ?? v.product?.unit_label ?? 'Cái'}" data-weight-per-unit="${weightPerUnit}"${data.product_variant_id == variantId ? ' selected' : ''}>${v.label || ((v.product?.name || '') + ' - ' + v.name)}</option>`;
+        options += `<option value="${variantId}" data-unit="${v.unit_label ?? v.product?.unit_label ?? 'Cái'}" data-priced-by-kg="${variantPricedByKg(v) ? '1' : '0'}" data-weight-per-unit="${weightPerUnit}"${data.product_variant_id == variantId ? ' selected' : ''}>${v.label || ((v.product?.name || '') + ' - ' + v.name)}</option>`;
     });
     
     // If the data was provided from the modal instead of productVariants array matching
     if (data.product_variant_id && !productVariants.some(v => v.id == data.product_variant_id)) {
-        options += `<option value="${data.product_variant_id}" data-unit="${data.unit_label ?? ''}" data-weight-per-unit="${data.weight_per_unit ?? 1}" selected>${data.label ?? 'Sản phẩm đã chọn'}</option>`;
+        options += `<option value="${data.product_variant_id}" data-unit="${data.unit_label ?? ''}" data-priced-by-kg="${variantPricedByKg(data) ? '1' : '0'}" data-weight-per-unit="${data.weight_per_unit ?? 1}" selected>${data.label ?? 'Sản phẩm đã chọn'}</option>`;
     }
 
     const qty = data.quantity ?? 1;
@@ -300,7 +307,7 @@ function renderRow(idx, data = {}) {
     const selectedVariant = findVariant(data.product_variant_id);
     const weightPerUnit = data.weight_per_unit ?? (selectedVariant ? variantWeightPerUnit(selectedVariant) : 1);
     const totalWeight = toNumber(data.weight, qty * weightPerUnit);
-    const lineTotal = (totalWeight * price).toLocaleString('vi-VN');
+    const lineTotal = ((variantPricedByKg(selectedVariant ?? data) ? totalWeight : qty) * price).toLocaleString('vi-VN');
     return `
     <tr class="item-row" data-item-row data-idx="${idx}">
         <td class="stt text-center align-middle">${idx + 1}</td>
@@ -397,7 +404,7 @@ function updateLineTotal(row) {
     const selected = select?.selectedOptions?.[0];
     const weightPerUnit = toNumber(selected?.getAttribute('data-weight-per-unit'), 1);
     const totalWeight = qty * weightPerUnit;
-    row.querySelector('.line-total').textContent = (totalWeight * price).toLocaleString('vi-VN');
+    row.querySelector('.line-total').textContent = ((selected?.dataset.pricedByKg === '1' ? totalWeight : qty) * price).toLocaleString('vi-VN');
 }
 
 function updateRowWeight(row) {
