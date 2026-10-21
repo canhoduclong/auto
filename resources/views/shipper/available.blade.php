@@ -634,9 +634,11 @@
                                                     <span class="badge rounded-pill bg-warning text-dark border px-2 py-1" style="font-size: 0.72rem;">
                                                         <i class="bi bi-check2-circle me-1"></i>Đã nhận
                                                     </span>
+                                                    @if(! $isReturnOrder || $order->canRequestReturn())
                                                     <a href="{{ $isReturnOrder ? route('shipper.return-form', $order) : route('shipper.delivered-form', $order) }}" class="btn {{ $isReturnOrder ? 'btn-outline-danger' : 'btn-success' }} btn-sm sp-av-delivery-btn d-inline-flex align-items-center gap-1">
                                                         <i class="bi {{ $isReturnOrder ? 'bi-arrow-return-left' : 'bi-truck' }}"></i> {{ $isReturnOrder ? 'Nhập kho trả' : 'Giao hàng' }}
                                                     </a>
+                                                    @endif
                                                     <form action="{{ route('shipper.accept.rollback', $order) }}" method="POST">
                                                         @csrf
                                                         <button class="btn btn-outline-danger btn-sm d-inline-flex align-items-center gap-1" type="submit">

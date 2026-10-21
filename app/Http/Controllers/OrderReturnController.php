@@ -528,6 +528,7 @@ class OrderReturnController extends Controller
 
     private function authorizeReturnCreation(?Order $order = null): void
     {
+        abort_if($order && ! $order->canRequestReturn(), 422, 'Đơn đã được kế toán xác nhận, không thể tạo yêu cầu trả hàng.');
         $user = Auth::user();
         if (! $user) {
             abort(403);

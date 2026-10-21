@@ -395,7 +395,7 @@
                                         <i class="bi bi-check2-square me-2"></i>Giao hàng
                                     @endif
                                 </button>
-                                <button type="button" id="btnPartialReturn" class="btn btn-lg btn-warning flex-fill" style="padding:1rem;">
+                                <button type="button" id="btnPartialReturn" class="btn btn-lg btn-warning flex-fill" style="padding:1rem;{{ $order->canRequestReturn() ? '' : 'display:none;' }}">
                                     <i class="bi bi-arrow-return-left me-2"></i>Trả hàng
                                 </button>
                             </div>

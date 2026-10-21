@@ -469,7 +469,7 @@
                                                 <i class="fa fa-pencil me-1"></i>Sửa
                                             </a>
                                         @endif
-                                        @if($canReturn)
+                                        @if($canReturn && $order->canRequestReturn())
                                             <a href="{{ route('site.order-returns.create', $order) }}" class="btn btn-warning btn-sm text-dark">
                                                 <i class="fa fa-undo me-1"></i>Trả hàng
                                             </a>

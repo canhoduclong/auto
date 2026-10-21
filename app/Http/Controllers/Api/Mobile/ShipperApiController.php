@@ -405,6 +405,10 @@ class ShipperApiController extends BaseApiController
             return $this->fail('Don khong dang giao.', 422);
         }
 
+        if (! $order->canRequestReturn()) {
+            return $this->fail('Đơn đã được kế toán xác nhận, không thể trả hàng.', 422);
+        }
+
         $validated = $request->validate([
             'return_reason' => ['required', 'string', 'max:500'],
             'return_note' => ['nullable', 'string', 'max:500'],
@@ -725,6 +729,9 @@ class ShipperApiController extends BaseApiController
 
         $before = (string) $order->status;
         $nextStatus = $validated['status'] === 'returning' ? Order::STATUS_RETURNING : 'delivered';
+        if (in_array($nextStatus, ['returning', 'returned', 'returned_completed'], true) && ! $order->canRequestReturn()) {
+            return $this->fail('Đơn đã được kế toán xác nhận, không thể trả hàng.', 422);
+        }
 
         $order->update([
             'status' => $nextStatus,

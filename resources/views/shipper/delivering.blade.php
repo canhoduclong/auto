@@ -381,7 +381,7 @@
                             <i class="bi bi-check-circle me-1"></i>{{ $isAwaitingPaymentCompletion ? 'Thu tiền & hoàn tất' : 'Đã giao' }}
                         </a>
                     @endif
-                    @if(!$isAwaitingPaymentCompletion)
+                    @if(!$isAwaitingPaymentCompletion && $order->canRequestReturn())
                         <a href="{{ route('shipper.return-form', $order) }}" class="btn btn-outline-danger flex-fill btn-sm">
                             <i class="bi bi-arrow-return-left me-1"></i>{{ $isReturnOrder ? 'Nhận hàng hoàn trả' : 'Trả hàng' }}
                         </a>

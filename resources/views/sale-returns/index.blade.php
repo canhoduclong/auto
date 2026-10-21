@@ -4,8 +4,30 @@
     $labels = ['sale_requested'=>'Chờ shipper xác nhận', 'sale_in_transit'=>'Chờ kho nhận', 'sale_accounting_pending'=>'Kho đã nhận · Chờ kế toán duyệt', 'warehouse_received'=>'Kế toán đã duyệt'];
 @endphp
 @extends($returnLayout)
+@push('styles')
+<style>
+.sale-returns-page{background:#f8fafc;padding:28px 0;min-height:60vh}
+.sale-returns-shell{width:calc(100% - 32px);max-width:1290px;margin:auto}
+.sale-returns-layout{display:grid;grid-template-columns:330px minmax(0,1fr);gap:20px;align-items:start}
+.sale-returns-content{min-width:0}
+.sale-returns-sidebar .monitor-tab-nav{display:grid;gap:8px}
+.sale-returns-sidebar .monitor-tab-link{display:flex;min-height:50px;align-items:center;gap:11px;padding:10px 14px;border:1px solid #d8e4ef;border-radius:4px;background:#fff;color:#075985;font-weight:700;text-decoration:none;box-shadow:0 3px 10px rgba(15,23,42,.04)}
+.sale-returns-sidebar .monitor-tab-link i{width:18px;color:#527394;text-align:center}
+.sale-returns-sidebar .monitor-tab-link:hover,.sale-returns-sidebar .monitor-tab-link.active{border-color:#cfe3e8;background:#eaf5f6;color:#075985}
+@media(max-width:991px){.sale-returns-layout{grid-template-columns:220px minmax(0,1fr);gap:14px}}
+@media(max-width:767px){.sale-returns-layout{grid-template-columns:minmax(0,1fr)}.sale-returns-sidebar .monitor-tab-nav{grid-template-columns:repeat(2,minmax(0,1fr))}.sale-returns-sidebar .monitor-tab-link{font-size:14px}.sale-returns-shell{width:calc(100% - 20px)}}
+</style>
+@endpush
 @section('content')
+@if($returnLayout === 'layouts.site')
+<section class="sale-returns-page"><div class="sale-returns-shell sale-returns-layout">
+    <aside class="sale-returns-sidebar" aria-label="Menu nghiệp vụ">
+        @include('site.orders.partials.monitor_sidebar_nav', ['activeTab' => 'sale_returns'])
+    </aside>
+    <div class="sale-returns-content">
+@else
 <div class="container py-4">
+@endif
     <h1 class="h4 mb-3">Hoàn trả từ sale</h1>
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
@@ -33,4 +55,7 @@
     @empty<div class="alert alert-info">Chưa có yêu cầu hoàn trả.</div>@endforelse
     {{ $returns->links() }}
 </div>
+@if($returnLayout === 'layouts.site')
+</div></section>
+@endif
 @endsection

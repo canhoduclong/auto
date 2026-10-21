@@ -33,6 +33,7 @@ class SaleReturnController extends Controller
 
     private function owner(Order $order): void
     {
+        abort_unless($order->canRequestReturn(), 422, 'Đơn đã được kế toán xác nhận, không thể tạo yêu cầu trả hàng.');
         abort_unless(auth()->user()->hasRole('admin') || (auth()->user()->hasRole('sale') && (int) $order->user_id === (int) auth()->id()), 403);
         abort_unless(in_array($order->status, [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED], true), 422, 'Chỉ hoàn trả đơn đã giao hoặc hoàn thành.');
     }

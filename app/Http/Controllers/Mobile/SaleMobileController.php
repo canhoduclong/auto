@@ -114,7 +114,7 @@ class SaleMobileController extends Controller
                 'copy_url' => route('site.orders.copy', $order),
                 'payment_url' => route('orders.complete-payment', $order),
                 'feedback_url' => route('site.orders.show', $order) . '#customer-feedback',
-                'return_url' => route('site.order-returns.create', $order),
+                'return_url' => $order->canRequestReturn() ? route('site.order-returns.create', $order) : null,
                 'adjustment_url' => route('site.order-adjustments.create', $order),
                 'cancel_url' => route('site.orders.cancel', $order),
                 'trash_url' => route('site.orders.trash', $order),

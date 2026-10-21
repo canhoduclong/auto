@@ -1,10 +1,10 @@
 {
-  "version": "1.1.35",
-  "version_code": 78,
-  "apk_url": "https://hoanglongtnt.com/app-update/app-release-1.1.35.apk",
+  "version": "1.1.36",
+  "version_code": 79,
+  "apk_url": "https://hoanglongtnt.com/app-update/app-release-1.1.36.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản 1.1.35: Cải tiến popup thông báo vừa màn hình, nội dung có thanh cuộn, tiêu đề và nút Đã hiểu căn giữa.",
+  "message": "Bản 1.1.36: Ẩn chức năng trả hàng đối với đơn đã được kế toán xác nhận.",
   "requires_reinstall": false,
-  "sha256": "00f3066a96d81041e88bfd0b4ad2f268c2d027eddf86a2f43f2aef3a99a97f2d"
+  "sha256": "261f5fe1ffe179ff4f4939b74780d84e0f4dc1e2e30616df1f9589663e166ada"
 }

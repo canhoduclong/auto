@@ -473,7 +473,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     <a class="sale-action-btn" href="${escapeHtml(item.copy_url)}">▣ Copy Đơn</a>
                     ${formButton(item.payment_url, '▣ Thanh toán', 'teal', 'Xác nhận thanh toán đơn này?')}
                     <a class="sale-action-btn muted" href="${escapeHtml(item.feedback_url)}">▤ Feedback</a>
-                    <a class="sale-action-btn orange" href="${escapeHtml(item.return_url)}">↩ Trả hàng</a>
+                    ${item.return_url ? `<a class="sale-action-btn orange" href="${escapeHtml(item.return_url)}">↩ Trả hàng</a>` : ''}
                     <a class="sale-action-btn yellow" href="${escapeHtml(item.adjustment_url)}">↔ Điều chỉnh</a>
                     ${formButton(item.cancel_url, '⊗ Hủy đơn hàng', 'muted', 'Xác nhận hủy đơn hàng này?')}
                     ${formButton(item.trash_url, '♲ Xóa đơn', 'muted', 'Đưa đơn này vào thùng rác?')}

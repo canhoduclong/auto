@@ -518,6 +518,13 @@ class DepartmentFinanceRequestController extends Controller
 
         $config = $this->config($source);
         $this->authorizeSource($config);
+        $prefillRequest = null;
+        if ($request->filled('copy_from')) {
+            $request->validate(['copy_from' => 'required|integer|min:1']);
+            $prefillRequest = Transaction::where('request_source', $source)->findOrFail($request->integer('copy_from'));
+            abort_unless((int) $prefillRequest->submitted_by === (int) auth()->id() || auth()->user()->hasRole('admin'), 403);
+            $showCreateForm = true;
+        }
 
         $status = in_array($request->input('status'), ['all', Transaction::STATUS_PENDING_APPROVAL, Transaction::STATUS_APPROVED_PENDING_COMPLETION, Transaction::STATUS_APPROVED, Transaction::STATUS_REJECTED], true)
             ? $request->input('status')
@@ -601,6 +608,7 @@ class DepartmentFinanceRequestController extends Controller
             'managedAccounts' => $managedAccounts,
             'defaultManagedAccountId' => $defaultManagedAccountId,
             'editingRequest' => $editingRequest,
+            'prefillRequest' => $prefillRequest,
             'showCreateForm' => $showCreateForm,
             'fromDate' => $fromDate, 'toDate' => $toDate, 'perPage' => $perPage,
             'sort' => $sort, 'direction' => $direction,

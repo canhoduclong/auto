@@ -14,6 +14,18 @@ use Illuminate\Support\Facades\Schema;
 class Order extends Model
 {
     use HasFactory;
+    protected $appends = ['can_request_return'];
+
+    public function canRequestReturn(): bool
+    {
+        return $this->accountingReconciliation?->status !== AccountingReconciliation::STATUS_CONFIRMED;
+    }
+
+    public function getCanRequestReturnAttribute(): bool
+    {
+        return $this->canRequestReturn();
+    }
+
     protected $fillable = [
         'customer_id', 'user_id', 'shipper_id', 'supplier_id', 'code', 'total', 'status',
         'commission_percent_snapshot', 'commission_amount_snapshot', 'commission_created_at',

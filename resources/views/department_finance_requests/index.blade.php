@@ -12,23 +12,25 @@
         \App\Models\Transaction::STATUS_REJECTED => ['label' => 'Từ chối', 'class' => 'danger'],
     ];
     $editingRequest = $editingRequest ?? null;
+    $prefillRequest = $prefillRequest ?? null;
+    $formRequest = $editingRequest ?? $prefillRequest;
     $showCreateForm = $showCreateForm ?? false;
     $isManagerPage = $source === 'manager';
     $separateCreatePage = true;
-    $selectedFormType = old('request_form_type', $editingRequest?->request_form_type ?? \App\Models\Transaction::REQUEST_FORM_CASH);
-    $oldItems = old('items', $editingRequest?->request_items ?? [['content' => '', 'unit' => '', 'quantity' => 1, 'unit_price' => 0]]);
-    $selectedMethod = old('method', $editingRequest?->method ?? 'cash');
-    $selectedFlow = old('flow_direction', $editingRequest?->type === 'extra_income' ? 'in' : 'out');
+    $selectedFormType = old('request_form_type', $formRequest?->request_form_type ?? \App\Models\Transaction::REQUEST_FORM_CASH);
+    $oldItems = old('items', $formRequest?->request_items ?? [['content' => '', 'unit' => '', 'quantity' => 1, 'unit_price' => 0]]);
+    $selectedMethod = old('method', $formRequest?->method ?? 'cash');
+    $selectedFlow = old('flow_direction', $formRequest?->type === 'extra_income' ? 'in' : 'out');
     $currentUser = auth()->user();
     $formSubmitter = $editingRequest?->submitter ?: $currentUser;
     $currentDepartmentName = $formSubmitter?->department?->name;
     $currentBlockName = $formSubmitter?->department?->block?->name ?: $formSubmitter?->block?->name;
     $requestJobTitle = $formSubmitter?->job_title ?: $config['label'];
-    $storedDocumentTitle = $editingRequest?->request_document_title
+    $storedDocumentTitle = $formRequest?->request_document_title
         ?: ($selectedFormType === \App\Models\Transaction::REQUEST_FORM_PAYMENT ? 'Phiếu đề nghị thanh toán' : 'Phiếu yêu cầu');
     $documentTemplates = \App\Models\FinanceDocumentTemplate::where('is_active', true)->orderBy('id')->get();
     $standardDocumentTitles = $documentTemplates->pluck('name')->all();
-    if (!$editingRequest) $storedDocumentTitle = $documentTemplates->firstWhere('flow_direction', 'out')?->name ?? ($standardDocumentTitles[0] ?? '');
+    if (!$formRequest) $storedDocumentTitle = $documentTemplates->firstWhere('flow_direction', 'out')?->name ?? ($standardDocumentTitles[0] ?? '');
     $selectedDocumentTitle = old('request_document_title', in_array($storedDocumentTitle, $standardDocumentTitles, true) ? $storedDocumentTitle : '__custom__');
     $customDocumentTitle = old('request_document_title_custom', in_array($storedDocumentTitle, $standardDocumentTitles, true) ? '' : $storedDocumentTitle);
 @endphp
@@ -400,6 +402,9 @@
             <span class="badge text-bg-light border px-3 py-2" id="requestJobTitleBadge">{{ $requestJobTitle }}</span>
         </div>
         <div class="fr-panel-body">
+            @if($prefillRequest)
+                <div class="alert alert-info m-3">Đang nhân bản nội dung phiếu #{{ $prefillRequest->id }}. Vui lòng kiểm tra, chỉnh sửa và đính kèm lại chứng từ trước khi gửi duyệt. Phiếu gốc được giữ nguyên.</div>
+            @endif
             <form method="POST" action="{{ $editingRequest ? route($config['route_prefix'] . '.update', $editingRequest) : route($config['route_prefix'] . '.store') }}" enctype="multipart/form-data">
                 @csrf
                 @if($editingRequest)
@@ -431,9 +436,9 @@
                     <input type="hidden" name="request_form_type" id="requestFormType" value="{{ $selectedFormType }}">
                     <div id="cashVoucherRecipient">
                         <label class="form-label fw-semibold">Người nhận / nộp tiền <span class="text-danger">*</span></label>
-                        <input name="request_recipient" class="form-control" maxlength="255" value="{{ old('request_recipient', $editingRequest?->request_recipient) }}">
+                        <input name="request_recipient" class="form-control" maxlength="255" value="{{ old('request_recipient', $formRequest?->request_recipient) }}">
                         <label class="form-label fw-semibold mt-2">Địa chỉ <span class="text-danger">*</span></label>
-                        <input name="request_recipient_address" class="form-control" maxlength="500" value="{{ old('request_recipient_address', $editingRequest?->request_recipient_address) }}">
+                        <input name="request_recipient_address" class="form-control" maxlength="500" value="{{ old('request_recipient_address', $formRequest?->request_recipient_address) }}">
                     </div>
                     <div id="flowDirectionGroup">
                         <label class="form-label fw-semibold">Dòng tiền <span class="text-danger">*</span></label>
@@ -447,7 +452,7 @@
                     </div>
                     <div>
                         <label class="form-label fw-semibold">Tiêu đề phiếu <span class="text-danger">*</span></label>
-                        <input type="text" name="request_title" class="form-control" value="{{ old('request_title', $editingRequest?->request_title) }}" placeholder="VD: Mua vật tư đóng gói">
+                        <input type="text" name="request_title" class="form-control" value="{{ old('request_title', $formRequest?->request_title) }}" placeholder="VD: Mua vật tư đóng gói">
                     </div>
                     <div>
                         <label class="form-label fw-semibold">Hình thức chi trả <span class="text-danger">*</span></label>
@@ -465,7 +470,7 @@
                             <select name="destination_account_id" id="managedDestinationAccountId" class="form-select">
                                 <option value="">-- Chọn tài khoản --</option>
                                 @foreach($managedAccounts as $account)
-                                    <option value="{{ $account->id }}" @selected((string) old('destination_account_id', $editingRequest?->destination_account_id ?? $defaultManagedAccountId) === (string) $account->id)>
+                                    <option value="{{ $account->id }}" @selected((string) old('destination_account_id', $formRequest?->destination_account_id ?? $defaultManagedAccountId) === (string) $account->id)>
                                         {{ $account->name }}{{ $account->account_number ? ' - ' . $account->account_number : '' }}{{ $account->bank_name ? ' (' . $account->bank_name . ')' : '' }}
                                     </option>
                                 @endforeach
@@ -476,19 +481,19 @@
                     <div id="externalBankGroup" class="fr-meta-grid" @if($selectedMethod !== 'bank_transfer') hidden @endif>
                         <div>
                             <label class="form-label fw-semibold">Tên tài khoản <span class="text-danger">*</span></label>
-                            <input type="text" name="external_recipient" id="externalRecipient" class="form-control" maxlength="255" value="{{ old('external_recipient', $editingRequest?->external_recipient) }}" placeholder="VD: Công ty ABC, Nguyễn Văn A...">
+                            <input type="text" name="external_recipient" id="externalRecipient" class="form-control" maxlength="255" value="{{ old('external_recipient', $formRequest?->external_recipient) }}" placeholder="VD: Công ty ABC, Nguyễn Văn A...">
                         </div>
                         <div>
                             <label class="form-label fw-semibold">Số tài khoản <span class="text-danger">*</span></label>
-                            <input type="text" name="external_account_number" id="externalAccountNumber" class="form-control" maxlength="100" value="{{ old('external_account_number', $editingRequest?->external_account_number) }}">
+                            <input type="text" name="external_account_number" id="externalAccountNumber" class="form-control" maxlength="100" value="{{ old('external_account_number', $formRequest?->external_account_number) }}">
                         </div>
                         <div>
                             <label class="form-label fw-semibold">Ngân hàng <span class="text-danger">*</span></label>
-                            <input type="text" name="external_bank_name" id="externalBankName" class="form-control" maxlength="150" value="{{ old('external_bank_name', $editingRequest?->external_bank_name) }}">
+                            <input type="text" name="external_bank_name" id="externalBankName" class="form-control" maxlength="150" value="{{ old('external_bank_name', $formRequest?->external_bank_name) }}">
                         </div>
                         <div>
                             <label class="form-label fw-semibold">Chi nhánh</label>
-                            <input type="text" name="external_bank_branch" id="externalBankBranch" class="form-control" maxlength="150" value="{{ old('external_bank_branch', $editingRequest?->external_bank_branch) }}">
+                            <input type="text" name="external_bank_branch" id="externalBankBranch" class="form-control" maxlength="150" value="{{ old('external_bank_branch', $formRequest?->external_bank_branch) }}">
                         </div>
                     </div>
                 </div>
@@ -496,7 +501,7 @@
                 <div class="fr-note-grid mb-4">
                     <div>
                         <label class="form-label fw-semibold">Nội dung/Lý do <span class="text-danger">*</span></label>
-                        <textarea name="note" class="form-control" rows="5" maxlength="1000" placeholder="Mô tả rõ lý do thu/chi, nhà cung cấp, vật tư, ghi chú kế toán...">{{ old('note', $editingRequest?->note) }}</textarea>
+                        <textarea name="note" class="form-control" rows="5" maxlength="1000" placeholder="Mô tả rõ lý do thu/chi, nhà cung cấp, vật tư, ghi chú kế toán...">{{ old('note', $formRequest?->note) }}</textarea>
                     </div>
                     @if($isManagerPage || in_array($source, ['leader', 'accounting', 'warehouse'], true))
                         <div>
@@ -610,7 +615,7 @@
                         <div class="fr-summary-row align-items-center">
                             <label class="form-label mb-0" for="requestVat">VAT</label>
                             <div class="input-group input-group-sm" style="max-width: 190px;">
-                                <input type="number" name="request_vat" id="requestVat" class="form-control text-end" min="0" step="any" value="{{ old('request_vat', $editingRequest?->request_vat ?? 0) }}">
+                                <input type="number" name="request_vat" id="requestVat" class="form-control text-end" min="0" step="any" value="{{ old('request_vat', $formRequest?->request_vat ?? 0) }}">
                                 <span class="input-group-text">đ</span>
                             </div>
                         </div>
@@ -735,6 +740,9 @@
                                             || ($requestItem->status === \App\Models\Transaction::STATUS_PENDING_APPROVAL
                                                 && !$requestItem->approvalSteps->contains(fn ($step) => $step->approved_by !== null || $step->status !== 'pending')));
                                 @endphp
+                                @if((int) $requestItem->submitted_by === (int) auth()->id() || auth()->user()->hasRole('admin'))
+                                    <a href="{{ route($config['route_prefix'].'.create', ['copy_from' => $requestItem->id]) }}" class="btn btn-outline-primary btn-sm" title="Nhân bản nội dung để chỉnh sửa và gửi lại"><i class="bi bi-copy me-1"></i>Nhân bản</a>
+                                @endif
                                 @if(!in_array($source, ['leader', 'manager'], true) && $requestItem->canBeEditedBySubmitter((int) auth()->id()))
                                     <a href="{{ route($config['route_prefix'].'.edit', array_merge(request()->query(), ['transaction' => $requestItem->id])) }}" class="btn btn-outline-primary btn-sm fr-action-icon" title="Sửa phiếu"><i class="bi bi-pencil"></i></a>
                                 @endif
@@ -750,12 +758,7 @@
                                             <i class="bi bi-pencil"></i>
                                         </a>
                                     @endif
-                                    <form method="POST" action="{{ route('manager.finance-requests.duplicate', $requestItem) }}" class="d-inline" onsubmit="return confirm('Nhân bản phiếu #{{ $requestItem->id }} và gửi vào luồng duyệt mới?');">
-                                        @csrf
-                                        <button type="submit" class="btn btn-outline-primary btn-sm fr-action-icon" title="Nhân bản phiếu">
-                                            <i class="bi bi-copy"></i>
-                                        </button>
-                                    </form>
+
                                     @if($canManageManagerRequest)
                                         <form method="POST" action="{{ route('manager.finance-requests.destroy', $requestItem) }}" class="d-inline" onsubmit="return confirm('Xóa phiếu #{{ $requestItem->id }}? Thao tác này không thể hoàn tác.');">
                                             @csrf @method('DELETE')

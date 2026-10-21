@@ -2722,7 +2722,7 @@
                                         @if($order->customer_id && !in_array((int) $order->customer_id, $sampleDraftCustomerIds ?? [], true))
                                             <button class="btn btn-sm btn-outline-primary monitor-add-to-sample" type="button" data-sample-customer-id="{{ $order->customer_id }}" data-sample-url="{{ route('pages.my_order_drafts.add_from_order', $order) }}"><i class="bi bi-bookmark-plus"></i><span>Đưa vào đơn mẫu</span></button>
                                         @endif
-                                        @if((int) $order->user_id === (int) auth()->id() && auth()->user()->hasRole('sale') && in_array($order->status, ['delivered', 'completed'], true))
+                                        @if($order->canRequestReturn() && (int) $order->user_id === (int) auth()->id() && auth()->user()->hasRole('sale') && in_array($order->status, ['delivered', 'completed'], true))
                                             <a class="btn btn-sm btn-outline-warning" href="{{ route('sale-returns.create', $order) }}"><i class="bi bi-arrow-return-left me-1"></i>Hoàn trả</a>
                                         @endif
                                         @if($canRequestAdjustment)

@@ -5728,6 +5728,8 @@ public function apiTruckRoutes(Request $request)
             ->where('user_id', $user->id)
             ->findOrFail($id);
 
+        abort_unless($oldOrder->canRequestReturn(), 422, 'Đơn đã được kế toán xác nhận, không thể trả hàng.');
+
         if ((string) $oldOrder->status !== Order::STATUS_DELIVERED) {
             return redirect()->route('pages.my_orders')
                 ->with('error', 'Chỉ tạo đơn hoàn trả từ đơn đã giao hàng.');

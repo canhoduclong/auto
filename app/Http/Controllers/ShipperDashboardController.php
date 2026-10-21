@@ -1612,6 +1612,7 @@ class ShipperDashboardController extends Controller
         $deliveredQtys = $request->input('delivered_qty', []);
         $partialWeights = $request->input('partial_weight', []);
         $hasPartialReturn = (bool) $request->input('has_partial_return', false);
+        abort_if($hasPartialReturn && ! $order->canRequestReturn(), 422, 'Đơn đã được kế toán xác nhận, không thể trả hàng.');
         $returnWarehouseId = $hasPartialReturn ? (int) $request->input('return_warehouse_id') : null;
         $partialReturnReason = $hasPartialReturn ? (string) $request->input('partial_return_reason', 'other') : null;
 
@@ -1792,6 +1793,7 @@ class ShipperDashboardController extends Controller
     public function returnForm(Order $order)
     {
         $this->authorizeShipper($order);
+        abort_unless($order->canRequestReturn(), 422, 'Đơn đã được kế toán xác nhận, không thể trả hàng.');
         abort_if($order->status !== Order::STATUS_DELIVERING, 403, 'Đơn không đang giao.');
 
         $order->load(['customer.addresses', 'items.variant.product', 'warehouse', 'histories.user.warehouse']);
@@ -1807,6 +1809,7 @@ class ShipperDashboardController extends Controller
     public function storeReturn(Request $request, Order $order)
     {
         $this->authorizeShipper($order);
+        abort_unless($order->canRequestReturn(), 422, 'Đơn đã được kế toán xác nhận, không thể trả hàng.');
         abort_if($order->status !== Order::STATUS_DELIVERING, 422, 'Đơn không đang giao.');
 
         $request->validate([
