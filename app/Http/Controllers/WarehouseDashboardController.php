@@ -6460,7 +6460,7 @@ class WarehouseDashboardController extends Controller
                     $newNote = trim((string) ($row['note'] ?? ''));
                     $delta = $newQty - $oldQty;
                     $oldWeight = $item->weight_kg !== null ? (float) $item->weight_kg : round($oldQty * (float) ($item->productVariant?->effective_kg ?? 1), 3);
-                    $newWeight = isset($row['weight_kg']) ? round((float) $row['weight_kg'], 3) : ($oldQty > 0 ? round($oldWeight * $newQty / $oldQty, 3) : 0);
+                    $newWeight = isset($row['weight_kg']) ? round((float) $row['weight_kg'], 3) : $oldWeight;
 
 
                     if ($delta === 0 && $newCost === $oldCost && $newNote === $oldNote && $newWeight === $oldWeight) {

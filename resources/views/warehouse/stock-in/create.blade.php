@@ -320,7 +320,7 @@ function renderRow(idx, data = {}) {
         <input type="hidden" name="items[${idx}][source_price_id]" class="source-price-id-input" value="${data.source_price_id ?? data.price_id ?? ''}">
         <td class="align-middle"><input type="text" class="form-control form-control-sm unit-label-input text-center" value="${data.unit_label ?? ''}" readonly tabindex="-1"></td>
         <td class="align-middle">
-            <input type="text" class="form-control form-control-sm text-center calculated-weight-input" value="${formatWeight(totalWeight)} Kg"  tabindex="-1" data-weight-per-unit="${weightPerUnit}">
+            <input type="number" name="items[${idx}][weight_kg]" class="form-control form-control-sm text-center calculated-weight-input" value="${totalWeight}" min="0" step="0.001" placeholder="Nhập kg thực tế" aria-label="Khối lượng thực nhập (kg)" required>
               
         </td>
         <td class="align-middle"><input type="number" name="items[${idx}][unit_cost]" class="form-control form-control-sm text-center" min="0" step="1000" value="${price}"></td>
@@ -403,7 +403,7 @@ function updateLineTotal(row) {
     const select = row.querySelector('.variant-select');
     const selected = select?.selectedOptions?.[0];
     const weightPerUnit = toNumber(selected?.getAttribute('data-weight-per-unit'), 1);
-    const totalWeight = qty * weightPerUnit;
+    const totalWeight = toNumber(row.querySelector('.calculated-weight-input')?.value, 0);
     row.querySelector('.line-total').textContent = ((selected?.dataset.pricedByKg === '1' ? totalWeight : qty) * price).toLocaleString('vi-VN');
 }
 
@@ -419,14 +419,13 @@ function updateRowWeight(row) {
     const selectedWeight = toNumber(selected?.getAttribute('data-weight-per-unit'), 1);
     const totalWeight = qty * selectedWeight;
     weightInput.dataset.weightPerUnit = selectedWeight;
-    weightInput.value = `${formatWeight(totalWeight)} Kg`;
+    if (!weightInput.value.trim()) weightInput.value = String(totalWeight);
     if (formula) {
         formula.textContent = `${formatWeight(selectedWeight)} Kg / đơn vị`;
     }
 }
 
 function syncRowCalculatedFields(row) {
-    updateRowWeight(row);
     updateLineTotal(row);
 }
 
@@ -842,7 +841,7 @@ document.addEventListener('DOMContentLoaded', function () {
             row.querySelector('.unit-label-input').value = unit;
             updateRowWeight(row);
         }
-        if (e.target.name && (e.target.name.includes('[quantity]') || e.target.name.includes('[unit_cost]'))) {
+        if (e.target.name && (e.target.name.includes('[quantity]') || e.target.name.includes('[unit_cost]') || e.target.name.includes('[weight_kg]'))) {
             syncRowCalculatedFields(row);
         }
     });
@@ -850,7 +849,7 @@ document.addEventListener('DOMContentLoaded', function () {
     stockinRows.addEventListener('input', function (e) {
         const row = e.target.closest('.item-row');
         if (!row) return;
-        if (e.target.name && (e.target.name.includes('[quantity]') || e.target.name.includes('[unit_cost]'))) {
+        if (e.target.name && (e.target.name.includes('[quantity]') || e.target.name.includes('[unit_cost]') || e.target.name.includes('[weight_kg]'))) {
             syncRowCalculatedFields(row);
         }
     });

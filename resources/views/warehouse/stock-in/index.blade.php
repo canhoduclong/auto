@@ -131,7 +131,8 @@
     white-space: normal;
     overflow-wrap: anywhere;
 }
-.edit-stock-weight { background: #f0fdfa !important; color: #0f766e; font-weight: 700; }
+.edit-stock-weight { background: #fff !important; color: #0f172a; font-weight: 600; border: 1px solid #94a3b8; cursor: text; }
+.edit-stock-weight:focus { border-color: #0f766e; box-shadow: 0 0 0 .2rem rgba(15,118,110,.15); }
 .edit-stock-hint { color: #64748b; font-size: .76rem; }
 .edit-stock-items-scroll table {
     width: 100%;
@@ -530,7 +531,7 @@
                                 <div class="fw-700" style="color:#0f172a;">
                                     <i class="bi bi-list-ul me-1"></i>Danh sách hàng hoá
                                 </div>
-                                <div class="edit-stock-hint">Sản phẩm được giữ nguyên để bảo toàn lịch sử kho. Có thể sửa số lượng, khối lượng thực nhập (kg), đơn giá và ghi chú.</div>
+                                <div class="edit-stock-hint">Sản phẩm được giữ nguyên để bảo toàn lịch sử kho. Nhập trực tiếp kg thực cân vào cột Khối lượng (ví dụ 120,5). Thành tiền tự cập nhật theo kg đã nhập. Có thể sửa số lượng, đơn giá và ghi chú.</div>
                             </div>
                             <div class="small text-muted"><i class="bi bi-arrow-down-up me-1"></i>Cuộn trong bảng để xem toàn bộ sản phẩm</div>
                         </div>
@@ -664,8 +665,9 @@
         document.querySelectorAll('#editItemsBody tr[data-item-row]').forEach(function (row) {
             const qty  = parseFloat(row.querySelector('.eq-qty').value)  || 0;
             const cost = parseFloat(row.querySelector('.eq-cost').value) || 0;
-            const weightPerUnit = parseFloat(row.dataset.weightPerUnit) || 1;
-            const weight = parseFloat(row.querySelector('.eq-weight').value) || 0;
+            const enteredWeight = row.querySelector('.eq-weight').value.trim().replace(',', '.');
+            row.querySelector('.eq-weight-value').value = enteredWeight;
+            const weight = Number(enteredWeight) || 0;
             const line = (row.dataset.pricedByKg === '1' ? weight : qty) * cost;
             row.querySelector('.eq-line').textContent = line.toLocaleString('vi-VN') + 'đ';
 
@@ -758,7 +760,8 @@
                         '<input type="text" class="form-control form-control-sm text-center" value="' + escHtml(item.unit_label || 'Cái') + '" readonly tabindex="-1">' +
                     '</td>' +
                     '<td>' +
-                        '<input type="number" name="items[' + item.id + '][weight_kg]" class="form-control form-control-sm text-center edit-stock-weight eq-weight" min="0" step="0.001" value="' + Number(item.weight_kg ?? item.quantity * (item.weight_per_unit || 1)) + '" aria-label="Khối lượng thực nhập (kg)" required>' +
+                        '<input type="text" inputmode="decimal" class="form-control form-control-sm text-center edit-stock-weight eq-weight" pattern="[0-9]{1,9}([.,][0-9]{1,3})?" value="' + String(Number(item.weight_kg ?? item.quantity * (item.weight_per_unit || 1))).replace('.', ',') + '" placeholder="Nhập kg thực tế" aria-label="Nhập khối lượng thực tế (kg)" title="Nhập kg thực tế, ví dụ 120 hoặc 120,5" required>' +
+                        '<input type="hidden" name="items[' + item.id + '][weight_kg]" class="eq-weight-value" value="' + Number(item.weight_kg ?? item.quantity * (item.weight_per_unit || 1)) + '">' +
                     '</td>' +
                     '<td class="text-center">' +
                         '<input type="number" name="items[' + item.id + '][unit_cost]" class="form-control form-control-sm eq-cost text-center" ' +
