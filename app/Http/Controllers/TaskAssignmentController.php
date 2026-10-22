@@ -494,9 +494,7 @@ class TaskAssignmentController extends Controller
         $task = $taskAssignment;
 
         // Only users with configured task assignment rights can edit
-        if (!$task->canBeEditedBy($user)) {
-            return back()->with('error', 'Ban khong co quyen chinh sua cong viec nay.');
-        }
+        abort_unless($task->canBeEditedBy($user), 403, 'Chỉ người giao việc được chỉnh sửa nội dung và khi công việc còn cho phép chỉnh sửa.');
 
         $isFrontRoles = $user && $user->isSalesFlowRole();
         $isFrontendRoute = false; // Edit always in admin
@@ -526,7 +524,7 @@ class TaskAssignmentController extends Controller
         $formMethod = 'PUT';
 
         // Load current assignees for edit form
-        $currentAssigneeIds = $currentAssigneeIds->all();
+        $currentAssigneeIds = $task->assignees()->pluck('user_id')->all();
 
         return view('task_assignments.edit', compact(
             'task',
@@ -550,9 +548,7 @@ class TaskAssignmentController extends Controller
         $task = $taskAssignment;
 
         // Only users with configured task assignment rights can update
-        if (!$task->canBeEditedBy($user)) {
-            return back()->with('error', 'Ban khong co quyen chinh sua cong viec nay.');
-        }
+        abort_unless($task->canBeEditedBy($user), 403, 'Chỉ người giao việc được chỉnh sửa nội dung và khi công việc còn cho phép chỉnh sửa.');
 
         $data = $request->validate([
             'task_type' => 'nullable|in:default,checklist,debt_collection',
@@ -599,6 +595,8 @@ class TaskAssignmentController extends Controller
 
         try {
             DB::transaction(function () use ($data, $paths, $task, $user) {
+                $task = TaskAssignment::whereKey($task->id)->lockForUpdate()->firstOrFail();
+                abort_unless($task->canBeEditedBy($user), 403, 'Chỉ người giao việc được chỉnh sửa nội dung công việc.');
                 // Update task
                 $task->update([
                     'task_type' => $data['task_type'] ?? $task->task_type,

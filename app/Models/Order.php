@@ -628,6 +628,13 @@ class Order extends Model
         return in_array($this->status, [self::STATUS_DELIVERED, self::STATUS_COMPLETED], true);
     }
 
+    public function canRequestAdjustmentBy(?User $user): bool
+    {
+        return $user && $this->canRequestAdjustment()
+            && ($user->hasRole('admin')
+                || ($user->isSalesFlowRole() && (int) $this->user_id === (int) $user->id));
+    }
+
     public function getPaymentStatusTextAttribute()
     {
         if ($this->status === self::STATUS_COMPLETED) {

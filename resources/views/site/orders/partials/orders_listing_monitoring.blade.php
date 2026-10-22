@@ -129,9 +129,8 @@
                 $canCancel = !$isTrashView && ($user->hasRole('admin') || (int) $order->user_id === (int) $user->id) && $order->canBeCancelled();
                 $canRequestAdjustment = !$isTrashView
                     && (int) $order->user_id === (int) $user->id
-                    && $order->status === \App\Models\Order::STATUS_COMPLETED
-                    && $order->canRequestAdjustment();
-                $canApprove = !$isTrashView && !$isCancelled && $user->hasRole(['admin', 'manager', 'manager_sale', 'director']);
+                    && $order->canRequestAdjustmentBy($user);
+                $canApprove = !$isTrashView && !$isCancelled && app(\App\Services\ApprovalService::class)->canApproveCurrentStep($order, $user);
                 $defaultAddress = $order->customer?->addresses?->firstWhere('is_default', 1) ?? $order->customer?->addresses?->first();
                 $address = $order->recipient_address ?: ($defaultAddress?->note ?: ($order->customer?->address ?: 'Chưa cập nhật'));
                 $area = collect([$defaultAddress?->ward, $defaultAddress?->city])->filter()->implode(', ');

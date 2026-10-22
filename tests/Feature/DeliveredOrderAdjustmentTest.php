@@ -45,4 +45,23 @@ class DeliveredOrderAdjustmentTest extends TestCase
         try { $method->invoke($controller,$order); self::fail('Other sale order allowed'); }
         catch(HttpException $e) { self::assertSame(403,$e->getStatusCode()); }
     }
+    public function test_sales_management_roles_can_request_adjustment_only_for_their_own_orders(): void
+    {
+        foreach (['sale','leader','leader_sale','sale_manager','manager','manager_sale'] as $role) {
+            $user=new User; $user->id=7;
+            $user->setRelation('roles',collect([new \App\Models\Role(['name'=>$role])]));
+            auth()->setUser($user);
+            $controller=(new \ReflectionClass(OrderAdjustmentController::class))->newInstanceWithoutConstructor();
+            $method=new \ReflectionMethod(OrderAdjustmentController::class,'authorizeCreate');
+            foreach(['delivered','completed'] as $status) {
+                $order=new Order(['status'=>$status,'user_id'=>7]);
+                $method->invoke($controller,$order);
+                self::assertTrue($order->canRequestAdjustmentBy($user));
+                $order->user_id=8;
+                try { $method->invoke($controller,$order); self::fail('Other owner allowed: '.$role); }
+                catch(HttpException $e) { self::assertSame(403,$e->getStatusCode()); }
+            }
+        }
+    }
+
 }

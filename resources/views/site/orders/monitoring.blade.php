@@ -2174,7 +2174,7 @@
                             $isEditable = $canManageOrder && $order->canBeDirectlyEditedByOwner();
                             $canCancel = in_array($order->status, \App\Models\Order::CANCELLABLE_STATUSES, true)
                                 && ($isAdminUser || $canManageOrder);
-                            $canRequestAdjustment = $canManageOrder && $order->canRequestAdjustment();
+                            $canRequestAdjustment = $canManageOrder && $order->canRequestAdjustmentBy(auth()->user());
                             $currentCustomer = $order->customer;
                             $currentUsesTruckStation = (bool) ($currentCustomer?->use_truck_station ?? false)
                                 && !empty($currentCustomer?->truck_station_id);
@@ -4162,8 +4162,14 @@ document.addEventListener('submit', async function (event) {
             host.scrollIntoView({ behavior: 'smooth', block: 'center' });
             try {
                 const response = await fetch(opener.dataset.adjustmentUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' } });
-                const data = await response.json();
-                if (!response.ok || !data.success) throw new Error(data.message || 'Không tải được biểu mẫu.');
+                const data = (response.headers.get('content-type') || '').includes('application/json')
+                    ? await response.json() : {};
+                if (!response.ok || !data.success) {
+                    const message = response.status === 403 ? 'Bạn không có quyền gửi yêu cầu điều chỉnh đơn này.'
+                        : response.status === 401 || response.redirected ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
+                        : 'Không tải được biểu mẫu. Vui lòng tải lại trang và thử lại.';
+                    throw new Error(data.message || message);
+                }
                 host.innerHTML = data.html;
                 const form = host.querySelector('[data-monitor-adjustment-form]');
                 form.dataset.nextItemIndex = String(form.querySelectorAll('[data-adjustment-item]').length);

@@ -669,17 +669,7 @@ class OrderAdjustmentController extends Controller
             'Chỉ có thể gửi yêu cầu điều chỉnh khi đơn đã giao hoặc hoàn tất.'
         );
 
-        if ($user->hasRole('admin')) {
-            return;
-        }
-
-        if (! $user->hasRole('sale')) {
-            abort(403);
-        }
-
-        if ((int) $order->user_id !== (int) $user->id) {
-            abort(403);
-        }
+        abort_unless($order->canRequestAdjustmentBy($user), 403, 'Chỉ người tạo đơn thuộc bộ phận kinh doanh hoặc quản trị viên được gửi yêu cầu điều chỉnh đơn này.');
     }
 
     private function authorizeView(OrderAdjustment $orderAdjustment): void

@@ -40,7 +40,7 @@ class OrderApprovalController extends Controller
 
     private function userCanApproveOrder(?\App\Models\User $user, Order $order): bool
     {
-        if (!$this->userCanApprove($user)) {
+        if (!$this->userCanApprove($user) || !app(ApprovalService::class)->canApproveCurrentStep($order, $user)) {
             return false;
         }
 

@@ -210,30 +210,21 @@ class TaskAssignment extends Model
         if (!$user || !in_array($this->status, [self::STATUS_PENDING, self::STATUS_PROCESSING, 'in_progress'], true)) {
             return false;
         }
-        return (int) $this->created_by === (int) $user->id
-            || $user->hasRole('admin')
-            || (!$this->work_kind && ($user->hasRole('CEO') || $user->hasRole('manager')));
+        return (int) $this->created_by === (int) $user->id;
     }
 
     public function canBeEditedBy(?User $user): bool
     {
-        if (!$user) {
+        if (!$user || (int) $this->created_by !== (int) $user->id) {
             return false;
         }
 
         if ($this->work_kind) {
-            return ((int)$this->created_by===(int)$user->id || $user->hasRole('admin'))
-                && $this->status==='pending'
+            return $this->status==='pending'
                 && !$this->assignees()->whereNotNull('accepted_at')->exists();
         }
 
-        $canManage = (int) $this->created_by === (int) $user->id
-            || $user->hasRole('admin')
-            || $user->hasRole('CEO')
-            || $user->hasRole('manager');
-
-        return $canManage
-            && (TaskDelegateConfig::canAssignTasks($user) || \App\Services\TaskMenuService::canAssignTasks($user))
+        return (TaskDelegateConfig::canAssignTasks($user) || \App\Services\TaskMenuService::canAssignTasks($user))
             && in_array($this->status, [self::STATUS_PENDING, self::STATUS_IN_PROGRESS, 'in_progress'], true)
             && $this->allAssigneePending();
     }
