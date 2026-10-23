@@ -1440,6 +1440,9 @@ class PageController extends Controller
         $tabContentHtml = $activeTab === 'today'
             ? null
             : $this->renderMonitoringTab($activeTab, $request);
+        $customerAreaStats = $activeTab === 'customers'
+            ? app(\App\Services\CustomerAreaService::class)->groups($this->monitoringCustomerAreaQuery($request))
+            : collect();
         $customerTabSales = collect();
         $selectedDraftCustomerId = max(0, (int) $request->input('draft_customer_id', 0));
         $draftSidebarCustomers = collect();
@@ -1489,6 +1492,7 @@ class PageController extends Controller
             'saleFilters' => $saleFilters,
             'customerFilters' => $customerFilters,
             'sampleDraftCustomerIds' => $sampleDraftCustomerIds,
+            'customerAreaStats' => $customerAreaStats,
             'customerTabSales' => $customerTabSales,
             'draftSidebarCustomers' => $draftSidebarCustomers,
             'selectedDraftCustomerId' => $selectedDraftCustomerId,
@@ -1746,6 +1750,28 @@ class PageController extends Controller
         };
     }
 
+    private function monitoringCustomerAreaQuery(Request $request): Builder
+    {
+        $userId = (int) $request->user()->id;
+        $search = trim((string) $request->input('search', ''));
+        return Customer::query()
+            ->where(function ($query) use ($userId) {
+                $query->where('user_id', $userId)
+                    ->orWhere('assigned_to', $userId);
+            })
+            ->where(function ($query) {
+                $query->where('is_employee', '<>', 1)->orWhereNull('is_employee');
+            })
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($searchQuery) use ($search) {
+                    $searchQuery->where('name', 'like', "%{$search}%")
+                        ->orWhere('phone', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhere('address', 'like', "%{$search}%");
+                });
+            });
+    }
+
     private function monitoringCustomers(Request $request)
     {
         $user = $request->user();
@@ -1763,22 +1789,7 @@ class PageController extends Controller
             ? (string) $request->input('classification_sort')
             : '';
 
-        $customersQuery = Customer::query()
-            ->where(function ($query) use ($userId) {
-                $query->where('user_id', $userId)
-                    ->orWhere('assigned_to', $userId);
-            })
-            ->where(function ($query) {
-                $query->where('is_employee', '<>', 1)->orWhereNull('is_employee');
-            })
-            ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($searchQuery) use ($search) {
-                    $searchQuery->where('name', 'like', "%{$search}%")
-                        ->orWhere('phone', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%")
-                        ->orWhere('address', 'like', "%{$search}%");
-                });
-            })
+        $customersQuery = $this->monitoringCustomerAreaQuery($request)
             ->withCount('orders')
             ->withSum('orders as total_debt', 'amount_due')
             ->with([
@@ -1787,6 +1798,9 @@ class PageController extends Controller
                 'assignedTo:id,name',
                 'user:id,name',
             ]);
+
+        $areaFilters = $request->validate(['area' => 'nullable|string|max:255', 'ward' => 'nullable|string|max:255']);
+        app(\App\Services\CustomerAreaService::class)->apply($customersQuery, $areaFilters['area'] ?? null, $areaFilters['ward'] ?? null);
 
         $classificationService = app(CustomerClassificationService::class);
         $classificationConfig = $classificationService->config();

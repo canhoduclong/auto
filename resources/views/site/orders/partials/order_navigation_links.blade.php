@@ -83,4 +83,7 @@
     >
         <i class="bi {{ $orderNavigationItem['icon'] }}"></i><span>{{ $orderNavigationItem['label'] }}</span>
     </a>
+    @if($orderNavigationItem['key'] === 'customers' && $orderNavigationActiveTab === 'customers')
+        @include('site.orders.partials.customer_area_menu', ['areaStats' => $customerAreaStats ?? collect()])
+    @endif
 @endforeach

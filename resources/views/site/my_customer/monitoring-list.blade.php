@@ -174,6 +174,8 @@
         'sale_id' => $selectedSaleId ?: null,
         'per_page' => $perPage,
         'classification_sort' => $classificationSort ?: null,
+        'area' => request('area'),
+        'ward' => request('ward'),
     ]);
     $classificationLabels = [
         'volume' => ['unit' => 'con/tháng', 'd' => 'Dưới ngưỡng C'],

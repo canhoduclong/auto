@@ -514,6 +514,11 @@ class CeoDashboardController extends Controller
             });
         }
 
+        $areaFilters = $request->validate(['area' => 'nullable|string|max:255', 'ward' => 'nullable|string|max:255']);
+        $areaService = app(\App\Services\CustomerAreaService::class);
+        $areaStats = $areaService->groups($query);
+        $areaService->apply($query, $areaFilters['area'] ?? null, $areaFilters['ward'] ?? null);
+
         $perPage = (int) $request->input('per_page', 15);
         if (! in_array($perPage, [10, 15, 25, 50, 100], true)) {
             $perPage = 15;
@@ -579,7 +584,8 @@ class CeoDashboardController extends Controller
             'users',
             'creatorUsers',
             'customerFreeDays',
-            'employeeStats'
+            'employeeStats',
+            'areaStats'
         ));
     }
 

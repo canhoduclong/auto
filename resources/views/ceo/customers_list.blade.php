@@ -76,6 +76,15 @@
 .expires-note { font-size: .7rem; color: #94a3b8; }
 .cust-empty { padding: 52px 0; text-align: center; color: #94a3b8; }
 .cust-pagination { padding: 16px 20px; border-top: 1px solid #eef2f7; }
+.customer-areas{max-height:520px;overflow-y:auto}
+.customer-area{border-bottom:1px solid #eef2f7}
+.customer-area summary{padding:12px 14px;cursor:pointer;list-style:none}
+.customer-area summary::-webkit-details-marker{display:none}
+.customer-area[open] .customer-area-arrow{transform:rotate(90deg)}
+.customer-area summary a{text-decoration:none}
+.customer-area-wards{padding:0 10px 10px 28px}
+.customer-area-wards a{padding:9px 10px;border-radius:6px;text-decoration:none;color:#475569;font-size:.85rem}
+.customer-area-wards a:hover,.customer-area-wards a.active{background:#eaf3ff;color:#1e40af}
 </style>
 @endpush
 
@@ -108,6 +117,8 @@
     <div class="cust-panel">
         <div class="cust-filter-bar">
             <form class="row g-2 align-items-center" method="GET" action="{{ route('ceo.customers-list') }}">
+                @if(request()->filled('area'))<input type="hidden" name="area" value="{{ request('area') }}">@endif
+                @if(request()->filled('ward'))<input type="hidden" name="ward" value="{{ request('ward') }}">@endif
                 <div class="col-auto">
                     <input type="text" name="q" value="{{ request('q') }}" class="form-control" placeholder="Tìm theo tên / số điện thoại / email" style="min-width:220px;">
                 </div>
@@ -182,6 +193,9 @@
 
         <div class="row g-3 mt-0">
             <div class="col-lg-8">
+                @if(request()->filled('area'))
+                    <div class="alert alert-info py-2 mb-3">Khu vực: <strong>{{ request('area') === \App\Services\CustomerAreaService::UNKNOWN ? 'Chưa cập nhật' : request('area') }}</strong>@if(request()->filled('ward')) · {{ request('ward') === \App\Services\CustomerAreaService::UNKNOWN ? 'Chưa cập nhật phường' : request('ward') }}@endif</div>
+                @endif
                 <div class="table-responsive">
                     <table class="table cust-table mb-0">
                         <thead>
@@ -268,7 +282,7 @@
             </div>
 
             <div class="col-lg-4">
-                <div class="card border-0 shadow-sm" style="position: sticky; top: 20px;">
+                <div class="card border-0 shadow-sm">
                     <div class="card-header bg-white border-bottom d-flex align-items-center justify-content-between">
                         <div class="fw-semibold text-muted small mb-0">THỐNG KÊ NHÂN VIÊN</div>
                         <div class="small text-muted" style="font-size:.8rem;">
@@ -293,6 +307,36 @@
                                 Chưa có dữ liệu nhân viên
                             </div>
                         @endforelse
+                    </div>
+                </div>
+                <div class="card border-0 shadow-sm mt-3">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                        <strong class="small text-muted">DANH SÁCH KHU VỰC</strong>
+                        <a class="small" href="{{ request()->fullUrlWithQuery(['area' => null, 'ward' => null, 'page' => null]) }}">Tất cả khu vực</a>
+                    </div>
+                    <div class="px-3 py-2 small text-muted border-bottom">Tỉnh/thành → phường theo địa chỉ mặc định. Số khách theo các bộ lọc hiện tại.</div>
+                    <div class="customer-areas">
+                        @forelse($areaStats as $area => $wards)
+                            @php
+                                $unknown = \App\Services\CustomerAreaService::UNKNOWN;
+                                $areaLabel = $area === $unknown ? 'Chưa cập nhật khu vực' : $area;
+                                $areaSelected = request('area') === $area;
+                            @endphp
+                            <details class="customer-area" @if($areaSelected) open @endif>
+                                <summary class="d-flex align-items-center gap-2">
+                                    <span class="customer-area-arrow" aria-hidden="true">▸</span>
+                                    <a class="flex-grow-1 {{ $areaSelected && !request()->filled('ward') ? 'fw-bold text-primary' : 'text-dark' }}" href="{{ request()->fullUrlWithQuery(['area' => $area, 'ward' => null, 'page' => null]) }}">{{ $areaLabel }}</a>
+                                    <span class="badge bg-secondary rounded-pill">{{ number_format($wards->sum('customer_count')) }}</span>
+                                </summary>
+                                <div class="customer-area-wards">
+                                    @foreach($wards as $ward)
+                                    <a class="d-flex justify-content-between align-items-center gap-2 {{ $areaSelected && request('ward') === $ward->ward ? 'active' : '' }}" href="{{ request()->fullUrlWithQuery(['area' => $area, 'ward' => $ward->ward, 'page' => null]) }}" @if($areaSelected && request('ward') === $ward->ward) aria-current="page" @endif>
+                                        <span>{{ $ward->ward === $unknown ? 'Chưa cập nhật phường' : $ward->ward }}</span><span class="badge bg-light text-secondary border rounded-pill">{{ number_format($ward->customer_count) }}</span>
+                                    </a>
+                                    @endforeach
+                                </div>
+                            </details>
+                        @empty<div class="p-3 text-muted small">Chưa có khách hàng phù hợp bộ lọc.</div>@endforelse
                     </div>
                 </div>
             </div>

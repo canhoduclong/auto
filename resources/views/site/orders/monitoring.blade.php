@@ -1200,6 +1200,15 @@
         #monitorOrderFilterSlot .orders-filter label { font-size: 15px; margin-bottom: 8px; }
         #monitorOrderFilterSlot .orders-filter .btn { min-height: 44px; font-size: 15px; }
     }
+.monitor-customer-areas{min-width:0;overflow:hidden;margin:2px 0 6px}
+.monitor-customer-area-list{max-height:400px;overflow-y:auto}
+.monitor-customer-area summary{display:flex;align-items:center;gap:7px;padding:10px 12px;cursor:pointer;list-style:none;border-top:1px solid #e2e8f0}
+.monitor-customer-area summary::-webkit-details-marker{display:none}
+.monitor-customer-area summary a{flex:1;min-width:0;text-decoration:none;color:#075985;font-size:13px;overflow-wrap:anywhere}
+.monitor-customer-area summary a.active{font-weight:800;color:#0f766e}
+.monitor-customer-area[open] .monitor-area-arrow{transform:rotate(90deg)}
+.monitor-area-wards{padding-left:18px}
+.monitor-area-wards .monitor-filter-link{gap:8px;white-space:normal}
 </style>
 @endpush
 
