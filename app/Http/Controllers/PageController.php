@@ -1802,6 +1802,10 @@ class PageController extends Controller
         $areaFilters = $request->validate(['area' => 'nullable|string|max:255', 'ward' => 'nullable|string|max:255']);
         app(\App\Services\CustomerAreaService::class)->apply($customersQuery, $areaFilters['area'] ?? null, $areaFilters['ward'] ?? null);
 
+        if ($printAll) {
+            $customersQuery->with(['addresses.province', 'addresses.wardModel']);
+        }
+
         $classificationService = app(CustomerClassificationService::class);
         $classificationConfig = $classificationService->config();
 
