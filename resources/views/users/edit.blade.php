@@ -82,6 +82,12 @@
         <div class="form-check mb-3">
             @if(auth()->user()?->hasRole('admin'))
                 <div class="mb-3">
+                    <input type="hidden" name="view_all_monitoring_customers" value="0">
+                    <label for="view_all_monitoring_customers"><input type="checkbox" id="view_all_monitoring_customers" name="view_all_monitoring_customers" value="1" @checked(old('view_all_monitoring_customers', \App\Models\Setting::enabled('view_all_monitoring_customers_'.$user->id)))> Cho phép xem toàn bộ khách hàng và in thống kê</label>
+                    <div class="small text-muted">Áp dụng tại Đơn của tôi → Khách hàng cho tài khoản sale, leader, manager: xem toàn bộ khách hàng, in danh sách và thống kê khu vực. Không cấp quyền chuyển giao khách hàng hoặc cài đặt hệ thống.</div>
+                </div>
+
+                <div class="mb-3">
                     <input type="hidden" name="shipper_auto_complete" value="0">
                     <label><input type="checkbox" name="shipper_auto_complete" value="1" @checked(old('shipper_auto_complete', \App\Models\Setting::enabled('shipper_auto_complete_'.$user->id)))> Cho phép điều phối xác nhận và hoàn thành giao hàng thay shipper</label>
                     <div class="small text-muted">Áp dụng cho các lộ trình đã gửi của shipper này.</div>

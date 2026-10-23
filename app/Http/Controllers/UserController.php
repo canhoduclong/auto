@@ -371,6 +371,7 @@ class UserController extends Controller
     public function update(Request $request, User $user, UserWorkspaceService $workspaceService)
     {
         $request->validate([
+            'view_all_monitoring_customers' => 'nullable|boolean',
             'name' => 'required|string|max:255',
             'short_name' => 'nullable|string|max:80',
             'zalo_name' => 'nullable|string|max:255',
@@ -451,6 +452,7 @@ class UserController extends Controller
         $user->managedAccounts()->sync($managedAccountPayload);
 
         if ($request->user()?->hasRole('admin')) {
+            Setting::set('view_all_monitoring_customers_'.$user->id, $request->boolean('view_all_monitoring_customers') ? '1' : '0');
             Setting::set('shipper_auto_complete_'.$user->id, $request->boolean('shipper_auto_complete') ? '1' : '0');
         }
 

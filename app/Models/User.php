@@ -68,6 +68,12 @@ class User extends Authenticatable
         ];
     }
 
+    public function canViewAllMonitoringCustomers(): bool
+    {
+        return $this->isAdmin()
+            || ($this->exists && Setting::enabled('view_all_monitoring_customers_'.$this->id));
+    }
+
     public function defaultRole()
     {
         return $this->belongsTo(Role::class, 'default_role_id');

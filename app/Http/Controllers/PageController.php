@@ -1772,7 +1772,7 @@ class PageController extends Controller
     {
         $selectedStaff = $this->monitoringCustomerSelectedStaff($request);
         $userId = (int) ($selectedStaff?->id ?? $request->user()->id);
-        $restrictToUser = !$request->user()->isAdmin() || $selectedStaff !== null;
+        $restrictToUser = !$request->user()->canViewAllMonitoringCustomers() || $selectedStaff !== null;
         $search = trim((string) $request->input('search', ''));
         return Customer::query()
             ->when($restrictToUser, fn ($query) => $query->where(function ($query) use ($userId) {
