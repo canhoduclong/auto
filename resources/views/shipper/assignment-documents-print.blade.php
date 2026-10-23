@@ -56,7 +56,8 @@
 @foreach($orders as $order)
 @php
     $totalQuantity = $order->items->sum('quantity');
-    $vatAmount = app(\App\Services\WarehousePackedOrderService::class)->summary($order, useActualWeight: true)['vat_amount'];
+    $printSummary = app(\App\Services\WarehousePackedOrderService::class)->summary($order, useActualWeight: true);
+    $vatAmount = $printSummary['vat_amount'];
     $totalWeight = $order->items->sum(fn ($item) => $item->effective_priced_by_kg ? (float) ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight ?? 0) : 0);
 @endphp
 <section class="sheet">
@@ -97,7 +98,7 @@
                 $product = $item->variant?->product ?: $item->product;
                 $unit = $product?->unit_label ?? 'Cái';
                 $weight = $item->effective_priced_by_kg ? ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight) : null;
-                $amount = (float) ($item->total ?? ((float) $item->quantity * (float) $item->price));
+                $amount = round(($item->effective_priced_by_kg ? ($item->export_actual_weight ?? $item->display_total_value) : (float) $item->quantity) * (float) $item->price, 2);
             @endphp
             <tr><td class="center">{{ $index + 1 }}</td><td class="center">{{ $item->variant?->sku ?? '—' }}</td><td><strong>{{ $product?->name ?? $item->imported_name ?? '—' }}</strong><br>{{ $item->variant?->name }}</td><td class="center">{{ $unit }}</td><td class="center">{{ number_format((float) $item->quantity, 0, ',', '.') }}</td><td class="center">{{ $weight !== null ? format_kg((float) $weight) : '—' }}</td><td></td><td class="right">{{ number_format((float) $item->price, 0, ',', '.') }}đ</td><td class="right">{{ number_format($amount, 0, ',', '.') }}đ</td></tr>
         @empty
@@ -112,14 +113,16 @@
     <table class="totals">
         <tr><td>Tổng số lượng</td><td>{{ number_format((float) $totalQuantity, 0, ',', '.') }}</td></tr>
         <tr><td>Khối lượng thực tế</td><td>{{ $totalWeight > 0 ? format_kg($totalWeight) : '—' }}</td></tr>
-        @if(isset($printTitle))
-        @php($customerShipping = app(\App\Services\OrderFeeService::class)->customerShippingState($order))
-        <tr><td>Phí giao hàng thu khách</td><td>{{ number_format((float) $customerShipping['value'], 0, ',', '.') }}đ</td></tr>
-        @else
-        <tr><td>Phí vận chuyển</td><td>{{ number_format((float) $order->shipping_fee, 0, ',', '.') }}đ</td></tr>
+        <tr><td>Tiền hàng</td><td>{{ number_format((float) $printSummary['items_subtotal'], 0, ',', '.') }}đ</td></tr>
+        @if((float) $printSummary['extra_discount_total'] != 0)
+        <tr><td>{{ $printSummary['extra_discount_total'] > 0 ? 'Chiết khấu đơn' : 'Điều chỉnh tăng' }}</td><td>{{ $printSummary['extra_discount_total'] > 0 ? '-' : '+' }}{{ number_format(abs((float) $printSummary['extra_discount_total']), 0, ',', '.') }}đ</td></tr>
         @endif
-        <tr><td>VAT</td><td>{{ number_format((float) $vatAmount, 0, ',', '.') }}đ</td></tr>
-        <tr><td>Tổng cộng</td><td>{{ number_format((float) $order->total, 0, ',', '.') }}đ</td></tr>
+        <tr><td>Phí ship</td><td>{{ number_format((float) $printSummary['shipping_fee'], 0, ',', '.') }}đ</td></tr>
+        <tr><td>VAT{{ $order->charge_vat && (float) $order->vat_percent > 0 ? ' ('.number_format((float) $order->vat_percent, 0, ',', '.').'%)' : '' }}</td><td>{{ number_format((float) $vatAmount, 0, ',', '.') }}đ</td></tr>
+        @if((float) $printSummary['foam_box_fee'] > 0)
+        <tr><td>Phí thùng xốp</td><td>{{ number_format((float) $printSummary['foam_box_fee'], 0, ',', '.') }}đ</td></tr>
+        @endif
+        <tr><td>Tổng thanh toán</td><td>{{ number_format((float) $printSummary['total'], 0, ',', '.') }}đ</td></tr>
     </table>
     </div>
     </div>
