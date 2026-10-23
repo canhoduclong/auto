@@ -14,6 +14,8 @@ tr { break-inside: avoid; page-break-inside: avoid; }
 .center { text-align: center; }
 .customer-name { font-weight: bold; }
 .address { white-space: pre-line; }
+.phone { white-space: nowrap; font-size: 10px; letter-spacing: -.2px; }
+.needs { font-size: 10px; line-height: 1.35; }
 .meta { font-size: 11px; color: #475569; text-align: center; }
 .tools { text-align: right; margin: 10px; }
 @media screen { body { max-width: 277mm; margin: 20px auto; padding: 0 10px; } }
@@ -26,10 +28,10 @@ tr { break-inside: avoid; page-break-inside: avoid; }
 <div class="meta">@if($search !== '')Tìm kiếm: {{ $search }} · @endif @if(request()->filled('area'))Khu vực: {{ request('area') === \App\Services\CustomerAreaService::UNKNOWN ? 'Chưa cập nhật' : request('area') }} @endif @if(request()->filled('ward')) · Phường: {{ request('ward') === \App\Services\CustomerAreaService::UNKNOWN ? 'Chưa cập nhật' : request('ward') }}@endif</div>
 <table>
 <colgroup>
-    <col style="width:4%"><col style="width:6%"><col style="width:14%"><col style="width:10%">
-    <col style="width:23%"><col style="width:12%"><col style="width:15%"><col style="width:11%"><col style="width:5%">
+    <col style="width:4%"><col style="width:6%"><col style="width:17%"><col style="width:8%">
+    <col style="width:27%"><col style="width:13%"><col style="width:12%"><col style="width:8%"><col style="width:5%">
 </colgroup>
-<thead><tr><th>STT</th><th>Mã KH</th><th>Khách hàng</th><th>Điện thoại</th><th>Địa chỉ</th><th>Khu vực</th><th>Nhu cầu</th><th>Sale đang quản lý</th><th>Số đơn</th></tr></thead><tbody>
+<thead><tr><th>STT</th><th>Mã KH</th><th>Khách hàng</th><th>Điện thoại</th><th>Địa chỉ</th><th>Khu vực</th><th>Nhu cầu</th><th>Sale quản lý</th><th>Số đơn</th></tr></thead><tbody>
 @forelse($customers as $customer)
 @php
     $address = $customer->addresses->firstWhere('is_default', 1) ?? $customer->addresses->first();
@@ -39,13 +41,15 @@ tr { break-inside: avoid; page-break-inside: avoid; }
     $needs = array_filter([
         $customer->product_name,
         $customer->size ? 'Size: '.$customer->size : null,
-        $customer->production ? 'Sản lượng: '.$customer->production : null,
-        $customer->brand ? 'Thương hiệu: '.$customer->brand : null,
+        $customer->production ? 'SL: '.$customer->production : null,
+        $customer->brand ? 'TH: '.$customer->brand : null,
         $customer->product_note,
     ]);
+    $sale = $customer->currentOwner ?? $customer->assignedTo;
+    $saleName = trim((string) $sale?->short_name) ?: ($sale?->name ?? '—');
     $addressText = $customer->address ?: ($address?->note ?: implode(', ', array_filter([$address?->house_number, $address?->street, $address?->ward, $address?->city])));
 @endphp
-<tr><td class="center">{{ $loop->iteration }}</td><td>{{ $customer->customer_code ?: '#'.$customer->id }}</td><td class="customer-name">{{ $customer->name }}</td><td>{{ $customer->phone }}</td><td class="address">{{ $addressText ?: 'Chưa cập nhật' }}</td><td>{{ $areaText ?: 'Chưa cập nhật' }}</td><td>@forelse($needs as $need)<div>{{ $need }}</div>@empty Chưa cập nhật @endforelse</td><td>{{ $customer->currentOwner?->name ?? $customer->assignedTo?->name ?? 'Chưa có sale quản lý' }}</td><td class="center">{{ $customer->orders_count }}</td></tr>
+<tr><td class="center">{{ $loop->iteration }}</td><td>{{ $customer->customer_code ?: '#'.$customer->id }}</td><td class="customer-name">{{ $customer->name }}</td><td class="phone">{{ $customer->phone }}</td><td class="address">{{ $addressText ?: 'Chưa cập nhật' }}</td><td>{{ $areaText ?: 'Chưa cập nhật' }}</td><td class="needs">{{ $needs ? implode(' · ', $needs) : '—' }}</td><td>{{ $saleName }}</td><td class="center">{{ $customer->orders_count }}</td></tr>
 @empty<tr><td colspan="9" class="center">Không có khách hàng phù hợp bộ lọc.</td></tr>@endforelse
 </tbody></table>
 <script>window.addEventListener('load',()=>window.print());</script>

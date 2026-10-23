@@ -1803,7 +1803,7 @@ class PageController extends Controller
         app(\App\Services\CustomerAreaService::class)->apply($customersQuery, $areaFilters['area'] ?? null, $areaFilters['ward'] ?? null);
 
         if ($printAll) {
-            $customersQuery->with(['addresses.province', 'addresses.wardModel']);
+            $customersQuery->with(['addresses.province', 'addresses.wardModel', 'currentOwner:id,name,short_name', 'assignedTo:id,name,short_name']);
         }
 
         $classificationService = app(CustomerClassificationService::class);
