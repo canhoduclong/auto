@@ -23,6 +23,6 @@
         @empty<div class="p-3 text-muted small">Chưa có khách hàng phù hợp.</div>@endforelse
     </div>
     <div class="p-2 border-top">
-        <a class="btn btn-outline-primary btn-sm w-100" href="{{ route('pages.my_orders.monitoring.areas.print', request()->only(['area', 'search'])) }}" target="_blank" rel="noopener"><i class="bi bi-printer" aria-hidden="true"></i> In thống kê khu vực</a>
+        <a class="btn btn-outline-primary btn-sm w-100" href="{{ route('pages.my_orders.monitoring.areas.print', request()->only(['area', 'search', 'sale_id'])) }}" target="_blank" rel="noopener"><i class="bi bi-printer" aria-hidden="true"></i> In thống kê khu vực</a>
     </div>
 </div>

@@ -32,6 +32,9 @@
 <div class="meta">Ngày in: {{ now()->format('d/m/Y H:i') }} · Người in: {{ auth()->user()->name }}</div>
 @if($search !== '')<div class="meta">Tìm kiếm khách hàng: {{ $search }}</div>@endif
 <div class="meta">{{ $rows->count() }} {{ $isWardList ? 'phường / nhóm khu vực' : 'tỉnh, thành / nhóm khu vực' }} · {{ number_format($rows->sum('customer_count'), 0, ',', '.') }} khách hàng</div>
+@if($selectedStaff ?? null)
+<div class="meta">Khách hàng của nhân viên: {{ $selectedStaff->name }}</div>
+@endif
 <table>
     <colgroup><col style="width:10%"><col style="width:65%"><col style="width:25%"></colgroup>
     <thead><tr><th>STT</th><th>{{ $isWardList ? 'Phường' : 'Tỉnh / Thành phố' }}</th><th>Số khách hàng</th></tr></thead>

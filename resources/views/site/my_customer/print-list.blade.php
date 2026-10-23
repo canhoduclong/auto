@@ -27,6 +27,9 @@ tr { break-inside: avoid; page-break-inside: avoid; }
 <h1>DANH SÁCH KHÁCH HÀNG</h1>
 <div class="meta">Ngày in: {{ now()->format('d/m/Y H:i') }} · Người in: {{ auth()->user()->name }} · Tổng: {{ number_format($customers->count()) }} khách</div>
 <div class="meta">@if($search !== '')Tìm kiếm: {{ $search }} · @endif @if(request()->filled('area'))Khu vực: {{ request('area') === \App\Services\CustomerAreaService::UNKNOWN ? 'Chưa cập nhật' : request('area') }} @endif @if(request()->filled('ward')) · Phường: {{ request('ward') === \App\Services\CustomerAreaService::UNKNOWN ? 'Chưa cập nhật' : request('ward') }}@endif</div>
+@if($selectedStaff ?? null)
+<div class="meta">Khách hàng của nhân viên: {{ $selectedStaff->name }}</div>
+@endif
 <table>
 <colgroup>
     <col style="width:4%"><col style="width:6%"><col style="width:14%"><col style="width:8%">

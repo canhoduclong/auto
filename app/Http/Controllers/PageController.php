@@ -1750,16 +1750,36 @@ class PageController extends Controller
         };
     }
 
+    private function monitoringCustomerStaffQuery(): Builder
+    {
+        return User::query()->whereHas('roles', fn ($query) => $query->whereIn(DB::raw('LOWER(name)'), [
+            'sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale',
+        ]));
+    }
+
+    private function monitoringCustomerSelectedStaff(Request $request): ?User
+    {
+        if (!$request->user()->isAdmin()) return null;
+        $validated = $request->validate(['sale_id' => 'nullable|integer|min:0']);
+        $id = (int) ($validated['sale_id'] ?? 0);
+        if ($id === 0) return null;
+        $staff = $this->monitoringCustomerStaffQuery()->find($id);
+        abort_unless($staff, 422, 'Nhân viên được chọn phải thuộc nhóm sale, leader hoặc manager.');
+        return $staff;
+    }
+
     private function monitoringCustomerAreaQuery(Request $request): Builder
     {
-        $userId = (int) $request->user()->id;
+        $selectedStaff = $this->monitoringCustomerSelectedStaff($request);
+        $userId = (int) ($selectedStaff?->id ?? $request->user()->id);
+        $restrictToUser = !$request->user()->isAdmin() || $selectedStaff !== null;
         $search = trim((string) $request->input('search', ''));
         return Customer::query()
-            ->when(!$request->user()->isAdmin(), fn ($query) => $query->where(function ($query) use ($userId) {
+            ->when($restrictToUser, fn ($query) => $query->where(function ($query) use ($userId) {
                 $query->where('user_id', $userId)
                     ->orWhere('assigned_to', $userId);
             }))
-            ->when(!$request->user()->isAdmin(), fn ($query) => $query->where(function ($query) {
+            ->when($restrictToUser, fn ($query) => $query->where(function ($query) {
                 $query->where('is_employee', '<>', 1)->orWhereNull('is_employee');
             }))
             ->when($search !== '', function ($query) use ($search) {
@@ -1776,6 +1796,7 @@ class PageController extends Controller
     {
         $user = $request->user();
         $userId = (int) $user->id;
+        $selectedStaff = $this->monitoringCustomerSelectedStaff($request);
 
         $perPage = (int) $request->input('per_page', 20);
         if (!in_array($perPage, [10, 20, 50, 100], true)) {
@@ -1823,7 +1844,7 @@ class PageController extends Controller
                 default => $allCustomers->sortBy(fn (Customer $customer) => $gradeRank[$customer->classification_result['grade'] ?? 'D']),
             })->values();
 
-            if ($printAll) return view('site.my_customer.print-list', ['customers' => $allCustomers, 'search' => $search]);
+            if ($printAll) return view('site.my_customer.print-list', ['customers' => $allCustomers, 'search' => $search, 'selectedStaff' => $selectedStaff]);
 
             $page = max(1, (int) $request->input('page', 1));
             $customers = new LengthAwarePaginator(
@@ -1835,7 +1856,7 @@ class PageController extends Controller
             );
         } else {
             $this->applyCustomerPinnedSort($customersQuery);
-            if ($printAll) return view('site.my_customer.print-list', ['customers' => $customersQuery->orderByDesc('id')->get(), 'search' => $search]);
+            if ($printAll) return view('site.my_customer.print-list', ['customers' => $customersQuery->orderByDesc('id')->get(), 'search' => $search, 'selectedStaff' => $selectedStaff]);
             $customers = $customersQuery->orderByDesc('id')->paginate($perPage)->withQueryString();
             $classifications = $classificationService->classifyMany($customers->getCollection());
             $customers->getCollection()->each(function (Customer $customer) use ($classifications) {
@@ -1855,7 +1876,8 @@ class PageController extends Controller
             'classificationSort' => $classificationSort,
             'classificationConfig' => $classificationConfig,
             'canConfigureClassification' => $canConfigureClassification,
-            'selectedSaleId' => 0,
+            'selectedSaleId' => $selectedStaff?->id ?? 0,
+            'customerStaff' => $user->isAdmin() ? $this->monitoringCustomerStaffQuery()->orderBy('name')->get(['id', 'name', 'short_name']) : collect(),
             'manageableSaleIds' => [$userId],
             'monitoringEmbedded' => true,
         ]);
@@ -1872,6 +1894,7 @@ class PageController extends Controller
             : $groups->map(fn ($wards, $name) => (object) ['name' => $name, 'customer_count' => (int) $wards->sum('customer_count')])->values();
 
         return view('site.my_customer.print-areas', [
+            'selectedStaff' => $this->monitoringCustomerSelectedStaff($request),
             'rows' => $rows,
             'area' => $area,
             'search' => trim((string) $request->input('search', '')),

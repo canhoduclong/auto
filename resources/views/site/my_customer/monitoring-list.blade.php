@@ -238,6 +238,23 @@
         </div>
     </details>
 
+    @if(auth()->user()->isAdmin())
+    <form method="GET" action="{{ route('pages.my_orders.monitoring') }}" class="d-flex align-items-center flex-wrap gap-2 mb-3">
+        @foreach(request()->except(['sale_id', 'page', 'ajax', 'tab']) as $name => $value)
+            @if(is_scalar($value))<input type="hidden" name="{{ $name }}" value="{{ $value }}">@endif
+        @endforeach
+        <input type="hidden" name="tab" value="customers">
+        <label for="mclCustomerStaff" class="fw-bold mb-0">Khách hàng của nhân viên</label>
+        <select id="mclCustomerStaff" name="sale_id" class="form-select" style="width:260px" onchange="this.form.submit()">
+            <option value="0">Tất cả nhân viên</option>
+            @foreach(($customerStaff ?? collect()) as $staff)
+                <option value="{{ $staff->id }}" @selected((int) $selectedSaleId === (int) $staff->id)>{{ $staff->name }}</option>
+            @endforeach
+        </select>
+        <button class="btn btn-outline-primary" type="submit">Lọc</button>
+    </form>
+    @endif
+
     <div class="mcl-toolbar">
         <div class="mcl-toolbar-left">
             <a class="btn btn-outline-primary" href="{{ route('pages.my_orders.monitoring.customers.print', request()->except(['page', 'ajax'])) }}" target="_blank" rel="noopener" title="In toàn bộ khách hàng theo bộ lọc hiện tại" aria-label="In danh sách khách hàng"><i class="bi bi-printer"></i></a>
