@@ -1041,9 +1041,8 @@ class CustomerController extends Controller
         abort_unless($request->user()?->isAdmin(), 403);
 
         if ($customer->is_employee) {
-            return back()->withErrors([
-                'assigned_to' => __('customers.messages.employee_cannot_assign_sale'),
-            ]);
+            if ($request->expectsJson()) return response()->json(['message' => __('customers.messages.employee_cannot_assign_sale')], 422);
+            return back()->withErrors(['assigned_to' => __('customers.messages.employee_cannot_assign_sale')]);
         }
 
         $validated = $request->validate([
@@ -1055,6 +1054,7 @@ class CustomerController extends Controller
         if ($assignedTo !== null) {
             $allowedSaleIds = $this->salesUsersQuery()->pluck('id')->all();
             if (!in_array((int) $assignedTo, array_map('intval', $allowedSaleIds), true)) {
+                if ($request->expectsJson()) return response()->json(['message' => 'User được chọn không thuộc nhóm sale có thể nhận khách.'], 422);
                 return back()->withErrors([
                     'assigned_to' => 'User được chọn không thuộc nhóm sale có thể nhận khách.',
                 ]);
@@ -1072,6 +1072,8 @@ class CustomerController extends Controller
         } else {
             $priorityService->takeover($customer, (int) $assignedTo, 'manager_override');
         }
+
+        if ($request->expectsJson()) return response()->json(['success' => true, 'message' => $assignedTo ? 'Đã chuyển giao khách hàng cho sale.' : 'Đã chuyển khách hàng về trạng thái tự do.']);
 
         return redirect()->route('customers.index', [
             'q' => $request->input('q'),

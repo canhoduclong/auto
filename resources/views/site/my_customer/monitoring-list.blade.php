@@ -39,6 +39,10 @@
     .mcl-toolbar .btn { min-height: 39px; font-size: .75rem; }
     .mcl-toolbar .btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-weight: 700; white-space: nowrap; }
     .mcl-per-page { width: 166px; }
+    .mcl-filter-form select[name="per_page"], .mcl-filter-form select[name="per_page"] + .nice-select { min-width:165px; }
+    .mcl-owner { margin-top:8px;font-size:13px;color:#475569;display:flex;gap:8px;align-items:center;flex-wrap:wrap; }
+    .mcl-transfer-dialog { border:0;border-radius:12px;padding:24px;width:440px;max-width:calc(100vw - 32px);box-shadow:0 20px 60px #0003; }
+    .mcl-transfer-dialog::backdrop { background:#0006; }
     .mcl-search-form { width: min(100%, 262px); }
     .mcl-search-form .form-control { min-width: 0; }
     .mcl-search-form .btn { width: 39px; padding: 0; }
@@ -236,6 +240,7 @@
 
     <div class="mcl-toolbar">
         <div class="mcl-toolbar-left">
+            <a class="btn btn-outline-primary" href="{{ route('pages.my_orders.monitoring.customers.print', request()->except(['page', 'ajax'])) }}" target="_blank" rel="noopener" title="In toàn bộ khách hàng theo bộ lọc hiện tại" aria-label="In danh sách khách hàng"><i class="bi bi-printer"></i></a>
             <button type="button" class="btn btn-outline-danger" id="mclBulkDelete" disabled><i class="bi bi-trash"></i> Xóa</button>
             <form method="GET" action="{{ route('pages.my_orders.monitoring') }}" class="mcl-filter-form">
                 @foreach($sharedFilters as $name => $value)
@@ -244,7 +249,7 @@
                 @if($search !== '')<input type="hidden" name="search" value="{{ $search }}">@endif
                 <select name="per_page" class="form-select mcl-per-page" onchange="this.form.submit()" aria-label="Số khách hàng mỗi trang">
                     @foreach([10, 20, 50, 100] as $size)
-                        <option value="{{ $size }}" @selected($perPage === $size)>{{ $size }} Khách / trang</option>
+                        <option value="{{ $size }}" @selected($perPage === $size)>{{ $size }} khách/trang</option>
                     @endforeach
                 </select>
                 <select name="classification_sort" class="form-select mcl-per-page" onchange="this.form.submit()" aria-label="Sắp xếp theo phân loại">
@@ -304,6 +309,13 @@
                         @if($customer->phone)<div class="mcl-phone">{{ $customer->phone }}</div>@endif
                     </div>
 
+                    <div class="mcl-owner">
+                        <span>Sale đang quản lý: <strong>{{ $customer->currentOwner?->name ?? $customer->assignedTo?->name ?? 'Chưa có sale quản lý' }}</strong></span>
+                        @if(auth()->user()->isAdmin() && !$customer->is_employee)
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-customer-transfer data-customer-name="{{ $customer->name }}" data-current-sale="{{ $customer->current_owner_sale_id ?? $customer->assigned_to }}" data-transfer-url="{{ route('customers.assign-sale', $customer) }}" title="Chuyển giao cho sale khác chăm sóc" aria-label="Chuyển sale quản lý {{ $customer->name }}"><i class="bi bi-pencil" aria-hidden="true"></i></button>
+                        @endif
+                    </div>
+
                     @if($viewMode === 'default')
                         <div class="mcl-details">
                             @if($canManage)<input type="checkbox" class="form-check-input mcl-check" value="{{ $customer->id }}" aria-label="Chọn {{ $customer->name }}">@endif
@@ -350,6 +362,52 @@
             {{ $customers->links('pagination::bootstrap-5') }}
         </div>
     @endif
+@if(auth()->user()->isAdmin())
+<dialog class="mcl-transfer-dialog" id="mclTransferDialog" aria-labelledby="mclTransferTitle">
+    <form id="mclTransferForm">
+        <h5 id="mclTransferTitle">Chuyển sale chăm sóc</h5>
+        <p class="text-muted" id="mclTransferCustomer"></p>
+        <label class="form-label" for="mclTransferSale">Sale nhận chăm sóc</label>
+        <select class="form-select" id="mclTransferSale" name="assigned_to" required>
+            <option value="">Chọn sale</option>
+            @foreach(($transferSales ?? collect()) as $sale)<option value="{{ $sale->id }}">{{ $sale->name }}</option>@endforeach
+        </select>
+        <div class="alert alert-danger mt-3" id="mclTransferError" hidden role="alert"></div>
+        <div class="d-flex justify-content-end gap-2 mt-3"><button type="button" class="btn btn-outline-secondary" data-transfer-close>Hủy</button><button type="submit" class="btn btn-primary">Xác nhận chuyển giao</button></div>
+    </form>
+</dialog>
+<script>
+(() => {
+    const dialog = document.getElementById('mclTransferDialog');
+    const form = document.getElementById('mclTransferForm');
+    const select = document.getElementById('mclTransferSale');
+    const errorBox = document.getElementById('mclTransferError');
+    document.addEventListener('click', event => {
+        const button = event.target.closest('[data-customer-transfer]');
+        if (button) {
+            form.dataset.url = button.dataset.transferUrl;
+            document.getElementById('mclTransferCustomer').textContent = button.dataset.customerName;
+            select.value = button.dataset.currentSale || '';
+            if (window.jQuery?.fn.niceSelect) window.jQuery(select).niceSelect('destroy');
+            errorBox.hidden = true;
+            dialog.showModal();
+        }
+        if (event.target.closest('[data-transfer-close]')) dialog.close();
+    });
+    form.addEventListener('submit', async event => {
+        event.preventDefault();
+        const submit = form.querySelector('[type="submit"]'); submit.disabled = true;
+        errorBox.hidden = true;
+        try {
+            const response = await fetch(form.dataset.url, {method:'POST', headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-TOKEN':document.querySelector('meta[name="csrf-token"]').content}, body:new FormData(form)});
+            const data = await response.json();
+            if (!response.ok || !data.success) throw new Error(Object.values(data.errors || {}).flat()[0] || data.message || 'Không thể chuyển giao khách hàng.');
+            window.location.reload();
+        } catch(error) {errorBox.textContent=error.message;errorBox.hidden=false;submit.disabled=false;}
+    });
+})();
+</script>
+@endif
 </section>
 
 <script>

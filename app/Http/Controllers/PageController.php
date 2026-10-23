@@ -1772,7 +1772,7 @@ class PageController extends Controller
             });
     }
 
-    private function monitoringCustomers(Request $request)
+    private function monitoringCustomers(Request $request, bool $printAll = false)
     {
         $user = $request->user();
         $userId = (int) $user->id;
@@ -1819,6 +1819,8 @@ class PageController extends Controller
                 default => $allCustomers->sortBy(fn (Customer $customer) => $gradeRank[$customer->classification_result['grade'] ?? 'D']),
             })->values();
 
+            if ($printAll) return view('site.my_customer.print-list', ['customers' => $allCustomers, 'search' => $search]);
+
             $page = max(1, (int) $request->input('page', 1));
             $customers = new LengthAwarePaginator(
                 $allCustomers->forPage($page, $perPage)->values(),
@@ -1829,6 +1831,7 @@ class PageController extends Controller
             );
         } else {
             $this->applyCustomerPinnedSort($customersQuery);
+            if ($printAll) return view('site.my_customer.print-list', ['customers' => $customersQuery->orderByDesc('id')->get(), 'search' => $search]);
             $customers = $customersQuery->orderByDesc('id')->paginate($perPage)->withQueryString();
             $classifications = $classificationService->classifyMany($customers->getCollection());
             $customers->getCollection()->each(function (Customer $customer) use ($classifications) {
@@ -1840,6 +1843,7 @@ class PageController extends Controller
             || $user->hasRole(['leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale', 'director']);
 
         return view('site.my_customer.monitoring-list', [
+            'transferSales' => $user->isAdmin() ? User::whereHas('roles', fn ($query) => $query->whereIn(DB::raw('LOWER(name)'), ['sale', 'leader', 'leader_sale', 'sale_manager']))->orderBy('name')->get(['id', 'name']) : collect(),
             'customers' => $customers,
             'perPage' => $perPage,
             'viewMode' => $viewMode,
@@ -1851,6 +1855,12 @@ class PageController extends Controller
             'manageableSaleIds' => [$userId],
             'monitoringEmbedded' => true,
         ]);
+    }
+
+    public function printMonitoringCustomers(Request $request)
+    {
+        $this->monitoringUserOrFail();
+        return $this->monitoringCustomers($request, true);
     }
 
     public function updateCustomerClassificationConfig(Request $request)
