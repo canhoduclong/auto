@@ -13,11 +13,12 @@ class SettingController extends Controller
 {
     /**
      * Middleware để bảo vệ các route trong controller này
-     * Chỉ người dùng đã đăng nhập và có quyền 'manage-settings' mới có thể truy cập
+     * Chỉ admin được truy cập và thay đổi cài đặt hệ thống.
      */ 
     public function __construct()
     {
         $this->middleware('auth');
+        $this->middleware('role:admin');
         $this->middleware('permission:manage-settings');
     }
 

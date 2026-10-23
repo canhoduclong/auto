@@ -499,12 +499,14 @@
 								<span>Tỉnh thành / Xã phường</span>
 							</a>
 						</li>
-						<li class="nav-item">
+						@if(auth()->user()?->isAdmin())
+<li class="nav-item">
 							<a href="{{ route('admin.settings.index') }}" class="nav-link{{ request()->routeIs('admin.settings.index') ? ' active' : '' }}">
 								<i class="ph-gear"></i>
 								<span>{{ __('menu.settings') }}</span>
 							</a>
 						</li>
+                        @endif
 @if(auth()->user()?->hasRole('admin'))
 <li class="nav-item"><a href="{{ route('admin.login-notice.edit') }}" class="nav-link{{ request()->routeIs('admin.login-notice.*') ? ' active' : '' }}"><i class="ph-megaphone"></i><span>Thông báo đăng nhập</span></a></li>
 <li class="nav-item"><a href="{{ route('admin.environment.edit') }}" class="nav-link{{ request()->routeIs('admin.environment.*') ? ' active' : '' }}"><i class="ph-file-code"></i><span>Cấu hình .env</span></a></li>
