@@ -1,5 +1,4 @@
 <div class="monitor-panel monitor-customer-areas" aria-label="Danh sách khu vực khách hàng">
-    <div class="monitor-filter-title">Danh sách khu vực</div>
     <a class="monitor-filter-link {{ !request()->filled('area') ? 'active' : '' }}" href="{{ request()->fullUrlWithQuery(['tab' => 'customers', 'area' => null, 'ward' => null, 'page' => null, 'ajax' => null]) }}"><span>Tất cả khu vực</span><span class="monitor-filter-count">{{ $areaStats->flatten()->sum('customer_count') }}</span></a>
     <div class="monitor-customer-area-list">
         @forelse($areaStats as $area => $wards)

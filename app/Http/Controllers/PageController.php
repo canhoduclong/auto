@@ -1755,13 +1755,13 @@ class PageController extends Controller
         $userId = (int) $request->user()->id;
         $search = trim((string) $request->input('search', ''));
         return Customer::query()
-            ->where(function ($query) use ($userId) {
+            ->when(!$request->user()->isAdmin(), fn ($query) => $query->where(function ($query) use ($userId) {
                 $query->where('user_id', $userId)
                     ->orWhere('assigned_to', $userId);
-            })
-            ->where(function ($query) {
+            }))
+            ->when(!$request->user()->isAdmin(), fn ($query) => $query->where(function ($query) {
                 $query->where('is_employee', '<>', 1)->orWhereNull('is_employee');
-            })
+            }))
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($searchQuery) use ($search) {
                     $searchQuery->where('name', 'like', "%{$search}%")
@@ -4841,10 +4841,10 @@ public function apiTruckRoutes(Request $request)
         $customerList = Customer::query()
             ->withCount('orders')
             ->with(['truckStation:id,name,address', 'truckRoute:id,name'])
-            ->where(function ($q) use ($userId) {
+            ->when(!auth()->user()->isAdmin(), fn ($q) => $q->where(function ($q) use ($userId) {
                 $q->where('user_id', $userId)
                     ->orWhere('assigned_to', $userId);
-            })
+            }))
             ->when($sidebarSearch !== '', function ($q) use ($sidebarSearch) {
                 $q->where(function ($sub) use ($sidebarSearch) {
                     $sub->where('name', 'like', "%{$sidebarSearch}%")
@@ -5273,7 +5273,7 @@ public function apiTruckRoutes(Request $request)
     public function myOrderDetail(Order $order)
     {
         $settings = $this->settings;
-        if ($order->user_id !== auth()->id()) {
+        if ((int) $order->user_id !== (int) auth()->id() && !auth()->user()->isAdmin()) {
             abort(403);
         }
 
