@@ -29,6 +29,11 @@
         .label { font-weight:700; }
         table { width:100%; border-collapse:collapse; table-layout:fixed; }
         .items th, .items td { border:1px solid #4b5563; padding:4px 3px; vertical-align:middle; }
+        .print-notice { width:100%; margin:16px auto 12px; }
+        .print-notice > div { margin:0 !important; padding-top:0 !important; border-top:0 !important; }
+        .items th, .items td.center { text-align:center; vertical-align:middle; }
+        .items { margin-left:auto; margin-right:auto; }
+        .signatures { justify-items:stretch; align-items:start; }
         .items th { white-space:nowrap; background:#e8eef5; color:#1f4e79; text-align:center; }
         .center { text-align:center; } .right { text-align:right; }
         .totals { width:45%; margin:8px 0 16px auto; }
@@ -78,6 +83,9 @@
     </div>
     <h1>{{ $printTitle ?? 'PHIẾU GIAO HÀNG' }}</h1>
     <div class="subtitle">Số chứng từ: <strong>PXK-{{ $order->code ?: $order->id }}</strong></div>
+    <div class="print-notice">
+        @include('shared.print-testing-disclaimer')
+    </div>
     <div class="info">
         <div><span class="label">Khách hàng:</span> {{ $order->recipient_name ?: $order->customer?->name ?: '—' }}</div>
         <div><span class="label">Mã đơn:</span> {{ $order->code ?: '#'.$order->id }}</div>
@@ -133,7 +141,6 @@
         <div class="signature">NGƯỜI NHẬN HÀNG<small>(Ký, ghi rõ họ tên)</small><div class="space"></div></div>
         <div class="signature">THỦ KHO<small>(Ký, ghi rõ họ tên)</small><div class="space"></div></div>
     </div>
-    @include('shared.print-testing-disclaimer')
     </div>
 </section>
 @endforeach
