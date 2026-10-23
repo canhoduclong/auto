@@ -1317,6 +1317,7 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
         ->middleware('role:leader,leader_sale,sale_manager,manager,manager_sale,admin');
     Route::get('/my-products', [PageController::class, 'myProducts'])->name('pages.my_products');
     Route::post('/my-products/{variant}/preference', [PageController::class, 'updateMyProductPreference'])->name('pages.my_products.preference');
+    Route::get('/my-orders/customers/areas/print', [PageController::class, 'printCustomerAreaStatistics'])->name('pages.my_orders.monitoring.areas.print');
     Route::get('/my-orders/customers/print', [PageController::class, 'printMonitoringCustomers'])->name('pages.my_orders.monitoring.customers.print');
     Route::get('/my-orders/customers/ajax', [PageController::class, 'myOrderCustomersAjax'])->name('site.orders.customers.ajax');
     // AJAX: Danh sách biến thể cho đơn hàng (my-orders/{order}/edit)

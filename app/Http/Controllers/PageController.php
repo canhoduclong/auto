@@ -1861,6 +1861,23 @@ class PageController extends Controller
         ]);
     }
 
+    public function printCustomerAreaStatistics(Request $request)
+    {
+        $this->monitoringUserOrFail();
+        $validated = $request->validate(['area' => 'nullable|string|max:255']);
+        $area = $validated['area'] ?? null;
+        $groups = app(\App\Services\CustomerAreaService::class)->groups($this->monitoringCustomerAreaQuery($request));
+        $rows = $area !== null && $area !== ''
+            ? $groups->get($area, collect())->map(fn ($ward) => (object) ['name' => $ward->ward, 'customer_count' => (int) $ward->customer_count])->values()
+            : $groups->map(fn ($wards, $name) => (object) ['name' => $name, 'customer_count' => (int) $wards->sum('customer_count')])->values();
+
+        return view('site.my_customer.print-areas', [
+            'rows' => $rows,
+            'area' => $area,
+            'search' => trim((string) $request->input('search', '')),
+        ]);
+    }
+
     public function printMonitoringCustomers(Request $request)
     {
         $this->monitoringUserOrFail();
