@@ -29,7 +29,7 @@
         .label { font-weight:700; }
         table { width:100%; border-collapse:collapse; table-layout:fixed; }
         .items th, .items td { border:1px solid #4b5563; padding:4px 3px; vertical-align:middle; }
-        .items th { background:#e8eef5; color:#1f4e79; text-align:center; }
+        .items th { white-space:nowrap; background:#e8eef5; color:#1f4e79; text-align:center; }
         .center { text-align:center; } .right { text-align:right; }
         .totals { width:45%; margin:8px 0 16px auto; }
         .totals td { padding:3px 5px; border-bottom:1px solid #d1d5db; }
@@ -91,7 +91,7 @@
     </div>
     <div class="delivery-print-details">
     <table class="items">
-        <thead><tr><th style="width:5%">STT</th><th style="width:11%">Mã hàng</th><th style="width:27%">Tên sản phẩm</th><th style="width:8%">ĐVT</th><th style="width:9%">Số lượng</th><th style="width:11%">Khối lượng thực</th><th style="width:11%">Thực giao</th><th style="width:9%">Đơn giá</th><th style="width:11%">Thành tiền</th></tr></thead>
+        <thead><tr><th style="width:5%">STT</th><th style="width:10%">Mã hàng</th><th style="width:26%">Tên sản phẩm</th><th style="width:6%">ĐVT</th><th style="width:8%">Số lượng</th><th style="width:14%">Khối lượng thực</th><th style="width:10%">Thực giao</th><th style="width:9%">Đơn giá</th><th style="width:12%">Thành tiền</th></tr></thead>
         <tbody>
         @forelse($order->items as $index => $item)
             @php
@@ -126,12 +126,14 @@
     </table>
     </div>
     </div>
-    @include('shared.print-testing-disclaimer')
+    <div style="break-inside:avoid;page-break-inside:avoid;">
     <div class="signatures">
         <div class="signature">NGƯỜI LẬP PHIẾU<small>(Ký, ghi rõ họ tên)</small><div class="space"></div>{{ $order->user?->name ?? auth()->user()?->name }}</div>
         <div class="signature">NGƯỜI GIAO HÀNG<small>(Ký, ghi rõ họ tên)</small><div class="space"></div></div>
         <div class="signature">NGƯỜI NHẬN HÀNG<small>(Ký, ghi rõ họ tên)</small><div class="space"></div></div>
         <div class="signature">THỦ KHO<small>(Ký, ghi rõ họ tên)</small><div class="space"></div></div>
+    </div>
+    @include('shared.print-testing-disclaimer')
     </div>
 </section>
 @endforeach
