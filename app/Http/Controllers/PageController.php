@@ -5495,6 +5495,25 @@ public function apiTruckRoutes(Request $request)
             ->get()
             ->keyBy('id');
 
+        $feesUpdated = DB::transaction(function () use ($order, $validated, $variants): bool {
+            $locked = Order::query()->lockForUpdate()->findOrFail($order->id);
+            $service = app(\App\Services\SaleOrderFeeEditService::class);
+            if (!$service->isFeeOnlyEdit($locked, $validated, $variants)) return false;
+            $service->updateFees($locked, $validated);
+            \App\Models\OrderHistory::create([
+                'order_id' => $locked->id, 'action' => 'sale_update_fees', 'user_id' => Auth::id(),
+                'role' => Auth::user()?->roles()->pluck('name')->first(),
+                'status_before' => (string) $locked->status, 'status_after' => (string) $locked->status,
+                'note' => 'Sale cập nhật VAT/phí ship, giữ nguyên hàng hóa và trạng thái đơn.',
+            ]);
+            return true;
+        });
+        if ($feesUpdated) {
+            return $request->input('return_to') === 'monitoring'
+                ? redirect()->route('pages.my_orders.monitoring', ['date' => $order->created_at?->toDateString(), 'highlight' => $order->id])->with('success', 'Đã cập nhật phí VAT/phí ship, giữ nguyên trạng thái đơn hàng.')
+                : redirect()->route('site.orders.show', $order)->with('success', 'Đã cập nhật phí VAT/phí ship, giữ nguyên trạng thái đơn hàng.');
+        }
+
         foreach ($itemsInput as $item) {
             $variant = $variants->get($item['variant_id']);
             if (!$variant) {
@@ -5524,7 +5543,7 @@ public function apiTruckRoutes(Request $request)
             $beforeSaleItems = $trackSaleItems ? $saleChangeService->itemSummary($order) : null;
             $previousDeliveryDate = $order->delivery_date?->toDateString();
             $previousItems = $order->items()->get()->keyBy('product_variant_id');
-            $order->items()->delete();
+            $order->items()->whereNotIn('product_variant_id', $itemsInput->pluck('variant_id'))->delete();
 
             $resolveKg = static fn ($variant): float => $variant->order_unit_weight;
 
@@ -5579,7 +5598,7 @@ public function apiTruckRoutes(Request $request)
                 $finalUnitPrice = $amounts['price'];
                 $lineTotal = $amounts['total'];
 
-                $order->items()->create([
+                $itemData = [
                     'product_id' => $variant->product_id,
                     'product_variant_id' => $variant->id,
                     'quantity' => $quantity,
@@ -5592,7 +5611,17 @@ public function apiTruckRoutes(Request $request)
                     'is_priced_by_kg' => $isPricedByKg,
                     'total_weight' => $totalWeight,
                     'total' => $lineTotal,
-                ]);
+                ];
+                if ($previousItem) {
+                    if ((int) $previousItem->quantity !== $quantity) {
+                        $itemData['actual_weight'] = null;
+                        $itemData['packed_weight'] = null;
+                        $itemData['packed_quantity'] = null;
+                    }
+                    $previousItem->update($itemData);
+                } else {
+                    $order->items()->create($itemData);
+                }
 
                 $estimatedOrderWeight += $totalWeight;
                 $subtotalAmount += $lineSubtotal;

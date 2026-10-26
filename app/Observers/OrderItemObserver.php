@@ -50,7 +50,7 @@ class OrderItemObserver
     }
     private function recordSaleItemChange(OrderItem $item, string $action): void
     {
-        // This editor replaces all rows and records one before/after summary.
+        // The sale editor records one before/after summary for added and removed rows.
         if (request()->route()?->getActionMethod() === 'myOrderUpdate') {
             return;
         }

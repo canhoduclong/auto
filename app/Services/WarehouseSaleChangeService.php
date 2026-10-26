@@ -49,6 +49,11 @@ class WarehouseSaleChangeService
             'packing_specification' => 'Quy cách đóng', 'package_count' => 'Số bọc',
         ];
         $changes = array_intersect_key($order->getChanges(), $labels);
+        $feeFields = ['charge_vat', 'vat_percent', 'vat_amount', 'collect_customer_shipping_fee', 'customer_shipping_fee', 'shipping_fee', 'charge_shipping_fee'];
+        if (array_intersect(array_keys($changes), $feeFields) !== []
+            && array_diff(array_keys($changes), [...$feeFields, 'total']) === []) {
+            return; // Financial fees alone do not require warehouse acknowledgement.
+        }
         if ($changes === [] || ! $this->shouldTrack($order)) {
             return;
         }
