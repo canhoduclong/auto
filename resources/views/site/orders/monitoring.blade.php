@@ -2271,7 +2271,7 @@
                             $truckStationName = trim((string) ($order->truck_station_name ?: $order->truckStation?->name));
                             $truckStationAddress = trim((string) ($order->truck_station_address ?: $order->truckStation?->address));
                             $zaloText = collect([
-                                '---- ĐƠN HÀNG '.($order->code ?: '#'.$order->id).' -----',
+                                '---- '.($order->code ?: '#'.$order->id).' -----',
                                 'Khách hàng: '.($order->recipient_name ?: $order->customer?->name ?: 'Khách hàng'),
                                 $deliveryAddress !== '' ? 'Địa chỉ: '.$deliveryAddress : null,
                                 '',
