@@ -80,6 +80,7 @@
     .finance-request-page .fr-list-title { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; font-weight:600; color:#0f172a; }
     .finance-request-page .fr-list-meta { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:3px; font-size:12px; color:#64748b; }
     .finance-request-page .fr-list-details { margin-top:4px; color:#64748b; font-size:12px; }
+    .finance-request-page .fr-reject-reason { font-size:12px; white-space:pre-line; overflow-wrap:anywhere; }
     .finance-request-page .fr-list-details summary { cursor:pointer; }
     .finance-request-page .fr-list-details[open] .fr-note { margin-top:6px; white-space:pre-line; overflow-wrap:anywhere; }
     .finance-request-page .fr-list-actions { display:flex; flex-wrap:nowrap; align-items:center; justify-content:flex-end; gap:4px; }
@@ -712,14 +713,14 @@
                                         </div>
                                     </details>
                                 @endif
+                                @if($requestItem->status === \App\Models\Transaction::STATUS_REJECTED && $requestItem->reject_reason)
+                                    <div class="fr-reject-reason text-danger mt-1">{{ $requestItem->reject_reason }}</div>
+                                @endif
                             </td>
 
                             <td class="text-end fw-bold fr-nowrap">{{ number_format((float) $requestItem->amount) }}đ</td>
                             <td>
                                 <span class="badge bg-{{ $statusMeta['class'] }}">{{ $statusMeta['label'] }}</span>
-                                @if($requestItem->status === \App\Models\Transaction::STATUS_REJECTED && $requestItem->reject_reason)
-                                    <div class="small text-danger mt-1">{{ \Illuminate\Support\Str::limit($requestItem->reject_reason, 80) }}</div>
-                                @endif
                             </td>
                             <td class="fr-handler">
                                 @if(in_array($requestItem->status, [\App\Models\Transaction::STATUS_APPROVED, \App\Models\Transaction::STATUS_APPROVED_PENDING_COMPLETION], true))
