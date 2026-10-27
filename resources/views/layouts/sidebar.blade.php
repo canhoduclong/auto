@@ -149,7 +149,8 @@
 						</a>
 					</li>
 						@if(auth()->user()?->hasRole('admin'))
-						<li class="nav-item">
+                        <li class="nav-item"><a href="{{ route('admin.sheet-order-import.index') }}" class="nav-link{{ request()->routeIs('admin.sheet-order-import.*') ? ' active' : '' }}"><i class="ph-download-simple"></i><span>Import Đơn</span></a></li>
+                        <li class="nav-item">
 							<a href="{{ route('admin.text-order-import.index') }}" class="nav-link{{ request()->routeIs('admin.text-order-import.*') ? ' active' : '' }}">
 								<i class="ph-textbox"></i>
 								<span>Nhập đơn text</span>

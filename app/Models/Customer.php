@@ -109,6 +109,7 @@ class Customer extends Model
         'company_email',
         'customer_code',
         'legacy_code',
+        'old_name',
         'foam_box_required',
         'foam_box_price',
         'use_truck_station',

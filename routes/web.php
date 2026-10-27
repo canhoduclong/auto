@@ -842,6 +842,12 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('admin/order-schedule-runs', [OrderScheduleRunController::class, 'index'])->name('admin.order-schedule-runs.index')->middleware('role:admin');
     Route::post('admin/order-schedule-runs/run-now', [OrderScheduleRunController::class, 'runNow'])->name('admin.order-schedule-runs.run-now')->middleware('role:admin');
     Route::post('admin/order-schedule-runs/run-daily-rules-now', [OrderScheduleRunController::class, 'runDailyRulesNow'])->name('admin.order-schedule-runs.run-daily-rules-now')->middleware('role:admin');
+    Route::prefix('admin/import-orders')->name('admin.sheet-order-import.')->middleware('role:admin')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Admin\GoogleSheetOrderImportController::class, 'index'])->name('index');
+        Route::post('/load', [\App\Http\Controllers\Admin\GoogleSheetOrderImportController::class, 'load'])->name('load');
+        Route::post('/review', [\App\Http\Controllers\Admin\GoogleSheetOrderImportController::class, 'review'])->name('review');
+        Route::post('/', [\App\Http\Controllers\Admin\GoogleSheetOrderImportController::class, 'store'])->name('store');
+    });
     Route::get('admin/text-order-import', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'index'])->name('admin.text-order-import.index')->middleware('role:admin');
     Route::get('admin/text-order-import/export-daily', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'exportDailyOrders'])->name('admin.text-order-import.export-daily')->middleware('role:admin');
     Route::get('admin/order-activity', [\App\Http\Controllers\Admin\OrderActivityController::class, 'index'])->name('admin.order-activity.index')->middleware('role:admin');

@@ -115,6 +115,12 @@
         @error('legacy_code') <div class="text-danger small">{{ $message }}</div> @enderror
     </div>
 
+    <div class="col-md-6">
+        <label class="form-label" for="old-name">Tên cũ (hệ thống cũ / Google Sheet)</label>
+        <textarea id="old-name" name="old_name" class="form-control" rows="2" maxlength="5000">{{ old('old_name', $customer->old_name ?? '') }}</textarea>
+        @error('old_name')<div class="text-danger small">{{ $message }}</div>@enderror
+    </div>
+
     <div class="col-12">
         <label class="form-label">{{ __('customers.form.note') }}</label>
         <textarea name="note" class="form-control" rows="3">{{ old('note', $customer->note ?? '') }}</textarea>
