@@ -35,6 +35,10 @@ class AppServiceProvider extends ServiceProvider
     {
         Paginator::useBootstrap();
 
+        View::composer(['layouts.admin', 'layouts.admin-accounting'], function (): void {
+            abort_unless(auth()->user()?->isAdmin(), 403, 'Giao diện quản trị chỉ dành cho Admin.');
+        });
+
         // Chan brute-force theo tai khoan+IP; gioi han IP du rong cho van phong dung chung NAT.
         RateLimiter::for('login', function (HttpRequest $request) {
             $email = strtolower(trim((string) $request->input('email')));

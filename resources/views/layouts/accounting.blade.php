@@ -399,9 +399,11 @@ body.acc-sidebar-collapsed .acc-task-group>summary{justify-content:center;paddin
             <a href="{{ route('accounting.reconciliation') }}" class="{{ request()->routeIs('accounting.reconciliation') ? 'active' : '' }}">
                 <i class="bi bi-check2-square"></i> Đối soát đơn hàng
             </a>
+            @if(auth()->user()?->isAdmin())
             <a href="{{ route('admin.imported-sales-orders.index') }}" class="{{ request()->routeIs('admin.imported-sales-orders.*') ? 'active' : '' }}">
                 <i class="bi bi-clipboard-check"></i> Hoàn chỉnh đơn lịch sử
             </a>
+            @endif
 
             <div class="nav-section">Ship</div>
             <a href="{{ route('accounting.shippers') }}" class="{{ request()->routeIs('accounting.shippers*') ? 'active' : '' }}">

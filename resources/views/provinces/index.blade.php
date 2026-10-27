@@ -1,4 +1,4 @@
-@extends('layouts.admin')
+@extends(auth()->user()?->isAdmin() ? 'layouts.admin' : 'layouts.app')
 
 @section('content')
 <div class="content-inner">

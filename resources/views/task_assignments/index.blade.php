@@ -1,4 +1,4 @@
-@extends('layouts.admin')
+@extends(\App\Support\TaskWorkspace::layout(auth()->user()))
 
 @section('title', 'Giao Viec')
 

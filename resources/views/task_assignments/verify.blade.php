@@ -1,4 +1,4 @@
-@extends($layout ?? 'layouts.admin')
+@extends($layout ?? \App\Support\TaskWorkspace::layout(auth()->user()))
 
 @section('title', 'Xác nhận hoàn thành: ' . $task->code)
 

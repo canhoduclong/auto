@@ -32,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withMiddleware(function (Middleware $middleware) {
     $middleware->web(append: [
+        \App\Http\Middleware\EnsureAdminArea::class,
         \App\Http\Middleware\ValidateMobileAccountingSession::class,
         \App\Http\Middleware\TrackUserOnlineStatus::class,
         \App\Http\Middleware\SetLocale::class,
