@@ -94,7 +94,7 @@ class DepartmentFinanceRequestController extends Controller
     {
         $source = $request->route('finance_source');
         $this->authorizeSource($this->config($source));
-        abort_unless($transaction->request_source === $source, 404);
+        abort_unless($transaction->request_source === $source || (array_key_exists($transaction->request_source ?? '', self::SOURCES) && (int) $transaction->submitted_by === (int) auth()->id()), 404);
         abort_unless($transaction->canBeEditedBySubmitter((int) auth()->id()), 403, 'Chỉ được sửa phiếu của mình khi chưa có bước duyệt nào được xử lý.');
 
         return $this->index($request, $source, $transaction, true);
@@ -107,7 +107,7 @@ class DepartmentFinanceRequestController extends Controller
         $removedPaths = DB::transaction(function () use ($request, $transaction, $source) {
             $locked = Transaction::whereKey($transaction->id)->lockForUpdate()->firstOrFail();
             $locked->setRelation('approvalSteps', $locked->approvalSteps()->lockForUpdate()->get());
-            abort_unless($locked->request_source === $source, 404);
+            abort_unless($locked->request_source === $source || (array_key_exists($locked->request_source ?? '', self::SOURCES) && (int) $locked->submitted_by === (int) auth()->id()), 404);
             abort_unless($locked->canBeEditedBySubmitter((int) auth()->id()), 403, 'Phiếu đã được xử lý duyệt hoặc không thuộc người tạo. Không thể lưu thay đổi.');
             $request->route()->setParameter('transaction', $locked);
             $data = $this->validatedRequestData($request, $source);
@@ -256,6 +256,7 @@ class DepartmentFinanceRequestController extends Controller
         $config = $this->config('manager');
         $this->authorizeSource($config);
         abort_unless($transaction->request_source === 'manager', 404);
+        abort_unless($this->visibleRequests('manager')->whereKey($transaction->id)->exists(), 403);
 
         $duplicate = DB::transaction(function () use ($transaction, $request, $config): Transaction {
             $copy = Transaction::query()->create([
@@ -521,7 +522,7 @@ class DepartmentFinanceRequestController extends Controller
         $prefillRequest = null;
         if ($request->filled('copy_from')) {
             $request->validate(['copy_from' => 'required|integer|min:1']);
-            $prefillRequest = Transaction::where('request_source', $source)->findOrFail($request->integer('copy_from'));
+            $prefillRequest = $this->visibleRequests($source)->findOrFail($request->integer('copy_from'));
             abort_unless((int) $prefillRequest->submitted_by === (int) auth()->id() || auth()->user()->hasRole('admin'), 403);
             $showCreateForm = true;
         }
@@ -548,7 +549,7 @@ class DepartmentFinanceRequestController extends Controller
         $showCreateForm = $showCreateForm || $editingRequest !== null;
 
 
-        $requests = Transaction::query()
+        $requests = $this->visibleRequests($source)
             ->with([
                 'submitter:id,name,email,job_title,department_id,block_id',
                 'submitter.department:id,name,block_id',
@@ -561,8 +562,6 @@ class DepartmentFinanceRequestController extends Controller
                 'destinationAccount:id,name,type,owner_name,account_number,bank_name',
                 'approvalSteps:id,transaction_id,status,approved_by',
             ])
-            ->where('request_source', $source)
-            ->when($config['own_only'] ?? false, fn ($query) => $query->where('submitted_by', auth()->id()))
             ->when($status !== 'all', fn ($query) => $query->where('status', $status))
             ->when($formType !== 'all', fn ($query) => $query->where('request_form_type', $formType))
             ->when($search !== '', function ($query) use ($search): void {
@@ -874,6 +873,7 @@ class DepartmentFinanceRequestController extends Controller
     {
         $this->authorizeSource($this->config('manager'));
         abort_unless($transaction->request_source === 'manager', 404);
+        abort_unless($this->visibleRequests('manager')->whereKey($transaction->id)->exists(), 403);
         abort_unless(in_array($transaction->status, [Transaction::STATUS_PENDING_APPROVAL, Transaction::STATUS_REJECTED], true), 403, 'Chỉ được sửa hoặc xóa phiếu chờ duyệt hay bị từ chối.');
     }
 
@@ -882,10 +882,7 @@ class DepartmentFinanceRequestController extends Controller
         $config = $this->config($source);
         $this->authorizeSource($config);
 
-        abort_unless($transaction->request_source === $source, 404);
-        if ($config['own_only'] ?? false) {
-            abort_unless((int) $transaction->submitted_by === (int) auth()->id(), 403);
-        }
+        abort_unless($this->visibleRequests($source)->whereKey($transaction->id)->exists(), 403);
 
         $transaction->load([
             'submitter:id,name,email,job_title,department_id,block_id',
@@ -902,6 +899,11 @@ class DepartmentFinanceRequestController extends Controller
             'config' => $config,
             'transaction' => $transaction,
         ]);
+    }
+
+    private function visibleRequests(string $source): \Illuminate\Database\Eloquent\Builder
+    {
+        return app(\App\Services\FinanceRequestVisibilityService::class)->query(auth()->user(), $source, (bool) ($this->config($source)['own_only'] ?? false));
     }
 
     private function authorizeSource(array $config): void

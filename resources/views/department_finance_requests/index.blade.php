@@ -735,7 +735,7 @@
                             <td class="text-end">
                                 <div class="fr-list-actions">
                                 @php
-                                    $canEditLeaderRequest = $source === 'leader'
+                                    $canEditLeaderRequest = $source === 'leader' && $requestItem->request_source === 'leader'
                                         && ((int) $requestItem->submitted_by === (int) auth()->id() || auth()->user()->hasRole('admin'))
                                         && ($requestItem->status === \App\Models\Transaction::STATUS_REJECTED
                                             || ($requestItem->status === \App\Models\Transaction::STATUS_PENDING_APPROVAL
@@ -753,7 +753,7 @@
                                     </a>
                                 @endif
                                 @if($isManagerPage)
-                                    @php($canManageManagerRequest = in_array($requestItem->status, [\App\Models\Transaction::STATUS_PENDING_APPROVAL, \App\Models\Transaction::STATUS_REJECTED], true))
+                                    @php($canManageManagerRequest = $requestItem->request_source === 'manager' && in_array($requestItem->status, [\App\Models\Transaction::STATUS_PENDING_APPROVAL, \App\Models\Transaction::STATUS_REJECTED], true))
                                     @if($canManageManagerRequest)
                                         <a href="{{ route('manager.finance-requests.edit', $requestItem) }}" class="btn btn-outline-success btn-sm fr-action-icon" title="Sửa phiếu">
                                             <i class="bi bi-pencil"></i>
