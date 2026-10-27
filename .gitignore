@@ -96,3 +96,9 @@ readme.txt
 !/tests/Feature/EmployeeFinanceRequestTest.php
 
 !/tests/Feature/AccountingWorkQueueTest.php
+
+!/tests/Feature/CustomerCardContextTest.php
+
+!/tests/Feature/ImportCustomerPickerTest.php
+
+!/tests/Feature/GoogleSheetOrderImportTest.php

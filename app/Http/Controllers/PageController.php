@@ -4007,6 +4007,8 @@ public function apiTruckRoutes(Request $request)
             'trash' => (clone $baseQuery)->onlyTrashed()->count(),
         ];
 
+        app(\App\Services\CustomerCardContextService::class)->enrich($customers->getCollection(), auth()->user());
+
         return view('site.my_customer.index', [
             'customers' => $customers,
             'search' => $request->search,
@@ -4156,6 +4158,8 @@ public function apiTruckRoutes(Request $request)
             ->orderByDesc('customers.id')
             ->paginate($request->input('per_page', 10));
 
+        app(\App\Services\CustomerCardContextService::class)->enrich($customers->getCollection(), auth()->user());
+
         $customers->getCollection()->transform(function ($customer) {
             $addressText = $customer->address ?: '';
             if (!$addressText && $customer->addresses->first()) {
@@ -4181,7 +4185,7 @@ public function apiTruckRoutes(Request $request)
             $customer->current_owner_name = $customer->currentOwner?->name
                 ?? $customer->assignedTo?->name
                 ?? $customer->user?->name;
-            $customer->is_free_customer = (string) $customer->customer_status === 'free' || $customer->isFree();
+            $customer->is_free_customer = (bool) $customer->getAttribute('card_is_free');
             $customer->is_pinned = (bool) ($customer->is_pinned ?? false);
             $customer->sort_order = (int) ($customer->sort_order ?? 0);
             $customer->truck_route = $route ? $route->toArray() : null;
@@ -4343,6 +4347,8 @@ public function apiTruckRoutes(Request $request)
         if ($user->hasRole(['admin', 'manager', 'manager_sale', 'director'])) {
             return;
         }
+
+        abort_unless(app(\App\Services\CustomerCardContextService::class)->canViewContact($customer, $user), 403, 'Vui lòng nhận khách trước khi xem thông tin liên hệ hoặc thao tác với khách.');
 
         $canManage = (int) $customer->user_id === (int) $user->id
             || (int) $customer->assigned_to === (int) $user->id
@@ -4911,6 +4917,11 @@ public function apiTruckRoutes(Request $request)
             ->orderByDesc('id')
             ->limit(300)
             ->get();
+
+        $customerList->loadMissing('lastOrder');
+        foreach ($customerList as $sidebarCustomer) {
+            if (!app(\App\Services\CustomerCardContextService::class)->canViewContact($sidebarCustomer, auth()->user())) $sidebarCustomer->setAttribute('phone', null);
+        }
 
         [$fromDate, $toDate] = $this->resolveMyCustomerDateRange(
             (string) ($validated['period'] ?? 'month'),

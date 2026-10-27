@@ -843,6 +843,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('admin/order-schedule-runs/run-now', [OrderScheduleRunController::class, 'runNow'])->name('admin.order-schedule-runs.run-now')->middleware('role:admin');
     Route::post('admin/order-schedule-runs/run-daily-rules-now', [OrderScheduleRunController::class, 'runDailyRulesNow'])->name('admin.order-schedule-runs.run-daily-rules-now')->middleware('role:admin');
     Route::prefix('admin/import-orders')->name('admin.sheet-order-import.')->middleware('role:admin')->group(function () {
+        Route::get('/customers', [\App\Http\Controllers\Admin\GoogleSheetOrderImportController::class, 'customers'])->name('customers');
         Route::get('/', [\App\Http\Controllers\Admin\GoogleSheetOrderImportController::class, 'index'])->name('index');
         Route::post('/load', [\App\Http\Controllers\Admin\GoogleSheetOrderImportController::class, 'load'])->name('load');
         Route::post('/review', [\App\Http\Controllers\Admin\GoogleSheetOrderImportController::class, 'review'])->name('review');

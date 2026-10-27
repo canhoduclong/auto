@@ -146,6 +146,9 @@ class GoogleSheetOrderImportService
         if (!$rows || count(array_unique(array_column($rows, 'customer_key'))) !== 1) throw ValidationException::withMessages(['source_customer' => 'Mỗi lần import phải chọn đúng một khách nguồn.']);
         return DB::transaction(function () use ($rows, $customer, $sale, $actor, $options) {
             $customer = Customer::whereKey($customer->id)->lockForUpdate()->firstOrFail();
+            if (!Customer::query()->managedBySale((int) $sale->id)->whereKey($customer->id)->exists()) {
+                throw ValidationException::withMessages(['customer_id' => 'Khách B không còn do sale đã chọn quản lý. Vui lòng chọn lại khách.']);
+            }
             $keys = array_unique(array_map(fn ($r) => $this->sourceKey($r), $rows));
             if (DB::table('google_sheet_order_imports')->whereIn('source_key', $keys)->exists()) {
                 throw ValidationException::withMessages(['source_customer' => 'Có đơn của khách/ngày này đã import. Hãy tải lại dữ liệu và bỏ những ngày đã nhập.']);

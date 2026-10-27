@@ -744,7 +744,7 @@
                                             @else
                                                 <span class=" mc-priority-p3">Ưu tiên: Chưa phân hạng</span>
                                             @endif
-                                            @if($ownerName)
+                                            @if($ownerName && !$isFreeCustomer)
                                                 <span class="mc-owner">Owner : {{ $ownerName }}</span>
                                             @endif
                                             <span class="mc-status-badge {{ $statusClass }}">{{ $statusLabel }}</span>
@@ -753,9 +753,13 @@
                                             @if($customer->brand)
                                                 <small class="text-muted">Brand: {{ $customer->brand }}</small><br>
                                             @endif
+                                            @if(!$customer->can_view_contact)
+                                                <small class="text-muted"><i class="bi bi-lock me-1"></i>Nhận khách để xem số điện thoại</small><br>
+                                            @endif
                                             @if($customer->phone)
                                                 <small class="fw-bold fs-6"><i class="bi bi-telephone me-1"></i>{{ $customer->phone }}</small><br>
                                             @endif
+                                            @include('site.my_customer.partials.card-context')
                                             @if($addressText)
                                                 <small class="text-muted"><i class="bi bi-geo-alt me-1"></i>{{ $addressText }}</small><br>
                                             @endif
@@ -815,11 +819,13 @@
                                                             <i class="bi bi-person-plus-fill me-1"></i>Nhận khách
                                                         </button>
                                                     @endif
+                                                    @if($customer->can_view_contact)
                                                     <a href="{{ route('my_customer.show', $customer) }}" class="btn btn-outline-info btn-sm" title="Xem chi tiết"><i class="bi bi-eye"></i></a>
                                                     <a href="{{ route('my_customer.order.create', $customer) }}" class="btn btn-outline-success btn-sm" title="Lên đơn hàng"><i class="bi bi-file-text"></i></a>
                                                     <a href="{{ route('my_customer.show', ['customer' => $customer, 'tab' => 'payments']) }}" class="btn btn-outline-secondary btn-sm" title="Thanh toán"><i class="bi bi-cash"></i></a>
                                                     <a href="{{ route('my_customer.edit', $customer) }}" class="btn btn-outline-warning btn-sm" title="Chỉnh sửa"><i class="bi bi-pencil"></i></a>
                                                     <button type="button" class="btn btn-outline-danger btn-sm js-delete-customer" data-id="{{ $customer->id }}" title="Đưa vào thùng rác"><i class="bi bi-trash"></i></button>
+                                                    @endif
                                                 @endif
                                             </div>
                                            
@@ -986,6 +992,10 @@
             `;
         }
 
+        if (customer.can_view_contact === false) {
+            return `<button type="button" class="btn btn-success btn-sm js-takeover-customer" data-id="${customer.id}" data-name="${escapeHtml(customer.name || '')}"><i class="bi bi-person-plus-fill me-1"></i>Nhận khách</button>`;
+        }
+
         return `
             ${customer.is_free_customer ? `<button type="button" class="btn btn-success btn-sm js-takeover-customer" data-id="${customer.id}" data-name="${escapeHtml(customer.name || '')}" title="Nhận khách về danh sách của bạn"><i class="bi bi-person-plus-fill me-1"></i>Nhận khách</button>` : ''}
             <a href="${mcUrl('show', customer.id)}" class="btn btn-outline-info btn-sm" title="Xem chi tiết"><i class="bi bi-eye"></i></a>
@@ -1146,6 +1156,17 @@
         });
     }
 
+    function customerContextHtml(customer) {
+        const context = customer.card_context || {};
+        return `<div class="small border-top pt-2 mt-2 text-muted">
+            ${customer.is_free_customer ? `<div>Sale trước đó: <strong>${escapeHtml(context.previous_sale || 'Chưa có thông tin')}</strong></div>` : ''}
+            <div>Đơn gần nhất: <strong>${escapeHtml(context.last_order_date || 'Chưa có đơn hợp lệ')}</strong></div>
+            <div>Lần lấy hàng gần nhất: <strong>${escapeHtml(context.last_received_date || 'Chưa ghi nhận giao thành công')}</strong>${context.days_without_order !== null && context.days_without_order !== undefined ? ` · <strong>${Number(context.days_without_order)} ngày</strong> chưa lấy hàng` : ''}</div>
+            <div>Phản hồi đơn hàng (${Number(context.feedback_total || 0)}): ${escapeHtml(context.feedback_total ? context.feedback_counts : 'Chưa có phản hồi')}</div>
+            ${context.latest_feedback ? `<div class="text-break">Phản hồi gần nhất (${escapeHtml(context.latest_feedback_date || '—')}): ${escapeHtml(context.latest_feedback)}</div>` : ''}
+        </div>`;
+    }
+
     function updateCustomerList(customers) {
         const container = document.getElementById('customer-list');
         if (customers.length === 0) {
@@ -1245,7 +1266,9 @@
                                         ${updatedAt ? `<small class="text-muted fst-italic"><i class="bi bi-clock me-1"></i>Cập nhật: ${updatedAt}</small>` : ''}
                                         <span class=" fst-italic">, Mã KH: <strong>${code}</strong> - Trạng thái: <strong>${status}</strong></span> 
                                         ${deletedAt ? `<small class="text-danger fst-italic"><i class="bi bi-trash me-1"></i>Đã xóa: ${deletedAt}</small>` : ''}
+                                        ${customer.can_view_contact === false ? '<small class="text-muted"><i class="bi bi-lock me-1"></i>Nhận khách để xem số điện thoại</small><br>' : ''}
                                         ${phone ? `<small class="fw-bold fs-6"><i class="bi bi-telephone me-1"></i>${phone}</small><br>` : ''}
+                                        ${customerContextHtml(customer)}
                                         ${addressText ? `<small class="text-muted"><i class="bi bi-geo-alt me-1"></i>${addressText}</small><br>` : ''} 
                                         ${email ? `<small class="text-muted"><i class="bi bi-envelope me-1"></i>${email}</small><br>` : ''} 
                                        

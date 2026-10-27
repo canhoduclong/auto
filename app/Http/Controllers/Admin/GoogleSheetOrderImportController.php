@@ -19,7 +19,7 @@ class GoogleSheetOrderImportController extends Controller
 
     public function load(Request $request, GoogleSheetOrderImportService $service)
     {
-        $data = $request->validate(['from_date' => 'required|date_format:Y-m-d', 'to_date' => 'required|date_format:Y-m-d|after_or_equal:from_date', 'source_text' => 'required|string|max:2000000']);
+        $data = $request->validate(['from_date' => 'required|date_format:Y-m-d', 'to_date' => 'required|date_format:Y-m-d|after_or_equal:from_date', 'source_text' => 'required|string|max:2000000', 'sale_id' => ['required', 'integer', Rule::in($this->sales()->pluck('id')->all())]]);
         try {
             $rows = $service->parseText($data['source_text'], $data['from_date'], $data['to_date']);
         } catch (\Throwable $e) {
@@ -45,6 +45,29 @@ class GoogleSheetOrderImportController extends Controller
         return User::whereHas('roles', fn ($q) => $q->whereRaw('LOWER(name) IN (?,?,?,?,?,?)', ['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']))->orderBy('name')->get(['id', 'name']);
     }
 
+    private function managedCustomers(int $saleId)
+    {
+        return Customer::query()->managedBySale($saleId);
+    }
+
+    public function customers(Request $request)
+    {
+        $data = $request->validate([
+            'sale_id' => ['required', 'integer', Rule::in($this->sales()->pluck('id')->all())],
+            'search' => 'nullable|string|max:150', 'page' => 'nullable|integer|min:1',
+        ]);
+        $search = trim($data['search'] ?? '');
+        $customers = $this->managedCustomers((int) $data['sale_id'])
+            ->when($search !== '', fn ($query) => $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', '%'.$search.'%')->orWhere('customer_code', 'like', '%'.$search.'%')->orWhere('old_name', 'like', '%'.$search.'%');
+            }))
+            ->orderBy('name')->orderBy('id')->paginate(20, ['id', 'name', 'customer_code', 'old_name'], 'page', (int) ($data['page'] ?? 1));
+        return response()->json([
+            'customers' => $customers->items(),
+            'pagination' => ['current_page' => $customers->currentPage(), 'last_page' => $customers->lastPage(), 'total' => $customers->total(), 'per_page' => $customers->perPage()],
+        ])->header('Cache-Control', 'no-store');
+    }
+
     private function selection(Request $request, GoogleSheetOrderImportService $service): array
     {
         $data = $request->validate([
@@ -55,6 +78,8 @@ class GoogleSheetOrderImportController extends Controller
             'stage' => 'required|in:created,delivered,completed',
             'shipper_id' => ['nullable', 'required_unless:stage,created', 'integer', Rule::exists('users', 'id')],
         ]);
+        $customer = $this->managedCustomers((int) $data['sale_id'])->find($data['customer_id']);
+        if (!$customer) throw ValidationException::withMessages(['customer_id' => 'Khách B không còn do sale đã chọn quản lý. Vui lòng chọn lại khách.']);
         if (!empty($data['shipper_id']) && !User::whereKey($data['shipper_id'])->whereHas('roles', fn ($q) => $q->whereRaw('LOWER(name) IN (?,?)', ['shipper', 'manager_shipper']))->exists()) {
             throw ValidationException::withMessages(['shipper_id' => 'Vui lòng chọn tài khoản shipper.']);
         }
@@ -64,7 +89,7 @@ class GoogleSheetOrderImportController extends Controller
         $imported = DB::table('google_sheet_order_imports')->whereIn('source_key', array_map(fn ($r) => $service->sourceKey($r), $rows))->pluck('source_key')->all();
         $rows = array_values(array_filter($rows, fn ($r) => !in_array($service->sourceKey($r), $imported, true)));
         if (!$rows) throw ValidationException::withMessages(['source_customer' => 'Tất cả đơn của khách trong khoảng ngày đã import.']);
-        return [$data, $rows, Customer::findOrFail($data['customer_id']), User::findOrFail($data['sale_id'])];
+        return [$data, $rows, $customer, User::findOrFail($data['sale_id'])];
     }
 
     public function review(Request $request, GoogleSheetOrderImportService $service)
@@ -112,9 +137,13 @@ class GoogleSheetOrderImportController extends Controller
             $remaining = $rows->reject(fn ($r) => in_array($service->sourceKey($r), $imported, true));
             return ['key' => $key, 'name' => $rows->first()['customer_name'], 'rows' => $rows->count(), 'orders' => $rows->pluck('date')->unique()->count(), 'remaining' => $remaining->pluck('date')->unique()->count()];
         });
+        $saleId = (int) $request->old('sale_id', $extra['selection']['sale_id'] ?? $snapshot['sale_id'] ?? 0);
+        $customerId = (int) $request->old('customer_id', $extra['selection']['customer_id'] ?? 0);
+        $selectedCustomer = $saleId && $customerId ? $this->managedCustomers($saleId)->find($customerId, ['id', 'name', 'customer_code', 'old_name']) : null;
         return view('admin.sheet-order-import.index', $extra + [
             'snapshot' => $snapshot, 'previewToken' => $request->input('preview'), 'groups' => $groups,
-            'customers' => Customer::orderBy('name')->get(['id', 'name', 'customer_code', 'old_name']),
+            'customers' => collect($selectedCustomer ? [$selectedCustomer] : []),
+            'selectedCustomer' => $selectedCustomer,
             'sales' => $this->sales(), 'warehouses' => Warehouse::where('status', true)->orderBy('name')->get(['id', 'name']),
             'shippers' => User::whereHas('roles', fn ($q) => $q->whereRaw('LOWER(name) IN (?,?)', ['shipper', 'manager_shipper']))->orderBy('name')->get(['id', 'name']),
         ]);

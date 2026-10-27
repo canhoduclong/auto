@@ -279,6 +279,14 @@ class Customer extends Model
         return $query;
     }
 
+    public function scopeManagedBySale(Builder $query, int $saleId): Builder
+    {
+        return $query->managed()->where(function (Builder $query) use ($saleId) {
+            $query->where('current_owner_sale_id', $saleId)
+                ->orWhere(fn (Builder $query) => $query->whereNull('current_owner_sale_id')->where('assigned_to', $saleId));
+        });
+    }
+
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
         if ($user->isAdmin()) {
@@ -342,6 +350,21 @@ class Customer extends Model
     public function lastOrder()
     {
         return $this->hasOne(Order::class)->latestOfMany('created_at');
+    }
+
+    public function previousOwnership()
+    {
+        return $this->hasOne(CustomerOwnershipHistory::class)->ofMany(['ended_at' => 'max', 'id' => 'max'], fn ($q) => $q->whereNotNull('ended_at'));
+    }
+
+    public function latestValidCustomerOrder()
+    {
+        return $this->hasOne(Order::class)->ofMany(['created_at' => 'max', 'id' => 'max'], fn ($q) => $q->whereNull('trash_at')->whereNotIn('status', ['cancelled', 'canceled', 'rejected', 'draft']));
+    }
+
+    public function latestCustomerFeedback()
+    {
+        return $this->hasOne(Order::class)->ofMany(['customer_feedback_at' => 'max', 'id' => 'max'], fn ($q) => $q->whereNotNull('customer_feedback_at')->whereNull('trash_at')->whereNotIn('status', ['cancelled', 'canceled', 'rejected', 'draft']));
     }
 
     public function priorities()
