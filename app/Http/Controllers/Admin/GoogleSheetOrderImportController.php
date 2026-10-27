@@ -123,8 +123,9 @@ class GoogleSheetOrderImportController extends Controller
             report($e);
             return redirect()->route('admin.sheet-order-import.index', ['preview' => $data['preview']])->with('error', 'Không thể import. Dữ liệu của lần nhập này đã được hoàn tác. Vui lòng tải lại để kiểm tra trùng hoặc xem nhật ký lỗi.');
         }
+        $sameDayOrders = $service->sameDayOrders($customer, array_column($rows, 'date'), 0);
         Cache::forget($key);
-        return redirect()->route('admin.sheet-order-import.index', ['preview' => $data['preview']])->with('success', 'Đã import '.count($orders).' đơn: '.implode(', ', $orders).'. Đã lưu tên khách nguồn vào Tên cũ.');
+        return redirect()->route('admin.sheet-order-import.index', ['preview' => $data['preview']])->with('success', 'Đã import '.count($orders).' đơn: '.implode(', ', $orders).'. Đã lưu tên khách nguồn vào Tên cũ.')->with('import_same_day_orders', $sameDayOrders)->with('import_customer_name', $customer->name);
     }
 
     private function page(Request $request, GoogleSheetOrderImportService $service, array $extra = [])

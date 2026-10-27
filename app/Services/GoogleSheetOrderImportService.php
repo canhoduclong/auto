@@ -106,6 +106,24 @@ class GoogleSheetOrderImportService
         return hash('sha256', self::SPREADSHEET.'|'.self::GID.'|'.$row['date'].'|'.$row['customer_key']);
     }
 
+    public function sameDayOrders(Customer $customer, array $dates, int $additionalOrders = 1): array
+    {
+        if (!$dates) return [];
+        $dateExpression = 'DATE(COALESCE(delivery_date, created_at))';
+        return Order::query()->where('customer_id', $customer->id)
+            ->whereNull('trash_at')->whereNotIn('status', ['cancelled', 'canceled', 'rejected', 'draft'])
+            ->whereIn(DB::raw($dateExpression), array_values(array_unique($dates)))
+            ->select(['id', 'code', 'status', 'total'])
+            ->selectRaw($dateExpression.' as business_date')->orderBy('id')->get()
+            ->groupBy('business_date')
+            ->filter(fn ($orders) => $orders->count() + $additionalOrders >= 2)
+            ->map(fn ($orders, $date) => [
+                'date' => $date, 'existing_count' => $orders->count(),
+                'resulting_count' => $orders->count() + $additionalOrders,
+                'orders' => $orders->map(fn ($order) => ['id' => $order->id, 'code' => $order->code ?: '#'.$order->id, 'status' => $order->status, 'total' => (float) $order->total])->all(),
+            ])->sortKeys()->values()->all();
+    }
+
     public function prepare(array $rows, Customer $customer, User $sale, User $actor): array
     {
         $columns = ['date', 'customer_code', 'customer_name', 'sale_name', 'unit', 'quantity', 'unit_weight', 'total_quantity', 'unit_price', 'total_amount'];
@@ -138,6 +156,7 @@ class GoogleSheetOrderImportService
             if ((int) $row['customer_id'] !== (int) $customer->id) throw ValidationException::withMessages(['customer_id' => 'Tên hoặc mã khách B bị trùng trong hệ thống. Vui lòng kiểm tra hồ sơ khách trước khi import.']);
         }
         unset($row);
+        $preview['same_day_orders'] = $this->sameDayOrders($customer, array_column($rows, 'date'));
         return compact('text', 'preview');
     }
 

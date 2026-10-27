@@ -4,6 +4,9 @@
 <div class="container-fluid py-3">
     <h3>Import Đơn từ dữ liệu Excel / Google Sheet</h3>
     @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
+    @if(session('import_same_day_orders'))
+        @include('admin.sheet-order-import.same-day-orders', ['sameDayOrders' => session('import_same_day_orders'), 'afterImport' => true, 'customerName' => session('import_customer_name')])
+    @endif
     @if(session('error'))<div class="alert alert-danger">{{ session('error') }}</div>@endif
     @if($errors->any())<div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
     <div class="card"><div class="card-body">
@@ -66,6 +69,9 @@
     <div class="card border-primary" id="import-review"><div class="card-body">
         <h5>Xem trước: {{ $review['order_count'] }} đơn · {{ count($review['rows']) }} dòng</h5>
         <p>Khách nhận đơn: <strong>{{ $customers->firstWhere('id', $selection['customer_id'])?->name }}</strong> · Sale được gán: <strong>{{ $sales->firstWhere('id', $selection['sale_id'])?->name }}</strong> · Trạng thái: <strong>{{ ['created' => 'Chờ duyệt', 'delivered' => 'Đã giao — chờ kế toán', 'completed' => 'Hoàn tất — kế toán xác nhận'][$selection['stage']] }}</strong></p>
+        @if(!empty($review['same_day_orders']))
+            @include('admin.sheet-order-import.same-day-orders', ['sameDayOrders' => $review['same_day_orders'], 'afterImport' => false, 'customerName' => $customers->firstWhere('id', $selection['customer_id'])?->name])
+        @endif
         <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Ngày</th><th>Khách B</th><th>Hàng / DVT</th><th>SL</th><th>Kg/con</th><th>Tổng KL</th><th>Đơn giá</th><th>Thành tiền</th><th>Kiểm tra</th></tr></thead><tbody>
         @foreach($review['rows'] as $row)<tr><td>{{ $row['data']['entry_date'] }}</td><td>{{ $row['data']['customer_name'] }}</td><td>{{ $row['data']['unit'] }}</td><td>{{ $row['data']['quantity'] }}</td><td>{{ $row['data']['unit_weight'] }}</td><td>{{ $row['data']['total_quantity'] }}</td><td>{{ number_format($row['data']['unit_price'] ?? 0) }}</td><td>{{ number_format($row['data']['total_amount']) }}</td><td>@foreach($row['errors'] as $error)<div class="text-danger">{{ $error }}</div>@endforeach @foreach($row['warnings'] as $warning)<div class="text-warning">{{ $warning }}</div>@endforeach</td></tr>@endforeach
         </tbody><tfoot><tr><th colspan="7">Tổng tiền</th><th>{{ number_format(collect($review['rows'])->sum('data.total_amount')) }}</th><td></td></tr></tfoot></table></div>

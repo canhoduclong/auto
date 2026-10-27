@@ -81,7 +81,7 @@ class GoogleSheetOrderImportTest extends TestCase
         $this->table('product_variants', ['name', 'size', 'sku'], ['kg', 'is_priced_by_kg'], ['product_id']);
         $this->table('accounting_sales_import_batches', ['raw_text', 'business_date'], ['total_amount', 'row_count'], ['imported_by', 'source_warehouse_id'], 'source_hash');
         $this->table('accounting_sales_entries', ['entry_date', 'customer_code', 'customer_name', 'sale_name', 'unit', 'source', 'source_key'], ['quantity', 'unit_weight', 'total_quantity', 'unit_price', 'total_amount', 'entry_month', 'import_row'], ['customer_id', 'sale_id', 'order_id', 'order_item_id', 'accounting_reconciliation_id', 'import_batch_id', 'created_by', 'updated_by']);
-        $this->table('orders', ['code', 'status', 'payment_status', 'recipient_name', 'recipient_phone', 'recipient_address', 'delivery_date', 'delivered_at', 'note', 'imported_sales_group_key', 'commission_created_at'], ['total', 'subtotal_amount', 'amount_paid', 'amount_due', 'needs_operational_completion', 'total_weight', 'skip_auto_cancel', 'commission_percent_snapshot', 'commission_amount_snapshot'], ['customer_id', 'user_id', 'warehouse_id', 'shipper_id', 'accounting_sales_import_batch_id']);
+        $this->table('orders', ['code', 'status', 'payment_status', 'recipient_name', 'recipient_phone', 'recipient_address', 'delivery_date', 'delivered_at', 'trash_at', 'note', 'imported_sales_group_key', 'commission_created_at'], ['total', 'subtotal_amount', 'amount_paid', 'amount_due', 'needs_operational_completion', 'total_weight', 'skip_auto_cancel', 'commission_percent_snapshot', 'commission_amount_snapshot'], ['customer_id', 'user_id', 'warehouse_id', 'shipper_id', 'accounting_sales_import_batch_id']);
         $this->table('order_items', ['imported_name'], ['quantity', 'price', 'base_price', 'unit_weight', 'total_weight', 'total', 'packed_weight'], ['order_id', 'accounting_sales_entry_id', 'product_id', 'product_variant_id']);
         $this->table('accounting_reconciliations', ['status', 'confirmed_at', 'note'], ['total_amount', 'paid_amount', 'shipping_fee', 'return_amount', 'recognized_revenue'], ['order_id', 'sale_id', 'shipper_id', 'confirmed_by']);
         $this->table('order_histories', ['role', 'action', 'status_before', 'status_after', 'note'], [], ['order_id', 'user_id']);
@@ -170,6 +170,34 @@ class GoogleSheetOrderImportTest extends TestCase
                 foreach (['orders', 'order_items', 'accounting_sales_entries', 'accounting_sales_import_batches', 'accounting_reconciliations', 'order_commissions', 'google_sheet_order_imports'] as $table) self::assertSame(0, DB::table($table)->count(), $table);
                 self::assertSame('Tên cũ trước đó', $customer->fresh()->old_name);
             }
+        });
+    }
+
+    public function test_same_day_report_shows_existing_orders_and_actual_counts_after_import(): void
+    {
+        [$customer, $sale] = $this->fixtures();
+        DB::table('orders')->insert(['id' => 10, 'customer_id' => 2, 'code' => 'OLD-10', 'status' => 'completed', 'delivery_date' => '2026-05-04', 'total' => 100000]);
+        DB::table('orders')->insert(['id' => 11, 'customer_id' => 2, 'code' => 'OLD-11', 'status' => 'delivered', 'created_at' => '2026-05-04 08:00:00', 'total' => 200000]);
+        DB::table('orders')->insert(['id' => 12, 'customer_id' => 2, 'status' => 'cancelled', 'delivery_date' => '2026-05-04']);
+        DB::table('orders')->insert(['id' => 13, 'customer_id' => 2, 'status' => 'completed', 'delivery_date' => '2026-05-04', 'trash_at' => now()]);
+        DB::table('orders')->insert(['id' => 14, 'customer_id' => 99, 'status' => 'completed', 'delivery_date' => '2026-05-04']);
+        DB::table('orders')->insert(['id' => 15, 'customer_id' => 2, 'status' => 'completed', 'delivery_date' => '2026-05-03']);
+        Model::withoutEvents(function () use ($customer, $sale) {
+            $service = new GoogleSheetOrderImportService;
+            $rows = $service->parseText(self::HEADER."\n".self::LINE, '2026-05-04', '2026-05-04');
+            $preview = $service->prepare($rows, $customer, $sale, $sale)['preview'];
+            $report = $preview['same_day_orders'];
+            self::assertCount(1, $report);
+            self::assertSame('2026-05-04', $report[0]['date']);
+            self::assertSame(2, $report[0]['existing_count']);
+            self::assertSame(3, $report[0]['resulting_count']);
+            self::assertSame(['OLD-10', 'OLD-11'], array_column($report[0]['orders'], 'code'));
+            $service->import($rows, $customer, $sale, $sale, ['stage' => 'completed', 'warehouse_id' => 1, 'shipper_id' => 1]);
+            $after = $service->sameDayOrders($customer, ['2026-05-04'], 0);
+            self::assertSame(3, $after[0]['resulting_count']);
+            self::assertCount(3, $after[0]['orders']);
+            self::assertSame([], $service->sameDayOrders($customer, ['2026-05-03'], 0));
+            self::assertSame([], $service->sameDayOrders($customer, ['2026-05-05']));
         });
     }
 
