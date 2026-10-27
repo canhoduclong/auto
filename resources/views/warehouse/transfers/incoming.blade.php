@@ -279,6 +279,16 @@
             </h5>
             <span class="badge rounded-pill" style="background:#38bdf8; color:#fff;">{{ $pendingTransfers->count() }} đơn</span>
         </div>
+        <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+            <label class="d-flex align-items-center gap-2 mb-0">
+                <input type="checkbox" class="form-check-input mt-0" id="select-all-receipts">
+                Chọn tất cả đơn chờ nhập kho
+            </label>
+            <button type="button" class="btn btn-success btn-sm" id="receive-selected" disabled>
+                Nhập kho các đơn đã chọn (<span id="selected-receipt-count">0</span>)
+            </button>
+            <div id="bulk-receipt-status" class="small w-100" role="status" aria-live="polite"></div>
+        </div>
         <div class="row g-3">
             @forelse($pendingTransfers as $transfer)
                 @include('warehouse.transfers._transfer_card', ['transfer' => $transfer, 'isReceived' => false])
@@ -329,6 +339,65 @@ function scrollToTransferCard(id, el) {
     }
 }
 document.addEventListener('DOMContentLoaded', function () {
+    const selections = Array.from(document.querySelectorAll('.js-receipt-select'));
+    const selectAll = document.getElementById('select-all-receipts');
+    const receiveSelected = document.getElementById('receive-selected');
+    const status = document.getElementById('bulk-receipt-status');
+    let receiving = false;
+    function updateSelection() {
+        const available = selections.filter(input => !input.disabled);
+        const count = available.filter(input => input.checked).length;
+        document.getElementById('selected-receipt-count').textContent = count;
+        selectAll.checked = count > 0 && count === available.length;
+        selectAll.indeterminate = count > 0 && count < available.length;
+        selectAll.disabled = receiving || available.length === 0;
+        receiveSelected.disabled = receiving || count === 0;
+    }
+    selections.forEach(input => input.addEventListener('change', updateSelection));
+    selectAll.addEventListener('change', () => {
+        selections.filter(input => !input.disabled).forEach(input => input.checked = selectAll.checked);
+        updateSelection();
+    });
+    document.addEventListener('submit', event => {
+        if (receiving) event.preventDefault();
+    }, true);
+    receiveSelected.addEventListener('click', async () => {
+        const selected = selections.filter(input => input.checked && !input.disabled);
+        if (!selected.length || receiving || !window.confirm(`Xác nhận nhập kho ${selected.length} đơn đã chọn? Khối lượng tiếp nhận lấy theo khối lượng bàn giao.`)) return;
+        receiving = true;
+        updateSelection();
+        selections.forEach(input => input.disabled = true);
+        let completed = 0;
+        for (const input of selected) {
+            const card = document.getElementById('transfer-card-' + input.value);
+            const form = card.querySelector('.js-confirm-receipt-form');
+            status.textContent = `Đang nhập kho ${completed + 1}/${selected.length}…`;
+            try {
+                const response = await fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.message || 'Không thể nhập kho.');
+                input.checked = false;
+                input.dataset.received = 'true';
+                completed++;
+                form.querySelector('button[type="submit"]').disabled = true;
+            } catch (error) {
+                status.textContent = `Đã nhập ${completed}/${selected.length} đơn. Dừng tại đơn #${input.value}: ${error.message} Vui lòng tải lại trang để kiểm tra trước khi thử tiếp.`;
+                receiving = false;
+                selections.forEach(item => item.disabled = item.dataset.received === 'true');
+                updateSelection();
+                return;
+            }
+        }
+        status.textContent = `Đã nhập kho ${completed} đơn. Đang tải lại…`;
+        window.location.reload();
+    });
+    updateSelection();
+
     document.querySelectorAll('.js-rollback-transfer-form').forEach(function (form) {
         form.addEventListener('submit', function (event) {
             event.preventDefault();

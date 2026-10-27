@@ -2236,14 +2236,18 @@ class WarehouseDashboardController extends Controller
 
     public function confirmTransferReceipt(Request $request, WarehouseTransfer $transfer)
     {
+        $receiptError = fn (string $message) => $request->expectsJson()
+            ? response()->json(['message' => $message], 422)
+            : back()->with('error', $message);
+
         abort_unless(WarehouseTransfer::whereKey($transfer->id)->forReceiving()->exists(), 422, 'Đơn đã hủy, đã xóa hoặc ở thùng rác; không thể tiếp nhận.');
         if ($transfer->status !== WarehouseTransfer::STATUS_DELIVERED_WAITING_RECEIVE) {
-            return back()->with('error', 'Phiếu điều chuyển không ở trạng thái chờ tiếp nhận.');
+            return $receiptError('Phiếu điều chuyển không ở trạng thái chờ tiếp nhận.');
         }
 
         $managedWarehouseId = Auth::user()?->warehouse_id ? (int) Auth::user()->warehouse_id : null;
         if ($managedWarehouseId && (int) $transfer->target_warehouse_id !== $managedWarehouseId) {
-            return back()->with('error', 'Bạn chỉ có thể tiếp nhận hàng cho kho mình quản lý.');
+            return $receiptError('Bạn chỉ có thể tiếp nhận hàng cho kho mình quản lý.');
         }
 
         $validated = $request->validate([
@@ -2256,7 +2260,7 @@ class WarehouseDashboardController extends Controller
         $transfer->loadMissing(['order.items']);
         $order = $transfer->order;
         if (! $order) {
-            return back()->with('error', 'Không tìm thấy đơn hàng của phiếu điều chuyển.');
+            return $receiptError('Không tìm thấy đơn hàng của phiếu điều chuyển.');
         }
 
         $orderItemsById = $order->items->keyBy('id');
@@ -2268,7 +2272,7 @@ class WarehouseDashboardController extends Controller
             ->values();
 
         if ($requiredIds->all() !== $submittedIds->all()) {
-            return back()->with('error', 'Vui lòng nhập đủ cân nặng tiếp nhận cho tất cả sản phẩm.')->withInput();
+            return $receiptError('Vui lòng nhập đủ cân nặng tiếp nhận cho tất cả sản phẩm.');
         }
 
         $receivedWeights = [];
@@ -2384,7 +2388,11 @@ class WarehouseDashboardController extends Controller
         } catch (\Throwable $e) {
             report($e);
 
-            return back()->with('error', 'Không thể tiếp nhận phiếu điều chuyển #'.$transfer->id.': '.$e->getMessage());
+            return $receiptError('Không thể tiếp nhận phiếu điều chuyển #'.$transfer->id.': '.$e->getMessage());
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Đã nhập kho thành công.']);
         }
 
         return back()->with('success', 'Đã tiếp nhận hàng điều chuyển, tạo phiếu nhập kho và cập nhật tồn kho thành công.');

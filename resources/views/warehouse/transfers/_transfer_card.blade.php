@@ -16,6 +16,10 @@
 <div class="card border-0 shadow-sm h-100" id="transfer-card-{{ $transfer->id }}">
     <div class="card-header bg-white d-flex justify-content-between align-items-center gap-2">
         <div class="d-flex align-items-center">
+            @if($canConfirm)
+                <input type="checkbox" class="form-check-input js-receipt-select me-2" value="{{ $transfer->id }}"
+                       aria-label="Chọn nhập kho đơn {{ $order?->code ?? $transfer->order_id }}">
+            @endif
             @if(isset($isReceived) && !$isReceived)
                 <div class="wh-order-index text-center me-2" style="background:#38bdf8 !important; color:#fff !important; border: 2px solid #38bdf8;">{{ $sequenceNumber }}</div>
             @else
@@ -125,7 +129,7 @@
                         <i class="bi bi-x-circle me-1"></i>Từ chối
                     </button>
                 </form>
-                <form method="POST" action="{{ route('warehouse.transfers.confirm-receipt', $transfer) }}" class="d-flex justify-content-end" onsubmit="return confirm('Xác nhận nhập hàng điều chuyển vào kho? Hệ thống sẽ tạo phiếu nhập và cập nhật tồn kho.');">
+                <form method="POST" action="{{ route('warehouse.transfers.confirm-receipt', $transfer) }}" class="d-flex justify-content-end js-confirm-receipt-form" onsubmit="return confirm('Xác nhận nhập hàng điều chuyển vào kho? Hệ thống sẽ tạo phiếu nhập và cập nhật tồn kho.');">
                     @csrf
                     <input type="hidden" name="receive_note" value="Đã nhận kho qua trang tiếp nhận nhanh">
                     @foreach($order?->items ?? [] as $item)

@@ -6,6 +6,7 @@
 
 @section('content')
 <div class="content-wrapper container task-workspace">
+@include('task_assignments.partials.ai-link')
 <div class="content-header d-flex align-items-center flex-wrap py-3 gap-3">
     <a href="{{ route($indexRoute ?? 'task-assignments.index') }}" class="btn btn-sm btn-outline-secondary">
         <i class="ph ph-arrow-left"></i>

@@ -9,6 +9,12 @@ use App\Http\Controllers\Api\Mobile\SaleApiController;
 use App\Http\Controllers\Api\Mobile\WarehouseApiController;
 use Illuminate\Support\Facades\Route;
 
+// Isolated task capabilities: deliberately outside all account/mobile authentication.
+Route::prefix('task-links')->middleware('throttle:30,1')->group(function () {
+    Route::get('/{token}', [\App\Http\Controllers\TaskAiLinkController::class, 'show'])->where('token', '[a-f0-9]{64}')->name('task-ai.show');
+    Route::post('/{token}', [\App\Http\Controllers\TaskAiLinkController::class, 'update'])->where('token', '[a-f0-9]{64}')->name('task-ai.update');
+});
+
 Route::prefix('mobile')->group(function () {
     Route::middleware('throttle:20,1')->group(function () {
         Route::post('/auth/login', [AuthApiController::class, 'login']);

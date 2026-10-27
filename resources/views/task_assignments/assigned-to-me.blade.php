@@ -175,6 +175,10 @@
                         <i class="fas fa-eye"></i> Chi tiết
                     </a>
                     
+                    @if($myTaskAssignment && !in_array($task->status, ['draft', 'completed', 'done', 'cancelled'], true) && !in_array($myTaskAssignment->status, ['completed', 'cancelled'], true))
+                        <a href="{{ route(auth()->user()?->isSalesFlowRole() ? 'tasks.show' : 'task-assignments.show', $task) }}#taskAiPanel" class="btn btn-outline-primary btn-sm">Link AI</a>
+                    @endif
+
                     @if ($task->status !== 'completed' && $task->status !== 'done' && $task->status !== 'rejected')
                         <a href="{{ route(auth()->user()?->isSalesFlowRole() ? 'tasks.show' : 'task-assignments.show', $task) }}" class="btn btn-primary btn-sm">
                             <i class="fas fa-edit"></i> Cập nhật

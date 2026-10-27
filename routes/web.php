@@ -931,6 +931,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::put('approval-workflows/{approvalWorkflow}', [ApprovalWorkflowController::class, 'update'])->name('approval-workflows.update');
 
     // Giao việc (Task Assignment)
+    Route::post('task-assignments/{taskAssignment}/ai-link', [\App\Http\Controllers\TaskAiLinkController::class, 'issue'])->name('task-ai.issue')->middleware('throttle:10,1');
+    Route::delete('task-assignments/{taskAssignment}/ai-link', [\App\Http\Controllers\TaskAiLinkController::class, 'revoke'])->name('task-ai.revoke');
     Route::post('task-assignments/{taskAssignment}/approve', [\App\Http\Controllers\TaskAssignmentController::class, 'approve'])->name('task-assignments.approve');
     Route::post('task-assignments/{taskAssignment}/reject', [\App\Http\Controllers\TaskAssignmentController::class, 'reject'])->name('task-assignments.reject');
     Route::post('task-assignments/{taskAssignment}/cancel', [\App\Http\Controllers\TaskAssignmentController::class, 'cancel'])->name('task-assignments.cancel');
