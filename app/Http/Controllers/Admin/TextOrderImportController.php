@@ -282,6 +282,7 @@ class TextOrderImportController extends Controller
                 'truckStation.brand:id,name',
                 'variant.product.avatar.media',
                 'order:id,code,created_at',
+                'additionalOrders' => fn ($query) => $query->whereDate('additional_template_date', $selectedDraftDate)->whereNull('trash_at')->whereNotIn('status', ['cancelled', 'canceled', 'rejected'])->orderBy('id')->select(['id', 'code', 'additional_text_order_draft_id', 'additional_template_date']),
                 'automatedSchedules' => fn ($query) => $query
                     ->whereDate('schedule_date', $selectedDraftDate)
                     ->with('generatedOrder'),
@@ -426,6 +427,29 @@ class TextOrderImportController extends Controller
         $this->forceSale($request);
 
         return $this->confirmAction($request, $draft, $approvalService);
+    }
+
+    public function saleConfirmAdditional(Request $request, TextOrderDraft $draft, ApprovalService $approvalService): JsonResponse
+    {
+        $this->ensureSaleDraft($request, $draft);
+        $request->validate(['creation_token' => 'required|uuid']);
+        $this->forceSale($request);
+        $hash = hash('sha256', json_encode(['draft_id' => $draft->id, 'payload' => $request->except('_token')]));
+        $order = DB::transaction(function () use ($request, $draft, $approvalService, $hash) {
+            $locked = TextOrderDraft::lockForUpdate()->findOrFail($draft->id);
+            $this->ensureSaleDraft($request, $locked);
+            $existing = Order::where('user_id', $locked->sale_id)->where('creation_token', $request->input('creation_token'))->first();
+            if ($existing) {
+                if ($existing->creation_payload_hash !== $hash || (int) $existing->additional_text_order_draft_id !== (int) $locked->id) {
+                    throw ValidationException::withMessages(['creation_token' => 'Lần gửi này đã tạo đơn với nội dung khác. Vui lòng tải lại trang.']);
+                }
+                return $existing;
+            }
+            return $this->confirmDraft($request, $locked, $approvalService, [
+                'creation_token' => $request->input('creation_token'), 'creation_payload_hash' => $hash,
+            ]);
+        });
+        return response()->json(['message' => 'Đã lên thêm đơn '.($order->code ?: '#'.$order->id).'. Đơn đã lên trước đó được giữ nguyên.', 'order_id' => $order->id, 'order_code' => $order->code]);
     }
 
     public function saleCopy(Request $request, TextOrderDraft $draft): JsonResponse
@@ -761,7 +785,7 @@ class TextOrderImportController extends Controller
         ]);
     }
 
-    private function confirmDraft(Request $request, TextOrderDraft $draft, ApprovalService $approvalService)
+    private function confirmDraft(Request $request, TextOrderDraft $draft, ApprovalService $approvalService, array $additionalContext = [])
     {
         abort_if(
             $draft->status === 'confirmed' && $draft->draft_scope !== TextOrderDraft::SCOPE_SALE_PRIVATE,
@@ -814,10 +838,13 @@ class TextOrderImportController extends Controller
             ]);
         }
 
-        return DB::transaction(function () use ($draft, $customer, $draftItems, $truckStation, $approvalService, $deliveryDate) {
+        return DB::transaction(function () use ($draft, $customer, $draftItems, $truckStation, $approvalService, $deliveryDate, $additionalContext) {
             $draft = TextOrderDraft::query()->lockForUpdate()->findOrFail($draft->id);
             $schedule = null;
-            if ($draft->draft_scope === TextOrderDraft::SCOPE_SALE_PRIVATE) {
+            if ($additionalContext && !OrderSchedule::where('text_order_draft_id', $draft->id)->whereDate('schedule_date', $deliveryDate)->withActiveGeneratedOrder()->exists()) {
+                throw ValidationException::withMessages(['delivery_date' => 'Ngày đã chọn chưa có đơn đang hoạt động từ mẫu này. Vui lòng dùng nút Lên đơn thông thường.']);
+            }
+            if ($draft->draft_scope === TextOrderDraft::SCOPE_SALE_PRIVATE && !$additionalContext) {
                 $schedule = OrderSchedule::query()
                     ->where('text_order_draft_id', $draft->id)
                     ->whereDate('schedule_date', $deliveryDate)
@@ -858,6 +885,8 @@ class TextOrderImportController extends Controller
                     'unit_weight' => isset($item['size_kg']) ? (float) $item['size_kg'] : null,
                 ])->all(),
                 [
+                    'creation_token' => $additionalContext['creation_token'] ?? null,
+                    'creation_payload_hash' => $additionalContext['creation_payload_hash'] ?? null,
                     'customer_id' => $customer->id,
                     'user_id' => $draft->sale_id,
                     'actor_user_id' => $draft->sale_id,
@@ -890,6 +919,10 @@ class TextOrderImportController extends Controller
                 ],
                 $approvalService
             );
+
+            if ($additionalContext) {
+                $order->forceFill(['additional_text_order_draft_id' => $draft->id, 'additional_template_date' => $deliveryDate])->save();
+            }
 
             if ($schedule) {
                 $schedule->update([

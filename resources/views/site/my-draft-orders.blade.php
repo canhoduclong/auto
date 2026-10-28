@@ -354,6 +354,7 @@
                     $draftTotal += $draftVat + $draftShipping;
                     $selectedSchedule = $draft->automatedSchedules->first();
                     $hasOrderForSelectedDate = (bool) $selectedSchedule?->hasActiveGeneratedOrder();
+                    $additionalOrders = $draft->additionalOrders;
                     $statusText = $hasOrderForSelectedDate
                         ? 'Đã lên đơn '.\Carbon\Carbon::parse($selectedDraftDate)->format('d/m/Y')
                         : ($draft->status === 'error' ? 'Có lỗi' : 'Chưa lên ngày '.\Carbon\Carbon::parse($selectedDraftDate)->format('d/m/Y'));
@@ -633,6 +634,9 @@
                                         <div class="small text-muted">Mẫu đã lên đơn trong ngày. Lưu chỉ cập nhật mẫu cho lần sử dụng tiếp theo, không thay đổi đơn đã tạo.</div>
                                         <div class="draft-edit-footer-actions">
                                             <button type="button" class="btn btn-sm btn-outline-success js-save-draft"><i class="bi bi-check2 me-1"></i>Lưu đơn mẫu</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary js-cancel-draft-confirm" hidden>Hủy lên thêm</button>
+                                            <button type="button" class="btn btn-sm btn-success js-confirm-draft" hidden>Xác nhận lên thêm đơn</button>
+                                            <small class="text-muted" data-additional-order-note hidden>Xác nhận sẽ lưu nội dung mẫu đang sửa và tạo thêm một đơn mới; đơn đã lên trước đó giữ nguyên.</small>
                                         </div>
                                     </div>
                                 @endif
@@ -705,8 +709,17 @@
                         @if(!$hasOrderForSelectedDate)
                             <button type="button" class="btn btn-sm btn-success js-review-draft-confirm"><i class="bi bi-check2-circle"></i>Lên đơn {{ \Carbon\Carbon::parse($selectedDraftDate)->format('d/m') }}</button>
                         @else
-                            <button type="button" class="btn btn-sm btn-outline-success" disabled><i class="bi bi-check-circle"></i>Đã lên đơn</button>
+                            <div class="d-flex gap-1">
+                                <button type="button" class="btn btn-sm btn-outline-success flex-grow-1" disabled><i class="bi bi-check-circle"></i>Đã lên đơn</button>
+                                <button type="button" class="btn btn-sm btn-success js-additional-draft-order" aria-label="Lên thêm đơn từ mẫu" title="Lên thêm đơn ngày {{ \Carbon\Carbon::parse($selectedDraftDate)->format('d/m/Y') }}"><i class="bi bi-plus-circle"></i></button>
+                            </div>
+                            @if($additionalOrders->isNotEmpty())<div class="small text-success">Đã lên thêm {{ $additionalOrders->count() }} đơn</div>@endif
                         @endif
+                    @if($additionalOrders->isNotEmpty())
+                        <div class="small text-muted px-2 pb-2">Đơn lên thêm ngày {{ \Carbon\Carbon::parse($selectedDraftDate)->format('d/m/Y') }}:
+                            @foreach($additionalOrders as $additionalOrder)<a href="{{ route('site.orders.show', $additionalOrder) }}" class="me-2">{{ $additionalOrder->code ?: '#'.$additionalOrder->id }}</a>@endforeach
+                        </div>
+                    @endif
                         <button type="button" class="btn btn-sm btn-outline-danger js-delete-draft"><i class="bi bi-trash"></i>Xóa đơn</button>
                     </div>
                 </article>
@@ -1071,10 +1084,15 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     };
     const request = async (card, suffix, method = 'POST') => {
+        const data = rowData(card);
+        if (suffix === '/confirm-additional') {
+            card.dataset.additionalToken ||= crypto.randomUUID ? crypto.randomUUID() : '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, c => (Number(c) ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> Number(c) / 4).toString(16));
+            data.creation_token = card.dataset.additionalToken;
+        }
         const response = await fetch(`${baseUrl}/${card.dataset.draftId}${suffix}`, {
             method,
             headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrf},
-            body: JSON.stringify(rowData(card)),
+            body: JSON.stringify(data),
         });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.message || Object.values(payload.errors || {}).flat()[0] || 'Không thể thực hiện thao tác.');
@@ -1087,17 +1105,23 @@ document.addEventListener('DOMContentLoaded', () => {
         const confirmButton = editor?.querySelector('.js-confirm-draft');
         const cancelButton = editor?.querySelector('.js-cancel-draft-confirm');
         card.dataset.confirming = enabled ? '1' : '0';
+        if (!enabled) card.dataset.additionalOrder = '0';
         if (review) review.hidden = !enabled;
         if (confirmButton) confirmButton.hidden = !enabled;
         if (cancelButton) cancelButton.hidden = !enabled;
+        const additionalNote = editor?.querySelector('[data-additional-order-note]');
+        if (additionalNote) additionalNote.hidden = !enabled || card.dataset.additionalOrder !== '1';
     };
-    const openDraftConfirmationReview = card => {
+    const openDraftConfirmationReview = (card, additional = false) => {
         if (!card) return;
         card.querySelector('.draft-template-details')?.classList.remove('show');
         card.querySelector('[data-draft-automation]')?.classList.remove('show');
         const editor = card.querySelector('.draft-template-editor');
         editor?.classList.add('show');
+        card.dataset.additionalOrder = additional ? '1' : '0';
         setDraftConfirmationReview(card, true);
+        const confirmButton = editor?.querySelector('.js-confirm-draft');
+        if (confirmButton) confirmButton.textContent = additional ? 'Xác nhận lên thêm đơn' : 'Xác nhận lên đơn';
         updateDraftTotals(editor);
         editor?.scrollIntoView({behavior: 'smooth', block: 'start'});
         editor?.querySelector('[name="item_quantity"]')?.focus({preventScroll: true});
@@ -1155,6 +1179,12 @@ document.addEventListener('DOMContentLoaded', () => {
             activeTruckEditor.querySelectorAll('.js-manual-truck-field').forEach(input => input.value = '');
             truckStationModal?.hide();
             activeTruckEditor.querySelector('[name="truck_brand_name"]')?.focus();
+            return;
+        }
+        const additionalButton = event.target.closest('.js-additional-draft-order');
+        if (additionalButton) {
+            const card = additionalButton.closest('[data-draft-card]');
+            if (card.dataset.orderSubmitting !== '1') openDraftConfirmationReview(card, true);
             return;
         }
         const reviewConfirmButton = event.target.closest('.js-review-draft-confirm');
@@ -1389,7 +1419,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const button = event.target.closest('.js-save-draft, .js-copy-draft, .js-confirm-draft');
         if (!button) return;
         const card = button.closest('[data-draft-card]');
-        if (!card) return;
+        if (!card || card.dataset.orderSubmitting === '1') return;
         if (button.classList.contains('js-confirm-draft')) {
             const selectedDate = rowData(card).delivery_date;
             if (!selectedDate) {
@@ -1398,15 +1428,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         button.disabled = true;
+        card.dataset.orderSubmitting = '1';
         try {
             const payload = button.classList.contains('js-save-draft')
                 ? await request(card, '', 'PUT')
-                : await request(card, button.classList.contains('js-copy-draft') ? '/copy' : '/confirm');
+                : await request(card, button.classList.contains('js-copy-draft') ? '/copy' : (card.dataset.additionalOrder === '1' ? '/confirm-additional' : '/confirm'));
             notify(payload.message || 'Thao tác thành công.');
             window.location.reload();
         } catch (error) {
             notify(error.message, 'error');
             button.disabled = false;
+            card.dataset.orderSubmitting = '0';
         }
     });
     document.addEventListener('change', event => {

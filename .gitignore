@@ -108,3 +108,5 @@ readme.txt
 !/tests/Feature/AdminOrderTemplatesTest.php
 
 !/tests/Feature/SpecialWarehousePickupTest.php
+
+!/tests/Feature/AdditionalTemplateOrderTest.php

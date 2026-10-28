@@ -45,4 +45,6 @@ class TextOrderDraft extends Model
     public function variant() { return $this->belongsTo(ProductVariant::class, 'product_variant_id'); }
     public function order() { return $this->belongsTo(Order::class); }
     public function automatedSchedules() { return $this->hasMany(OrderSchedule::class); }
+    public function additionalOrders() { return $this->hasMany(Order::class, 'additional_text_order_draft_id'); }
+
 }

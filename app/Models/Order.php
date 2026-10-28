@@ -151,6 +151,8 @@ class Order extends Model
         // A copied order must be explicitly selected for a new transfer.
         static::replicating(function (Order $order): void {
             $order->forceFill(['is_special_pickup' => false, 'special_import_document_id' => null, 'special_export_document_id' => null, 'special_payment_id' => null]);
+            $order->additional_text_order_draft_id = null;
+            $order->additional_template_date = null;
             $order->order_transfer_id = null;
             $order->unsetRelation('orderTransfer');
             $order->unsetRelation('warehouseTransfers');
@@ -552,6 +554,8 @@ class Order extends Model
     public function resetForCopiedOrder(?int $sourceOrderId = null): self
     {
         $this->forceFill([
+            'additional_text_order_draft_id' => null,
+            'additional_template_date' => null,
             'is_special_pickup' => false,
             'special_import_document_id' => null,
             'special_export_document_id' => null,
