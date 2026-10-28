@@ -613,8 +613,15 @@
                                         </div>
                                         <div class="draft-edit-footer-actions">
                                             <button type="button" class="btn btn-sm btn-outline-secondary js-cancel-draft-confirm" hidden><i class="bi bi-x-circle me-1"></i>Hủy</button>
-                                            <button type="button" class="btn btn-sm btn-outline-success js-save-draft"><i class="bi bi-check2 me-1"></i>Lưu</button>
+                                            <button type="button" class="btn btn-sm btn-outline-success js-save-draft"><i class="bi bi-check2 me-1"></i>Lưu đơn mẫu</button>
                                             <button type="button" class="btn btn-sm btn-success js-confirm-draft" hidden><i class="bi bi-check2-circle me-1"></i>Xác nhận đơn {{ \Carbon\Carbon::parse($selectedDraftDate)->format('d/m') }}</button>
+                                        </div>
+                                    </div>
+                                @else
+                                    <div class="draft-edit-footer">
+                                        <div class="small text-muted">Mẫu đã lên đơn trong ngày. Lưu chỉ cập nhật mẫu cho lần sử dụng tiếp theo, không thay đổi đơn đã tạo.</div>
+                                        <div class="draft-edit-footer-actions">
+                                            <button type="button" class="btn btn-sm btn-outline-success js-save-draft"><i class="bi bi-check2 me-1"></i>Lưu đơn mẫu</button>
                                         </div>
                                     </div>
                                 @endif
