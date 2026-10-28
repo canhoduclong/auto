@@ -66,6 +66,7 @@ class Order extends Model
     }
 
     protected $casts = [
+        'is_special_pickup' => 'boolean',
         'proof_images' => 'array',
         'cancel_images' => 'array',
         'customer_feedback_images' => 'array',
@@ -149,6 +150,7 @@ class Order extends Model
     {
         // A copied order must be explicitly selected for a new transfer.
         static::replicating(function (Order $order): void {
+            $order->forceFill(['is_special_pickup' => false, 'special_import_document_id' => null, 'special_export_document_id' => null, 'special_payment_id' => null]);
             $order->order_transfer_id = null;
             $order->unsetRelation('orderTransfer');
             $order->unsetRelation('warehouseTransfers');
@@ -550,6 +552,10 @@ class Order extends Model
     public function resetForCopiedOrder(?int $sourceOrderId = null): self
     {
         $this->forceFill([
+            'is_special_pickup' => false,
+            'special_import_document_id' => null,
+            'special_export_document_id' => null,
+            'special_payment_id' => null,
             'status' => OrderStatus::Pending->value,
             'payment_status' => PaymentStatus::Unpaid->value,
             'delivery_status' => DeliveryStatus::NotShipped->value,

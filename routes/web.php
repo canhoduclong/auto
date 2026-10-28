@@ -849,6 +849,13 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/review', [\App\Http\Controllers\Admin\GoogleSheetOrderImportController::class, 'review'])->name('review');
         Route::post('/', [\App\Http\Controllers\Admin\GoogleSheetOrderImportController::class, 'store'])->name('store');
     });
+    Route::prefix('admin/order-templates')->name('admin.order-templates.')->middleware('role:admin')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Admin\OrderTemplateController::class, 'index'])->name('index');
+        Route::get('/{draft}/edit', [\App\Http\Controllers\Admin\OrderTemplateController::class, 'edit'])->name('edit');
+        Route::put('/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'adminTemplateUpdate'])->name('update');
+        Route::put('/{draft}/automation', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'adminTemplateAutomation'])->name('automation');
+        Route::delete('/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'adminTemplateDestroy'])->name('destroy');
+    });
     Route::get('admin/text-order-import', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'index'])->name('admin.text-order-import.index')->middleware('role:admin');
     Route::get('admin/text-order-import/export-daily', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'exportDailyOrders'])->name('admin.text-order-import.export-daily')->middleware('role:admin');
     Route::get('admin/order-activity', [\App\Http\Controllers\Admin\OrderActivityController::class, 'index'])->name('admin.order-activity.index')->middleware('role:admin');
@@ -900,6 +907,10 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('/orders/create-new', [OrderController::class, 'createNewOrderForm'])->name('orders.create_new');
     Route::post('/orders/store-a-new', [OrderController::class, 'storeANewOrder'])->name('orders.store_a_new');
     Route::post('/orders/store-new', [OrderController::class, 'storeNewOrder'])->name('orders.store_new');
+    Route::middleware('role:admin,sale,leader,leader_sale,sale_manager,manager,manager_sale')->group(function () {
+        Route::post('/special-warehouse-pickup/options', [\App\Http\Controllers\SpecialWarehousePickupController::class, 'options'])->name('special-pickup.options');
+        Route::post('/special-warehouse-pickup', [\App\Http\Controllers\SpecialWarehousePickupController::class, 'store'])->name('special-pickup.store');
+    });
     Route::get('/orders/ajax-customer-search', [OrderController::class, 'ajaxCustomerSearch'])->name('orders.ajax_customer_search');
     Route::get('/orders/ajax-variant-search', [OrderController::class, 'ajaxVariantSearch'])->name('orders.ajax_variant_search');
     Route::post('/orders/product-variants/{variant}/preference', [OrderController::class, 'updateVariantPreference'])->name('orders.variant_preference');

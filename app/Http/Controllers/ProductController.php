@@ -130,6 +130,7 @@ class ProductController extends Controller
             'product_type' => ['required', Rule::in(array_keys(Product::typeOptions()))],
             'allow_adjacent_packing_sizes' => ['sometimes', 'boolean'],
             'supplemental_packing_enabled' => ['sometimes', 'boolean'],
+            'special_pickup_enabled' => ['sometimes', 'boolean'],
             'cutting_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'sort_order' => 'nullable|integer|min:0|max:999999',
             'media_id' => 'nullable|integer|exists:media,id',
@@ -138,7 +139,7 @@ class ProductController extends Controller
         $data['sort_order'] = (int) ($data['sort_order'] ?? 0);
         $data['product_type'] = $data['product_type'] ?? Product::TYPE_WHOLE;
 
-        if (! $request->user()->hasRole('admin')) unset($data['supplemental_packing_enabled']);
+        if (! $request->user()->hasRole('admin')) unset($data['supplemental_packing_enabled'], $data['special_pickup_enabled']);
         $product = Product::create($data);
 
         if ($request->filled('media_id')) {
@@ -284,6 +285,7 @@ class ProductController extends Controller
                 'product_type' => ['required', Rule::in(array_keys(Product::typeOptions()))],
             'allow_adjacent_packing_sizes' => ['sometimes', 'boolean'],
             'supplemental_packing_enabled' => ['sometimes', 'boolean'],
+            'special_pickup_enabled' => ['sometimes', 'boolean'],
             'cutting_percentage' => ['nullable', 'numeric', 'min:0', 'max:100'],
                 'sort_order' => 'nullable|integer|min:0|max:999999',
                 'media_id'    => 'nullable|integer|exists:media,id',
@@ -327,6 +329,7 @@ class ProductController extends Controller
                 'product_type' => $validated['product_type'],
                 'cutting_percentage' => array_key_exists('cutting_percentage', $validated) ? $validated['cutting_percentage'] : $product->cutting_percentage,
                 'allow_adjacent_packing_sizes' => $validated['allow_adjacent_packing_sizes'] ?? $product->allow_adjacent_packing_sizes,
+                'special_pickup_enabled' => $request->user()->isAdmin() ? ($validated['special_pickup_enabled'] ?? $product->special_pickup_enabled) : $product->special_pickup_enabled,
                 'supplemental_packing_enabled' => $request->user()->hasRole('admin') ? ($validated['supplemental_packing_enabled'] ?? $product->supplemental_packing_enabled) : $product->supplemental_packing_enabled,
                 'sort_order' => (int) ($validated['sort_order'] ?? 0),
                 'description' => $validated['description'] ?? $product->description,

@@ -12,6 +12,7 @@ class Product extends Model
     use HasFactory;
 
     protected $fillable = [
+        'special_pickup_enabled',
         'tax_priority',
         'household_tax_percent',
         'company_tax_percent',
@@ -42,6 +43,7 @@ class Product extends Model
     }
 
     protected $casts = [
+        'special_pickup_enabled' => 'boolean',
         'household_tax_percent' => 'decimal:2',
         'company_tax_percent' => 'decimal:2',
         'tax_percent' => 'decimal:2',

@@ -1955,6 +1955,7 @@
                     </div>
                     <div class="monitor-create-actions justify-content-between">
                         <button type="button" class="btn btn-sm btn-outline-secondary" data-create-back="2"><i class="bi bi-arrow-left me-1"></i>Khách hàng</button>
+                        <button type="button" class="btn btn-sm btn-success fw-bold" id="monitorSpecialPickup" hidden>Tạo và hoàn tất tại kho</button>
                         <button type="button" class="btn btn-sm btn-warning fw-bold" id="monitorSubmitOrder"><i class="bi bi-check2 me-1"></i>Tạo đơn</button>
                     </div>
                 </div>
@@ -2902,6 +2903,8 @@
 @endif
 @endsection
 
+@include('orders.partials.special-pickup')
+
 @push('scripts')
 <script>
 (() => {
@@ -3224,7 +3227,15 @@ document.addEventListener('click', async event => {
         document.getElementById('monitorTruckReceiveTime').value = selectedCustomer?.truckReceiveTime || '';
     }
 
+    const specialPickup = window.SpecialWarehousePickup.mount(document.getElementById('monitorSpecialPickup'), () => ({
+        customer_id: selectedCustomer?.id,
+        items: Array.from(selectedItems.values()).map(item => ({variant_id: item.id, name: item.name, quantity: item.quantity, unit_price: itemAdjustedPrice(item), actual_weight: item.quantity * item.weight})),
+        charge_vat: document.getElementById('monitorChargeVat').checked,
+        vat_percent: selectedVatPercent(), note: document.getElementById('monitorOrderNote')?.value || '',
+    }));
+
     function renderConfirmation() {
+        specialPickup.refresh();
         if (!selectedCustomer) return;
         const stationDetails = selectedCustomer.useTruckStation
             ? `<div class="alert alert-info py-2 px-3 mt-2 mb-0"><strong>Giao tại trạm:</strong> ${escapeHtml(selectedCustomer.truckStationName || 'Chưa cập nhật')}<br><strong>Địa chỉ:</strong> ${escapeHtml(selectedCustomer.truckStationAddress || 'Chưa cập nhật')}</div>`

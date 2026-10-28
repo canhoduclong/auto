@@ -670,6 +670,7 @@
 @endpush
 
 @section('content')
+@include('orders.partials.special-pickup-summary')
 @include('processes.entity-actions',['entity'=>$order,'position'=>'order_detail'])
 
 <section class="order-detail-page">

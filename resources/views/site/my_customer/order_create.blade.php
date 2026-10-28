@@ -606,6 +606,7 @@
 
                             <div class="d-flex gap-2 mt-2">
                                 <a href="{{ route('my_customer.show', $customer) }}" class="btn btn-outline-secondary w-50">Quay lại</a>
+                                <button type="button" id="customerSpecialPickup" class="btn btn-success" hidden>Tạo và hoàn tất tại kho</button>
                                 <button type="submit" class="btn btn-primary w-50" id="myCustomerOrderSubmitButton">Tạo đơn</button>
                             </div>
                         </div>
@@ -616,6 +617,8 @@
     </div>
 </section>
 @endsection
+
+@include('orders.partials.special-pickup')
 
 @push('scripts')
 <script>
@@ -1144,6 +1147,28 @@ document.addEventListener('DOMContentLoaded', function () {
     updateNameIndexes();
     updateCartTotal();
     updateCartVisibility();
+});
+</script>
+@endpush
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.getElementById('my-customer-order-create-form');
+    const special = window.SpecialWarehousePickup.mount(document.getElementById('customerSpecialPickup'), () => ({
+        customer_id: @json($customer->id),
+        items: Array.from(form.querySelectorAll('.cart-item-row')).map(row => {
+            const id = Number(row.dataset.variantId);
+            const quantity = Number(row.querySelector('.quantity-input').value);
+            const base = Number(row.querySelector('.price').dataset.price);
+            const discount = Number(row.querySelector('.discount-input').value);
+            return {variant_id: id, quantity, unit_price: base + (row.querySelector('.discount-type-input').value === 'increase' ? discount : -discount), actual_weight: quantity * Number(row.querySelector('.line-weight').dataset.unitWeight)};
+        }),
+        charge_vat: false, vat_percent: 0, note: form.querySelector('[name="note"]')?.value || '',
+    }));
+    new MutationObserver(() => special.refresh()).observe(form.querySelector('#cart-items-container') || form.querySelector('.cart-item-row')?.parentElement || form, {childList: true, subtree: true});
+    form.addEventListener('input', () => special.refresh());
+    special.refresh();
 });
 </script>
 @endpush

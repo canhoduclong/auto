@@ -314,7 +314,18 @@
                             <input type="number" class="form-control" id="cutting_percentage" name="cutting_percentage" min="0" max="100" step="0.001" value="{{ old('cutting_percentage', $product->cutting_percentage) }}" placeholder="Nhập tỷ lệ %">
                             <div class="form-text">Tỷ lệ chung khi sản phẩm được thu hồi làm thành phần phụ, áp dụng cho mọi size nguyên liệu. Thành phần chính tự tính bằng 100% trừ tổng thành phần phụ.</div>
                         </div>
-                        @if(auth()->user()?->hasRole('admin'))
+
+@if(auth()->user()?->isAdmin())
+<div class="col-12 my-3">
+    <input type="hidden" name="special_pickup_enabled" value="0">
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" role="switch" id="special_pickup_enabled" name="special_pickup_enabled" value="1" @checked(old('special_pickup_enabled', $product->special_pickup_enabled ?? false))>
+        <label class="form-check-label fw-semibold" for="special_pickup_enabled">Hàng đặc biệt — khách tự lấy và hoàn tất giao hàng tại kho</label>
+    </div>
+    <div class="form-text">Chỉ cho phép “Tạo và hoàn tất tại kho” khi cả khách hàng và toàn bộ sản phẩm đều bật. Hoàn tất giao hàng và xuất kho, giữ shipper mặc định của khách. Đơn chờ kế toán xác nhận doanh thu và cập nhật thanh toán sau.</div>
+</div>
+@endif
+@if(auth()->user()?->hasRole('admin'))
 <div class="mb-3 border rounded p-3">
     <input type="hidden" name="supplemental_packing_enabled" value="0">
     <div class="form-check form-switch">

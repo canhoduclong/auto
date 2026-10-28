@@ -32,6 +32,17 @@
         @error('website') <div class="text-danger small">{{ $message }}</div> @enderror
     </div>
 
+
+@if(auth()->user()?->isAdmin())
+<div class="col-12 my-3">
+    <input type="hidden" name="special_pickup_enabled" value="0">
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" role="switch" id="special_pickup_enabled" name="special_pickup_enabled" value="1" @checked(old('special_pickup_enabled', $customer->special_pickup_enabled ?? false))>
+        <label class="form-check-label fw-semibold" for="special_pickup_enabled">Hàng đặc biệt — khách tự lấy và hoàn tất giao hàng tại kho</label>
+    </div>
+    <div class="form-text">Chỉ cho phép “Tạo và hoàn tất tại kho” khi cả khách hàng và toàn bộ sản phẩm đều bật. Hoàn tất giao hàng và xuất kho, giữ shipper mặc định của khách. Đơn chờ kế toán xác nhận doanh thu và cập nhật thanh toán sau.</div>
+</div>
+@endif
     <div class="col-12">
         <label class="form-label">{{ __('customers.form.address') }}</label>
         <textarea name="address" class="form-control" rows="3">{{ old('address', $defaultAddress->note ?? '') }}</textarea>

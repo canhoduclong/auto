@@ -1,5 +1,6 @@
 @extends('layouts.app')
 @section('content')
+@include('orders.partials.special-pickup-summary')
 <div class="container">
     @php
         $formatSignedMoney = static function (float $amount): string {

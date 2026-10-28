@@ -790,6 +790,7 @@ class CustomerController extends Controller
             'commission_percent' => 'nullable|numeric|min:0|max:100',
             'legacy_code' => 'nullable|string|max:50',
             'old_name' => 'nullable|string|max:5000',
+            'special_pickup_enabled' => 'sometimes|boolean',
             'note' => 'nullable|string|max:2000',
             'address' => 'nullable|string|max:1000',
             'delivery_time' => 'required|date_format:H:i',
@@ -815,6 +816,8 @@ class CustomerController extends Controller
             'duplicate_priority_level' => 'nullable|in:2,3',
             'duplicate_takeover' => 'nullable|boolean',
         ]);
+        if (!$request->user()->isAdmin()) unset($data['special_pickup_enabled']);
+
 
         if (!(bool) ($data['use_truck_station'] ?? false)) {
             $data['truck_station_id'] = null;
@@ -953,6 +956,7 @@ class CustomerController extends Controller
             'commission_percent' => 'nullable|numeric|min:0|max:100',
             'legacy_code' => 'nullable|string|max:50',
             'old_name' => 'nullable|string|max:5000',
+            'special_pickup_enabled' => 'sometimes|boolean',
             'note' => 'nullable|string|max:2000',
             'address' => 'nullable|string|max:1000',
             'delivery_time' => 'required|date_format:H:i',
@@ -976,6 +980,8 @@ class CustomerController extends Controller
             'province_id' => 'nullable|exists:provinces,id',
             'ward_id' => 'nullable|exists:wards,id',
         ]);
+        if (!$request->user()->isAdmin()) unset($data['special_pickup_enabled']);
+
 
         if (!(bool) ($data['use_truck_station'] ?? false)) {
             $data['truck_station_id'] = null;

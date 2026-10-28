@@ -149,6 +149,7 @@
 						</a>
 					</li>
 						@if(auth()->user()?->hasRole('admin'))
+                        <li class="nav-item"><a href="{{ route('admin.order-templates.index') }}" class="nav-link{{ request()->routeIs('admin.order-templates.*') ? ' active' : '' }}"><i class="ph-bookmark-simple"></i><span>Đơn hàng mẫu toàn bộ sale</span></a></li>
                         <li class="nav-item"><a href="{{ route('admin.sheet-order-import.index') }}" class="nav-link{{ request()->routeIs('admin.sheet-order-import.*') ? ' active' : '' }}"><i class="ph-download-simple"></i><span>Import Đơn</span></a></li>
                         <li class="nav-item">
 							<a href="{{ route('admin.text-order-import.index') }}" class="nav-link{{ request()->routeIs('admin.text-order-import.*') ? ' active' : '' }}">

@@ -469,6 +469,11 @@ class TextOrderImportController extends Controller
     {
         $this->ensureSaleDraft($request, $draft);
 
+        return $this->updateTemplateAutomation($request, $draft);
+    }
+
+    private function updateTemplateAutomation(Request $request, TextOrderDraft $draft): JsonResponse
+    {
         $validated = $request->validate([
             'automation_mode' => ['required', Rule::in([
                 TextOrderDraft::AUTOMATION_DAILY,
@@ -531,6 +536,56 @@ class TextOrderImportController extends Controller
                 'dates' => $draft->automation_dates ?: [],
             ],
         ]);
+    }
+
+    private function ensureAdminTemplate(Request $request, TextOrderDraft $draft): void
+    {
+        abort_unless($request->user()?->isAdmin() && $draft->draft_scope === TextOrderDraft::SCOPE_SALE_PRIVATE, 403);
+    }
+
+    public function adminTemplateUpdate(Request $request, TextOrderDraft $draft)
+    {
+        $this->ensureAdminTemplate($request, $draft);
+        return DB::transaction(function () use ($request, $draft) {
+            $draft = TextOrderDraft::lockForUpdate()->findOrFail($draft->id);
+            $this->ensureAdminTemplate($request, $draft);
+            abort_if($draft->status === 'confirmed', 422, 'Đơn mẫu đã lên đơn, không thể sửa.');
+            $request->merge(['sale_id' => $draft->sale_id]);
+            $request->mergeIfMissing($draft->only(['use_truck_station', 'truck_brand_id', 'truck_station_id', 'truck_brand_name', 'truck_station_name', 'truck_station_address', 'truck_station_phone', 'truck_receive_time']));
+            $draft->fill($this->validatedDraftData($request));
+            $draft->error_message = null;
+            $draft->status = 'draft';
+            $draft->save();
+            \App\Services\AdminActivityService::record('order_template', 'updated', $draft, 'Admin sửa đơn mẫu #'.$draft->id, null, ['sale_id' => $draft->sale_id]);
+            return redirect()->route('admin.order-templates.edit', $draft)->with('success', 'Đã lưu đơn mẫu của sale. Các đơn đã tạo không thay đổi.');
+        });
+    }
+
+    public function adminTemplateAutomation(Request $request, TextOrderDraft $draft)
+    {
+        $this->ensureAdminTemplate($request, $draft);
+        if (is_string($request->input('automation_dates'))) {
+            $request->merge(['automation_dates' => array_values(array_filter(preg_split('/[\s,;]+/', trim($request->input('automation_dates')))))]);
+        }
+        return DB::transaction(function () use ($request, $draft) {
+            $draft = TextOrderDraft::lockForUpdate()->findOrFail($draft->id);
+            $this->ensureAdminTemplate($request, $draft);
+            $response = $this->updateTemplateAutomation($request, $draft);
+            \App\Services\AdminActivityService::record('order_template', 'automation_updated', $draft, 'Admin đổi lịch đơn mẫu #'.$draft->id, null, ['sale_id' => $draft->sale_id, 'enabled' => $draft->automation_enabled]);
+            return redirect()->route('admin.order-templates.edit', $draft)->with('success', $response->getData(true)['message']);
+        });
+    }
+
+    public function adminTemplateDestroy(Request $request, TextOrderDraft $draft)
+    {
+        $this->ensureAdminTemplate($request, $draft);
+        return DB::transaction(function () use ($request, $draft) {
+            $draft = TextOrderDraft::lockForUpdate()->findOrFail($draft->id);
+            $this->ensureAdminTemplate($request, $draft);
+            \App\Services\AdminActivityService::record('order_template', 'deleted', $draft, 'Admin xóa đơn mẫu #'.$draft->id, null, ['sale_id' => $draft->sale_id]);
+            $draft->delete();
+            return redirect()->route('admin.order-templates.index')->with('success', 'Đã xóa đơn mẫu. Các đơn và lịch đã tạo được giữ lại.');
+        });
     }
 
     public function saleBulkConfirm(Request $request, ApprovalService $approvalService): JsonResponse

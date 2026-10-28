@@ -3679,7 +3679,8 @@ class AccountingDashboardController extends Controller
         };
 
         $isFullyPaid = $totalPaid >= (float) $order->total;
-        if ($isFullyPaid && ! in_array((string) $order->status, ['completed', 'cancelled', 'returned', 'returned_completed'], true)) {
+        $canComplete = !$order->is_special_pickup || $order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED;
+        if ($isFullyPaid && $canComplete && ! in_array((string) $order->status, ['completed', 'cancelled', 'returned', 'returned_completed'], true)) {
             $order->status = 'completed';
         }
 

@@ -104,3 +104,7 @@ readme.txt
 !/tests/Feature/GoogleSheetOrderImportTest.php
 
 !/tests/Feature/AdminAreaAccessTest.php
+
+!/tests/Feature/AdminOrderTemplatesTest.php
+
+!/tests/Feature/SpecialWarehousePickupTest.php

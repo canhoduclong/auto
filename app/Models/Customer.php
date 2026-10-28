@@ -110,6 +110,7 @@ class Customer extends Model
         'customer_code',
         'legacy_code',
         'old_name',
+        'special_pickup_enabled',
         'foam_box_required',
         'foam_box_price',
         'use_truck_station',
@@ -144,6 +145,7 @@ class Customer extends Model
     protected $dates = ['dob'];
 
     protected $casts = [
+        'special_pickup_enabled' => 'boolean',
         'dob' => 'date',
         'next_appointment' => 'datetime',
         'assigned_at' => 'datetime',

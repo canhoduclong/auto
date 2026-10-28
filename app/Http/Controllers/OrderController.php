@@ -1982,7 +1982,7 @@ class OrderController extends Controller
                 // Serialize retries for this sale; distinct tokens remain distinct orders.
                 User::query()->whereKey($actorUserId)->lockForUpdate()->firstOrFail();
                 $existing = Order::query()
-                    ->where('user_id', $actorUserId)
+                    ->where('user_id', !empty($orderData['special_pickup']) ? $orderData['user_id'] : $actorUserId)
                     ->where('creation_token', $orderData['creation_token'])
                     ->first();
                 if ($existing) {
@@ -1997,7 +1997,7 @@ class OrderController extends Controller
             $customerId = (int) ($orderData['customer_id'] ?? 0);
             if ($customerId > 0) {
                 $customer = Customer::query()->find($customerId);
-                if ($customer && $actorUserId > 0) {
+                if ($customer && $actorUserId > 0 && !(!empty($orderData['special_pickup']) && $actorUser?->isAdmin())) {
                     app(CustomerPriorityService::class)->assertCanCreateOrder($customer, $actorUserId);
                 }
             }
@@ -2062,10 +2062,11 @@ class OrderController extends Controller
                 $unitWeight = isset($item['unit_weight']) && (float) $item['unit_weight'] > 0
                     ? round((float) $item['unit_weight'], 3)
                     : round(max(0.01, $this->resolveVariantKg($variant)), 3);
-                $isPricedByKg = $this->resolveVariantPricedByKg($variant);
-                $pricingFactor = $isPricedByKg ? $unitWeight : 1;
+                $isPricedByKg = !empty($orderData['special_pickup']) ? (bool) $variant->effective_priced_by_kg : $this->resolveVariantPricedByKg($variant);
+                $lineWeight = !empty($orderData['special_pickup']) && isset($item['total_weight'])
+                    ? round((float) $item['total_weight'], 3) : $unitWeight * $quantity;
+                $pricingFactor = $isPricedByKg ? (!empty($orderData['special_pickup']) ? $lineWeight / $quantity : $unitWeight) : 1;
                 $lineDiscount = ($unitDiscountType === 'increase' ? -1 : 1) * $unitDiscount * $quantity * $pricingFactor;
-                $lineWeight = $unitWeight * $quantity;
 
                 $variantsData[] = [
                     'variant' => $variant,
@@ -2209,6 +2210,12 @@ class OrderController extends Controller
                 ]);
 
                 $order->items()->create($itemInsert);
+            }
+
+            if (!empty($orderData['special_pickup'])) {
+                app(\App\Services\SpecialWarehousePickupService::class)->completeCreatedOrder($order, $orderData['special_pickup'], $actorUser);
+                if ($customer && $actorUserId > 0 && !$actorUser->isAdmin()) app(CustomerPriorityService::class)->onOrderCreated($customer, $order->fresh(), $actorUserId);
+                return $order->fresh();
             }
 
             // OMS flow: create order => reserve stock only, not deduct on-hand yet.
