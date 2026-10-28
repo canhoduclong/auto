@@ -32,6 +32,17 @@
     .draft-template-list { display: grid; gap: 16px; }
     .draft-template-row { display: grid; grid-template-columns: minmax(0, 1fr) 132px; gap: 14px; align-items: start; }
     .draft-template-card { position: relative; min-width: 0; padding: 14px 16px; border: 1px solid #dce6f1; border-radius: 7px; background: #fff; box-shadow: 0 5px 16px rgba(15, 23, 42, .06); }
+    .draft-template-card > .order-demo-watermark {
+        top: auto;
+        bottom: 8px;
+        right: 16px;
+        font-size: 24px;
+        opacity: .04;
+    }
+    @media print {
+        .draft-template-card > .order-demo-watermark { opacity: .05 !important; }
+    }
+
     .draft-template-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; }
     .draft-template-name { color: #0f172a; font-size: .82rem; font-weight: 900; text-transform: uppercase; }
     .draft-template-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 3px; color: #64748b; font-size: .68rem; }
