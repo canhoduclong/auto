@@ -72,18 +72,6 @@
         </div>
     </div>
 </div>
-                                        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure?')">Xóa</button>
-                                    </form>
-                                </td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            
-            {{ $customers->links() }}
-        </div>
-    </div>
-</div>
 
 <!-- Add Customer Modal -->
 @include('site.partials.add_customer_modal')
