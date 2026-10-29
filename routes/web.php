@@ -424,6 +424,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::prefix('warehouse')->name('warehouse.')->middleware('role:warehouse,admin')->group(function () {
         Route::get('/manage-assignments/review', [AssignmentReviewController::class, 'index'])->name('assignment-review.index');
         Route::post('/manage-assignments/review/print', [AssignmentReviewController::class, 'print'])->name('assignment-review.print');
+        Route::post('/manage-assignments/review/orders/{order}/print-truck-label', [AssignmentReviewController::class, 'printTruckLabel'])->name('assignment-review.print-truck-label');
         Route::get('/procurement-receipts', [\App\Http\Controllers\WarehouseProcurementController::class, 'index'])->name('procurement-receipts.index');
         Route::post('/procurement-receipts/{purchase}/receive', [\App\Http\Controllers\WarehouseProcurementController::class, 'receive'])->name('procurement-receipts.receive');
         Route::get('/order-transfers', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'index'])->name('order-transfers');
@@ -1219,6 +1220,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/my-truck-stations/regions', [PageController::class, 'myTruckStationsRegions'])->name('pages.my_truck_stations.regions');
         Route::post('/my-truck-stations', [PageController::class, 'myTruckStationsStore'])->name('pages.my_truck_stations.store');
         Route::put('/my-truck-stations/{truckStation}', [PageController::class, 'myTruckStationsUpdate'])->name('pages.my_truck_stations.update');
+        Route::post('/my-truck-stations/{truckStation}/sort-settings', [PageController::class, 'myTruckStationSortSettings'])->name('pages.my_truck_stations.sort-settings');
     }); // end my-truck-stations role group
 
     // API: Truck Routes for customer create

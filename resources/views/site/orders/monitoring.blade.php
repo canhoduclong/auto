@@ -2270,6 +2270,7 @@
                                     });
                                 })->values();
                             $truckStationName = trim((string) ($order->truck_station_name ?: $order->truckStation?->name));
+                            $truckStationPhone = trim((string) ($order->truck_station_phone ?: ($order->customer?->truck_station_phone ?: $order->truckStation?->phone)));
                             $truckStationAddress = trim((string) ($order->truck_station_address ?: $order->truckStation?->address));
                             $zaloText = collect([
                                 '---- '.($order->code ?: '#'.$order->id).' -----',
@@ -2331,7 +2332,7 @@
                                         <span><i class="bi bi-truck me-1"></i>Shipper: {{ $order->shipper->name }}</span>
                                     @endif
                                     @if($order->use_truck_station)
-                                        <span><i class="bi bi-building me-1"></i>Nhà xe: {{ $order->truck_station_name ?: ($order->truckStation?->name ?: 'Chưa cập nhật') }}</span>
+                                        <span><i class="bi bi-building me-1"></i>Nhà xe: {{ $order->truck_station_name ?: ($order->truckStation?->name ?: 'Chưa cập nhật') }}{{ $truckStationPhone !== '' ? ' · '.$truckStationPhone : '' }}</span>
                                         <span><i class="bi bi-geo-fill me-1"></i>Địa chỉ trạm xe: {{ $order->truck_station_address ?: ($order->truckStation?->address ?: 'Chưa cập nhật') }}</span>
                                     @endif
                                 </div>

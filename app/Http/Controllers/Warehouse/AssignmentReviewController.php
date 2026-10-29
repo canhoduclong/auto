@@ -112,6 +112,38 @@ class AssignmentReviewController extends Controller
         return view('shipper.assignment-documents-print', compact('orders', 'selectedDate'));
     }
 
+    public function printTruckLabel(Request $request, Order $order)
+    {
+        $validated = $request->validate(['date' => ['required', 'date']]);
+        $selectedDate = Carbon::parse($validated['date'])->toDateString();
+        $dispatch = $this->latestDispatch($selectedDate);
+        $allowedOrders = $this->printableOrders(
+            $dispatch ? $this->dispatchOrderIds($dispatch) : [],
+            $selectedDate
+        );
+        abort_unless($allowedOrders->contains('id', $order->id), 403, 'Đơn hàng không thuộc danh sách rà soát của ngày đã chọn.');
+        abort_unless((bool) $order->use_truck_station, 404, 'Đơn hàng không giao qua nhà xe.');
+
+        $order->forceFill([
+            'truck_label_print_count' => ((int) $order->truck_label_print_count) + 1,
+            'truck_label_printed_at' => now(),
+            'truck_label_printed_by' => Auth::id(),
+        ])->save();
+        OrderHistory::create([
+            'order_id' => $order->id,
+            'action' => 'print_truck_label',
+            'user_id' => Auth::id(),
+            'role' => 'warehouse',
+            'status_before' => $order->status,
+            'status_after' => $order->status,
+            'note' => 'Kho in tờ dán thùng xốp từ trang Rà soát phân công.',
+        ]);
+
+        $order->loadMissing(['customer.addresses', 'truckStation']);
+
+        return view('warehouse.orders.print-truck-label', compact('order'));
+    }
+
     private function latestDispatch(string $date): ?ShipperDispatchHistory
     {
         return ShipperDispatchHistory::query()

@@ -14,6 +14,7 @@ class TruckBrand extends Model
 
     protected $fillable = [
         'name',
+        'headquarters_address',
         'slug',
         'phone',
         'email',

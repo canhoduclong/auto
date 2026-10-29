@@ -7,7 +7,7 @@
         @page { size: A4 landscape; margin: 10mm; }
         * { box-sizing: border-box; }
         body { margin: 0; padding: 18px; background: #eef2f7; color: #090909; font-family: Arial, "DejaVu Sans", sans-serif; }
-        .sheet { width: 277mm; min-height: 190mm; margin: auto; padding: 22mm 18mm 16mm; background: #fff; border: 1px solid #94a3b8; }
+        .sheet { display: flex; flex-direction: column; justify-content: center; width: 277mm; height: 190mm; margin: auto; padding: 16mm 18mm; background: #fff; border: 1px solid #94a3b8; }
         h1 { margin: 0 0 14px; text-align: center; font-size: 46px; line-height: 1.15; text-transform: uppercase; }
         .line { margin: 11px 0; text-align: center; font-size: 34px; line-height: 1.25; }
         .line strong { font-weight: 800; }
@@ -17,7 +17,7 @@
         .station-line strong { font-weight: 700; }
         .order-code { margin-top: 12px; text-align: center; color: #475569; font-size: 11px; }
         .print { position: fixed; top: 16px; right: 18px; padding: 9px 15px; border: 0; border-radius: 6px; background: #087f5b; color: #fff; font-weight: 700; cursor: pointer; }
-        @media print { body { padding: 0; background: #fff; } .sheet { width: auto; min-height: auto; border: 0; } .print { display: none; } }
+        @media print { body { padding: 0; background: #fff; } .sheet { width: 277mm; height: 190mm; margin: 0; border: 0; } .print { display: none; } }
     </style>
 </head>
 <body>

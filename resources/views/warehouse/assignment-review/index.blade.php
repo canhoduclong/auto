@@ -59,7 +59,7 @@
             <table class="table align-middle mb-0">
                 <thead class="table-light"><tr>
                     <th style="width:42px"><input id="warehouse-select-all" type="checkbox" class="form-check-input"></th>
-                    <th class="text-center">STT ưu tiên</th><th>Khách hàng / Đơn hàng</th><th>Sản phẩm</th><th>Size</th><th class="text-center">Số lượng</th><th class="text-end">Khối lượng</th><th>Shipper</th><th>Trạng thái in của Kho</th><th class="text-end">Tổng tiền</th><th class="text-center">In</th>
+                    <th class="text-center">STT ưu tiên</th><th>Khách hàng / Đơn hàng</th><th>Sản phẩm</th><th>Size</th><th class="text-center">Số lượng</th><th class="text-end">Khối lượng</th><th>Shipper</th><th>Trạng thái in của Kho</th><th class="text-end">Tổng tiền</th><th>Tờ dán thùng xốp</th><th class="text-center">In phiếu</th>
                 </tr></thead>
                 <tbody>
                 @forelse($orders as $order)
@@ -113,10 +113,22 @@
                             @endif
                         </td>
                         <td class="text-end fw-bold">{{ number_format((float) $order->total, 0, ',', '.') }}đ</td>
+                        <td>
+                            @if($order->use_truck_station)
+                                <button type="button" class="btn btn-outline-primary btn-sm warehouse-print-foam-label" data-order-id="{{ $order->id }}">
+                                    <i class="bi bi-printer me-1"></i>In Tờ dán Thùng xốp
+                                </button>
+                                @if((int) $order->truck_label_print_count > 0)
+                                    <div class="small text-muted mt-1">Đã in {{ (int) $order->truck_label_print_count }} lần</div>
+                                @endif
+                            @else
+                                <span class="text-muted">—</span>
+                            @endif
+                        </td>
                         <td class="text-center"><button type="button" class="btn btn-outline-success btn-sm warehouse-print-one" data-order-id="{{ $order->id }}"><i class="bi bi-printer"></i></button></td>
                     </tr>
                 @empty
-                    <tr><td colspan="11" class="text-center text-muted py-5"><i class="bi bi-inbox fs-2 d-block mb-2"></i>Không có đơn có ngày lên đơn hoặc ngày giao khớp ngày đã chọn.</td></tr>
+                    <tr><td colspan="12" class="text-center text-muted py-5"><i class="bi bi-inbox fs-2 d-block mb-2"></i>Không có đơn có ngày lên đơn hoặc ngày giao khớp ngày đã chọn.</td></tr>
                 @endforelse
                 </tbody>
             </table>
@@ -128,6 +140,10 @@
     @csrf
     <input type="hidden" name="date" value="{{ $selectedDate }}">
     <input id="warehouse-single-order-id" type="hidden" name="order_ids[]">
+</form>
+<form id="warehouse-foam-label-print" method="POST" data-action-template="{{ route('warehouse.assignment-review.print-truck-label', ['order' => '__ORDER__']) }}" action="{{ route('warehouse.assignment-review.print-truck-label', ['order' => '__ORDER__']) }}" target="_blank" class="d-none">
+    @csrf
+    <input type="hidden" name="date" value="{{ $selectedDate }}">
 </form>
 @endsection
 
@@ -141,6 +157,12 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.warehouse-print-one').forEach(button => button.addEventListener('click', function () {
         document.getElementById('warehouse-single-order-id').value = this.dataset.orderId;
         document.getElementById('warehouse-single-print').submit();
+        window.setTimeout(() => window.location.reload(), 1200);
+    }));
+    document.querySelectorAll('.warehouse-print-foam-label').forEach(button => button.addEventListener('click', function () {
+        const form = document.getElementById('warehouse-foam-label-print');
+        form.action = form.dataset.actionTemplate.replace('__ORDER__', this.dataset.orderId);
+        form.submit();
         window.setTimeout(() => window.location.reload(), 1200);
     }));
     document.getElementById('warehouse-bulk-print')?.addEventListener('submit', function (event) {

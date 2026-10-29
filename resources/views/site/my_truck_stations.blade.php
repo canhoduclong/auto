@@ -78,15 +78,12 @@
         color: #0f766e;
         font-weight: 600;
     }
-    .ts-station-card {
-        border: 1px solid #e7ecf3;
-        border-radius: 16px;
-        padding: 16px;
-        background: linear-gradient(180deg, #ffffff 0%, #fafbfd 100%);
-        box-shadow: 0 4px 14px rgba(15,23,42,0.05);
-        transition: box-shadow .2s ease;
-    }
-    .ts-station-card:hover { box-shadow: 0 8px 24px rgba(15,23,42,0.10); }
+    .ts-table-wrap { overflow-x: auto; }
+    .ts-table { min-width: 980px; margin-bottom: 0; }
+    .ts-table th { white-space: nowrap; background: #f8fafc; color: #475569; font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; }
+    .ts-sort-btn { border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; padding: 0; }
+    .ts-sort-btn:hover { color: #0f766e; }
+    .ts-table td { vertical-align: middle; }
     .ts-badge-on  { display:inline-flex; align-items:center; gap:5px; padding:5px 11px; border-radius:999px; font-size:.75rem; font-weight:700; background:#ecfdf5; color:#047857; }
     .ts-badge-off { display:inline-flex; align-items:center; gap:5px; padding:5px 11px; border-radius:999px; font-size:.75rem; font-weight:700; background:#fee2e2; color:#991b1b; }
     .ts-actions .btn { border-radius: 10px; padding: 6px 9px; font-size: .8rem; }
@@ -358,20 +355,9 @@
         <div class="col-xl-8">
 
             <div class="ts-panel mb-3">
-                <div class="ts-section-head d-flex flex-wrap gap-2 align-items-center" id="ts-view-tabs">
-                    <button type="button" class="btn btn-sm btn-primary" data-view-mode="routes">
-                        <i class="bi bi-signpost-2 me-1"></i>Danh sách chuyến
-                    </button>
-                    <button type="button" class="btn btn-sm btn-outline-primary" data-view-mode="stations">
-                        <i class="bi bi-geo-alt me-1"></i>Danh sách trạm
-                    </button>
-                </div>
-            </div>
-
-            <div class="ts-panel mb-3">
                 <div class="ts-section-head d-flex flex-wrap gap-2 justify-content-between align-items-center">
                     <div>
-                        <h4 class="mb-0" id="ts-list-title">Danh sách chuyến vận chuyển</h4>
+                        <h4 class="mb-0" id="ts-list-title">Trạm xe vận chuyển</h4>
                         <div class="text-muted small" id="ts-count-label">Đang tải...</div>
                     </div>
                     <div class="d-flex flex-wrap gap-2 align-items-center">
@@ -380,10 +366,6 @@
                             <option value="20" selected>20 / trang</option>
                             <option value="50">50 / trang</option>
                             <option value="100">100 / trang</option>
-                        </select>
-                        <select id="ts-sort-route" class="form-select form-select-sm" style="width:auto;">
-                            <option value="asc" selected>Tuyến đi A-Z</option>
-                            <option value="desc">Tuyến đi Z-A</option>
                         </select>
                         <button class="btn btn-primary" id="ts-show-create-btn">
                             <i class="bi bi-plus-circle me-1"></i>Thêm trạm xe
@@ -403,12 +385,16 @@
                     </div>
                     <div class="col-12 col-sm-6">
                         <label class="form-label form-label-sm mb-1">Nhà xe (Brand)</label>
-                        <select id="cf-brand-id" class="form-select form-select-sm">
-                            <option value="">-- Chọn nhà xe --</option>
+                        <input type="text" id="cf-brand-name" class="form-control form-control-sm" list="cf-brand-options" placeholder="Chọn hoặc nhập tên nhà xe">
+                        <datalist id="cf-brand-options">
                             @foreach($brands as $brand)
-                                <option value="{{ $brand->id }}">{{ $brand->name }}</option>
+                                <option value="{{ $brand->name }}" data-headquarters-address="{{ $brand->headquarters_address }}"></option>
                             @endforeach
-                        </select>
+                        </datalist>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label form-label-sm mb-1">Trụ sở chính của nhà xe</label>
+                        <input type="text" id="cf-brand-headquarters-address" class="form-control form-control-sm" placeholder="Nhập địa chỉ trụ sở chính">
                     </div>
                     <div class="col-12 col-sm-6">
                         <label class="form-label form-label-sm mb-1">Số điện thoại</label>
@@ -514,8 +500,25 @@
                 <input type="text" class="form-control form-control-sm" data-field="name">
             </div>
             <div class="col-12 col-sm-6">
+                <label class="form-label form-label-sm mb-1">Nhà xe</label>
+                <select class="form-select form-select-sm" data-field="brand_id">
+                    <option value="">-- Chưa gắn nhà xe --</option>
+                    @foreach($brands as $brand)
+                        <option value="{{ $brand->id }}">{{ $brand->name }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-12 col-sm-6">
                 <label class="form-label form-label-sm mb-1">Số điện thoại</label>
                 <input type="text" class="form-control form-control-sm" data-field="phone">
+            </div>
+            <div class="col-12 col-sm-6">
+                <label class="form-label form-label-sm mb-1">Phí vào bãi xe (₫)</label>
+                <input type="number" min="0" class="form-control form-control-sm" data-field="parking_fee">
+            </div>
+            <div class="col-12">
+                <label class="form-label form-label-sm mb-1">Thông tin phòng / chi nhánh</label>
+                <input type="text" class="form-control form-control-sm" data-field="branch_info">
             </div>
             <div class="col-12 col-sm-6">
                 <label class="form-label form-label-sm mb-1">Tỉnh/Thành</label>
@@ -558,6 +561,16 @@
             <div class="col-12">
                 <label class="form-label form-label-sm mb-1">Ghi chú</label>
                 <textarea class="form-control form-control-sm" rows="2" data-field="note"></textarea>
+            </div>
+            <div class="col-12 col-sm-6">
+                <div class="form-check form-switch mt-2">
+                    <input class="form-check-input" type="checkbox" data-field="has_home_delivery">
+                    <label class="form-check-label">Có giao hàng tận nhà</label>
+                </div>
+            </div>
+            <div class="col-12 col-sm-6">
+                <label class="form-label form-label-sm mb-1">Phí giao tận nhà mặc định (₫)</label>
+                <input type="number" min="0" class="form-control form-control-sm" data-field="home_delivery_fee">
             </div>
             <div class="col-12">
                 <div class="form-check form-switch">
@@ -749,6 +762,8 @@
     const createShowBtn = document.getElementById('ts-show-create-btn');
     const createCancelBtn = document.getElementById('ts-cancel-create-btn');
     const createSaveBtn = document.getElementById('ts-create-save-btn');
+    const createBrandNameEl = document.getElementById('cf-brand-name');
+    const createBrandHeadquartersEl = document.getElementById('cf-brand-headquarters-address');
     const homeDeliveryToggleEl = document.getElementById('cf-has-home-delivery');
     const homeDeliveryFeeWrapEl = document.getElementById('cf-home-delivery-fee-wrap');
 
@@ -762,7 +777,8 @@
 
     function resetCreateForm() {
         document.getElementById('cf-name').value = '';
-        document.getElementById('cf-brand-id').value = '';
+        createBrandNameEl.value = '';
+        createBrandHeadquartersEl.value = '';
         document.getElementById('cf-phone').value = '';
         document.getElementById('cf-address').value = '';
         document.getElementById('cf-parking-fee').value = '';
@@ -810,12 +826,19 @@
     homeDeliveryToggleEl?.addEventListener('change', toggleHomeDeliveryFee);
     toggleHomeDeliveryFee();
 
+    createBrandNameEl?.addEventListener('change', function () {
+        const brandOption = [...document.querySelectorAll('#cf-brand-options option')]
+            .find(option => option.value.trim().toLocaleLowerCase() === this.value.trim().toLocaleLowerCase());
+        createBrandHeadquartersEl.value = brandOption?.dataset.headquartersAddress || '';
+    });
+
     createSaveBtn?.addEventListener('click', function () {
         clearCreateErrors();
 
         const payload = {
             name: document.getElementById('cf-name').value.trim(),
-            brand_id: document.getElementById('cf-brand-id').value,
+            brand_name: createBrandNameEl.value.trim(),
+            brand_headquarters_address: createBrandHeadquartersEl.value.trim(),
             phone: document.getElementById('cf-phone').value.trim(),
             province_id: cfProvinceGd.getValue(),
             ward_id: cfWardGd.getValue(),
@@ -860,8 +883,8 @@
     let currentWard     = '';
     let currentPage     = 1;
     let currentPerPage  = 20;
-    let currentSortRoute = 'asc';
-    let currentViewMode = 'routes';
+    let currentSortBy = 'personal';
+    let currentSortDirection = 'asc';
     let searchTimer     = null;
 
     function esc(s) {
@@ -878,7 +901,7 @@
 
     function getFilters() {
         return {
-            mode:        currentViewMode,
+            mode:        'stations',
             q:           document.getElementById('ts-search').value.trim(),
             route:       document.getElementById('ts-route-filter').value.trim(),
             destination: document.getElementById('ts-destination-filter').value.trim(),
@@ -887,44 +910,10 @@
             ward_id:     currentWard,
             is_active:   document.getElementById('ts-status-filter').value,
             per_page:    currentPerPage,
-            sort_route:  currentSortRoute,
+            sort_by: currentSortBy,
+            sort_direction: currentSortDirection,
             page:        currentPage,
         };
-    }
-
-    function applyViewModeUI() {
-        const isRouteMode = currentViewMode === 'routes';
-        const regionPanel = document.getElementById('ts-region-panel');
-        const createBtn = document.getElementById('ts-show-create-btn');
-        const createForm = document.getElementById('ts-create-form');
-        const listTitle = document.getElementById('ts-list-title');
-        const totalLabel = document.getElementById('kpi-total-label');
-
-        if (regionPanel) {
-            regionPanel.style.display = isRouteMode ? 'none' : '';
-        }
-
-        if (createBtn) {
-            createBtn.style.display = isRouteMode ? 'none' : '';
-        }
-
-        if (isRouteMode && createForm) {
-            createForm.classList.remove('open');
-        }
-
-        if (listTitle) {
-            listTitle.textContent = isRouteMode ? 'Danh sách chuyến vận chuyển' : 'Trạm xe vận chuyển';
-        }
-
-        if (totalLabel) {
-            totalLabel.textContent = isRouteMode ? 'Tổng chuyến' : 'Tổng trạm xe';
-        }
-
-        document.querySelectorAll('#ts-view-tabs [data-view-mode]').forEach(btn => {
-            const active = btn.dataset.viewMode === currentViewMode;
-            btn.classList.toggle('btn-primary', active);
-            btn.classList.toggle('btn-outline-primary', !active);
-        });
     }
 
     /* ── region tree ──────────────────────────────────────── */
@@ -1034,22 +1023,6 @@
         currentPage = 1; loadList();
     });
 
-    document.querySelectorAll('#ts-view-tabs [data-view-mode]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const nextMode = btn.dataset.viewMode;
-            if (!nextMode || nextMode === currentViewMode) {
-                return;
-            }
-
-            currentViewMode = nextMode;
-            currentPage = 1;
-            currentProvince = '';
-            currentWard = '';
-            applyViewModeUI();
-            loadList();
-        });
-    });
-
     function loadList() {
         const wrap = document.getElementById('ts-list-wrap');
         wrap.innerHTML = '<div class="ts-empty"><i class="bi bi-hourglass-split" style="font-size:2rem;"></i><h5 class="mt-3">Đang tải...</h5></div>';
@@ -1064,137 +1037,145 @@
         const wrap  = document.getElementById('ts-list-wrap');
         const links = res.links || {};
         const total = links.total || 0;
-        const active = (res.data || []).filter(d => d.is_active).length;
-        const isRouteMode = currentViewMode === 'routes';
+        const rows = res.data || [];
+        const perPage = Number(links.per_page || currentPerPage);
+        const first = total ? ((Number(links.current_page || 1) - 1) * perPage) + 1 : 0;
+        const last = total ? first + rows.length - 1 : 0;
 
         document.getElementById('ts-count-label').textContent =
-            'Hiển thị ' + (res.data ? res.data.length : 0) + ' trong tổng số ' + total + (isRouteMode ? ' chuyến' : ' trạm xe');
+            `Hiển thị ${first}–${last} trong tổng số ${total} trạm xe`;
         document.getElementById('kpi-total').textContent  = total;
-        document.getElementById('kpi-active').textContent = active;
-        document.getElementById('kpi-page').textContent   = res.data ? res.data.length : 0;
+        document.getElementById('kpi-active').textContent = res.active_total ?? 0;
+        document.getElementById('kpi-page').textContent   = rows.length;
 
-        if (!res.data || !res.data.length) {
-            wrap.innerHTML = isRouteMode
-                ? '<div class="ts-empty"><i class="bi bi-signpost-2" style="font-size:2.4rem;"></i><h5 class="mt-3 mb-2">Không có chuyến nào</h5><p>Hãy thêm/chỉnh sửa tuyến để bắt đầu quản lý danh sách chuyến.</p></div>'
-                : '<div class="ts-empty"><i class="bi bi-truck" style="font-size:2.4rem;"></i><h5 class="mt-3 mb-2">Không có trạm xe nào</h5><p>Hãy thêm trạm xe mới để bắt đầu quản lý.</p></div>';
+        if (!rows.length) {
+            wrap.innerHTML = '<div class="ts-empty"><i class="bi bi-truck" style="font-size:2.4rem;"></i><h5 class="mt-3 mb-2">Không có trạm xe nào</h5><p>Thử đổi điều kiện lọc hoặc thêm trạm xe mới.</p></div>';
             return;
         }
 
-        wrap.innerHTML = '<div class="row g-3" id="ts-card-grid"></div>';
-        const grid = document.getElementById('ts-card-grid');
-        res.data.forEach(item => {
-            const col = document.createElement('div');
-            col.className = 'col-12';
-            col.innerHTML = isRouteMode ? buildRouteCard(item) : buildCard(item);
-            const card = col.querySelector('.ts-station-card');
-            if (!isRouteMode) {
-                card._tsData = item;
-                attachEditHandlers(card, item);
+        const columns = [
+            ['name', 'Tên trạm'], ['brand', 'Nhà xe / Trụ sở chính'], ['phone', 'Điện thoại'],
+            ['province', 'Tỉnh/Thành'], ['ward', 'Phường/Xã'], ['address', 'Địa chỉ trạm'], ['branch_info', 'Phòng / chi nhánh'], ['parking_fee', 'Phí bãi'],
+            ['is_active', 'Trạng thái'], ['has_home_delivery', 'Giao tận nhà'],
+        ];
+        const sortMark = key => currentSortBy === key ? (currentSortDirection === 'asc' ? ' ↑' : ' ↓') : '';
+        wrap.innerHTML = `<div class="ts-table-wrap"><table class="table table-hover ts-table">
+            <thead><tr><th><button type="button" class="ts-sort-btn" data-sort="id">Mã${sortMark('id')}</button></th>${columns.map(([key, label]) => `<th><button type="button" class="ts-sort-btn" data-sort="${key}">${label}${sortMark(key)}</button></th>`).join('')}<th>Ghim</th><th>Thứ tự riêng</th><th>Thao tác</th></tr></thead>
+            <tbody>${rows.map(item => buildStationRow(item)).join('')}</tbody>
+        </table></div>`;
+        wrap.querySelectorAll('[data-sort]').forEach(button => button.addEventListener('click', () => {
+            const key = button.dataset.sort;
+            currentSortDirection = currentSortBy === key && currentSortDirection === 'asc' ? 'desc' : 'asc';
+            currentSortBy = key;
+            currentPage = 1;
+            loadList();
+        }));
+        rows.forEach(item => {
+            const row = wrap.querySelector(`[data-station-row="${item.id}"]`);
+            if (row) {
+                row._tsData = item;
+                attachEditHandlers(row, item);
             }
-            grid.appendChild(col);
         });
 
         renderPagination(links.current_page, links.last_page);
     }
 
-    function buildRouteCard(route) {
-        const badge = route.is_active
+    function buildStationRow(ts) {
+        const status = ts.is_active
             ? '<span class="ts-badge-on"><i class="bi bi-check-circle-fill"></i> Đang HĐ</span>'
             : '<span class="ts-badge-off"><i class="bi bi-x-circle-fill"></i> Ngừng HĐ</span>';
-
-        return `<div class="ts-station-card ts-route-card">
-            <div class="ts-route-head">
-                <h6 class="ts-route-name">${esc(route.name || '')}</h6>
-                ${badge}
-            </div>
-
-            <div class="ts-route-meta">
-                ${route.brand ? `<span class="ts-route-chip"><i class="bi bi-truck"></i>${esc(route.brand)}</span>` : ''}
-                <span class="ts-route-code">Mã tuyến: #${esc(route.id || '')}</span>
-            </div>
-
-            <div class="ts-route-line">
-                <div class="ts-route-path">
-                    <span><i class="bi bi-geo-alt me-1"></i>${esc(route.origin || '-')}</span>
-                    <i class="bi bi-arrow-right ts-route-arrow"></i>
-                    <span><i class="bi bi-pin-map me-1"></i>${esc(route.destination || '-')}</span>
-                </div>
-                <div class="ts-route-time">
-                    <i class="bi bi-clock me-1"></i>Giờ đi: <strong>${esc(route.departure_time || '-')}</strong>
-                </div>
-            </div>
-        </div>`;
-    }
-
-    function buildCard(ts) {
-        const badge    = ts.is_active
-            ? '<span class="ts-badge-on"><i class="bi bi-check-circle-fill"></i> Đang HĐ</span>'
-            : '<span class="ts-badge-off"><i class="bi bi-x-circle-fill"></i> Ngừng HĐ</span>';
-        const location = [ts.ward, ts.province].filter(Boolean).join(', ');
-        const brandText = ts.brand ? `<small class="text-muted d-block ts-brand"><i class="bi bi-truck me-1"></i>Brand: ${esc(ts.brand)}</small>` : '';
-        const routes = Array.isArray(ts.routes) ? ts.routes : [];
-        const routesHtml = routes.length
-            ? `<div class="mt-2 pt-2 border-top"><small class="text-uppercase fw-bold text-muted">Tuyến xe (${routes.length})</small>
-                <div class="mt-1">${routes.map(route => `<div class="small text-secondary"><i class="bi bi-signpost-2 me-1"></i><strong>${esc(route.name || '')}</strong>${route.brand ? ` <span class="text-muted">(${esc(route.brand)})</span>` : ''}<div class="text-muted ms-4">Điểm đi: <span class="text-dark">${esc(route.origin || '-')}</span> | Điểm đến: <span class="text-dark">${esc(route.destination || '-')}</span> | Giờ đi: <span class="text-dark">${esc(route.departure_time || '-')}</span></div></div>`).join('')}</div>
-               </div>`
-            : `<div class="mt-2 pt-2 border-top"><small class="text-muted">Chưa có tuyến xe gắn với trạm này.</small></div>`;
-        const editBtn  = ts.can_edit
-            ? `<button class="btn btn-outline-warning btn-sm" data-action="open-edit" title="Chỉnh sửa"><i class="bi bi-pencil"></i></button>`
-            : '';
-
-        return `<div class="ts-station-card">
-            <div class="row justify-content-between">
-                <div class="col-md-7">
-                    <div class="d-flex align-items-start gap-2 flex-wrap mb-1">
-                        <h6 class="mb-0 fw-bold fs-6 ts-name">${esc(ts.name)}</h6>
-                        <span class="ts-badge-wrap">${badge}</span>
-                    </div>
-                    ${ts.phone ? `<div class="fw-bold"><i class="bi bi-telephone me-1"></i><a href="tel:${esc(ts.phone)}" class="text-decoration-none ts-phone">${esc(ts.phone)}</a></div>` : `<span class="ts-phone d-none"></span>`}
-                    <div class="ts-meta">
-                        ${brandText}
-                        ${location ? `<small class="text-muted d-block mt-1 ts-location"><i class="bi bi-geo-alt me-1"></i>${esc(location)}</small>` : ''}
-                        ${ts.address ? `<small class="text-muted d-block ts-address"><i class="bi bi-house me-1"></i>${esc(ts.address)}</small>` : ''}
-                        ${ts.note ? `<small class="text-secondary d-block mt-1 ts-note"><i class="bi bi-sticky me-1"></i>${esc(ts.note)}</small>` : ''}
-                        ${routesHtml}
-                    </div>
-                </div>
-                <div class="col-md-5 d-flex flex-column justify-content-between align-items-end mt-2 mt-md-0">
-                    <div class="ts-actions d-flex gap-2">
-                        ${editBtn}
-                    </div>
-                </div>
-            </div>
-        </div>`;
+        const homeDelivery = ts.has_home_delivery
+            ? `Có${Number(ts.home_delivery_fee || 0) ? ` · ${Number(ts.home_delivery_fee).toLocaleString('vi-VN')}₫` : ''}`
+            : 'Không';
+        const editBtn = ts.can_edit
+            ? '<button class="btn btn-outline-primary btn-sm" data-action="open-edit" title="Sửa trạm"><i class="bi bi-pencil me-1"></i>Sửa</button>'
+            : '<span class="text-muted small">—</span>';
+        const pinButton = `<button type="button" class="btn btn-sm ${ts.user_is_pinned ? 'btn-warning' : 'btn-outline-secondary'}" data-action="toggle-pin" data-pinned="${ts.user_is_pinned ? '1' : '0'}" title="${ts.user_is_pinned ? 'Bỏ ghim trạm' : 'Ghim trạm'}"><i class="bi ${ts.user_is_pinned ? 'bi-star-fill' : 'bi-star'}"></i></button>`;
+        return `<tr data-station-row="${ts.id}">
+            <td class="text-muted">#${ts.id}</td><td class="fw-semibold">${esc(ts.name || '')}</td>
+            <td>${esc(ts.brand || '—')}${ts.brand_headquarters_address ? `<small class="d-block text-muted">${esc(ts.brand_headquarters_address)}</small>` : ''}</td>
+            <td>${ts.phone ? `<a href="tel:${esc(ts.phone)}">${esc(ts.phone)}</a>` : '—'}</td>
+            <td>${esc(ts.province || '—')}</td><td>${esc(ts.ward || '—')}</td><td>${esc(ts.address || '—')}</td><td>${esc(ts.branch_info || '—')}</td>
+            <td class="text-end text-nowrap">${Number(ts.parking_fee || 0).toLocaleString('vi-VN')}₫</td>
+            <td>${status}</td><td>${homeDelivery}</td><td>${pinButton}</td>
+            <td><input type="number" min="0" max="999999" class="form-control form-control-sm ts-personal-order" style="width:90px" value="${Number(ts.user_sort_order || 0)}" data-action="sort-order" aria-label="Thứ tự riêng"></td>
+            <td class="text-nowrap">${editBtn}</td>
+        </tr><tr class="d-none" data-edit-row="${ts.id}"><td colspan="14" data-edit-container></td></tr>`;
     }
 
     /* ── edit ─────────────────────────────────────────────── */
     function attachEditHandlers(card, ts) {
+        const pinBtn = card.querySelector('[data-action="toggle-pin"]');
+        pinBtn?.addEventListener('click', async () => {
+            pinBtn.disabled = true;
+            try {
+                await saveStationPreference(ts.id, { is_pinned: pinBtn.dataset.pinned !== '1' });
+                loadList();
+            } catch (error) {
+                alert(error.message || 'Không lưu được trạng thái ghim.');
+                pinBtn.disabled = false;
+            }
+        });
+
+        const orderInput = card.querySelector('[data-action="sort-order"]');
+        orderInput?.addEventListener('change', async () => {
+            orderInput.disabled = true;
+            try {
+                await saveStationPreference(ts.id, { sort_order: Number(orderInput.value || 0) });
+                loadList();
+            } catch (error) {
+                alert(error.message || 'Không lưu được thứ tự trạm.');
+                orderInput.disabled = false;
+            }
+        });
+
         const openBtn = card.querySelector('[data-action="open-edit"]');
         if (!openBtn) return;
+        const editRow = card.nextElementSibling;
+        const editContainer = editRow?.querySelector('[data-edit-container]');
+        if (!editContainer) return;
 
         openBtn.addEventListener('click', () => {
             document.querySelectorAll('.ts-edit-wrap.open').forEach(w => {
                 w.classList.remove('open');
-                const c = w.closest('.ts-station-card');
+                const oldRow = w.closest('tr[data-edit-row]');
+                if (oldRow) oldRow.classList.add('d-none');
+                const c = oldRow?.previousElementSibling;
                 if (c) { const b = c.querySelector('[data-action="open-edit"]'); if (b) b.style.display = ''; }
             });
 
-            let wrap = card.querySelector('.ts-edit-wrap');
+            let wrap = editContainer.querySelector('.ts-edit-wrap');
             if (!wrap) {
-                card.appendChild(document.getElementById('ts-edit-tpl').content.cloneNode(true));
-                wrap = card.querySelector('.ts-edit-wrap');
+                editContainer.appendChild(document.getElementById('ts-edit-tpl').content.cloneNode(true));
+                wrap = editContainer.querySelector('.ts-edit-wrap');
                 initEditGridDropdowns(wrap);
-                setupEditSave(card, wrap, ts.id);
+                setupEditSave(card, editRow, wrap, ts.id);
                 wrap.querySelector('[data-action="cancel-edit"]').addEventListener('click', () => {
                     wrap.classList.remove('open');
+                    editRow.classList.add('d-none');
                     openBtn.style.display = '';
                 });
             }
 
             fillEditForm(wrap, card._tsData || ts);
             wrap.classList.add('open');
+            editRow.classList.remove('d-none');
             openBtn.style.display = 'none';
         });
+    }
+
+    async function saveStationPreference(stationId, payload) {
+        const response = await fetch(`${updateBase}/${stationId}/sort-settings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.message || Object.values(data.errors || {}).flat().join(' ') || 'Không thể lưu tùy chọn trạm xe.');
+        }
+        return data;
     }
 
     function initEditGridDropdowns(wrap) {
@@ -1226,10 +1207,15 @@
 
     function fillEditForm(wrap, ts) {
         wrap.querySelector('[data-field="name"]').value    = ts.name    || '';
+        wrap.querySelector('[data-field="brand_id"]').value = ts.brand_id || '';
         wrap.querySelector('[data-field="phone"]').value   = ts.phone   || '';
+        wrap.querySelector('[data-field="parking_fee"]').value = ts.parking_fee ?? 0;
+        wrap.querySelector('[data-field="branch_info"]').value = ts.branch_info || '';
         wrap.querySelector('[data-field="address"]').value = ts.address || '';
         wrap.querySelector('[data-field="note"]').value    = ts.note    || '';
         wrap.querySelector('[data-field="is_active"]').checked = !!ts.is_active;
+        wrap.querySelector('[data-field="has_home_delivery"]').checked = !!ts.has_home_delivery;
+        wrap.querySelector('[data-field="home_delivery_fee"]').value = ts.home_delivery_fee ?? 0;
 
         const provGd = wrap._provGd;
         const wardGd = wrap._wardGd;
@@ -1251,18 +1237,23 @@
         }
     }
 
-    function setupEditSave(card, wrap, stationId) {
+    function setupEditSave(card, editRow, wrap, stationId) {
         wrap.querySelector('[data-action="save-edit"]').addEventListener('click', function () {
             const errDiv = wrap.querySelector('[data-edit-errors]');
             errDiv.classList.add('d-none'); errDiv.innerHTML = '';
             const body = {
                 name:        wrap.querySelector('[data-field="name"]').value.trim(),
+                brand_id:    wrap.querySelector('[data-field="brand_id"]').value,
                 phone:       wrap.querySelector('[data-field="phone"]').value.trim(),
+                parking_fee: wrap.querySelector('[data-field="parking_fee"]').value,
+                branch_info: wrap.querySelector('[data-field="branch_info"]').value.trim(),
                 province_id: wrap._provGd ? wrap._provGd.getValue() : '',
                 ward_id:     wrap._wardGd ? wrap._wardGd.getValue() : '',
                 address:     wrap.querySelector('[data-field="address"]').value.trim(),
                 note:        wrap.querySelector('[data-field="note"]').value.trim(),
                 is_active:   wrap.querySelector('[data-field="is_active"]').checked ? 1 : 0,
+                has_home_delivery: wrap.querySelector('[data-field="has_home_delivery"]').checked ? 1 : 0,
+                home_delivery_fee: wrap.querySelector('[data-field="home_delivery_fee"]').value,
                 _method:     'PUT',
             };
             this.disabled = true;
@@ -1279,60 +1270,27 @@
                     errDiv.classList.remove('d-none');
                     return;
                 }
-                card._tsData = d.data;
-                updateCardDisplay(card, d.data);
                 wrap.classList.remove('open');
-                const ob = card.querySelector('[data-action="open-edit"]');
-                if (ob) ob.style.display = '';
+                editRow.classList.add('d-none');
+                loadList();
             })
             .catch(() => { errDiv.innerHTML = '<div>Lỗi kết nối, vui lòng thử lại.</div>'; errDiv.classList.remove('d-none'); })
             .finally(() => { this.disabled = false; });
         });
     }
 
-    function updateCardDisplay(card, ts) {
-        const nameEl = card.querySelector('.ts-name');
-        if (nameEl) nameEl.textContent = ts.name;
-
-        const badgeWrap = card.querySelector('.ts-badge-wrap');
-        if (badgeWrap) badgeWrap.innerHTML = ts.is_active
-            ? '<span class="ts-badge-on"><i class="bi bi-check-circle-fill"></i> Đang HĐ</span>'
-            : '<span class="ts-badge-off"><i class="bi bi-x-circle-fill"></i> Ngừng HĐ</span>';
-
-        const phoneWrap = card.querySelector('.ts-phone');
-        if (phoneWrap) {
-            const parent = phoneWrap.closest('div') || phoneWrap.parentElement;
-            if (ts.phone) {
-                parent.outerHTML = `<div class="fw-bold"><i class="bi bi-telephone me-1"></i><a href="tel:${esc(ts.phone)}" class="text-decoration-none ts-phone">${esc(ts.phone)}</a></div>`;
-            }
-        }
-
-        const meta = card.querySelector('.ts-meta');
-        if (meta) {
-            const location = [ts.ward, ts.province].filter(Boolean).join(', ');
-            const brandText = ts.brand ? `<small class="text-muted d-block ts-brand"><i class="bi bi-truck me-1"></i>Brand: ${esc(ts.brand)}</small>` : '';
-            const routes = Array.isArray(ts.routes) ? ts.routes : [];
-            const routesHtml = routes.length
-                ? `<div class="mt-2 pt-2 border-top"><small class="text-uppercase fw-bold text-muted">Tuyến xe (${routes.length})</small>
-                    <div class="mt-1">${routes.map(route => `<div class="small text-secondary"><i class="bi bi-signpost-2 me-1"></i><strong>${esc(route.name || '')}</strong>${route.brand ? ` <span class="text-muted">(${esc(route.brand)})</span>` : ''}<div class="text-muted ms-4">Điểm đi: <span class="text-dark">${esc(route.origin || '-')}</span> | Điểm đến: <span class="text-dark">${esc(route.destination || '-')}</span> | Giờ đi: <span class="text-dark">${esc(route.departure_time || '-')}</span></div></div>`).join('')}</div>
-                   </div>`
-                : `<div class="mt-2 pt-2 border-top"><small class="text-muted">Chưa có tuyến xe gắn với trạm này.</small></div>`;
-            meta.innerHTML =
-                brandText +
-                (location ? `<small class="text-muted d-block mt-1 ts-location"><i class="bi bi-geo-alt me-1"></i>${esc(location)}</small>` : '') +
-                (ts.address ? `<small class="text-muted d-block ts-address"><i class="bi bi-house me-1"></i>${esc(ts.address)}</small>` : '') +
-                (ts.note ? `<small class="text-secondary d-block mt-1 ts-note"><i class="bi bi-sticky me-1"></i>${esc(ts.note)}</small>` : '') +
-                routesHtml;
-        }
-    }
-
     /* ── pagination ────────────────────────────────────────── */
     function renderPagination(current, last) {
         const container = document.getElementById('ts-pagination');
         if (last <= 1) { container.innerHTML = ''; return; }
-        let html = '';
-        for (let i = 1; i <= last; i++)
+        const start = Math.max(1, current - 2);
+        const end = Math.min(last, current + 2);
+        let html = `<button class="btn btn-sm btn-outline-secondary" data-page="${current - 1}" ${current <= 1 ? 'disabled' : ''}>‹ Trước</button>`;
+        if (start > 1) html += `<button class="btn btn-sm btn-outline-secondary" data-page="1">1</button>${start > 2 ? '<span class="px-1">…</span>' : ''}`;
+        for (let i = start; i <= end; i++)
             html += `<button class="btn btn-sm ${i===current?'btn-primary':'btn-outline-secondary'}" data-page="${i}">${i}</button>`;
+        if (end < last) html += `${end < last - 1 ? '<span class="px-1">…</span>' : ''}<button class="btn btn-sm btn-outline-secondary" data-page="${last}">${last}</button>`;
+        html += `<button class="btn btn-sm btn-outline-secondary" data-page="${current + 1}" ${current >= last ? 'disabled' : ''}>Sau ›</button>`;
         container.innerHTML = html;
         container.querySelectorAll('button').forEach(btn =>
             btn.addEventListener('click', () => { currentPage = +btn.dataset.page; loadList(); }));
@@ -1367,15 +1325,7 @@
         loadList();
     });
 
-    document.getElementById('ts-sort-route').addEventListener('change', (e) => {
-        currentSortRoute = e.target.value === 'desc' ? 'desc' : 'asc';
-        currentPage = 1;
-        loadList();
-    });
-
-
     loadRegionTree();
-    applyViewModeUI();
     loadList();
 })();
 </script>

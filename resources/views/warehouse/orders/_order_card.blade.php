@@ -154,19 +154,11 @@
                             $stationPhone = $order->truck_station_phone ?: $order->truckStation?->phone;
                         @endphp
                         @if($order->use_truck_station)
-                        <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                        <div class="mb-3">
                             <div class="d-grid gap-2 fs-6">
                                 <div><i class="bi bi-telephone me-1"></i><strong>SĐT khách:</strong> {{ $customerPhone ?: 'Chưa cập nhật' }}</div>
                                 <div><i class="bi bi-truck me-1"></i><strong>Trạm xe:</strong> {{ $stationName ?: 'Chưa cập nhật' }} - {{ $stationAddress ?: 'Chưa có địa chỉ' }} - {{ $stationPhone ?: 'Chưa có SĐT' }}</div>
                             </div>
-                            <form method="POST" target="_blank" action="{{ route(($orderRoutePrefix ?? 'warehouse').'.orders.print-truck-label', $order) }}"
-                                  onsubmit="const b=this.querySelector('[data-print-label]');const c=this.querySelector('[data-print-count]');const n=Number(b.dataset.count||0)+1;b.dataset.count=n;b.innerHTML='<i class=&quot;bi bi-printer me-1&quot;></i>Đã in';c.textContent=n+' lần';c.classList.remove('d-none');">
-                                @csrf
-                                <button type="submit" class="btn btn-outline-primary text-nowrap" data-print-label data-count="{{ (int) $order->truck_label_print_count }}">
-                                    <i class="bi bi-printer me-1"></i>{{ (int) $order->truck_label_print_count > 0 ? 'Đã in' : 'In' }}
-                                </button>
-                                <div class="small text-muted text-center mt-1 {{ (int) $order->truck_label_print_count > 0 ? '' : 'd-none' }}" data-print-count>{{ (int) $order->truck_label_print_count }} lần</div>
-                            </form>
                         </div>
                         @endif
                         <div id="order-details-{{ $order->id }}" class="js-order-details">

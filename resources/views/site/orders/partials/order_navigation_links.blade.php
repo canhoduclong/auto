@@ -57,6 +57,12 @@
             'url' => route('pages.my_orders.monitoring', ['tab' => 'customers']),
         ],
         [
+            'key' => 'truck_stations',
+            'label' => 'Nhà xe',
+            'icon' => 'bi-truck',
+            'url' => route('pages.my_truck_stations'),
+        ],
+        [
             'key' => 'sale_returns',
             'label' => 'Hoàn trả',
             'icon' => 'bi-arrow-return-left',
@@ -75,7 +81,7 @@
 
 @foreach($orderNavigationItems as $orderNavigationItem)
     @continue(($orderNavigationItem['visible'] ?? true) === false)
-    @php $isOrderNavigationActive = $orderNavigationActiveTab === $orderNavigationItem['key']; @endphp
+    @php $isOrderNavigationActive = $orderNavigationActiveTab === $orderNavigationItem['key'] || ($orderNavigationItem['key'] === 'truck_stations' && request()->routeIs('pages.my_truck_stations*')); @endphp
     <a
         class="{{ $orderNavigationLinkClass }}{{ $isOrderNavigationActive ? ' ' . $orderNavigationActiveClass : '' }}"
         href="{{ $orderNavigationItem['url'] }}"

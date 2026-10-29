@@ -4028,42 +4028,6 @@ public function apiTruckRoutes(Request $request)
     public function myCustomerAjax(Request $request)
     {
         $userId = auth()->id();
-
-        // DEBUG: Kiểm tra khách hàng 46 có trong bảng customers không
-        \Log::info('DEBUG_CUSTOMER_46', [
-            'customer' => Customer::withTrashed()->find(46)
-        ]);
-
-        // DEBUG: Kiểm tra có bản ghi customer_priorities đúng không
-        \Log::info('DEBUG_PRIORITY_46', [
-            'priority' => \App\Models\CustomerPriority::where('customer_id', 46)
-                ->where('sale_id', $userId)
-                ->where('is_active', 1)
-                ->first()
-        ]);
-
-        // DEBUG: Kiểm tra có lọt qua whereHas không
-        \Log::info('DEBUG_WHEREHAS_46', [
-            'whereHas' => Customer::whereHas('priorities', function ($q) use ($userId) {
-                $q->where('sale_id', $userId)
-                  ->where('is_active', 1);
-            })
-            ->where('id', 46)
-            ->first()
-        ]);
-
-        // DEBUG: Kiểm tra có lọt qua các filter khác không
-        \Log::info('DEBUG_FINAL_46', [
-            'final' => Customer::whereHas('priorities', function ($q) use ($userId) {
-                $q->where('sale_id', $userId)
-                  ->where('is_active', 1);
-            })
-            ->where('id', 46)
-            ->whereNull('deleted_at')
-            ->first()
-        ]);
-
-
         $tab = (string) $request->input('tab', 'all');
         if (!in_array($tab, ['all', 'processing', 'trash'], true)) {
             $tab = 'all';
@@ -4554,6 +4518,22 @@ public function apiTruckRoutes(Request $request)
         }
 
         $validated = $request->validate($rules);
+
+        if (array_key_exists('name', $validated)) {
+            $normalizedName = Customer::normalizeName($validated['name']);
+            $nameInUse = Customer::withTrashed()
+                ->where('name_normalized', $normalizedName)
+                ->where('id', '!=', $customer->id)
+                ->exists();
+
+            if ($nameInUse) {
+                $message = 'Tên khách hàng này đã được sử dụng. Vui lòng kiểm tra khách hàng trùng trước khi lưu.';
+                if ($request->expectsJson()) {
+                    return response()->json(['message' => $message, 'errors' => ['name' => [$message]]], 422);
+                }
+                return back()->withErrors(['name' => $message])->withInput();
+            }
+        }
 
         if (array_key_exists('use_truck_station', $validated) && !(bool) $validated['use_truck_station']) {
             $validated['truck_station_id'] = null;
@@ -6235,18 +6215,11 @@ public function apiTruckRoutes(Request $request)
 
         $duplicate = null;
         $name = trim((string) ($validated['name'] ?? ''));
-        $phone = trim((string) ($validated['phone'] ?? ''));
 
-        if ($name !== '' && $phone !== '') {
-            $duplicateQuery = Customer::query()
-                ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
-                ->where('phone', $phone);
-
-            if (!empty($validated['duplicate_customer_id'])) {
-                $duplicateQuery->where('id', (int) $validated['duplicate_customer_id']);
-            }
-
-            $duplicate = $duplicateQuery->first();
+        if ($name !== '') {
+            $duplicate = Customer::withTrashed()
+                ->where('name_normalized', Customer::normalizeName($name))
+                ->first();
         }
 
         if (!$duplicate && !empty($validated['email'])) {
@@ -6256,6 +6229,12 @@ public function apiTruckRoutes(Request $request)
         }
 
         if ($duplicate) {
+            if ($duplicate->trashed()) {
+                return back()->withErrors([
+                    'name' => 'Tên khách hàng đã tồn tại trong danh sách đã xóa. Hãy khôi phục khách hàng đó trước khi tạo lại.',
+                ])->withInput();
+            }
+
             $priority = isset($validated['duplicate_priority_level'])
                 ? (int) $validated['duplicate_priority_level']
                 : null;
@@ -6425,7 +6404,7 @@ public function apiTruckRoutes(Request $request)
 
     public function myTruckStations(Request $request)
     {
-        $brands = TruckBrand::where('is_active', true)->orderBy('name')->get(['id', 'name']);
+        $brands = TruckBrand::orderBy('name')->get(['id', 'name', 'headquarters_address', 'is_active']);
         $provinces = Province::orderBy('name')->get(['id', 'name']);
         $settings =  $this->settings; 
 
@@ -6467,7 +6446,9 @@ public function apiTruckRoutes(Request $request)
 
     public function myTruckStationsAjax(Request $request)
     {
-        $userId = auth()->id();
+        $user = auth()->user();
+        $userId = $user?->id;
+        $canManageAllStations = $user && ($user->isAdmin() || $user->hasRole(['leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']));
         $mode = (string) $request->input('mode', 'stations');
 
         if ($mode === 'routes') {
@@ -6558,7 +6539,11 @@ public function apiTruckRoutes(Request $request)
             $query->where(function ($sub) use ($keyword) {
                 $sub->where('name', 'like', "%{$keyword}%")
                     ->orWhere('address', 'like', "%{$keyword}%")
-                    ->orWhere('phone', 'like', "%{$keyword}%");
+                    ->orWhere('phone', 'like', "%{$keyword}%")
+                    ->orWhere('branch_info', 'like', "%{$keyword}%")
+                    ->orWhereHas('brand', fn ($brandQuery) => $brandQuery->where('name', 'like', "%{$keyword}%"))
+                    ->orWhereHas('province', fn ($provinceQuery) => $provinceQuery->where('name', 'like', "%{$keyword}%"))
+                    ->orWhereHas('ward', fn ($wardQuery) => $wardQuery->where('name', 'like', "%{$keyword}%"));
             });
         }
 
@@ -6606,20 +6591,56 @@ public function apiTruckRoutes(Request $request)
             });
         }
 
+        $activeTotal = (clone $query)->where('truck_stations.is_active', true)->count();
+
         $perPage = (int) $request->input('per_page', 20);
         $perPage = in_array($perPage, [10, 20, 50, 100], true) ? $perPage : 20;
+        $sortBy = (string) $request->input('sort_by', 'personal');
+        $sortDirection = strtolower((string) $request->input('sort_direction', 'asc'));
+        $sortDirection = in_array($sortDirection, ['asc', 'desc'], true) ? $sortDirection : 'asc';
+        $stationPreferences = DB::table('truck_station_user_preferences')
+            ->where('user_id', $userId)
+            ->whereColumn('truck_station_user_preferences.truck_station_id', 'truck_stations.id');
+        $query->addSelect([
+            'user_is_pinned' => (clone $stationPreferences)->select('is_pinned'),
+            'user_sort_order' => (clone $stationPreferences)->select('sort_order'),
+        ])->orderByDesc('user_is_pinned');
 
-        $sortRoute = strtolower((string) $request->input('sort_route', 'asc'));
-        $sortRoute = in_array($sortRoute, ['asc', 'desc'], true) ? $sortRoute : 'asc';
-
-        $query->orderByRaw(
-            "COALESCE((SELECT MIN(tr.name) FROM truck_route_stops trs INNER JOIN truck_routes tr ON tr.id = trs.truck_route_id WHERE trs.truck_station_id = truck_stations.id), truck_stations.name) {$sortRoute}"
-        );
+        if ($sortBy === 'personal') {
+            $query->orderByRaw('CASE WHEN COALESCE(user_sort_order, 0) = 0 THEN 1 ELSE 0 END')
+                ->orderBy('user_sort_order')
+                ->orderBy('truck_stations.name');
+        }
+        $sortColumns = [
+            'id' => 'id',
+            'name' => 'name',
+            'phone' => 'phone',
+            'address' => 'address',
+            'branch_info' => 'branch_info',
+            'parking_fee' => 'parking_fee',
+            'is_active' => 'is_active',
+            'has_home_delivery' => 'has_home_delivery',
+        ];
+        if ($sortBy === 'personal') {
+            // Personal order is already applied above, with pinned stations first.
+        } elseif (isset($sortColumns[$sortBy])) {
+            $query->orderBy('truck_stations.'.$sortColumns[$sortBy], $sortDirection);
+        } elseif ($sortBy === 'brand') {
+            $query->orderBy(TruckBrand::query()->select('name')->whereColumn('truck_brands.id', 'truck_stations.brand_id'), $sortDirection);
+        } elseif ($sortBy === 'province') {
+            $query->orderBy(Province::query()->select('name')->whereColumn('provinces.id', 'truck_stations.province_id'), $sortDirection);
+        } elseif ($sortBy === 'ward') {
+            $query->orderBy(Ward::query()->select('name')->whereColumn('wards.id', 'truck_stations.ward_id'), $sortDirection);
+        } else {
+            $sortBy = 'name';
+            $query->orderBy('truck_stations.name', $sortDirection);
+        }
+        $query->orderBy('truck_stations.id');
 
         $truckStations = $query->paginate($perPage);
 
         return response()->json([
-            'data' => $truckStations->map(function ($ts) use ($userId) {
+            'data' => $truckStations->map(function ($ts) use ($userId, $canManageAllStations) {
                 $routes = $ts->routeStops
                     ->map(fn ($routeStop) => $routeStop->route)
                     ->filter()
@@ -6647,8 +6668,13 @@ public function apiTruckRoutes(Request $request)
                     'name' => $ts->name,
                     'brand_id' => $ts->brand_id,
                     'brand' => $ts->brand?->name,
+                    'brand_headquarters_address' => $ts->brand?->headquarters_address,
                     'address' => $ts->address,
                     'phone' => $ts->phone,
+                    'parking_fee' => $ts->parking_fee,
+                    'branch_info' => $ts->branch_info,
+                    'has_home_delivery' => (bool) $ts->has_home_delivery,
+                    'home_delivery_fee' => $ts->home_delivery_fee,
                     'note' => $ts->note,
                     'is_active' => $ts->is_active,
                     'province_id' => $ts->province_id,
@@ -6657,7 +6683,9 @@ public function apiTruckRoutes(Request $request)
                     'ward' => $ts->ward ? $ts->ward->name : null,
                     'routes' => $routes,
                     'route_count' => $routes->count(),
-                    'can_edit' => (int) $ts->created_by === (int) $userId,
+                    'user_is_pinned' => (bool) $ts->user_is_pinned,
+                    'user_sort_order' => (int) ($ts->user_sort_order ?? 0),
+                    'can_edit' => $canManageAllStations || (int) $ts->created_by === (int) $userId,
                 ];
             }),
             'links' => [
@@ -6666,6 +6694,7 @@ public function apiTruckRoutes(Request $request)
                 'per_page' => $truckStations->perPage(),
                 'total' => $truckStations->total(),
             ],
+            'active_total' => $activeTotal,
         ]);
     }
 
@@ -6674,6 +6703,8 @@ public function apiTruckRoutes(Request $request)
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'brand_id' => ['nullable', 'exists:truck_brands,id'],
+            'brand_name' => ['nullable', 'string', 'max:255'],
+            'brand_headquarters_address' => ['nullable', 'string', 'max:500'],
             'province_id' => ['nullable', 'exists:provinces,id'],
             'ward_id' => ['nullable', 'exists:wards,id'],
             'address' => ['nullable', 'string', 'max:500'],
@@ -6700,6 +6731,30 @@ public function apiTruckRoutes(Request $request)
         $data['has_home_delivery'] = $request->boolean('has_home_delivery', false);
         $data['home_delivery_fee'] = $data['home_delivery_fee'] ?? 0;
         $data['created_by'] = auth()->id();
+
+        $brandName = trim((string) ($data['brand_name'] ?? ''));
+        $brandHeadquartersAddress = trim((string) ($data['brand_headquarters_address'] ?? ''));
+        unset($data['brand_name']);
+        unset($data['brand_headquarters_address']);
+        if ($brandName !== '') {
+            $brand = TruckBrand::query()
+                ->whereRaw('LOWER(name) = ?', [mb_strtolower($brandName)])
+                ->first();
+            if (!$brand) {
+                $brand = TruckBrand::create([
+                    'name' => $brandName,
+                    'headquarters_address' => $brandHeadquartersAddress ?: null,
+                    'created_by' => auth()->id(),
+                    'is_active' => true,
+                ]);
+            } elseif ($brandHeadquartersAddress !== '') {
+                $brand->headquarters_address = $brandHeadquartersAddress;
+                $brand->save();
+            }
+            $data['brand_id'] = $brand->id;
+        } else {
+            $data['brand_id'] = null;
+        }
 
         $station = TruckStation::create($data);
         $station->load(['brand', 'province', 'ward']);
@@ -6733,16 +6788,23 @@ public function apiTruckRoutes(Request $request)
 
     public function myTruckStationsUpdate(Request $request, TruckStation $truckStation)
     {
-        if ((int) $truckStation->created_by !== (int) auth()->id()) {
+        $user = auth()->user();
+        $canManageAllStations = $user && ($user->isAdmin() || $user->hasRole(['leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']));
+        if (!$user || (!$canManageAllStations && (int) $truckStation->created_by !== (int) $user->id)) {
             return response()->json(['message' => 'Bạn không có quyền sửa trạm xe này.'], 403);
         }
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'brand_id' => ['nullable', 'exists:truck_brands,id'],
             'province_id' => ['nullable', 'exists:provinces,id'],
             'ward_id' => ['nullable', 'exists:wards,id'],
-            'address' => ['nullable', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:500'],
             'phone' => ['nullable', 'string', 'max:30'],
+            'parking_fee' => ['nullable', 'numeric', 'min:0'],
+            'branch_info' => ['nullable', 'string', 'max:500'],
+            'has_home_delivery' => ['nullable', 'boolean'],
+            'home_delivery_fee' => ['nullable', 'numeric', 'min:0'],
             'note' => ['nullable', 'string', 'max:2000'],
             'is_active' => ['nullable', 'boolean'],
         ]);
@@ -6758,6 +6820,9 @@ public function apiTruckRoutes(Request $request)
         }
 
         $data['is_active'] = (bool) ($data['is_active'] ?? false);
+        $data['has_home_delivery'] = (bool) ($data['has_home_delivery'] ?? false);
+        $data['parking_fee'] = $data['parking_fee'] ?? 0;
+        $data['home_delivery_fee'] = $data['has_home_delivery'] ? ($data['home_delivery_fee'] ?? 0) : 0;
 
         $truckStation->update($data);
         $truckStation->load([
@@ -6811,6 +6876,45 @@ public function apiTruckRoutes(Request $request)
                 'can_edit' => true,
             ],
         ]);
+    }
+
+    public function myTruckStationSortSettings(Request $request, TruckStation $truckStation)
+    {
+        $validated = $request->validate([
+            'is_pinned' => ['sometimes', 'boolean'],
+            'sort_order' => ['sometimes', 'integer', 'min:0', 'max:999999'],
+        ]);
+        if (!$validated) {
+            return response()->json(['message' => 'Không có thông tin sắp xếp để lưu.'], 422);
+        }
+
+        $userId = (int) $request->user()->id;
+        $key = ['user_id' => $userId, 'truck_station_id' => (int) $truckStation->id];
+        $values = [];
+        if (array_key_exists('is_pinned', $validated)) {
+            $values['is_pinned'] = (bool) $validated['is_pinned'];
+        }
+        if (array_key_exists('sort_order', $validated)) {
+            $values['sort_order'] = (int) $validated['sort_order'];
+        }
+
+        $existing = DB::table('truck_station_user_preferences')->where($key)->first();
+        if ($existing) {
+            DB::table('truck_station_user_preferences')->where($key)->update($values + ['updated_at' => now()]);
+            $isPinned = array_key_exists('is_pinned', $values) ? $values['is_pinned'] : (bool) $existing->is_pinned;
+            $sortOrder = array_key_exists('sort_order', $values) ? $values['sort_order'] : (int) $existing->sort_order;
+        } else {
+            $isPinned = (bool) ($values['is_pinned'] ?? false);
+            $sortOrder = (int) ($values['sort_order'] ?? 0);
+            DB::table('truck_station_user_preferences')->insert($key + [
+                'is_pinned' => $isPinned,
+                'sort_order' => $sortOrder,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        return response()->json(['success' => true, 'is_pinned' => $isPinned, 'sort_order' => $sortOrder]);
     }
 
     /**
