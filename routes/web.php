@@ -852,6 +852,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     });
     Route::prefix('admin/order-templates')->name('admin.order-templates.')->middleware('role:admin')->group(function () {
         Route::get('/', [\App\Http\Controllers\Admin\OrderTemplateController::class, 'index'])->name('index');
+        Route::post('/copy-to-sale', [\App\Http\Controllers\Admin\OrderTemplateController::class, 'copyToSale'])->name('copy-to-sale');
         Route::get('/{draft}/edit', [\App\Http\Controllers\Admin\OrderTemplateController::class, 'edit'])->name('edit');
         Route::put('/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'adminTemplateUpdate'])->name('update');
         Route::put('/{draft}/automation', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'adminTemplateAutomation'])->name('automation');

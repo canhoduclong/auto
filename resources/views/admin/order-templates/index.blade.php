@@ -13,9 +13,14 @@
         <div class="col-md-3"><label for="template-automation" class="form-label">Lên đơn tự động</label><select id="template-automation" name="automation" class="form-select"><option value="">Tất cả</option>@foreach(['on' => 'Đang bật', 'off' => 'Đang tắt', 'daily' => 'Hằng ngày', 'scheduled' => 'Theo ngày chọn', 'error' => 'Có lỗi'] as $value => $label)<option value="{{ $value }}" @selected(request('automation') === $value)>{{ $label }}</option>@endforeach</select></div>
         <div class="col-md-2"><button class="btn btn-primary">Lọc</button> <a href="{{ route('admin.order-templates.index') }}" class="btn btn-light">Xóa lọc</a></div>
     </div></form>
-    <div class="card"><div class="table-responsive"><table class="table align-middle"><thead><tr><th>Mẫu / Sale</th><th>Khách hàng</th><th>Sản phẩm</th><th>Lịch tự động</th><th>Kết quả gần nhất</th><th></th></tr></thead><tbody>
+    <form method="POST" action="{{ route('admin.order-templates.copy-to-sale', request()->query()) }}" id="copy-templates-form">@csrf
+    <div class="card"><div class="card-body border-bottom"><div class="row g-2 align-items-end">
+        <div class="col-md-4"><label for="copy-sale" class="form-label">Sale nhận mẫu</label><select id="copy-sale" name="sale_id" class="form-select" required><option value="">Chọn sale</option>@foreach($sales as $sale)<option value="{{ $sale->id }}">{{ $sale->name }}</option>@endforeach</select></div>
+        <div class="col-md-4"><button class="btn btn-primary" type="submit" onclick="return confirm('Sao chép các mẫu đã chọn sang sale này? Lịch tự động ở bản sao sẽ tắt.');">Sao chép mẫu đã chọn</button> <span class="small text-muted" id="selected-template-count">Chưa chọn mẫu</span></div>
+    </div></div><div class="table-responsive"><table class="table align-middle"><thead><tr><th><input type="checkbox" class="form-check-input" id="select-all-templates" aria-label="Chọn tất cả mẫu trên trang"></th><th>Mẫu / Sale</th><th>Khách hàng</th><th>Sản phẩm</th><th>Lịch tự động</th><th>Kết quả gần nhất</th><th></th></tr></thead><tbody>
     @forelse($drafts as $draft)
         <tr>
+            <td><input type="checkbox" class="form-check-input template-checkbox" name="draft_ids[]" value="{{ $draft->id }}" aria-label="Chọn mẫu #{{ $draft->id }}"></td>
             <td><strong>#{{ $draft->id }}</strong><div>{{ $draft->sale?->name ?? 'Sale không còn tồn tại' }}</div></td>
             <td>{{ $draft->customer?->name ?: $draft->customer_name ?: 'Chưa chọn khách' }}<div class="small text-muted">{{ $draft->customer?->customer_code }} · {{ $draft->customer?->phone ?: $draft->phone }}</div></td>
             <td>@if($draft->parsed_items){{ count($draft->parsed_items) }} dòng sản phẩm@else{{ $draft->variant?->product?->name ?: $draft->product_text ?: 'Chưa chọn sản phẩm' }} · SL {{ $draft->quantity }}@endif</td>
@@ -23,7 +28,25 @@
             <td>@if($draft->automation_last_run_at)<div class="small">{{ $draft->automation_last_run_at->format('d/m/Y H:i') }}</div>@endif @if($draft->automation_last_error)<div class="small text-danger text-break">{{ $draft->automation_last_error }}</div>@elseif($draft->error_message)<div class="small text-danger text-break">{{ $draft->error_message }}</div>@else<span class="text-muted small">Không có lỗi</span>@endif @if($draft->order)<a href="{{ route('orders.show', $draft->order) }}" class="small">{{ $draft->order->code ?: '#'.$draft->order->id }}</a>@endif</td>
             <td><a href="{{ route('admin.order-templates.edit', $draft) }}" class="btn btn-sm btn-outline-primary">Xem / sửa / lịch</a></td>
         </tr>
-    @empty<tr><td colspan="6" class="text-center text-muted py-4">Không có đơn hàng mẫu phù hợp.</td></tr>@endforelse
-    </tbody></table></div><div class="card-body">{{ $drafts->links() }}</div></div>
+    @empty<tr><td colspan="7" class="text-center text-muted py-4">Không có đơn hàng mẫu phù hợp.</td></tr>@endforelse
+    </tbody></table></div><div class="card-body">{{ $drafts->links() }}</div></div></form>
 </div>
+<script>
+(() => {
+    const boxes = [...document.querySelectorAll('.template-checkbox')];
+    const selectAll = document.getElementById('select-all-templates');
+    const count = document.getElementById('selected-template-count');
+    const update = () => {
+        const selected = boxes.filter(box => box.checked).length;
+        count.textContent = selected ? `Đã chọn ${selected} mẫu` : 'Chưa chọn mẫu';
+        selectAll.checked = boxes.length > 0 && selected === boxes.length;
+        selectAll.indeterminate = selected > 0 && selected < boxes.length;
+    };
+    selectAll?.addEventListener('change', () => { boxes.forEach(box => box.checked = selectAll.checked); update(); });
+    boxes.forEach(box => box.addEventListener('change', update));
+    document.getElementById('copy-templates-form')?.addEventListener('submit', event => {
+        if (!boxes.some(box => box.checked)) { event.preventDefault(); alert('Vui lòng chọn ít nhất một mẫu.'); }
+    });
+})();
+</script>
 @endsection
