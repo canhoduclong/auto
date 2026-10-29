@@ -79,11 +79,23 @@
         font-weight: 600;
     }
     .ts-table-wrap { overflow-x: auto; }
-    .ts-table { min-width: 980px; margin-bottom: 0; }
-    .ts-table th { white-space: nowrap; background: #f8fafc; color: #475569; font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; }
+    .ts-table { width: 100%; min-width: 900px; table-layout: fixed; margin-bottom: 0; }
+    .ts-table th { background: #f8fafc; color: #475569; font-size: .74rem; text-transform: uppercase; letter-spacing: .02em; }
+    .ts-table td { overflow-wrap: anywhere; }
+    .ts-table .ts-col-id { width: 48px; }
+    .ts-table .ts-col-info { width: 34%; }
+    .ts-table .ts-col-region { width: 8%; }
+    .ts-table .ts-col-fee { width: 7%; }
+    .ts-table .ts-col-status { width: 8%; }
+    .ts-table .ts-col-home { width: 8%; }
+    .ts-table .ts-col-pin { width: 54px; }
+    .ts-table .ts-col-number { width: 58px; }
+    .ts-table .ts-col-actions { width: 70px; }
     .ts-sort-btn { border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; padding: 0; }
     .ts-sort-btn:hover { color: #0f766e; }
     .ts-table td { vertical-align: middle; }
+    .ts-station-info-name { display:block; color:#0f172a; font-weight:800; line-height:1.25; }
+    .ts-station-info-meta { display:block; color:#64748b; font-size:.78rem; line-height:1.35; margin-top:3px; }
     .ts-badge-on  { display:inline-flex; align-items:center; gap:5px; padding:5px 11px; border-radius:999px; font-size:.75rem; font-weight:700; background:#ecfdf5; color:#047857; }
     .ts-badge-off { display:inline-flex; align-items:center; gap:5px; padding:5px 11px; border-radius:999px; font-size:.75rem; font-weight:700; background:#fee2e2; color:#991b1b; }
     .ts-actions .btn { border-radius: 10px; padding: 6px 9px; font-size: .8rem; }
@@ -307,7 +319,7 @@
     <div class="row g-4">
 
         {{-- LEFT PANEL --}}
-        <div class="col-xl-4">
+        <div class="col-xl-3">
 
             <div class="ts-panel mb-4">
                 <div class="ts-filter">
@@ -352,7 +364,7 @@
         </div>
 
         {{-- RIGHT PANEL --}}
-        <div class="col-xl-8">
+        <div class="col-xl-9">
 
             <div class="ts-panel mb-3">
                 <div class="ts-section-head d-flex flex-wrap gap-2 justify-content-between align-items-center">
@@ -1053,14 +1065,9 @@
             return;
         }
 
-        const columns = [
-            ['name', 'Tên trạm'], ['brand', 'Nhà xe / Trụ sở chính'], ['phone', 'Điện thoại'],
-            ['province', 'Tỉnh/Thành'], ['ward', 'Phường/Xã'], ['address', 'Địa chỉ trạm'], ['branch_info', 'Phòng / chi nhánh'], ['parking_fee', 'Phí bãi'],
-            ['is_active', 'Trạng thái'], ['has_home_delivery', 'Giao tận nhà'],
-        ];
         const sortMark = key => currentSortBy === key ? (currentSortDirection === 'asc' ? ' ↑' : ' ↓') : '';
         wrap.innerHTML = `<div class="ts-table-wrap"><table class="table table-hover ts-table">
-            <thead><tr><th><button type="button" class="ts-sort-btn" data-sort="id">Mã${sortMark('id')}</button></th>${columns.map(([key, label]) => `<th><button type="button" class="ts-sort-btn" data-sort="${key}">${label}${sortMark(key)}</button></th>`).join('')}<th>Ghim</th><th>Thứ tự riêng</th><th>Thao tác</th></tr></thead>
+            <thead><tr><th class="ts-col-id"><button type="button" class="ts-sort-btn" data-sort="id">Mã${sortMark('id')}</button></th><th class="ts-col-info"><button type="button" class="ts-sort-btn" data-sort="name">Tên trạm / Nhà xe${sortMark('name')}</button></th><th class="ts-col-region"><button type="button" class="ts-sort-btn" data-sort="province">Tỉnh/Thành${sortMark('province')}</button></th><th class="ts-col-region"><button type="button" class="ts-sort-btn" data-sort="ward">Phường/Xã${sortMark('ward')}</button></th><th class="ts-col-fee"><button type="button" class="ts-sort-btn" data-sort="parking_fee">Phí bãi${sortMark('parking_fee')}</button></th><th class="ts-col-status"><button type="button" class="ts-sort-btn" data-sort="is_active">Trạng thái${sortMark('is_active')}</button></th><th class="ts-col-home"><button type="button" class="ts-sort-btn" data-sort="has_home_delivery">Giao tận nhà${sortMark('has_home_delivery')}</button></th><th class="ts-col-pin">Ghim</th><th class="ts-col-number">No.</th><th class="ts-col-actions">Thao tác</th></tr></thead>
             <tbody>${rows.map(item => buildStationRow(item)).join('')}</tbody>
         </table></div>`;
         wrap.querySelectorAll('[data-sort]').forEach(button => button.addEventListener('click', () => {
@@ -1092,16 +1099,19 @@
             ? '<button class="btn btn-outline-primary btn-sm" data-action="open-edit" title="Sửa trạm"><i class="bi bi-pencil me-1"></i>Sửa</button>'
             : '<span class="text-muted small">—</span>';
         const pinButton = `<button type="button" class="btn btn-sm ${ts.user_is_pinned ? 'btn-warning' : 'btn-outline-secondary'}" data-action="toggle-pin" data-pinned="${ts.user_is_pinned ? '1' : '0'}" title="${ts.user_is_pinned ? 'Bỏ ghim trạm' : 'Ghim trạm'}"><i class="bi ${ts.user_is_pinned ? 'bi-star-fill' : 'bi-star'}"></i></button>`;
+        const phone = ts.brand_phone || ts.phone || '';
+        const place = [ts.address, ts.ward, ts.province].filter(Boolean).join(', ');
+        const info = `<span class="ts-station-info-name">${esc(ts.name || '')}</span>
+            <small class="ts-station-info-meta">${esc(ts.brand || 'Chưa gắn nhà xe')}${phone ? ` · ${esc(phone)}` : ''}</small>
+            <small class="ts-station-info-meta">${esc(place || 'Chưa cập nhật địa chỉ')}${ts.branch_info ? ` · ${esc(ts.branch_info)}` : ''}</small>`;
         return `<tr data-station-row="${ts.id}">
-            <td class="text-muted">#${ts.id}</td><td class="fw-semibold">${esc(ts.name || '')}</td>
-            <td>${esc(ts.brand || '—')}${ts.brand_headquarters_address ? `<small class="d-block text-muted">${esc(ts.brand_headquarters_address)}</small>` : ''}</td>
-            <td>${ts.phone ? `<a href="tel:${esc(ts.phone)}">${esc(ts.phone)}</a>` : '—'}</td>
-            <td>${esc(ts.province || '—')}</td><td>${esc(ts.ward || '—')}</td><td>${esc(ts.address || '—')}</td><td>${esc(ts.branch_info || '—')}</td>
+            <td class="text-muted ts-col-id">#${ts.id}</td><td>${info}</td>
+            <td>${esc(ts.province || '—')}</td><td>${esc(ts.ward || '—')}</td>
             <td class="text-end text-nowrap">${Number(ts.parking_fee || 0).toLocaleString('vi-VN')}₫</td>
             <td>${status}</td><td>${homeDelivery}</td><td>${pinButton}</td>
-            <td><input type="number" min="0" max="999999" class="form-control form-control-sm ts-personal-order" style="width:90px" value="${Number(ts.user_sort_order || 0)}" data-action="sort-order" aria-label="Thứ tự riêng"></td>
+            <td><input type="number" min="0" max="999999" class="form-control form-control-sm ts-personal-order" style="width:48px;padding:.25rem" value="${Number(ts.user_sort_order || 0)}" data-action="sort-order" aria-label="No. cá nhân"></td>
             <td class="text-nowrap">${editBtn}</td>
-        </tr><tr class="d-none" data-edit-row="${ts.id}"><td colspan="14" data-edit-container></td></tr>`;
+        </tr><tr class="d-none" data-edit-row="${ts.id}"><td colspan="10" data-edit-container></td></tr>`;
     }
 
     /* ── edit ─────────────────────────────────────────────── */

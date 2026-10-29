@@ -6668,6 +6668,7 @@ public function apiTruckRoutes(Request $request)
                     'name' => $ts->name,
                     'brand_id' => $ts->brand_id,
                     'brand' => $ts->brand?->name,
+                    'brand_phone' => $ts->brand?->phone,
                     'brand_headquarters_address' => $ts->brand?->headquarters_address,
                     'address' => $ts->address,
                     'phone' => $ts->phone,
