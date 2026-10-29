@@ -5491,6 +5491,39 @@ public function apiTruckRoutes(Request $request)
             'delivery_time.date_format' => 'Giờ giao hàng phải đúng định dạng HH:mm.',
         ]);
 
+        // Once packed, an owner may still add or correct truck station details.
+        // Keep this as a logistics-only edit so rebuilding the order lines cannot
+        // clear packed quantities, weights, packing evidence, totals, or status.
+        if (in_array((string) $order->status, [Order::STATUS_PACKED, Order::STATUS_READY_TO_SHIP], true)) {
+            $useTruckStation = (bool) ($validated['use_truck_station'] ?? false);
+            $station = $useTruckStation && !empty($validated['truck_station_id'])
+                ? TruckStation::query()->find($validated['truck_station_id'])
+                : null;
+            $statusBefore = (string) $order->status;
+            $order->forceFill(array_filter([
+                'use_truck_station' => $useTruckStation,
+                'truck_station_id' => $useTruckStation ? ($station?->id) : null,
+                'truck_station_name' => $useTruckStation ? (trim((string) ($validated['truck_station_name'] ?? '')) ?: $station?->name) : null,
+                'truck_station_address' => $useTruckStation ? (trim((string) ($validated['truck_station_address'] ?? '')) ?: $station?->address) : null,
+                'truck_station_phone' => $useTruckStation ? (trim((string) ($validated['truck_station_phone'] ?? '')) ?: $station?->phone) : null,
+                'truck_receive_time' => $useTruckStation ? (trim((string) ($validated['truck_receive_time'] ?? '')) ?: null) : null,
+            ], fn ($value, $column) => $this->hasOrderColumn($column), ARRAY_FILTER_USE_BOTH))->save();
+
+            \App\Models\OrderHistory::create([
+                'order_id' => $order->id,
+                'action' => 'update_truck_station_after_packing',
+                'user_id' => Auth::id(),
+                'role' => Auth::user()?->roles()->pluck('name')->first(),
+                'status_before' => $statusBefore,
+                'status_after' => (string) $order->status,
+                'note' => 'Cập nhật thông tin gửi nhà xe sau khi đóng hàng; giữ nguyên hàng hóa và trạng thái đóng gói.',
+            ]);
+
+            return $request->input('return_to') === 'monitoring'
+                ? redirect()->route('pages.my_orders.monitoring', ['date' => $order->created_at?->toDateString(), 'highlight' => $order->id])->with('success', 'Đã cập nhật thông tin nhà xe; trạng thái và dữ liệu đóng hàng được giữ nguyên.')
+                : redirect()->route('site.orders.show', $order)->with('success', 'Đã cập nhật thông tin nhà xe; trạng thái và dữ liệu đóng hàng được giữ nguyên.');
+        }
+
         $itemsInput = collect($validated['items'] ?? [])->values();
 
         if ($itemsInput->isEmpty()) {
