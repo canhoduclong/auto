@@ -11,10 +11,11 @@
         .delivery-print-details { position:relative; isolation:isolate; }
         .delivery-print-details::after { content:"DRAFT"; position:absolute; top:45%; left:50%; transform:translate(-50%, -50%) rotate(-30deg); font:800 100px/1 Arial, sans-serif; letter-spacing:10px; color:rgba(100,116,139,.055); pointer-events:none; z-index:1; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
         .sheet:last-child { break-after:auto; page-break-after:auto; }
-        .company { display:grid; grid-template-columns:minmax(0, 72%) minmax(0, 28%); align-items:center; gap:8px; padding:0 2mm; }
+        .company { display:grid; grid-template-columns:minmax(0, 72%) minmax(0, 28%); align-items:center; gap:8px; min-height:12mm; padding:0 2mm; }
         .company-brand { display:flex; align-items:center; gap:6mm; min-width:0; }
-        .company-logo { flex:0 0 22mm; width:22mm; display:flex; align-items:center; justify-content:center; transform:translateY(2mm); }
-        .logo { display:block; width:22mm; height:22mm; object-fit:contain; }
+        /* Let the logo occupy the left of the title rows without pushing them down. */
+        .company-logo { position:relative; flex:0 0 22mm; width:22mm; height:12mm; }
+        .logo { position:absolute; top:0; left:0; display:block; width:22mm; height:22mm; object-fit:contain; }
         .company-details { min-width:0; }
         .company-name { font-size:12px; font-weight:800; text-transform:uppercase; }
         .company-info { font-size:8.5px; }
@@ -23,12 +24,12 @@
         h1 { text-align:center; font-size:18px; color:#1f4e79; margin:0; }
         .subtitle { text-align:center; font-size:9px; font-style:italic; color:#1f4e79; margin-bottom:0; }
         .info { display:grid; grid-template-columns:1fr 1fr 1fr; border:1px solid #6b7280; margin-bottom:7px; }
-        .info div { padding:3px 5px; min-height:18px; border-bottom:1px solid #d1d5db; }
+        .info div { padding:2px 5px; min-height:18px; border-bottom:1px solid #d1d5db; }
         .info div:nth-child(3n+1), .info div:nth-child(3n+2) { border-right:1px solid #d1d5db; }
         .info div:nth-last-child(-n+3) { border-bottom:0; }
         .label { font-weight:700; }
         table { width:100%; border-collapse:collapse; table-layout:fixed; }
-        .items th, .items td { border:1px solid #4b5563; padding:4px 3px; vertical-align:middle; }
+        .items th, .items td { border:1px solid #4b5563; padding:3px 3px; vertical-align:middle; }
         .print-notice { width:100%; margin:4px auto 6px; }
         .print-notice > div { margin:0 !important; padding-top:0 !important; border-top:0 !important; font-size:7px !important; line-height:1.2 !important; }
         .items th, .items td.center { text-align:center; vertical-align:middle; }
@@ -37,12 +38,12 @@
         .items th { white-space:nowrap; background:#e8eef5; color:#1f4e79; text-align:center; }
         .center { text-align:center; } .right { text-align:right; }
         .totals { width:45%; margin:6px 0 8px auto; }
-        .totals td { padding:3px 5px; border-bottom:1px solid #d1d5db; }
+        .totals td { padding:1px 5px; border-bottom:1px solid #d1d5db; }
         .totals td:last-child { text-align:right; font-weight:700; }
-        .signatures { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; text-align:center; margin-top:12px; page-break-inside:avoid; }
-        .signature { min-height:86px; font-weight:700; }
+        .signatures { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; text-align:center; margin-top:8px; page-break-inside:avoid; }
+        .signature { min-height:78px; font-weight:700; }
         .signature small { display:block; font-weight:400; font-style:italic; }
-        .space { height:52px; }
+        .space { height:44px; }
         @media screen { body { background:#e5e7eb; } .sheet { width:210mm; min-height:148mm; margin:12px auto; padding:6mm; background:#fff; box-shadow:0 2px 10px #94a3b8; } }
         @media print { .sheet { padding:0; } }
     </style>
