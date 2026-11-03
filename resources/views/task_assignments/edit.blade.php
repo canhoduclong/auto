@@ -157,6 +157,10 @@
                         <span class="fw-semibold"><i class="ph-flow-arrow me-1"></i>Quy trình phê duyệt</span>
                     </div>
                     <div class="card-body">
+                        @if($task->awaitsPublication())
+                            <p class="mb-2">Người duyệt công bố: <strong>{{ $task->publicationApprover?->name }}</strong></p>
+                            <p class="small text-muted mb-0">Bạn đang chỉnh sửa bản gửi duyệt. Công việc chỉ được gửi đến những người nhận đã chọn sau khi người duyệt đồng ý công bố.</p>
+                        @else
                         <p class="small text-muted mb-3">Chọn quy trình cho công việc này. Thành viên tương ứng trong từng bước sẽ phê duyệt để hoàn thành công việc.</p>
 
                         @forelse($workflows as $wf)
@@ -183,6 +187,7 @@
                             <div class="fw-semibold" style="font-size:13px">Không cần phê duyệt</div>
                             <div class="text-muted" style="font-size:11px">Công việc sẽ chuyển sang trạng thái đang thực hiện ngay.</div>
                         </label>
+                        @endif
                     </div>
                 </div>
 

@@ -21,7 +21,7 @@
     </a>
     <div>
         <h4 class="mb-0">Tạo công việc mới</h4>
-        <small class="text-muted">Điền thông tin và chọn quy trình phê duyệt</small>
+        <small class="text-muted">Soạn công việc và gửi người duyệt trước khi công bố</small>
     </div>
 </div>
 
@@ -69,6 +69,8 @@
                             <textarea name="description" class="form-control task-description-editor" rows="5" maxlength="20000"
                                       placeholder="Ghi rõ yêu cầu, kết quả cần đạt, ghi chú...">{{ \App\Support\TaskDescription::render(old('description')) }}</textarea>
                         </div>
+
+                        @include('task_assignments.partials.create-attachments')
 
                         <div class="row g-3 mb-3">
                             <div class="col-sm-6">
@@ -135,10 +137,7 @@
                         </div>
                         @endif
 
-                        <div class="mb-3">
-                            <label class="form-label fw-semibold">Đính kèm <span class="text-muted small">(ảnh, PDF, doc — tối đa 10MB mỗi file)</span></label>
-                            <input type="file" name="attachments[]" class="form-control" multiple accept="image/*,.pdf,.doc,.docx,.xlsx,.zip">
-                        </div>
+
                     </div>
                 </div>
             </div>
@@ -147,41 +146,27 @@
             <div class="col-lg-4">
                 <div class="card shadow-sm">
                     <div class="card-header py-2">
-                        <span class="fw-semibold"><i class="ph-flow-arrow me-1"></i>Quy trình phê duyệt</span>
+                        <span class="fw-semibold"><i class="ph-flow-arrow me-1"></i>Duyệt công bố công việc</span>
                     </div>
                     <div class="card-body">
-                        <p class="small text-muted mb-3">Chọn quy trình cho công việc này. Thành viên tương ứng trong từng bước sẽ phê duyệt để hoàn thành công việc.</p>
-
-                        @forelse($workflows as $wf)
-                            <label class="wf-card mb-2 d-block {{ old('approval_flow_id') == $wf->id ? 'selected' : '' }}"
-                                   id="wfl-{{ $wf->id }}" onclick="selectWf({{ $wf->id }})">
-                                <input type="radio" name="approval_flow_id" value="{{ $wf->id }}"
-                                       {{ old('approval_flow_id') == $wf->id ? 'checked' : '' }} class="d-none">
-                                <div class="fw-semibold" style="font-size:13px">{{ $wf->name }}</div>
-                                <div class="text-muted" style="font-size:11px">{{ $wf->code }}</div>
-                                <div class="wf-steps-preview">
-                                    @foreach($wf->steps->sortBy('step_order') as $stp)
-                                        <span class="wf-step-badge">{{ $stp->step_order }}. {{ $stp->role_slug }}</span>
-                                        @if(!$loop->last)<span class="ta-meta">→</span>@endif
-                                    @endforeach
-                                </div>
-                            </label>
-                        @empty
-                            <div class="text-muted small mb-3">Chưa có quy trình nào được cấu hình cho hoạt động "Giao việc". Hãy vào <a href="{{ route('approval-workflows.create') }}">Quy trình duyệt</a> để tạo.</div>
-                        @endforelse
-
-                        <label class="wf-card mb-2 d-block {{ old('approval_flow_id') === '' && !old('approval_flow_id') ? '' : '' }}"
-                               id="wfl-none" onclick="selectWf(null)">
-                            <input type="radio" name="approval_flow_id" value="" class="d-none">
-                            <div class="fw-semibold" style="font-size:13px">Không cần phê duyệt</div>
-                            <div class="text-muted" style="font-size:11px">Công việc sẽ chuyển sang trạng thái đang thực hiện ngay.</div>
-                        </label>
+                        <p class="small text-muted mb-3">Công việc mới là bản gửi duyệt. Chỉ khi người được chọn đồng ý, công việc mới được gửi cho người chủ trì và những người nhận đã chọn.</p>
+                        <label for="publication-approver" class="form-label fw-semibold">Người duyệt công bố <span class="text-danger">*</span></label>
+                        <select id="publication-approver" name="publication_approver_id" class="form-select" required>
+                            <option value="">Chọn người duyệt công việc</option>
+                            @foreach($users as $person)
+                                @if((int)$person->id !== (int)auth()->id())
+                                <option value="{{ $person->id }}" @selected((string)old('publication_approver_id') === (string)$person->id)>{{ $person->name }}</option>
+                                @endif
+                            @endforeach
+                        </select>
+                        @error('publication_approver_id')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                        <small class="text-muted d-block mt-2">Người duyệt có thể duyệt công bố hoặc yêu cầu bạn chỉnh sửa. Người nhận chưa thấy công việc trong thời gian chờ duyệt.</small>
                     </div>
                 </div>
 
                 <div class="mt-3 d-grid gap-2">
                     <button type="submit" class="btn btn-primary">
-                        <i class="ph-paper-plane-tilt me-1"></i>Lưu lại
+                        <i class="ph-paper-plane-tilt me-1"></i>Gửi duyệt
                     </button>
                     <a href="{{ route($indexRoute ?? 'task-assignments.index') }}" class="btn btn-outline-secondary">Huy</a>
                 </div>

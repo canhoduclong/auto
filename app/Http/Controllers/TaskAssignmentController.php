@@ -44,13 +44,14 @@ class TaskAssignmentController extends Controller
         $user = auth()->user();
 
         $q = TaskAssignment::with(['creator:id,name', 'workflow:id,name', 'approvalSteps.step', 'assignees.user:id,name'])
-            ->latest();
+            ->publicationVisibleTo($user)->latest();
 
         // Role-based visibility
         if (!$user->hasRole('admin') && !$user->hasRole('CEO') && !$user->hasRole('manager')) {
             $userRoles = $user->roles->pluck('name')->toArray();
             $q->where(function ($inner) use ($user, $userRoles) {
                 $inner->where('created_by', $user->id)
+                      ->orWhere('publication_approver_id', $user->id)
                       // custom assignee
                       ->orWhereHas('assignees', fn ($s) => $s->where('user_id', $user->id))
                       // workflow step actor
@@ -131,6 +132,7 @@ class TaskAssignmentController extends Controller
         abort_unless(TaskMenuService::canAssignTasks($user) || TaskDelegateConfig::canAssignTasks($user), 403);
 
         $data = $request->validate([
+            'publication_approver_id' => 'required|integer|exists:users,id|not_in:'.$user->id,
             'work_kind' => 'nullable|in:execution,coordination',
             'proposal_id' => 'nullable|integer|exists:operating_proposals,id',
             'accountable_user_id' => 'required|integer|exists:users,id',
@@ -146,6 +148,7 @@ class TaskAssignmentController extends Controller
             'approval_flow_id' => 'nullable|exists:approval_flows,id',
             'parent_id'        => 'nullable|exists:task_assignments,id',
             'due_date'         => 'required|date_format:Y-m-d|after_or_equal:today',
+            'attachments'      => 'nullable|array',
             'attachments.*'    => 'nullable|file|max:10240|mimes:jpg,jpeg,png,pdf,doc,docx,xlsx,zip',
             'assignee_ids'     => 'required|array|min:1',
             'assignee_ids.*'   => 'required|integer|distinct|exists:users,id',
@@ -168,6 +171,7 @@ class TaskAssignmentController extends Controller
 
         if (!empty($data['parent_id'])) {
             $parent=TaskAssignment::findOrFail($data['parent_id']);
+            abort_if($parent->awaitsPublication(), 422, 'Công việc cha chưa được duyệt công bố.');
             abort_unless($this->canViewTask($parent,$user) && ((int)$parent->created_by===(int)$user->id || $parent->assignees()->where('user_id',$user->id)->exists() || $user->hasRole('admin')),403);
             abort_if(in_array($parent->status,['done','cancelled'],true),422,'Việc cha đã kết thúc.');
         }
@@ -224,32 +228,34 @@ class TaskAssignmentController extends Controller
             'parent_id'        => $data['parent_id'] ?? null,
             'due_date'         => $data['due_date'] ?? null,
             'created_by'       => $user->id,
-            'status'           => TaskAssignment::STATUS_PENDING,
+            'status'           => TaskAssignment::STATUS_DRAFT,
+            'publication_approver_id' => $data['publication_approver_id'],
+            'publication_status' => 'pending',
+            'publication_assignee_ids' => array_map('intval', $data['assignee_ids']),
             'attachments'      => $paths ?: null,
         ]);
 
-        // Create assignee records
-        if (!empty($data['assignee_ids'])) {
-            foreach ($data['assignee_ids'] as $assigneeId) {
-                TaskAssignee::create([
-                    'task_id' => $task->id,
-                    'user_id' => $assigneeId,
-                    'status'  => 'pending',
-                ]);
-            }
-        }
-
-        // New execution tasks wait for explicit receipt; existing workflow remains an independent gate.
-        if ($task->approval_flow_id) $this->approvalService->initTaskApproval($task);
-        $task->update(['status'=>TaskAssignment::STATUS_PENDING]);
-
+        // Recipients are activated only after the selected person approves publication.
             return $task;
         });
 
-        \Illuminate\Support\Facades\Notification::send(User::whereIn('id',$data['assignee_ids'])->get(),new \App\Notifications\OperatingNotification('Công việc mới cần tiếp nhận',$task->title,route('tasks.show',$task)));
+        $task->publicationApprover?->notify(new \App\Notifications\OperatingNotification('Công việc chờ duyệt công bố', $task->title, route('tasks.show', $task)));
 
         return redirect()->route('task-assignments.show', $task)
-            ->with('success', 'Đã giao việc '.$task->code.'. Đang chờ người nhận tiếp nhận.');
+            ->with('success', 'Đã gửi '.$task->code.' cho người duyệt. Công việc chưa được công bố cho người nhận.');
+    }
+
+    public function publicationDecision(Request $request, TaskAssignment $taskAssignment)
+    {
+        $data = $request->validate(['decision' => 'required|in:approve,reject', 'reason' => 'required_if:decision,reject|nullable|string|max:2000']);
+        app(\App\Services\TaskPublicationService::class)->decide($taskAssignment, $request->user(), $data['decision'], $data['reason'] ?? null);
+        return back()->with('success', $data['decision'] === 'approve' ? 'Đã duyệt và công bố công việc cho những người nhận được chọn.' : 'Đã gửi yêu cầu chỉnh sửa cho người tạo.');
+    }
+
+    public function resubmitPublication(Request $request, TaskAssignment $taskAssignment)
+    {
+        app(\App\Services\TaskPublicationService::class)->resubmit($taskAssignment, $request->user());
+        return back()->with('success', 'Đã gửi duyệt công bố lại.');
     }
 
     // ── Show ──────────────────────────────────────────────────────────
@@ -260,6 +266,7 @@ class TaskAssignmentController extends Controller
 
         $task = $taskAssignment->load([
             'creator:id,name',
+            'publicationApprover:id,name',
             'workflow.steps',
             'parent:id,code,title',
             'subTasks.creator:id,name',
@@ -283,6 +290,7 @@ class TaskAssignmentController extends Controller
 
         // Current user's assignee record (if any)
         $myAssignee = $task->assignees->firstWhere('user_id', $user->id);
+        $publicationRecipients = $task->awaitsPublication() ? User::whereIn('id', $task->publication_assignee_ids ?? [])->orderBy('name')->get(['id', 'name']) : collect();
 
         $layout = \App\Support\TaskWorkspace::layout(auth()->user());
         $indexRoute = $isWarehouse ? 'tasks.my-tasks' : ($isFrontRoles ? 'my-tasks' : 'task-assignments.index');
@@ -297,7 +305,7 @@ class TaskAssignmentController extends Controller
             return view('task_assignments.presentation', compact('task', 'checklistProgress'));
         }
 
-        return view('task_assignments.show', compact('task', 'canAct', 'current', 'myAssignee', 'layout', 'indexRoute', 'showRoute', 'createRoute', 'subTaskAssignees', 'canUploadDocuments', 'checklistProgress'));
+        return view('task_assignments.show', compact('task', 'publicationRecipients', 'canAct', 'current', 'myAssignee', 'layout', 'indexRoute', 'showRoute', 'createRoute', 'subTaskAssignees', 'canUploadDocuments', 'checklistProgress'));
     }
 
     public function updateDescription(Request $request, TaskAssignment $taskAssignment)
@@ -439,6 +447,7 @@ class TaskAssignmentController extends Controller
 
     public function storeSubTask(Request $request, TaskAssignment $taskAssignment)
     {
+        abort_if($taskAssignment->awaitsPublication(), 422, 'Cần duyệt công bố công việc trước khi giao việc con.');
         abort_if(TaskMenuService::isReceiptOnlyShipper($request->user()),403);
         $user = $request->user();
         abort_unless($this->canViewTask($taskAssignment, $user) && (
@@ -524,7 +533,7 @@ class TaskAssignmentController extends Controller
         $formMethod = 'PUT';
 
         // Load current assignees for edit form
-        $currentAssigneeIds = $task->assignees()->pluck('user_id')->all();
+        $currentAssigneeIds = $task->awaitsPublication() ? ($task->publication_assignee_ids ?? []) : $task->assignees()->pluck('user_id')->all();
 
         return view('task_assignments.edit', compact(
             'task',
@@ -608,6 +617,12 @@ class TaskAssignmentController extends Controller
                     'due_date'         => $data['due_date'] ?? null,
                     'attachments'      => $paths ?: null,
                 ]);
+
+                if ($task->awaitsPublication()) {
+                    $task->update(['publication_assignee_ids' => array_map('intval', $data['assignee_ids'])]);
+                    TaskStatusLog::log($task, 'draft', $user, 'Đã chỉnh sửa bản gửi duyệt công bố.');
+                    return;
+                }
 
                 // Update assignees
                 $newAssigneeIds = $data['assignee_ids'] ?? [];
@@ -1258,6 +1273,10 @@ class TaskAssignmentController extends Controller
 
     private function canViewTask(TaskAssignment $task, User $user): bool
     {
+        if ($task->awaitsPublication()) {
+            return $user->isAdmin() || (int) $task->created_by === (int) $user->id || (int) $task->publication_approver_id === (int) $user->id;
+        }
+        if ((int) $task->publication_approver_id === (int) $user->id) return true;
         if ($task->work_kind && !$user->hasRole('admin')) {
             return (int)$task->created_by===(int)$user->id
                 || $task->assignees()->where('user_id',$user->id)->exists()

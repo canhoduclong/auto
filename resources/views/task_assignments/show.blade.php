@@ -7,6 +7,7 @@
 @section('content')
 <div class="content-wrapper container task-workspace">
 @include('task_assignments.partials.ai-link')
+@include('task_assignments.partials.publication-approval')
 <div class="content-header d-flex align-items-center flex-wrap py-3 gap-3">
     <a href="{{ route($indexRoute ?? 'task-assignments.index') }}" class="btn btn-sm btn-outline-secondary">
         <i class="ph ph-arrow-left"></i>
@@ -116,7 +117,7 @@
             @include('task_assignments.partials.checklist-progress')
             @include('task_assignments.partials.progress')
             <div class="task-action-bar mb-3">
-                @if(!\App\Services\TaskMenuService::isReceiptOnlyShipper(auth()->user()) && !in_array($task->status,['done','cancelled'],true) && (auth()->user()->hasRole('admin') || (int)$task->created_by===(int)auth()->id() || $myAssignee))
+                @if(!$task->awaitsPublication() && !\App\Services\TaskMenuService::isReceiptOnlyShipper(auth()->user()) && !in_array($task->status,['done','cancelled'],true) && (auth()->user()->hasRole('admin') || (int)$task->created_by===(int)auth()->id() || $myAssignee))
                 <button type="button" class="btn task-action-button" data-bs-toggle="collapse" data-bs-target="#taskChildPanel" aria-controls="taskChildPanel" aria-expanded="{{ $errors->any() && !$errors->has('evaluation_score') ? 'true' : 'false' }}">Giao việc con</button>
                 @endif
                 @if($myAssignee && in_array($myAssignee->status,['pending','in_progress','processing']))

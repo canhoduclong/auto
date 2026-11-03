@@ -75,6 +75,7 @@ class TaskAssignment extends Model
     ];
 
     protected $fillable = [
+        'publication_approver_id', 'publication_status', 'publication_assignee_ids', 'published_at',
         'task_type', 'debt_items', 'work_kind', 'proposal_id', 'accountable_user_id', 'acceptance_due_at',
         'code', 'title', 'description', 'priority', 'status',
         'created_by', 'approval_flow_id', 'parent_id',
@@ -84,6 +85,8 @@ class TaskAssignment extends Model
     ];
 
     protected $casts = [
+        'publication_assignee_ids' => 'array',
+        'published_at' => 'datetime',
         'debt_items' => 'array',
         'acceptance_due_at' => 'datetime',
         'due_date'                  => 'datetime',
@@ -93,6 +96,23 @@ class TaskAssignment extends Model
     ];
 
     // ── Relations ────────────────────────────────────────────────────
+
+    public function publicationApprover(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'publication_approver_id');
+    }
+
+    public function awaitsPublication(): bool
+    {
+        return $this->publication_approver_id !== null && $this->published_at === null;
+    }
+
+    public function scopePublicationVisibleTo($query, User $user): void
+    {
+        if ($user->isAdmin()) return;
+        $query->where(fn ($q) => $q->whereNull('publication_approver_id')->orWhereNotNull('published_at')
+            ->orWhere('created_by', $user->id)->orWhere('publication_approver_id', $user->id));
+    }
 
     public function creator(): BelongsTo
     {
@@ -150,12 +170,14 @@ class TaskAssignment extends Model
 
     public function scopeVisibleTo($q, User $user): void
     {
+        $q->publicationVisibleTo($user);
         // Admin/CEO/Manager sees all; others see only tasks they created or are assigned in
         if ($user->hasRole('admin') || $user->hasRole('CEO') || $user->hasRole('manager')) {
             return;
         }
         $q->where(function ($inner) use ($user) {
             $inner->where('created_by', $user->id)
+                  ->orWhere('publication_approver_id', $user->id)
                   ->orWhereHas('assignees', fn($s) => $s->where('user_id', $user->id))
                   ->orWhereHas('approvalSteps', fn($s) => $s->where('approved_by', $user->id))
                   ->orWhereHas('approvalSteps.step', fn($s) => $s->where('role_slug', $user->roles->pluck('name')->first()));
@@ -193,6 +215,7 @@ class TaskAssignment extends Model
 
     public function operatingStatusLabel(): string
     {
+        if ($this->awaitsPublication()) return $this->publication_status === 'rejected' ? 'Cần chỉnh sửa trước khi công bố' : 'Chờ duyệt công bố';
         if ($this->work_kind && $this->status==='pending') {
             if ($this->approval_flow_id && $this->approvalSteps()->where('status','pending')->exists()) return 'Chờ duyệt giao';
             return $this->assignees->firstWhere('user_id',$this->accountable_user_id)?->accepted_at ? 'Đã tiếp nhận' : 'Chưa tiếp nhận';
@@ -220,6 +243,7 @@ class TaskAssignment extends Model
         }
 
         if ($this->work_kind) {
+            if ($this->awaitsPublication()) return $this->status === 'draft';
             return $this->status==='pending'
                 && !$this->assignees()->whereNotNull('accepted_at')->exists();
         }

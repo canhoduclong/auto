@@ -47,8 +47,8 @@ class OperatingController extends Controller {
         ]);
 
         abort_if(in_array($filter,['all','deleted'],true) && !$user->hasRole('admin'),403);
-        $tasks=TaskAssignment::with(['creator','assignees.user'])->when($filter==='deleted',fn($q)=>$q->onlyTrashed())->where(function($q)use($user,$filter){
-            $q->where('created_by',$user->id)->orWhereHas('assignees',fn($a)=>$a->where('user_id',$user->id));
+        $tasks=TaskAssignment::with(['creator','assignees.user'])->publicationVisibleTo($user)->when($filter==='deleted',fn($q)=>$q->onlyTrashed())->where(function($q)use($user,$filter){
+            $q->where('created_by',$user->id)->orWhere('publication_approver_id',$user->id)->orWhereHas('assignees',fn($a)=>$a->where('user_id',$user->id));
             if($user->hasRole('admin') && in_array($filter,['all','deleted'],true))$q->orWhereRaw('1=1');
         })->when($filter==='received',fn($q)=>$q->whereHas('assignees',fn($a)=>$a->where('user_id',$user->id)))
           ->when($filter==='assigned',fn($q)=>$q->where('created_by',$user->id))

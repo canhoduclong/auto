@@ -984,6 +984,8 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::post('/operating/proposals/{proposal}/vote', [\App\Http\Controllers\OperatingController::class, 'vote'])->name('operating.proposals.vote');
     Route::post('/operating/proposals/{proposal}/close', [\App\Http\Controllers\OperatingController::class, 'close'])->name('operating.proposals.close');
     Route::post('/tasks/{taskAssignment}/decline-coordination', [\App\Http\Controllers\TaskAssignmentController::class, 'declineCoordination'])->name('tasks.decline-coordination');
+    Route::post('/tasks/{taskAssignment}/publication-decision', [\App\Http\Controllers\TaskAssignmentController::class, 'publicationDecision'])->name('tasks.publication-decision');
+    Route::post('/tasks/{taskAssignment}/resubmit-publication', [\App\Http\Controllers\TaskAssignmentController::class, 'resubmitPublication'])->name('tasks.resubmit-publication');
     Route::post('/tasks/{taskAssignment}/accept', [\App\Http\Controllers\TaskAssignmentController::class, 'acceptTask'])->name('tasks.accept');
 
     // User-facing task aliases
