@@ -8,7 +8,7 @@
                 @php $documentCount++; @endphp
                 <div class="task-document">
                     @if(in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), ['jpg','jpeg','png','gif','webp']))<img src="{{ Storage::url($path) }}" alt="Tài liệu {{ $documentTask->title }}">@else<i class="ph ph-file-text fs-1 text-primary" aria-hidden="true"></i>@endif
-                    <div><strong class="small">{{ basename($path) }}</strong><div class="small text-muted">Người giao: {{ $documentTask->creator?->name ?? 'Không xác định' }}</div><div class="small text-muted">Ngày tạo nhiệm vụ: {{ $documentTask->created_at?->format('d/m/Y H:i') }}</div><a class="small d-block" href="{{ route('tasks.show', $documentTask) }}">{{ $documentTask->title }}</a><a class="small" href="{{ Storage::url($path) }}" target="_blank" rel="noopener">Mở / tải tài liệu</a></div>
+                    <div><strong class="small">{{ basename($path) }}</strong><div class="small text-muted">Người giao: {{ $documentTask->assigner?->name ?? 'Không xác định' }}</div><div class="small text-muted">Ngày tạo nhiệm vụ: {{ $documentTask->created_at?->format('d/m/Y H:i') }}</div><a class="small d-block" href="{{ route('tasks.show', $documentTask) }}">{{ $documentTask->title }}</a><a class="small" href="{{ Storage::url($path) }}" target="_blank" rel="noopener">Mở / tải tài liệu</a></div>
                 </div>
             @endforeach
             @foreach($documentTask->completionImages as $document)

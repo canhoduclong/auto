@@ -84,7 +84,7 @@
                                 <a href="{{ route('task-assignments.show', $task) }}" class="fw-bold text-decoration-none">
                                     {{ $task->title }}
                                 </a>
-                                <div class="ta-meta">{{ $task->code }} &bull; {{ $task->creator?->name }}</div>
+                                <div class="ta-meta">{{ $task->code }} &bull; {{ $task->assigner?->name }}</div>
                             </div>
                             <span class="badge bg-{{ $task->statusColor() }} ms-2">
                                 {{ \App\Models\TaskAssignment::STATUS_LABELS[$task->status] ?? $task->status }}

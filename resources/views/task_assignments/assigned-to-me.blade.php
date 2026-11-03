@@ -153,7 +153,7 @@
                 <div class="task-item-meta">
                     <div class="task-item-meta-item">
                         <i class="fas fa-user"></i>
-                        <strong>{{ $task->creator->name }}</strong>
+                        <strong>{{ $task->assigner->name }}</strong>
                     </div>
                     <div class="task-item-meta-item">
                         <i class="fas fa-signal"></i>

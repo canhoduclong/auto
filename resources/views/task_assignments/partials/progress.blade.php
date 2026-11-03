@@ -1,6 +1,6 @@
 @php
     $personStatuses = ['pending' => 'Chờ thực hiện', 'in_progress' => 'Đang thực hiện', 'processing' => 'Đang thực hiện', 'completed' => 'Đã báo hoàn thành', 'done' => 'Đã hoàn thành', 'rejected' => 'Không thể thực hiện', 'cancelled' => 'Đã thu hồi / hủy'];
-    $delegations = $task->subTasks->where('status','!=','cancelled')->sortBy('due_date')->flatMap(fn ($child) => $child->assignees->map(fn ($assignment) => ['task' => $child, 'assignment' => $assignment]))->groupBy(fn ($entry) => $entry['task']->created_by . ':' . $entry['assignment']->user_id);
+    $delegations = $task->subTasks->where('status','!=','cancelled')->sortBy('due_date')->flatMap(fn ($child) => $child->assignees->map(fn ($assignment) => ['task' => $child, 'assignment' => $assignment]))->groupBy(fn ($entry) => $entry['task']->assigner_id . ':' . $entry['assignment']->user_id);
 @endphp
 <section class="card shadow-sm mb-3 task-progress-compact">
     <div class="card-header fw-semibold">Tiến độ công việc</div>
@@ -50,7 +50,7 @@
             </article>
         @endforeach
         @foreach($delegations as $entries)
-            @php $recipient = $entries->first()['assignment']; $delegator = $entries->first()['task']->creator; @endphp
+            @php $recipient = $entries->first()['assignment']; $delegator = $entries->first()['task']->assigner; @endphp
             <article class="task-person">
                 <div class="task-person-head"><strong>{{ $recipient->user?->name ?? 'Người dùng đã xóa' }}</strong><span class="small text-muted">Được giao bởi <strong>{{ $delegator?->name ?? 'Không xác định' }}</strong> · {{ $entries->count() }} việc con</span></div>
                 <details class="mt-2" open>

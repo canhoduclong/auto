@@ -43,7 +43,7 @@ class TaskAssignmentController extends Controller
     {
         $user = auth()->user();
 
-        $q = TaskAssignment::with(['creator:id,name', 'workflow:id,name', 'approvalSteps.step', 'assignees.user:id,name'])
+        $q = TaskAssignment::with(['creator:id,name', 'assigner:id,name', 'workflow:id,name', 'approvalSteps.step', 'assignees.user:id,name'])
             ->publicationVisibleTo($user)->latest();
 
         // Role-based visibility
@@ -265,11 +265,11 @@ class TaskAssignmentController extends Controller
         abort_unless($this->canViewTask($taskAssignment, auth()->user()), 403);
 
         $task = $taskAssignment->load([
-            'creator:id,name',
+            'creator:id,name', 'assigner:id,name',
             'publicationApprover:id,name',
             'workflow.steps',
             'parent:id,code,title',
-            'subTasks.creator:id,name',
+            'subTasks.creator:id,name', 'subTasks.assigner:id,name',
             'subTasks.assignees.user:id,name',
             'subTasks.statusLogs.changedBy:id,name',
             'subTasks.statusLogs.documents',
@@ -333,7 +333,7 @@ class TaskAssignmentController extends Controller
 
     public function extendDeadline(Request $request, TaskAssignment $taskAssignment)
     {
-        abort_unless((int) $taskAssignment->created_by === (int) $request->user()->id, 403, 'Chỉ người giao việc được gia hạn.');
+        abort_unless($taskAssignment->isAssignedBy($request->user()), 403, 'Chỉ người giao việc được gia hạn.');
         abort_if(in_array($taskAssignment->status, [TaskAssignment::STATUS_COMPLETED, TaskAssignment::STATUS_DONE, TaskAssignment::STATUS_CANCELLED], true), 422, 'Không thể gia hạn công việc đã báo hoàn thành, đã hoàn thành hoặc đã hủy.');
 
         $data = $request->validate([
@@ -351,7 +351,7 @@ class TaskAssignmentController extends Controller
 
         $task = DB::transaction(function () use ($request, $taskAssignment, $data, $newDueDate) {
             $task = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
-            abort_unless((int) $task->created_by === (int) $request->user()->id, 403);
+            abort_unless($task->isAssignedBy($request->user()), 403);
             abort_if(in_array($task->status, [TaskAssignment::STATUS_COMPLETED, TaskAssignment::STATUS_DONE, TaskAssignment::STATUS_CANCELLED], true), 422, 'Không thể gia hạn công việc đã báo hoàn thành, đã hoàn thành hoặc đã hủy.');
             $previous = $task->due_date?->copy();
             if ($previous && $newDueDate->toDateString() <= $previous->toDateString()) {
@@ -387,7 +387,7 @@ class TaskAssignmentController extends Controller
             abort_unless($task->task_type === 'debt_collection' && isset($task->debt_items[$item]), 404);
             abort_if(in_array($task->status, ['done', 'cancelled', 'completed'], true), 422, 'Công việc đã kết thúc hoặc chờ xác nhận.');
             $items = $task->debt_items;
-            abort_unless((int) $task->created_by === (int) $request->user()->id || ((int) $items[$item]['sale_id'] === (int) $request->user()->id && $task->assignees()->where('user_id', $request->user()->id)->exists()), 403);
+            abort_unless($task->isAssignedBy($request->user()) || ((int) $items[$item]['sale_id'] === (int) $request->user()->id && $task->assignees()->where('user_id', $request->user()->id)->exists()), 403);
             if ((float) $data['collected'] > (float) $items[$item]['target']) {
                 throw \Illuminate\Validation\ValidationException::withMessages(['collected' => 'Số tiền báo thu không được vượt mục tiêu.']);
             }
@@ -402,12 +402,12 @@ class TaskAssignmentController extends Controller
 
     public function evaluateAssignee(Request $request, TaskAssignment $taskAssignment, TaskAssignee $assignee)
     {
-        abort_unless((int) $taskAssignment->created_by === (int) $request->user()->id, 403, 'Chỉ người giao công việc được đánh giá.');
+        abort_unless($taskAssignment->isAssignedBy($request->user()), 403, 'Chỉ người giao công việc được đánh giá.');
         abort_unless((int) $assignee->task_id === (int) $taskAssignment->id, 404);
         $data = $request->validate(['evaluation_score' => ['required', 'integer', 'between:0,100']]);
         DB::transaction(function () use ($taskAssignment, $assignee, $request, $data) {
             $task = TaskAssignment::whereKey($taskAssignment->id)->lockForUpdate()->firstOrFail();
-            abort_unless((int) $task->created_by === (int) $request->user()->id, 403);
+            abort_unless($task->isAssignedBy($request->user()), 403);
             $record = TaskAssignee::whereKey($assignee->id)->where('task_id', $task->id)->lockForUpdate()->firstOrFail();
             $previous = $record->evaluation_score;
             $record->update(['evaluation_score' => $data['evaluation_score'], 'evaluated_by' => $request->user()->id, 'evaluated_at' => now()]);
@@ -451,7 +451,7 @@ class TaskAssignmentController extends Controller
         abort_if(TaskMenuService::isReceiptOnlyShipper($request->user()),403);
         $user = $request->user();
         abort_unless($this->canViewTask($taskAssignment, $user) && (
-            $user->hasRole('admin') || (int) $taskAssignment->created_by === (int) $user->id
+            $user->hasRole('admin') || $taskAssignment->isAssignedBy($user) || (int) $taskAssignment->created_by === (int) $user->id
             || $taskAssignment->assignees()->where('user_id', $user->id)->exists()
         ), 403);
         $data = $request->validate([
@@ -725,10 +725,10 @@ class TaskAssignmentController extends Controller
         $user = auth()->user();
 
         if ($taskAssignment->work_kind) {
-            abort_unless((int)$taskAssignment->created_by===(int)$user->id || $user->hasRole('admin'),403);
+            abort_unless($taskAssignment->isAssignedBy($user) || ($taskAssignment->awaitsPublication() && (int)$taskAssignment->created_by===(int)$user->id) || $user->hasRole('admin'),403);
         }
 
-        if ($taskAssignment->created_by !== $user->id && !$user->hasRole('admin') && !$user->hasRole('manager') && !$user->hasRole('CEO')) {
+        if (!$taskAssignment->isAssignedBy($user) && !($taskAssignment->awaitsPublication() && (int)$taskAssignment->created_by === (int)$user->id) && !$user->hasRole('admin') && !$user->hasRole('manager') && !$user->hasRole('CEO')) {
             return back()->with('error', 'Ban khong co quyen huy cong viec nay.');
         }
 
@@ -753,7 +753,7 @@ class TaskAssignmentController extends Controller
             $task->update(['status'=>'cancelled','reject_reason'=>$data['reason']]);
             $task->assignees()->update(['status'=>'cancelled']);
         });
-        $taskAssignment->creator?->notify(new \App\Notifications\OperatingNotification('Yêu cầu phối hợp bị từ chối',$data['reason'],route('tasks.show',$taskAssignment)));
+        $taskAssignment->assigner?->notify(new \App\Notifications\OperatingNotification('Yêu cầu phối hợp bị từ chối',$data['reason'],route('tasks.show',$taskAssignment)));
         return back()->with('success','Đã gửi phản hồi từ chối phối hợp kèm lý do.');
     }
 
@@ -922,7 +922,7 @@ class TaskAssignmentController extends Controller
         $submitRoute = $isFrontRoles ? 'tasks.complete' : 'task-assignments.complete-with-content';
 
         return view('task_assignments.complete', [
-            'task' => $taskAssignment->load(['creator:id,name', 'assignees.user:id,name','statusLogs.changedBy:id,name','subTasks.creator:id,name','subTasks.assignees.user:id,name','subTasks.statusLogs.changedBy:id,name']),
+            'task' => $taskAssignment->load(['creator:id,name', 'assigner:id,name', 'assignees.user:id,name','statusLogs.changedBy:id,name','subTasks.creator:id,name', 'subTasks.assigner:id,name','subTasks.assignees.user:id,name','subTasks.statusLogs.changedBy:id,name']),
             'layout' => $layout,
             'showRoute' => $showRoute,
             'submitRoute' => $submitRoute,
@@ -1093,7 +1093,7 @@ class TaskAssignmentController extends Controller
         }
 
         $task = $taskAssignment->load([
-            'creator:id,name',
+            'creator:id,name', 'assigner:id,name',
             'assignees.user:id,name',
             'completionImages',
             'statusLogs.changedBy:id,name',
@@ -1167,7 +1167,7 @@ class TaskAssignmentController extends Controller
             })
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->status))
             ->when($request->filled('priority'), fn ($query) => $query->where('priority', $request->priority))
-            ->with(['creator:id,name', 'assignees.user:id,name', 'completionImages', 'statusLogs'])
+            ->with(['creator:id,name', 'assigner:id,name', 'assignees.user:id,name', 'completionImages', 'statusLogs'])
             ->latest()
             ->paginate(20)
             ->withQueryString();
@@ -1187,7 +1187,7 @@ class TaskAssignmentController extends Controller
         $user = auth()->user();
         $isFrontRoles = $user && $user->isSalesFlowRole();
 
-        $tasks = TaskAssignment::where('created_by', $user->id)
+        $tasks = TaskAssignment::assignedBy($user->id)
             ->with(['assignees.user:id,name', 'completionImages', 'statusLogs'])
             ->latest()
             ->paginate(20);
@@ -1209,7 +1209,7 @@ class TaskAssignmentController extends Controller
 
         $tasks = TaskAssignment::whereHas('assignees', fn($q) => $q->where('user_id', $user->id))
             ->whereIn('status', ['in_progress', TaskAssignment::STATUS_PROCESSING])
-            ->with(['creator:id,name', 'statusLogs'])
+            ->with(['creator:id,name', 'assigner:id,name', 'statusLogs'])
             ->latest()
             ->paginate(20);
 
@@ -1227,7 +1227,7 @@ class TaskAssignmentController extends Controller
         $isFrontRoles = $user && $user->isSalesFlowRole();
 
         $tasks = TaskAssignment::where('status', TaskAssignment::STATUS_COMPLETED)
-            ->where(fn($q) => $q->where('created_by', $user->id)->orWhere('completion_verified_by', $user->id))
+            ->where(fn($q) => $q->assignedBy($user->id)->orWhere('completion_verified_by', $user->id))
             ->with(['assignees.user:id,name', 'completionImages', 'statusLogs'])
             ->latest()
             ->paginate(20);
@@ -1245,8 +1245,8 @@ class TaskAssignmentController extends Controller
         $user = auth()->user();
 
         $tasks = TaskAssignment::where('status', TaskAssignment::STATUS_COMPLETED)
-            ->when(!($user->hasRole('admin') || $user->hasRole('CEO') || $user->hasRole('manager')), fn ($query) => $query->where('created_by', $user->id))
-            ->with(['creator:id,name', 'assignees.user:id,name', 'completionImages', 'statusLogs'])
+            ->when(!($user->hasRole('admin') || $user->hasRole('CEO') || $user->hasRole('manager')), fn ($query) => $query->assignedBy($user->id))
+            ->with(['creator:id,name', 'assigner:id,name', 'assignees.user:id,name', 'completionImages', 'statusLogs'])
             ->latest()
             ->paginate(20);
 
@@ -1262,7 +1262,7 @@ class TaskAssignmentController extends Controller
 
         $tasks = TaskAssignment::whereHas('assignees', fn($q) => $q->where('user_id', $user->id))
             ->whereIn('status', [TaskAssignment::STATUS_DONE, TaskAssignment::STATUS_REJECTED, TaskAssignment::STATUS_CANCELLED])
-            ->with(['creator:id,name', 'statusLogs', 'completionImages'])
+            ->with(['creator:id,name', 'assigner:id,name', 'statusLogs', 'completionImages'])
             ->latest()
             ->paginate(20);
 
@@ -1312,7 +1312,7 @@ class TaskAssignmentController extends Controller
 
     private function canVerifyTask(TaskAssignment $task, User $user): bool
     {
-        if ($task->work_kind) return (int)$task->created_by===(int)$user->id || $user->hasRole('admin');
+        if ($task->work_kind) return $task->isAssignedBy($user) || $user->hasRole('admin');
 
         return (int) $task->created_by === (int) $user->id
             || $user->hasRole('admin')

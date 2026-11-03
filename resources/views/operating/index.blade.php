@@ -69,7 +69,7 @@
                 <td class="op-muted">{{ $listing->firstItem()+$loop->index }}</td>
                 <td><a class="op-title" href="{{ $isVote ? route('operating.proposals.show',$entity) : ($entity->trashed()?route('operating.deleted-task',$entity->id):route('tasks.show',$entity)) }}">{{ $entity->title }}</a><div class="op-meta op-content-meta"><span>{{ $isVote?'Đề xuất #'.$entity->id:$entity->code }} @if(!$isVote && $entity->trashed()) · Đã xóa @endif</span><span class="op-badge {{ $isVote?'op-badge-blue':'' }}">{{ $isVote?'Biểu quyết':($entity->work_kind==='coordination'?'Yêu cầu phối hợp':'Giao thực hiện') }}</span></div></td>
                 <td class="op-date">{{ $entity->created_at?->format('d/m/Y') }}<div class="op-meta">{{ $entity->created_at?->format('H:i') }}</div></td>
-                <td>{{ $entity->creator?->name ?? '—' }}<div class="op-meta">@if($isVote){{ $entity->voted_count }} / {{ $entity->votes_count }} thành viên đã bỏ phiếu @else Chủ trì: {{ $entity->assignees->firstWhere('user_id',$entity->accountable_user_id)?->user?->name ?? 'Chưa chỉ định' }} @endif</div></td>
+                <td>{{ ($isVote ? $entity->creator?->name : $entity->assigner?->name) ?? '—' }}<div class="op-meta">@if($isVote){{ $entity->voted_count }} / {{ $entity->votes_count }} thành viên đã bỏ phiếu @else Chủ trì: {{ $entity->assignees->firstWhere('user_id',$entity->accountable_user_id)?->user?->name ?? 'Chưa chỉ định' }} @endif</div></td>
                 <td class="op-date">{{ $deadline?->format('d/m/Y H:i') ?? '—' }}@if(!$isVote && $deadline?->isPast() && !in_array($entity->status,['done','cancelled']))<div class="mt-1"><span class="op-badge op-badge-red">Quá hạn</span></div>@endif</td>
                 <td>
                     <span class="op-badge op-badge-{{ $tone }}">{{ $isVote?$entity->statusLabel():($entity->status==='in_progress'?'Đang thực hiện':$entity->operatingStatusLabel()) }}</span>
@@ -92,7 +92,7 @@
                                 @csrf
                                 <button type="submit" class="btn btn-sm op-action-receive" aria-label="Tiếp nhận công việc {{ $entity->title }}"><i class="bi bi-check2-circle me-1" aria-hidden="true"></i>Tiếp nhận</button>
                             </form>
-                        @elseif(!$entity->trashed() && $entity->status==='completed' && ((int)$entity->created_by===(int)auth()->id() || auth()->user()->hasRole('admin')))
+                        @elseif(!$entity->trashed() && $entity->status==='completed' && ($entity->isAssignedBy(auth()->user()) || auth()->user()->hasRole('admin')))
                             <a class="btn btn-sm op-action-complete" href="{{ route('task-assignments.verify-form',$entity) }}">Hoàn thành</a>
                         @elseif(!$entity->trashed() && !in_array($entity->status,['done','cancelled','completed','draft'],true) && $myReceipt && in_array($myReceipt->status,['pending','processing','in_progress'],true) && (!$entity->work_kind || $myReceipt->accepted_at))
                             <a class="btn btn-sm op-action-update" href="{{ route('tasks.show',$entity) }}#taskStatusPanel">Cập nhật</a>

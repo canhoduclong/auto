@@ -73,7 +73,7 @@
 
                 <div>
                     <small class="text-muted">
-                        <i class="fas fa-user"></i> Người giao: <strong>{{ $task->creator->name }}</strong>
+                        <i class="fas fa-user"></i> Người giao: <strong>{{ $task->assigner->name }}</strong>
                     </small>
                 </div>
 

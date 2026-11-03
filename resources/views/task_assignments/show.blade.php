@@ -22,10 +22,10 @@
                 {{ \App\Models\TaskAssignment::PRIORITY_LABELS[$task->priority] }}
             </span>
         </div>
-        <small class="text-muted">{{ $task->code }} &bull; Tạo bởi {{ $task->creator?->name }} &bull; {{ $task->created_at?->format('d/m/Y H:i') }} · Hạn chót: <strong class="{{ $task->isOverdue() ? 'text-danger' : '' }}">{{ $task->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</strong></small>
+        <small class="text-muted">{{ $task->code }} &bull; Soạn bởi {{ $task->creator?->name }} · Người giao việc: {{ $task->assigner?->name }} &bull; {{ $task->created_at?->format('d/m/Y H:i') }} · Hạn chót: <strong class="{{ $task->isOverdue() ? 'text-danger' : '' }}">{{ $task->due_date?->format('d/m/Y H:i') ?? 'Chưa đặt' }}</strong></small>
     </div>
     <a href="{{ route($showRoute ?? 'tasks.show', $task) }}?presentation=1" class="btn btn-sm btn-primary" target="_blank" rel="noopener"><i class="ph ph-presentation me-1"></i>Trình chiếu</a>
-    @if((int)$task->created_by === (int)auth()->id() && !in_array($task->status, ['completed', 'done', 'cancelled'], true))
+    @if($task->isAssignedBy(auth()->user()) && !in_array($task->status, ['completed', 'done', 'cancelled'], true))
         <button type="button" class="btn btn-sm btn-outline-warning" data-bs-toggle="modal" data-bs-target="#extendTaskDeadlineModal"><i class="bi bi-calendar-plus me-1"></i>Gia hạn</button>
     @endif
     @if($task->canBeEditedBy(auth()->user()))
@@ -42,7 +42,7 @@
     @endif
 </div>
 
-@if((int)$task->created_by === (int)auth()->id() && !in_array($task->status, ['completed', 'done', 'cancelled'], true))
+@if($task->isAssignedBy(auth()->user()) && !in_array($task->status, ['completed', 'done', 'cancelled'], true))
 @php
     $minimumExtensionDate = $task->due_date ? $task->due_date->copy()->startOfDay()->addDay() : today();
     if ($minimumExtensionDate->lt(today())) $minimumExtensionDate = today();
@@ -117,7 +117,7 @@
             @include('task_assignments.partials.checklist-progress')
             @include('task_assignments.partials.progress')
             <div class="task-action-bar mb-3">
-                @if(!$task->awaitsPublication() && !\App\Services\TaskMenuService::isReceiptOnlyShipper(auth()->user()) && !in_array($task->status,['done','cancelled'],true) && (auth()->user()->hasRole('admin') || (int)$task->created_by===(int)auth()->id() || $myAssignee))
+                @if(!$task->awaitsPublication() && !\App\Services\TaskMenuService::isReceiptOnlyShipper(auth()->user()) && !in_array($task->status,['done','cancelled'],true) && (auth()->user()->hasRole('admin') || $task->isAssignedBy(auth()->user()) || $myAssignee))
                 <button type="button" class="btn task-action-button" data-bs-toggle="collapse" data-bs-target="#taskChildPanel" aria-controls="taskChildPanel" aria-expanded="{{ $errors->any() && !$errors->has('evaluation_score') ? 'true' : 'false' }}">Giao việc con</button>
                 @endif
                 @if($myAssignee && in_array($myAssignee->status,['pending','in_progress','processing']))
@@ -127,7 +127,7 @@
                 @endif
                 @endif
             </div>
-            @if(!\App\Services\TaskMenuService::isReceiptOnlyShipper(auth()->user()) && !in_array($task->status, ['done', 'cancelled'], true) && (auth()->user()->hasRole('admin') || (int) $task->created_by === (int) auth()->id() || $myAssignee))
+            @if(!\App\Services\TaskMenuService::isReceiptOnlyShipper(auth()->user()) && !in_array($task->status, ['done', 'cancelled'], true) && (auth()->user()->hasRole('admin') || $task->isAssignedBy(auth()->user()) || $myAssignee))
                 <div id="taskChildPanel" class="collapse mb-3 {{ $errors->any() && !$errors->has('evaluation_score') ? 'show' : '' }}">
                 <form class="card card-body shadow-sm" action="{{ route('tasks.subtasks.store', $task) }}" method="POST">
                     @csrf
@@ -141,7 +141,7 @@
                                 <div class="small text-muted" style="overflow-wrap:anywhere">{{ auth()->user()->email }}</div>
                             @endif
 
-                            <div class="small text-muted mt-1">Người giao công việc chính: {{ $task->creator?->name ?? 'Không xác định' }}</div>
+                            <div class="small text-muted mt-1">Người giao công việc chính: {{ $task->assigner?->name ?? 'Không xác định' }}</div>
                         </div>
                     </div>
                     <p class="small text-muted">Chọn người thực hiện việc con; kết quả được dùng để bổ sung hồ sơ hoàn thành công việc chính.</p>
@@ -261,7 +261,7 @@
                 </div>
             @endif
 
-            @if($task->status==='completed' && ((int)$task->created_by===(int)auth()->id() || auth()->user()->hasRole('admin')))
+            @if($task->status==='completed' && ($task->isAssignedBy(auth()->user()) || auth()->user()->hasRole('admin')))
                 <div class="card card-body mb-3"><h6>Nghiệm thu kết quả</h6><a class="btn btn-success" href="{{ route('task-assignments.verify-form',$task) }}">Kiểm tra và nghiệm thu</a></div>
             @endif
             {{-- Approval timeline --}}

@@ -24,6 +24,7 @@ class TaskEvaluationTest extends TestCase
                 $table->timestamps();
             });
         }
+        Schema::table('task_assignments', fn (Blueprint $table) => $table->softDeletes());
         DB::table('users')->insert([['id'=>1, 'name'=>'Creator'], ['id'=>2, 'name'=>'Recipient']]);
         DB::table('task_assignments')->insert(['id'=>1, 'created_by'=>1, 'status'=>'processing']);
         DB::table('task_assignees')->insert(['id'=>1, 'task_id'=>1, 'user_id'=>2, 'status'=>'processing']);

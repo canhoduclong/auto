@@ -147,4 +147,23 @@ class TaskPublicationTest extends TestCase
         self::assertSame('Changed owner', TaskAssignment::findOrFail(1)->title);
         self::assertSame([4], TaskAssignee::pluck('user_id')->all());
     }
+    public function test_approver_is_assigner_and_drafter_remains_recorded_separately(): void
+    {
+        $task = TaskAssignment::with('assigner')->findOrFail(1);
+        self::assertSame(2, $task->assigner_id);
+        self::assertSame(2, (int) $task->assigner->id);
+        self::assertSame(1, (int) $task->created_by);
+        self::assertTrue(TaskAssignment::assignedBy(2)->exists());
+        self::assertFalse(TaskAssignment::assignedBy(1)->exists());
+        $controller = (new \ReflectionClass(\App\Http\Controllers\TaskAssignmentController::class))->newInstanceWithoutConstructor();
+        $verify = new \ReflectionMethod($controller, 'canVerifyTask');
+        self::assertTrue($verify->invoke($controller, $task, $this->actor(2)));
+        self::assertFalse($verify->invoke($controller, $task, $this->actor(1)));
+        (new TaskPublicationService)->configureForEdit($task, $this->actor(1), null, [3, 4]);
+        $task = TaskAssignment::with('assigner')->findOrFail(1);
+        self::assertSame(1, $task->assigner_id);
+        self::assertSame(1, (int) $task->assigner->id);
+        self::assertTrue(TaskAssignment::assignedBy(1)->exists());
+        self::assertFalse(TaskAssignment::assignedBy(2)->exists());
+    }
 }

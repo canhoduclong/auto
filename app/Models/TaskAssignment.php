@@ -119,6 +119,27 @@ class TaskAssignment extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function getAssignerIdAttribute(): int
+    {
+        return (int) ($this->publication_approver_id ?? $this->created_by);
+    }
+
+    public function assigner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigner_id');
+    }
+
+    public function isAssignedBy(User $user): bool
+    {
+        return $this->assigner_id === (int) $user->id;
+    }
+
+    public function scopeAssignedBy($query, $userId): void
+    {
+        $query->where(fn ($q) => $q->where('publication_approver_id', $userId)
+            ->orWhere(fn ($fallback) => $fallback->whereNull('publication_approver_id')->where('created_by', $userId)));
+    }
+
     public function workflow(): BelongsTo
     {
         return $this->belongsTo(ApprovalWorkflow::class, 'approval_flow_id');

@@ -37,7 +37,7 @@ class AccountingWorkQueueService
 
     public function relatedTasks(User $user): Builder
     {
-        return TaskAssignment::query()->where('created_by', $user->id)->where('status', 'completed');
+        return TaskAssignment::query()->assignedBy($user->id)->where('status', 'completed');
     }
 
     public function relatedProposals(User $user): Builder

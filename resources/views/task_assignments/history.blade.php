@@ -104,7 +104,7 @@
                     </div>
                     <div class="history-item-info-item">
                         <i class="fas fa-user"></i>
-                        {{ $task->creator->name }}
+                        {{ $task->assigner->name }}
                     </div>
                     <div class="history-item-info-item">
                         <i class="fas fa-clock"></i>

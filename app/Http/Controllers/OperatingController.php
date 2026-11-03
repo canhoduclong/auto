@@ -47,14 +47,14 @@ class OperatingController extends Controller {
         ]);
 
         abort_if(in_array($filter,['all','deleted'],true) && !$user->hasRole('admin'),403);
-        $tasks=TaskAssignment::with(['creator','assignees.user'])->publicationVisibleTo($user)->when($filter==='deleted',fn($q)=>$q->onlyTrashed())->where(function($q)use($user,$filter){
+        $tasks=TaskAssignment::with(['creator','assigner','assignees.user'])->publicationVisibleTo($user)->when($filter==='deleted',fn($q)=>$q->onlyTrashed())->where(function($q)use($user,$filter){
             $q->where('created_by',$user->id)->orWhere('publication_approver_id',$user->id)->orWhereHas('assignees',fn($a)=>$a->where('user_id',$user->id));
             if($user->hasRole('admin') && in_array($filter,['all','deleted'],true))$q->orWhereRaw('1=1');
         })->when($filter==='received',fn($q)=>$q->whereHas('assignees',fn($a)=>$a->where('user_id',$user->id)))
-          ->when($filter==='assigned',fn($q)=>$q->where('created_by',$user->id))
+          ->when($filter==='assigned',fn($q)=>$q->assignedBy($user->id))
           ->when(in_array($filter,['execution','coordination'],true),fn($q)=>$filter==='execution' ? $q->where(fn($k)=>$k->where('work_kind','execution')->orWhereNull('work_kind')) : $q->where('work_kind','coordination'))
           ->when($filter==='overdue',fn($q)=>$q->where('due_date','<',now())->whereNotIn('status',['done','cancelled']))
-          ->when($filter==='verification',fn($q)=>$q->when(!$user->hasRole('admin'),fn($q)=>$q->where('created_by',$user->id))->where('status','completed'))
+          ->when($filter==='verification',fn($q)=>$q->when(!$user->hasRole('admin'),fn($q)=>$q->assignedBy($user->id))->where('status','completed'))
           ->when($filter==='unaccepted',fn($q)=>$q->whereNotIn('status',['done','cancelled','completed'])->whereHas('assignees',fn($a)=>$a->where('user_id',$user->id)->whereNull('accepted_at')->where('status','pending')))
           ->when($filter==='working',fn($q)=>$q->whereNotIn('status',['done','cancelled'])->whereHas('assignees',fn($a)=>$a->where('user_id',$user->id)->whereIn('status',['processing','in_progress'])))
           ->when($filter==='reported',fn($q)=>$q->whereNotIn('status',['done','cancelled'])->whereHas('assignees',fn($a)=>$a->where('user_id',$user->id)->where('status','completed')))

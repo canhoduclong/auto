@@ -101,7 +101,7 @@
                             </p>
                             <p class="mb-0">
                                 <strong>Giao bởi:</strong><br>
-                                {{ $task->creator->name }}
+                                {{ $task->assigner->name }}
                             </p>
                         </div>
                     </div>

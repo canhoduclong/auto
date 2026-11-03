@@ -24,7 +24,7 @@
                         </div>
                         <div class="col-md-6">
                             <p><strong>Ngày hết hạn:</strong> {{ $task->due_date?->format('d/m/Y H:i') ?? 'Không có' }}</p>
-                            <p><strong>Người giao:</strong> {{ $task->creator?->name }}</p>
+                            <p><strong>Người giao:</strong> {{ $task->assigner?->name }}</p>
                         </div>
                     </div>
                 </div>

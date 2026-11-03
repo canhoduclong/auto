@@ -123,7 +123,7 @@
                         <p><strong>Mức độ ưu tiên:</strong> <span class="badge bg-{{ $task->getStatusColor() }}">{{ $task->getPriorityLabel() }}</span></p>
                     </div>
                     <div class="col-md-6">
-                        <p><strong>Người giao:</strong> {{ $task->creator->name }}</p>
+                        <p><strong>Người giao:</strong> {{ $task->assigner->name }}</p>
                         <p><strong>Người thực hiện:</strong> {{ $task->assignees->pluck('user.name')->filter()->join(', ') ?: 'N/A' }}</p>
                         <p><strong>Ngày gửi hoàn thành:</strong> {{ $task->completed_at?->format('d/m/Y H:i') ?? 'N/A' }}</p>
                     </div>

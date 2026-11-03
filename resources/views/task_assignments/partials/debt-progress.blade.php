@@ -6,7 +6,7 @@
 @foreach($debtRows as $index => $debt)
 <div class="border-top py-3"><strong>{{ $debt['customer_name'] }}</strong><div class="small">Sale: {{ $debt['sale_name'] }} · {{ $debt['collected'] >= $debt['target'] ? 'Đã đạt mục tiêu' : ($debt['collected'] > 0 ? 'Đang thu' : 'Chưa thu') }}</div>
 <div>{{ number_format($debt['collected'], 0, ',', '.') }} / {{ number_format($debt['target'], 0, ',', '.') }} đ · {{ round($debt['collected'] / max(1, $debt['target']) * 100, 1) }}%</div>
-@if(!in_array($task->status, ['done','cancelled','completed'], true) && ((int) $task->created_by === (int) auth()->id() || ((int) $debt['sale_id'] === (int) auth()->id() && $task->assignees->contains('user_id', auth()->id()))))
+@if(!in_array($task->status, ['done','cancelled','completed'], true) && ($task->isAssignedBy(auth()->user()) || ((int) $debt['sale_id'] === (int) auth()->id() && $task->assignees->contains('user_id', auth()->id()))))
 <form action="{{ route('tasks.debt-progress', [$task, $index]) }}" method="POST" class="d-flex flex-wrap gap-2 mt-2">@csrf
 <label class="small">Tổng tiền đã thu (đ)<input name="collected" type="number" min="0" max="{{ $debt['target'] }}" step="0.01" value="{{ $debt['collected'] }}" required class="form-control form-control-sm"></label>
 <label class="small flex-grow-1">Ghi chú cập nhật<input name="note" required maxlength="1000" class="form-control form-control-sm"></label><button class="btn btn-sm btn-primary align-self-end">Lưu tiến độ</button></form>
