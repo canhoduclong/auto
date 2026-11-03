@@ -516,6 +516,7 @@ class TaskAssignmentController extends Controller
             ->with('steps')
             ->get();
 
+        $users = User::where('id', '!=', $user->id)->orderBy('name')->get(['id', 'name']);
         $allowedAssignees = $this->allowedAssigneesFor($user);
         $parentId = $task->parent_id;
         $parentTasks = TaskAssignment::query()
@@ -537,6 +538,7 @@ class TaskAssignmentController extends Controller
 
         return view('task_assignments.edit', compact(
             'task',
+            'users',
             'workflows',
             'allowedAssignees',
             'parentId',
@@ -560,6 +562,7 @@ class TaskAssignmentController extends Controller
         abort_unless($task->canBeEditedBy($user), 403, 'Chỉ người giao việc được chỉnh sửa nội dung và khi công việc còn cho phép chỉnh sửa.');
 
         $data = $request->validate([
+            'publication_approver_id' => 'sometimes|nullable|integer|exists:users,id|not_in:'.$user->id,
             'task_type' => 'nullable|in:default,checklist,debt_collection',
             'title'            => 'required|string|max:255',
             'description'      => 'nullable|string|max:20000',
@@ -612,11 +615,16 @@ class TaskAssignmentController extends Controller
                     'title'            => $data['title'],
                     'description'      => $data['description'] ?? null,
                     'priority'         => $data['priority'],
-                    'approval_flow_id' => $data['approval_flow_id'] ?? null,
+                    'approval_flow_id' => $data['approval_flow_id'] ?? $task->approval_flow_id,
                     'parent_id'        => $data['parent_id'] ?? null,
                     'due_date'         => $data['due_date'] ?? null,
                     'attachments'      => $paths ?: null,
                 ]);
+
+                if (array_key_exists('publication_approver_id', $data)) {
+                    app(\App\Services\TaskPublicationService::class)->configureForEdit($task, $user, isset($data['publication_approver_id']) ? (int) $data['publication_approver_id'] : null, $data['assignee_ids']);
+                    return;
+                }
 
                 if ($task->awaitsPublication()) {
                     $task->update(['publication_assignee_ids' => array_map('intval', $data['assignee_ids'])]);

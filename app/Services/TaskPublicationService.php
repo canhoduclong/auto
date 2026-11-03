@@ -8,6 +8,38 @@ use Illuminate\Support\Facades\{DB, Notification};
 
 class TaskPublicationService
 {
+    public function configureForEdit(TaskAssignment $task, User $actor, ?int $approverId, array $recipientIds): void
+    {
+        DB::transaction(function () use ($task, $actor, $approverId, $recipientIds) {
+            $task = TaskAssignment::whereKey($task->id)->lockForUpdate()->firstOrFail();
+            abort_unless($task->canBeEditedBy($actor), 403);
+            abort_if($approverId === (int) $actor->id, 422, 'Vui lòng chọn người duyệt khác người tạo.');
+            $wasUnpublished = $task->awaitsPublication();
+            $recipientIds = array_values(array_unique(array_map('intval', $recipientIds)));
+            abort_if(empty($recipientIds), 422, 'Vui lòng chọn người nhận.');
+
+            if ($approverId !== null) {
+                abort_if($task->assignees()->whereNotNull('accepted_at')->exists(), 422, 'Công việc đã được tiếp nhận, không thể chuyển lại thành bản chờ duyệt.');
+                $task->assignees()->delete();
+                $task->update(['publication_approver_id' => $approverId, 'publication_status' => 'pending',
+                    'publication_assignee_ids' => $recipientIds, 'published_at' => null, 'status' => 'draft']);
+                TaskStatusLog::log($task, 'draft', $actor, 'Đã lưu nội dung và gửi duyệt công bố.');
+                DB::afterCommit(fn () => $task->publicationApprover?->notify(new OperatingNotification('Công việc chờ duyệt công bố', $task->title, route('tasks.show', $task))));
+                return;
+            }
+
+            $existingIds = $task->assignees()->pluck('user_id')->map(fn ($id) => (int) $id)->all();
+            $task->assignees()->whereNotIn('user_id', $recipientIds)->delete();
+            foreach ($recipientIds as $id) $task->assignees()->firstOrCreate(['user_id' => $id], ['status' => 'pending']);
+            $task->update(['publication_approver_id' => null, 'publication_status' => null,
+                'publication_assignee_ids' => $recipientIds, 'published_at' => $task->published_at ?? now(),
+                'status' => $wasUnpublished ? 'pending' : $task->status]);
+            TaskStatusLog::log($task, $task->status, $actor, 'Đã lưu công việc — không cần duyệt công bố.');
+            $newIds = array_values(array_diff($recipientIds, $existingIds));
+            if ($newIds) DB::afterCommit(fn () => Notification::send(User::whereIn('id', $newIds)->get(), new OperatingNotification('Công việc mới cần tiếp nhận', $task->title, route('tasks.show', $task))));
+        });
+    }
+
     public function decide(TaskAssignment $task, User $actor, string $decision, ?string $reason = null): TaskAssignment
     {
         abort_unless(in_array($decision, ['approve', 'reject'], true), 422);

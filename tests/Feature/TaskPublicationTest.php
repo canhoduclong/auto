@@ -87,4 +87,43 @@ class TaskPublicationTest extends TestCase
             self::assertSame($visible,TaskAssignment::publicationVisibleTo($actor)->exists());
         }
     }
+    public function test_edit_can_change_approver_and_only_new_approver_can_publish(): void
+    {
+        $service = new TaskPublicationService;
+        $task = TaskAssignment::findOrFail(1);
+        $service->configureForEdit($task, $this->actor(1), 4, [3]);
+        self::assertSame(4, (int) $task->fresh()->publication_approver_id);
+        self::assertSame('draft', $task->fresh()->status);
+        self::assertSame(0, TaskAssignee::count());
+        $this->denied(fn () => $service->decide($task, $this->actor(2), 'approve'), 403);
+        $service->decide($task, $this->actor(4), 'approve');
+        self::assertSame([3], TaskAssignee::pluck('user_id')->all());
+    }
+
+    public function test_edit_without_approval_publishes_and_notifies_recipients_once(): void
+    {
+        $service = new TaskPublicationService;
+        $task = TaskAssignment::findOrFail(1);
+        $service->configureForEdit($task, $this->actor(1), null, [3, 4]);
+        self::assertFalse($task->fresh()->awaitsPublication());
+        self::assertNull($task->fresh()->publication_approver_id);
+        self::assertSame('pending', $task->fresh()->status);
+        self::assertSame([3, 4], TaskAssignee::orderBy('user_id')->pluck('user_id')->all());
+        Notification::assertSentToTimes(User::find(3), \App\Notifications\OperatingNotification::class, 1);
+        $service->configureForEdit($task->fresh(), $this->actor(1), null, [3, 4]);
+        Notification::assertSentToTimes(User::find(3), \App\Notifications\OperatingNotification::class, 1);
+    }
+
+    public function test_edit_can_require_approval_for_a_task_not_yet_received(): void
+    {
+        $service = new TaskPublicationService;
+        $task = TaskAssignment::findOrFail(1);
+        $service->configureForEdit($task, $this->actor(1), null, [3]);
+        $service->configureForEdit($task->fresh(), $this->actor(1), 2, [3]);
+        self::assertTrue($task->fresh()->awaitsPublication());
+        self::assertSame('draft', $task->fresh()->status);
+        self::assertSame(0, TaskAssignee::count());
+        $this->denied(fn () => $service->configureForEdit($task->fresh(), $this->actor(3), null, [3]), 403);
+        $this->denied(fn () => $service->configureForEdit($task->fresh(), $this->actor(1), 1, [3]), 422);
+    }
 }

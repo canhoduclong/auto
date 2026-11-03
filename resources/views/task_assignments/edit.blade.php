@@ -157,37 +157,15 @@
                         <span class="fw-semibold"><i class="ph-flow-arrow me-1"></i>Quy trình phê duyệt</span>
                     </div>
                     <div class="card-body">
-                        @if($task->awaitsPublication())
-                            <p class="mb-2">Người duyệt công bố: <strong>{{ $task->publicationApprover?->name }}</strong></p>
-                            <p class="small text-muted mb-0">Bạn đang chỉnh sửa bản gửi duyệt. Công việc chỉ được gửi đến những người nhận đã chọn sau khi người duyệt đồng ý công bố.</p>
-                        @else
-                        <p class="small text-muted mb-3">Chọn quy trình cho công việc này. Thành viên tương ứng trong từng bước sẽ phê duyệt để hoàn thành công việc.</p>
-
-                        @forelse($workflows as $wf)
-                            <label class="wf-card mb-2 d-block {{ old('approval_flow_id', $task->approval_flow_id) == $wf->id ? 'selected' : '' }}"
-                                   id="wfl-{{ $wf->id }}" onclick="selectWf({{ $wf->id }})">
-                                <input type="radio" name="approval_flow_id" value="{{ $wf->id }}"
-                                       {{ old('approval_flow_id', $task->approval_flow_id) == $wf->id ? 'checked' : '' }} class="d-none">
-                                <div class="fw-semibold" style="font-size:13px">{{ $wf->name }}</div>
-                                <div class="text-muted" style="font-size:11px">{{ $wf->code }}</div>
-                                <div class="wf-steps-preview">
-                                    @foreach($wf->steps->sortBy('step_order') as $stp)
-                                        <span class="wf-step-badge">{{ $stp->step_order }}. {{ $stp->role_slug }}</span>
-                                        @if(!$loop->last)<span class="ta-meta">→</span>@endif
-                                    @endforeach
-                                </div>
-                            </label>
-                        @empty
-                            <div class="text-muted small mb-3">Chưa có quy trình nào được cấu hình cho hoạt động "Giao việc". Hãy vào <a href="{{ route('approval-workflows.create') }}">Quy trình duyệt</a> để tạo.</div>
-                        @endforelse
-
-                        <label class="wf-card mb-2 d-block {{ old('approval_flow_id', $task->approval_flow_id) === null || (old('approval_flow_id', $task->approval_flow_id) === '' && old('approval_flow_id', $task->approval_flow_id) !== null) ? '' : '' }}"
-                               id="wfl-none" onclick="selectWf(null)">
-                            <input type="radio" name="approval_flow_id" value="" class="d-none">
-                            <div class="fw-semibold" style="font-size:13px">Không cần phê duyệt</div>
-                            <div class="text-muted" style="font-size:11px">Công việc sẽ chuyển sang trạng thái đang thực hiện ngay.</div>
-                        </label>
-                        @endif
+                        <label for="edit-publication-approver" class="form-label fw-semibold">Người phê duyệt công bố</label>
+                        <select id="edit-publication-approver" name="publication_approver_id" class="form-select">
+                            <option value="">Không cần phê duyệt</option>
+                            @foreach($users as $person)
+                                <option value="{{ $person->id }}" @selected((string)old('publication_approver_id', $task->publication_approver_id) === (string)$person->id)>{{ $person->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('publication_approver_id')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                        <p class="small text-muted mt-2 mb-0">Chọn người duyệt: lưu thành bản chờ duyệt và gửi lại người này. Chọn “Không cần phê duyệt”: công việc được gửi đến người nhận để tiếp nhận sau khi lưu.</p>
                     </div>
                 </div>
 
