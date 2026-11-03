@@ -120,18 +120,7 @@
                                     Chọn một hoặc nhiều thành viên cùng thực hiện công việc.
                                     Công việc hoàn thành khi <strong>tất cả</strong> người nhận báo cáo xong.
                                 </p>
-                                <div class="row g-2">
-                                    @foreach($allowedAssignees as $au)
-                                        <div class="col-sm-6 col-md-4">
-                                            <label class="d-flex align-items-center gap-2 p-2 border rounded"
-                                                   style="cursor:pointer;background:#fff">
-                                                <input type="checkbox" name="assignee_ids[]" value="{{ $au->id }}"
-                                                       {{ in_array($au->id, old('assignee_ids', [])) ? 'checked' : '' }}>
-                                                <span class="small fw-semibold">{{ $au->name }}</span>
-                                            </label>
-                                        </div>
-                                    @endforeach
-                                </div>
+                                @include('task_assignments.partials.assignee-picker', ['selectedAssigneeIds' => old('assignee_ids', $currentAssigneeIds ?? [])])
                                 @error('assignee_ids')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
                             </div>
                         </div>

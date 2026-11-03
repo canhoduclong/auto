@@ -562,6 +562,7 @@ class TaskAssignmentController extends Controller
         abort_unless($task->canBeEditedBy($user), 403, 'Chỉ người giao việc được chỉnh sửa nội dung và khi công việc còn cho phép chỉnh sửa.');
 
         $data = $request->validate([
+            'accountable_user_id' => 'sometimes|required|integer|exists:users,id',
             'publication_approver_id' => 'sometimes|nullable|integer|exists:users,id|not_in:'.$user->id,
             'task_type' => 'nullable|in:default,checklist,debt_collection',
             'title'            => 'required|string|max:255',
@@ -583,8 +584,9 @@ class TaskAssignmentController extends Controller
             $data['due_date'] = Carbon::createFromFormat('!Y-m-d', $data['due_date'])->endOfDay()->format('Y-m-d H:i:s');
         }
 
-        if ($task->work_kind && !in_array((int)$task->accountable_user_id,array_map('intval',$data['assignee_ids']),true)) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['assignee_ids'=>'Không được bỏ người chủ trì khỏi danh sách người nhận.']);
+        $accountableId = (int) ($data['accountable_user_id'] ?? $task->accountable_user_id);
+        if ($task->work_kind && !in_array($accountableId, array_map('intval', $data['assignee_ids']), true)) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['accountable_user_id' => 'Người chủ trì phải thuộc danh sách người nhận việc đã chọn.']);
         }
 
         // Validate that chosen assignees are actually allowed for this user
@@ -606,11 +608,12 @@ class TaskAssignmentController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($data, $paths, $task, $user) {
+            DB::transaction(function () use ($data, $paths, $task, $user, $accountableId) {
                 $task = TaskAssignment::whereKey($task->id)->lockForUpdate()->firstOrFail();
                 abort_unless($task->canBeEditedBy($user), 403, 'Chỉ người giao việc được chỉnh sửa nội dung công việc.');
                 // Update task
                 $task->update([
+                    'accountable_user_id' => $accountableId ?: null,
                     'task_type' => $data['task_type'] ?? $task->task_type,
                     'title'            => $data['title'],
                     'description'      => $data['description'] ?? null,

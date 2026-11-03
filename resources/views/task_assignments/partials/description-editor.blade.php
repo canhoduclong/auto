@@ -1,5 +1,6 @@
 @once
 @push('styles')
+<link rel="stylesheet" href="{{ asset('assets/css/task-rich-text.css') }}?v={{ filemtime(public_path('assets/css/task-rich-text.css')) }}">
 <style>
 .task-description { font-size:14px; line-height:1.6; overflow-wrap:anywhere; }
 .task-description p { margin:0 0 .75em; }

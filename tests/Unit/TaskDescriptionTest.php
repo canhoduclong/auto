@@ -22,4 +22,17 @@ class TaskDescriptionTest extends TestCase
     public function test_preview_is_plain_text(): void {
         self::assertSame('Mục tiêu Việc 1',TaskDescription::text('<p>Mục tiêu</p><ul><li>Việc 1</li></ul>'));
     }
+    public function test_list_numbering_indentation_and_basic_editor_formats_survive_round_trip(): void {
+        $source = '<h1>Tiêu đề</h1><ol start="4" type="I" style="list-style-type: upper-roman; padding-left: 40px;"><li value="7"><strong>Mục 7</strong><ul style="list-style-type: square;"><li>Mục con</li></ul></li></ol><p style="text-align: center; margin-left: 40px; font-family: Arial; font-size: 18px; line-height: 1.8;"><span style="background-color: #ffff00; color: #ff0000;">Nội dung</span><sub>2</sub><sup>3</sup></p><blockquote>Trích dẫn</blockquote><pre>  giữ khoảng trắng</pre><table><caption>Bảng</caption><tbody><tr><td style="vertical-align: top;" colspan="2">Ô</td></tr></tbody></table>';
+        $html = TaskDescription::render(TaskDescription::sanitize($source));
+        foreach (['<h1>', 'start="4"', 'type="I"', 'value="7"', 'list-style-type:upper-roman', 'list-style-type:square', 'padding-left:40px', 'margin-left:40px', 'text-align:center', 'font-family:Arial', 'font-size:18px', 'line-height:1.8', '<sub>', '<sup>', '<blockquote>', '<pre>', '<caption>', 'colspan="2"', 'vertical-align:top'] as $expected) {
+            self::assertStringContainsString($expected, str_replace(': ', ':', $html));
+        }
+    }
+
+    public function test_additional_formatting_does_not_allow_scripts_or_unsafe_css(): void {
+        $html = TaskDescription::sanitize('<div onclick="bad()" style="position:fixed; background-image:url(javascript:bad());"><p style="color:red; behavior:url(bad);">Text</p></div><ol onmouseover="bad()"><li>Item</li></ol>');
+        foreach (['onclick', 'onmouseover', 'position:', 'background-image', 'javascript:', 'behavior:'] as $unsafe) self::assertStringNotContainsString($unsafe, $html);
+        self::assertStringContainsString('Text', $html);
+    }
 }

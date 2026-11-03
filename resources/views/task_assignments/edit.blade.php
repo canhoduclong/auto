@@ -45,6 +45,18 @@
                     <div class="card-body">
 
                         <div class="mb-3">
+                            <label for="edit-accountable-user" class="form-label fw-semibold">Người chủ trì <span class="text-danger">*</span></label>
+                            <select id="edit-accountable-user" name="accountable_user_id" class="form-select" required>
+                                <option value="">Chọn người chịu trách nhiệm chính</option>
+                                @foreach($allowedAssignees as $person)
+                                    <option value="{{ $person->id }}" @selected((string)old('accountable_user_id', $task->accountable_user_id) === (string)$person->id)>{{ $person->name }}</option>
+                                @endforeach
+                            </select>
+                            <small class="text-muted">Người chủ trì mới sẽ được đánh dấu trong danh sách người nhận việc bên dưới.</small>
+                            @error('accountable_user_id')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="mb-3">
                             <label class="form-label fw-semibold">Tiêu đề công việc <span class="text-danger">*</span></label>
                             <input type="text" name="title" class="form-control @error('title') is-invalid @enderror"
                                    value="{{ old('title', $task->title) }}" maxlength="255" placeholder="Nham tat, mo ta ngan gon...">
@@ -125,18 +137,7 @@
                                     Chọn một hoặc nhiều thành viên cùng thực hiện công việc.
                                     Công việc hoàn thành khi <strong>tất cả</strong> người nhận báo cáo xong.
                                 </p>
-                                <div class="row g-2">
-                                    @foreach($allowedAssignees as $au)
-                                        <div class="col-sm-6 col-md-4">
-                                            <label class="d-flex align-items-center gap-2 p-2 border rounded"
-                                                   style="cursor:pointer;background:#fff">
-                                                <input type="checkbox" name="assignee_ids[]" value="{{ $au->id }}"
-                                                       {{ in_array($au->id, old('assignee_ids', $currentAssigneeIds)) ? 'checked' : '' }}>
-                                                <span class="small fw-semibold">{{ $au->name }}</span>
-                                            </label>
-                                        </div>
-                                    @endforeach
-                                </div>
+                                @include('task_assignments.partials.assignee-picker', ['selectedAssigneeIds' => old('assignee_ids', $currentAssigneeIds ?? [])])
                                 @error('assignee_ids')<div class="text-danger small mt-1">{{ $message }}</div>@enderror
                             </div>
                         </div>
@@ -182,6 +183,16 @@
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function () {
+    const select = document.getElementById('edit-accountable-user');
+    select.addEventListener('change', function () {
+        const input = [...document.querySelectorAll('input[name="assignee_ids[]"]')].find(input => input.value === select.value);
+        if (input) {
+            input.checked = true;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    });
+});
 function selectWf(id) {
     document.querySelectorAll('.wf-card').forEach(c => {
         c.classList.remove('selected');

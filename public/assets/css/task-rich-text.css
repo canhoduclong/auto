@@ -1,0 +1,33 @@
+/* Restore editor defaults inside saved content, isolated from application resets.
+   Inline formatting saved by the editor takes precedence over these defaults. */
+:is(.task-description, .presentation-content) ul { list-style-type: disc; }
+:is(.task-description, .presentation-content) ol { list-style-type: decimal; }
+:is(.task-description, .presentation-content) ul ul { list-style-type: circle; }
+:is(.task-description, .presentation-content) ul ul ul { list-style-type: square; }
+:is(.task-description, .presentation-content) ol[type="a"] { list-style-type: lower-alpha; }
+:is(.task-description, .presentation-content) ol[type="A"] { list-style-type: upper-alpha; }
+:is(.task-description, .presentation-content) ol[type="i"] { list-style-type: lower-roman; }
+:is(.task-description, .presentation-content) ol[type="I"] { list-style-type: upper-roman; }
+:is(.task-description, .presentation-content) ul,
+:is(.task-description, .presentation-content) ol { margin: 0 0 .75em; padding-left: 2em; list-style-position: outside; }
+:is(.task-description, .presentation-content) li { display: list-item; }
+:is(.task-description, .presentation-content) h1 { font-size: 2em; }
+:is(.task-description, .presentation-content) h2 { font-size: 1.5em; }
+:is(.task-description, .presentation-content) h3 { font-size: 1.17em; }
+:is(.task-description, .presentation-content) h4 { font-size: 1em; }
+:is(.task-description, .presentation-content) h5 { font-size: .83em; }
+:is(.task-description, .presentation-content) h6 { font-size: .67em; }
+:is(.task-description, .presentation-content) :is(h1,h2,h3,h4,h5,h6) { font-weight: bold; margin: 1em 0 .5em; }
+:is(.task-description, .presentation-content) :is(strong,b) { font-weight: bold; }
+:is(.task-description, .presentation-content) :is(em,i) { font-style: italic; }
+:is(.task-description, .presentation-content) u { text-decoration: underline; }
+:is(.task-description, .presentation-content) s { text-decoration: line-through; }
+:is(.task-description, .presentation-content) sub { vertical-align: sub; font-size: smaller; }
+:is(.task-description, .presentation-content) sup { vertical-align: super; font-size: smaller; }
+:is(.task-description, .presentation-content) blockquote { margin: 1em 0 1em 2em; border-left: 3px solid #cbd5e1; padding-left: 1em; }
+:is(.task-description, .presentation-content) :is(pre,code) { font-family: monospace; }
+:is(.task-description, .presentation-content) pre { white-space: pre-wrap; margin: 1em 0; }
+:is(.task-description, .presentation-content) dt { font-weight: bold; }
+:is(.task-description, .presentation-content) dd { margin-left: 2em; }
+:is(.task-description, .presentation-content) a { color: #0763b8; text-decoration: underline; }
+:is(.task-description, .presentation-content) hr { border: 0; border-top: 1px solid #cbd5e1; margin: 1em 0; }

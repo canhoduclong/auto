@@ -126,4 +126,25 @@ class TaskPublicationTest extends TestCase
         $this->denied(fn () => $service->configureForEdit($task->fresh(), $this->actor(3), null, [3]), 403);
         $this->denied(fn () => $service->configureForEdit($task->fresh(), $this->actor(1), 1, [3]), 422);
     }
+    public function test_edit_saves_new_accountable_user_instead_of_requiring_previous_one(): void
+    {
+        Schema::table('task_assignments', function (Blueprint $t) {
+            $t->string('task_type')->nullable(); $t->text('description')->nullable();
+            $t->string('priority')->nullable(); $t->integer('parent_id')->nullable();
+            $t->timestamp('due_date')->nullable(); $t->json('attachments')->nullable();
+        });
+        $actor = $this->actor(1);
+        $role = new Role; $role->name = 'admin';
+        $actor->setRelation('roles', new Collection([$role]));
+        $request = \Illuminate\Http\Request::create('/task-assignments/1', 'PUT', [
+            'accountable_user_id' => 4, 'title' => 'Changed owner', 'priority' => 'medium',
+            'assignee_ids' => [4], 'publication_approver_id' => null,
+        ]);
+        $request->setUserResolver(fn () => $actor);
+        $controller = (new \ReflectionClass(\App\Http\Controllers\TaskAssignmentController::class))->newInstanceWithoutConstructor();
+        $controller->update($request, TaskAssignment::findOrFail(1));
+        self::assertSame(4, (int) TaskAssignment::findOrFail(1)->accountable_user_id);
+        self::assertSame('Changed owner', TaskAssignment::findOrFail(1)->title);
+        self::assertSame([4], TaskAssignee::pluck('user_id')->all());
+    }
 }
