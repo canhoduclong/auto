@@ -15,7 +15,7 @@
         .company-brand { display:flex; align-items:center; gap:6mm; min-width:0; }
         /* Let the logo occupy the left of the title rows without pushing them down. */
         .company-logo { position:relative; flex:0 0 22mm; width:22mm; height:12mm; }
-        .logo { position:absolute; top:0; left:0; display:block; width:22mm; height:22mm; object-fit:contain; }
+        .logo { position:absolute; top:0; left:0; display:block; width:18.7mm; height:18.7mm; object-fit:contain; }
         .company-details { min-width:0; }
         .company-name { font-size:12px; font-weight:800; text-transform:uppercase; }
         .company-info { font-size:8.5px; }
