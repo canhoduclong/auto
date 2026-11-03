@@ -21,6 +21,7 @@
 	<!-- /core JS files -->
 
 	<!-- Theme JS files -->
+    <script src="{{ asset('assets/js/app.js') }}?v={{ filemtime(public_path('assets/js/app.js')) }}"></script>
 	<script src="{{ asset('assets/js/vendor/visualization/d3/d3.min.js') }}"></script>
 	<script src="{{ asset('assets/js/vendor/visualization/d3/d3_tooltip.js') }}"></script>
 
@@ -29,6 +30,12 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
     <style>
+        /* Bootstrap owns the collapse state; Tailwind's utility must not hide
+           panels when Bootstrap restores .collapse after an animation. */
+        .collapse {
+            visibility: visible;
+        }
+
         @media (max-width: 991.98px) {
             .sidebar.sidebar-main {
                 position: fixed;

@@ -1249,6 +1249,9 @@ class TaskAssignmentController extends Controller
     private function allowedAssigneesFor(User $user)
     {
         $delegated = TaskDelegateConfig::allowedAssignees($user);
+        if ($user->isAdmin()) {
+            return $delegated;
+        }
         $hiddenIds = User::hiddenTaskAssigneeIds();
         return $delegated->reject(fn ($assignee) => in_array((int) $assignee->id, $hiddenIds, true))->values();
     }

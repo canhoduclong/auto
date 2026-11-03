@@ -41,6 +41,10 @@ class TaskDelegateConfig extends Model
      */
     public static function allowedAssignees(User $user): \Illuminate\Database\Eloquent\Collection
     {
+        if ($user->isAdmin()) {
+            return User::orderBy('name')->get(['id', 'name']);
+        }
+
         return User::whereIn('id',
             self::where('assigner_id', $user->id)
                 ->where('is_active', true)

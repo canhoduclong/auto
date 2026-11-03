@@ -110,3 +110,5 @@ readme.txt
 !/tests/Feature/SpecialWarehousePickupTest.php
 
 !/tests/Feature/AdditionalTemplateOrderTest.php
+
+!/tests/Feature/AdminTaskAssigneesTest.php
