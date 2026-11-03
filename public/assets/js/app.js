@@ -240,12 +240,14 @@ const App = function () {
 
                     // Collapsible
                     if(submenuContainer.classList.contains(navItemOpenClass)) {
-                        new bootstrap.Collapse(submenu).hide();
+                        bootstrap.Collapse.getOrCreateInstance(submenu, { toggle: false }).hide();
                         submenuContainer.classList.remove(navItemOpenClass);
+                        link.setAttribute('aria-expanded', 'false');
                     }
                     else {
-                        new bootstrap.Collapse(submenu).show();
+                        bootstrap.Collapse.getOrCreateInstance(submenu, { toggle: false }).show();
                         submenuContainer.classList.add(navItemOpenClass);
+                        link.setAttribute('aria-expanded', 'true');
                     }
 
                     // Accordion
@@ -253,8 +255,9 @@ const App = function () {
                         for (let sibling of link.parentNode.parentNode.children) {
                             if (sibling != link.parentNode && sibling.classList.contains(navItemOpenClass)) {
                                 sibling.querySelectorAll(`:scope > .${navSubmenuClass}`).forEach(function(submenu) {
-                                    new bootstrap.Collapse(submenu).hide();
+                                    bootstrap.Collapse.getOrCreateInstance(submenu, { toggle: false }).hide();
                                     sibling.classList.remove(navItemOpenClass);
+                                    sibling.querySelector(`:scope > .${navLinkClass}`).setAttribute('aria-expanded', 'false');
                                 });
                             }
                         }

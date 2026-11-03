@@ -1,5 +1,11 @@
 @import 'tailwindcss';
 
+/* Bootstrap controls collapsed panels with display/height. Tailwind's
+   visibility: collapse utility otherwise hides their contents even when open. */
+.collapse {
+    visibility: visible;
+}
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';

@@ -27,7 +27,7 @@
 @if(auth()->user()->isAdmin())
     @php $taskGroupOpen = collect($taskNavItems)->contains(fn ($item) => $item['active']); @endphp
     <li class="nav-item nav-item-submenu {{ $taskGroupOpen ? 'nav-item-open' : '' }}">
-        <a href="#admin-task-menu" class="nav-link" aria-controls="admin-task-menu">
+        <a href="#admin-task-menu" class="nav-link" aria-controls="admin-task-menu" aria-expanded="{{ $taskGroupOpen ? 'true' : 'false' }}">
             <i class="ph-list-checks"></i><span>Giao việc</span>
         </a>
         <ul id="admin-task-menu" class="nav-group-sub collapse {{ $taskGroupOpen ? 'show' : '' }}" data-submenu-title="Giao việc">
