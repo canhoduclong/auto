@@ -23,15 +23,17 @@
         .company-meta strong { font-size:11.5px; }
         h1 { text-align:center; font-size:18px; color:#1f4e79; margin:0; }
         .subtitle { text-align:center; font-size:9px; font-style:italic; color:#1f4e79; margin-bottom:0; }
-        .info { display:grid; grid-template-columns:1fr 1fr 1fr; border:1px solid #6b7280; margin-bottom:7px; }
-        .info div { padding:2px 5px; min-height:18px; border-bottom:1px solid #d1d5db; }
-        .info div:nth-child(3n+1), .info div:nth-child(3n+2) { border-right:1px solid #d1d5db; }
-        .info div:nth-last-child(-n+3) { border-bottom:0; }
+        .info { display:grid; grid-template-columns:51% 24% 25%; border:1px solid #6b7280; margin-bottom:7px; }
+        .info div { padding:2px 5px; min-height:18px; border-bottom:1px solid #d1d5db; border-right:1px solid #d1d5db; min-width:0; overflow-wrap:anywhere; }
+        .info .info-row-end { border-right:0; }
+        .info .info-last-row { border-bottom:0; }
+        .info .info-note { grid-column:span 2; }
+        .info .info-address { font-size:9.5px; }
         .label { font-weight:700; }
         table { width:100%; border-collapse:collapse; table-layout:fixed; }
         .items th, .items td { border:1px solid #4b5563; padding:3px 3px; vertical-align:middle; }
-        .print-notice { width:100%; margin:4px auto 6px; }
-        .print-notice > div { margin:0 !important; padding-top:0 !important; border-top:0 !important; font-size:7px !important; line-height:1.2 !important; }
+        .print-notice { width:100%; margin:8px auto 6px; }
+        .print-notice > div { margin:0 !important; padding-top:0 !important; border-top:0 !important; font-size:7.5px !important; line-height:1.2 !important; }
         .items th, .items td.center { text-align:center; vertical-align:middle; }
         .items { margin-left:auto; margin-right:auto; }
         .signatures { justify-items:stretch; align-items:start; }
@@ -90,13 +92,12 @@
     <div class="info">
         <div><span class="label">Khách hàng:</span> {{ $order->recipient_name ?: $order->customer?->name ?: '—' }}</div>
         <div><span class="label">Mã đơn:</span> {{ $order->code ?: '#'.$order->id }}</div>
-        <div><span class="label">Người lập:</span> {{ $order->user?->name ?? auth()->user()?->name ?? '—' }}</div>
-        <div><span class="label">Địa chỉ giao:</span> {{ $order->recipient_address ?: $order->customer?->address ?: '—' }}</div>
+        <div class="info-row-end"><span class="label">Người lập:</span> {{ $order->user?->name ?? auth()->user()?->name ?? '—' }}</div>
+        <div class="info-address"><span class="label">Địa chỉ giao:</span> {{ $order->recipient_address ?: $order->customer?->address ?: '—' }}</div>
         <div><span class="label">Điện thoại:</span> {{ $order->recipient_phone ?: $order->customer?->phone ?: '—' }}</div>
-        <div><span class="label">Tài xế:</span> {{ $order->shipper?->name ?? '—' }}</div>
-        <div><span class="label">SĐT tài xế:</span> {{ $order->shipper?->phone ?? '—' }}</div>
-        <div><span class="label">Ghi chú:</span> {{ $order->note ?: '—' }}</div>
-        <div></div>
+        <div class="info-row-end"><span class="label">Tài xế:</span> {{ $order->shipper?->name ?? '—' }}</div>
+        <div class="info-note info-last-row"><span class="label">Ghi chú:</span> {{ $order->note ?: '—' }}</div>
+        <div class="info-row-end info-last-row"><span class="label">SĐT tài xế:</span> {{ $order->shipper?->phone ?? '—' }}</div>
     </div>
     <div class="delivery-print-details">
     <table class="items">
