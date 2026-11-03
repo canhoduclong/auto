@@ -43,7 +43,7 @@ class TaskAssignmentController extends Controller
     {
         $user = auth()->user();
 
-        $q = TaskAssignment::with(['creator:id,name', 'assigner:id,name', 'workflow:id,name', 'approvalSteps.step', 'assignees.user:id,name'])
+        $q = TaskAssignment::with(['creator:id,name', 'assigner:id,name,job_title', 'workflow:id,name', 'approvalSteps.step', 'assignees.user:id,name'])
             ->publicationVisibleTo($user)->latest();
 
         // Role-based visibility
@@ -265,11 +265,11 @@ class TaskAssignmentController extends Controller
         abort_unless($this->canViewTask($taskAssignment, auth()->user()), 403);
 
         $task = $taskAssignment->load([
-            'creator:id,name', 'assigner:id,name',
+            'creator:id,name', 'assigner:id,name,job_title',
             'publicationApprover:id,name',
             'workflow.steps',
             'parent:id,code,title',
-            'subTasks.creator:id,name', 'subTasks.assigner:id,name',
+            'subTasks.creator:id,name', 'subTasks.assigner:id,name,job_title',
             'subTasks.assignees.user:id,name',
             'subTasks.statusLogs.changedBy:id,name',
             'subTasks.statusLogs.documents',
@@ -922,7 +922,7 @@ class TaskAssignmentController extends Controller
         $submitRoute = $isFrontRoles ? 'tasks.complete' : 'task-assignments.complete-with-content';
 
         return view('task_assignments.complete', [
-            'task' => $taskAssignment->load(['creator:id,name', 'assigner:id,name', 'assignees.user:id,name','statusLogs.changedBy:id,name','subTasks.creator:id,name', 'subTasks.assigner:id,name','subTasks.assignees.user:id,name','subTasks.statusLogs.changedBy:id,name']),
+            'task' => $taskAssignment->load(['creator:id,name', 'assigner:id,name,job_title', 'assignees.user:id,name','statusLogs.changedBy:id,name','subTasks.creator:id,name', 'subTasks.assigner:id,name,job_title','subTasks.assignees.user:id,name','subTasks.statusLogs.changedBy:id,name']),
             'layout' => $layout,
             'showRoute' => $showRoute,
             'submitRoute' => $submitRoute,
@@ -1093,7 +1093,7 @@ class TaskAssignmentController extends Controller
         }
 
         $task = $taskAssignment->load([
-            'creator:id,name', 'assigner:id,name',
+            'creator:id,name', 'assigner:id,name,job_title',
             'assignees.user:id,name',
             'completionImages',
             'statusLogs.changedBy:id,name',
@@ -1167,7 +1167,7 @@ class TaskAssignmentController extends Controller
             })
             ->when($request->filled('status'), fn ($query) => $query->where('status', $request->status))
             ->when($request->filled('priority'), fn ($query) => $query->where('priority', $request->priority))
-            ->with(['creator:id,name', 'assigner:id,name', 'assignees.user:id,name', 'completionImages', 'statusLogs'])
+            ->with(['creator:id,name', 'assigner:id,name,job_title', 'assignees.user:id,name', 'completionImages', 'statusLogs'])
             ->latest()
             ->paginate(20)
             ->withQueryString();
@@ -1209,7 +1209,7 @@ class TaskAssignmentController extends Controller
 
         $tasks = TaskAssignment::whereHas('assignees', fn($q) => $q->where('user_id', $user->id))
             ->whereIn('status', ['in_progress', TaskAssignment::STATUS_PROCESSING])
-            ->with(['creator:id,name', 'assigner:id,name', 'statusLogs'])
+            ->with(['creator:id,name', 'assigner:id,name,job_title', 'statusLogs'])
             ->latest()
             ->paginate(20);
 
@@ -1246,7 +1246,7 @@ class TaskAssignmentController extends Controller
 
         $tasks = TaskAssignment::where('status', TaskAssignment::STATUS_COMPLETED)
             ->when(!($user->hasRole('admin') || $user->hasRole('CEO') || $user->hasRole('manager')), fn ($query) => $query->assignedBy($user->id))
-            ->with(['creator:id,name', 'assigner:id,name', 'assignees.user:id,name', 'completionImages', 'statusLogs'])
+            ->with(['creator:id,name', 'assigner:id,name,job_title', 'assignees.user:id,name', 'completionImages', 'statusLogs'])
             ->latest()
             ->paginate(20);
 
@@ -1262,7 +1262,7 @@ class TaskAssignmentController extends Controller
 
         $tasks = TaskAssignment::whereHas('assignees', fn($q) => $q->where('user_id', $user->id))
             ->whereIn('status', [TaskAssignment::STATUS_DONE, TaskAssignment::STATUS_REJECTED, TaskAssignment::STATUS_CANCELLED])
-            ->with(['creator:id,name', 'assigner:id,name', 'statusLogs', 'completionImages'])
+            ->with(['creator:id,name', 'assigner:id,name,job_title', 'statusLogs', 'completionImages'])
             ->latest()
             ->paginate(20);
 

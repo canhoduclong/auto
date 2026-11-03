@@ -107,6 +107,7 @@
                     @if($task->description)
                         <div>
                             <div class="task-description">{!! \App\Support\TaskDescription::render($task->description) !!}</div>
+                            @include('task_assignments.partials.assigner-signature')
                         </div>
                     @endif
 

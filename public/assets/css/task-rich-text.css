@@ -31,3 +31,8 @@
 :is(.task-description, .presentation-content) dd { margin-left: 2em; }
 :is(.task-description, .presentation-content) a { color: #0763b8; text-decoration: underline; }
 :is(.task-description, .presentation-content) hr { border: 0; border-top: 1px solid #cbd5e1; margin: 1em 0; }
+
+.task-assigner-signature { display: flex; flex-direction: column; align-items: center; gap: 6px; width: fit-content; min-width: 220px; max-width: 100%; margin: 36px 0 0 auto; padding: 16px 12px 4px; text-align: center; line-height: 1.5; break-inside: avoid; }
+.task-assigner-label { font-size: .75em; font-weight: 700; letter-spacing: .06em; }
+.task-assigner-title { font-size: .85em; font-style: italic; }
+.task-assigner-name { font-size: 1em; font-weight: 700; }

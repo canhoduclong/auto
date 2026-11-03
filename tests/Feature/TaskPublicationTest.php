@@ -19,7 +19,7 @@ class TaskPublicationTest extends TestCase
         config(['database.default'=>'sqlite', 'database.connections.sqlite.database'=>':memory:', 'cache.default'=>'array']);
         DB::purge('sqlite');
         Notification::fake();
-        Schema::create('users', function (Blueprint $t) { $t->id(); $t->string('name'); });
+        Schema::create('users', function (Blueprint $t) { $t->id(); $t->string('name'); $t->string('job_title')->nullable(); });
         Schema::create('task_assignments', function (Blueprint $t) {
             $t->id(); $t->integer('created_by'); $t->integer('accountable_user_id'); $t->string('work_kind');
             $t->string('title'); $t->string('status'); $t->integer('approval_flow_id')->nullable();
@@ -165,5 +165,19 @@ class TaskPublicationTest extends TestCase
         self::assertSame(1, (int) $task->assigner->id);
         self::assertTrue(TaskAssignment::assignedBy(1)->exists());
         self::assertFalse(TaskAssignment::assignedBy(2)->exists());
+    }
+    public function test_signature_uses_assigner_job_title_and_handles_missing_title(): void
+    {
+        DB::table('users')->where('id', 2)->update(['job_title' => 'Giám đốc điều hành']);
+        $task = TaskAssignment::with('assigner:id,name,job_title')->findOrFail(1);
+        $html = view('task_assignments.partials.assigner-signature', compact('task'))->render();
+        self::assertStringContainsString('Giám đốc điều hành', $html);
+        self::assertStringContainsString('User 2', $html);
+        self::assertStringNotContainsString('User 1', $html);
+        DB::table('task_assignments')->where('id', 1)->update(['publication_approver_id' => null]);
+        $task = TaskAssignment::with('assigner:id,name,job_title')->findOrFail(1);
+        $html = view('task_assignments.partials.assigner-signature', compact('task'))->render();
+        self::assertStringContainsString('User 1', $html);
+        self::assertStringNotContainsString('task-assigner-title', $html);
     }
 }
