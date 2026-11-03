@@ -26,13 +26,19 @@
 	<!-- /core JS files -->
 
 	<!-- Theme JS files -->
-    <script src="{{ asset('assets/js/app.js') }}"></script>
+    <script src="{{ asset('assets/js/app.js') }}?v={{ filemtime(public_path('assets/js/app.js')) }}"></script>
 
    
     <script src="{{ asset('ckeditor/ckeditor.js') }}"></script>
     @vite(['resources/css/app.css', 'resources/js/app.js']) 
 
     <style>
+        /* Keep Bootstrap panels visible after their opening transition, including
+           when the deployed Vite bundle still has Tailwind's collapse utility. */
+        .collapse {
+            visibility: visible;
+        }
+
         @media (max-width: 991.98px) {
             .sidebar.sidebar-main {
                 position: fixed;
