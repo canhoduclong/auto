@@ -110,7 +110,7 @@
                 $weight = $item->effective_priced_by_kg ? ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight) : null;
                 $amount = round(($item->effective_priced_by_kg ? ($item->export_actual_weight ?? $item->display_total_value) : (float) $item->quantity) * (float) $item->price, 2);
             @endphp
-            <tr><td class="center">{{ $index + 1 }}</td><td class="center">{{ $item->variant?->sku ?? '—' }}</td><td><strong>{{ $product?->name ?? $item->imported_name ?? '—' }}</strong><br>{{ $item->variant?->name }}</td><td class="center">{{ $unit }}</td><td class="center">{{ number_format((float) $item->quantity, 0, ',', '.') }}</td><td class="center">{{ $weight !== null ? format_kg((float) $weight) : '—' }}</td><td></td><td class="center">{{ number_format((float) $item->price, 0, ',', '.') }}đ</td><td class="right">{{ number_format($amount, 0, ',', '.') }}đ</td></tr>
+            <tr><td class="center">{{ $index + 1 }}</td><td class="center">{{ $item->variant?->sku ?? '—' }}</td><td><strong>{{ $product?->name ?? $item->imported_name ?? '—' }}</strong>@if(filled($item->variant?->name)) - {{ $item->variant->name }}@endif</td><td class="center">{{ $unit }}</td><td class="center">{{ number_format((float) $item->quantity, 0, ',', '.') }}</td><td class="center">{{ $weight !== null ? format_kg((float) $weight) : '—' }}</td><td></td><td class="center">{{ number_format((float) $item->price, 0, ',', '.') }}đ</td><td class="right">{{ number_format($amount, 0, ',', '.') }}đ</td></tr>
         @empty
             <tr><td colspan="9" class="center">Không có hàng hóa.</td></tr>
         @endforelse
