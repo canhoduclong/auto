@@ -377,7 +377,7 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
                                 $unitLabel = \App\Enums\ProductUnit::tryFrom($row->product_unit ?? '')?->label() ?? 'Cái';
 
                                 // Display weight: show kg if priced by kg or weight > 0
-                                $showWeight = $effWeight > 0 ? $fmtN($effWeight) : '—';
+                                $showWeight = \App\Support\QuantityByUnit::hasWeight($unitLabel) && $effWeight > 0 ? $fmtN($effWeight) : '—';
                                 $showQty    = $fmtN($effQty);
                                 $actualQty = (float) $row->actual_qty;
                                 $actualWeight = (float) $row->actual_weight;
@@ -450,7 +450,7 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
                                     {{ number_format($effTotal, 0, ',', '.') }}
                                 </td>
                                 <td class="text-center fw-bold">{{ $actualQty > 0 ? $fmtN($actualQty) : '—' }}</td>
-                                <td class="text-center text-muted">{{ $actualWeight > 0 ? $fmtN($actualWeight) : '—' }}</td>
+                                <td class="text-center text-muted">{{ \App\Support\QuantityByUnit::hasWeight($unitLabel) && $actualWeight > 0 ? $fmtN($actualWeight) : '—' }}</td>
                                 <td class="text-end fw-bold text-success">{{ $actualTotal > 0 ? number_format($actualTotal, 0, ',', '.').'đ' : '—' }}</td>
                             </tr>
                         @empty
@@ -464,24 +464,26 @@ $packedLikeStatuses = ['packed', 'packed_waiting_pickup', 'delivering', 'deliver
                         </tbody>
                         @if($items->isNotEmpty())
                         <tfoot class="table-light fw-semibold">
-                            <tr>
-                                <td colspan="8" class="text-end text-muted small">Tổng trang này:</td>
-                                <td class="text-end">
-                                    {{ $fmtN((float)$items->sum('eff_qty')) }}
-                                </td>
-                                <td></td>
-                                <td class="text-end">
-                                    {{ $fmtN((float)$items->sum('eff_weight')) }}
-                                </td>
-                                <td></td>
-                                <td class="text-end text-success">
-                                    {{ number_format($items->sum('eff_total'), 0, ',', '.') }}đ
-                                </td>
-                                <td class="text-end">{{ $fmtN((float)$items->sum('actual_qty')) }}</td>
-                                <td class="text-end">{{ $fmtN((float)$items->sum('actual_weight')) }}</td>
-                                <td class="text-end text-success">{{ number_format($items->sum('actual_total'), 0, ',', '.') }}đ</td>
-                            </tr>
-                        </tfoot>
+                    @foreach(\App\Support\DailySalesUnitSummary::groups($items) as $group)
+                    <tr>
+                        <td colspan="8" class="text-end">Tổng {{ $group['unit'] }} (trang này)</td>
+                        <td class="text-center">{{ $fmtN($group['eff_qty']) }}</td>
+                        <td>{{ $group['unit'] }}</td>
+                        <td class="text-center">{{ \App\Support\QuantityByUnit::hasWeight($group['unit']) ? $fmtN($group['eff_weight']).' kg' : '—' }}</td>
+                        <td></td>
+                        <td class="text-end text-success">{{ number_format($group['eff_total'], 0, ',', '.') }}đ</td>
+                        <td class="text-center">{{ $fmtN($group['actual_qty']) }}</td>
+                        <td class="text-center">{{ \App\Support\QuantityByUnit::hasWeight($group['unit']) ? $fmtN($group['actual_weight']).' kg' : '—' }}</td>
+                        <td class="text-end text-success">{{ number_format($group['actual_total'], 0, ',', '.') }}đ</td>
+                    </tr>
+                    @endforeach
+                    <tr>
+                        <td colspan="12" class="text-end">TỔNG TIỀN (TRANG NÀY)</td>
+                        <td class="text-end text-success">{{ number_format($items->sum('eff_total'), 0, ',', '.') }}đ</td>
+                        <td colspan="2"></td>
+                        <td class="text-end text-success">{{ number_format($items->sum('actual_total'), 0, ',', '.') }}đ</td>
+                    </tr>
+                </tfoot>
                         @endif
                     </table>
                 </div>

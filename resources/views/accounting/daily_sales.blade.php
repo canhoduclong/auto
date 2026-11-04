@@ -312,13 +312,29 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                 </tbody>
                 @if($journalRows->isNotEmpty())
                     <tfoot class="table-light fw-semibold">
-                        <tr>
-                            <td colspan="8" class="text-end">Tổng trang:</td>
-                            <td class="text-end">{{ $fmtN((float) $journalRows->sum('total_quantity'), 1) }}</td>
-                            <td></td>
-                            <td class="text-end text-success">{{ number_format((float) $journalRows->sum('total_amount'), 0, ',', '.') }}đ</td>
-                        </tr>
-                    </tfoot>
+                    @foreach(\App\Support\DailySalesUnitSummary::groups($items) as $group)
+                    <tr>
+                        <td colspan="8" class="text-end">Tổng {{ $group['unit'] }} (trang này)</td>
+                        <td class="text-center">{{ $fmtN($group['eff_qty']) }}</td>
+                        <td>{{ $group['unit'] }}</td>
+                        <td class="text-center">{{ \App\Support\QuantityByUnit::hasWeight($group['unit']) ? $fmtN($group['eff_weight']).' kg' : '—' }}</td>
+                        <td></td><td></td>
+                        <td class="text-end text-success">{{ number_format($group['eff_total'], 0, ',', '.') }}đ</td>
+                        <td class="text-end text-primary">{{ number_format($group['customer_shipping_fee'], 0, ',', '.') }}đ</td>
+                        <td class="text-end">{{ number_format($group['price_adjustment'], 0, ',', '.') }}đ</td>
+                    </tr>
+                    @endforeach
+                    <tr>
+                        <td colspan="13" class="text-end">TỔNG TIỀN HÀNG (TRANG NÀY)</td>
+                        <td class="text-end text-success">{{ number_format($items->sum('eff_total'), 0, ',', '.') }}đ</td>
+                        <td class="text-end text-primary">{{ number_format($items->sum('customer_shipping_fee'), 0, ',', '.') }}đ</td>
+                        <td class="text-end">{{ number_format($items->sum('price_adjustment'), 0, ',', '.') }}đ</td>
+                    </tr>
+                    <tr>
+                        <td colspan="13" class="text-end text-muted small">Tiền hàng + phí giao hàng thu khách (trang này):</td>
+                        <td colspan="2" class="text-end text-success">{{ number_format((float)$items->sum('eff_total') + (float)$items->sum('customer_shipping_fee'), 0, ',', '.') }}đ</td><td></td>
+                    </tr>
+                </tfoot>
                 @endif
             </table>
         </div>
@@ -513,7 +529,7 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                         $unitLabel = \App\Enums\ProductUnit::tryFrom($row->product_unit ?? '')?->label() ?? 'Cái';
 
                         // Display weight: show kg if priced by kg or weight > 0
-                        $showWeight = $effWeight > 0 ? $fmtN($effWeight) : '—';
+                        $showWeight = \App\Support\QuantityByUnit::hasWeight($unitLabel) && $effWeight > 0 ? $fmtN($effWeight) : '—';
                         $showQty    = $fmtN($effQty);
 
                         // Variant label: size + name

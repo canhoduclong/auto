@@ -1826,7 +1826,7 @@ class CeoDashboardController extends Controller
             COUNT(DISTINCT order_items.id)                                                          as item_count,
             COUNT(DISTINCT order_items.order_id)                                                    as order_count,
             SUM(COALESCE(adj.adjusted_quantity,  order_items.quantity))                             as grand_qty,
-            SUM(COALESCE(adj.adjusted_weight,    order_items.total_weight))                         as grand_weight,
+            SUM(CASE WHEN LOWER(COALESCE(products.unit, 'cai')) IN ('bo','bộ','cai','cái') THEN 0 ELSE COALESCE(adj.adjusted_weight, order_items.total_weight) END) as grand_weight,
             SUM({$effTotalExpr})                                                                     as grand_total
         ")->first();
 

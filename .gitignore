@@ -115,3 +115,5 @@ readme.txt
 !/tests/Feature/TaskPublicationTest.php
 
 !/tests/Feature/QuantityByUnitTest.php
+
+!/tests/Feature/DailySalesUnitSummaryTest.php

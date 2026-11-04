@@ -2260,7 +2260,7 @@ class AccountingDashboardController extends Controller
             COUNT(DISTINCT order_items.id)                                                          as item_count,
             COUNT(DISTINCT order_items.order_id)                                                    as order_count,
             SUM(COALESCE(adj.adjusted_quantity,  order_items.quantity))                             as grand_qty,
-            SUM({$effectiveWeightExpr}) as grand_weight,
+            SUM(CASE WHEN LOWER(COALESCE(products.unit, 'cai')) IN ('bo','bộ','cai','cái') THEN 0 ELSE ({$effectiveWeightExpr}) END) as grand_weight,
             COALESCE(SUM({$priceAdjustmentExpr}), 0) as item_adjustment,
             COALESCE(SUM(CASE WHEN ({$priceAdjustmentExpr}) < 0 THEN -({$priceAdjustmentExpr}) ELSE 0 END), 0) as item_discount,
             COALESCE(SUM(CASE WHEN ({$priceAdjustmentExpr}) > 0 THEN ({$priceAdjustmentExpr}) ELSE 0 END), 0) as item_increase,
