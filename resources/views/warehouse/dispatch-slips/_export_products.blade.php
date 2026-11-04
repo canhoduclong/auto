@@ -12,6 +12,6 @@
         @foreach($unitGroups as $group)
         <tr class="summary"><th colspan="4">Tổng {{ $group['unit'] }}</th><th class="center">{{ $group['unit'] }}</th><th class="num">{{ number_format($group['quantity']) }}</th><th class="num">{{ $group['weight'] === null ? '—' : $formatKg($group['weight']) }}</th><th></th><th class="num">{{ $formatMoney($group['amount']) }}</th></tr>
         @endforeach
-        <tr class="summary"><th colspan="5">TỔNG CỘNG</th><th class="num">@include('warehouse.dispatch-slips._quantity_by_unit', ['quantityRows' => $rows])</th><th class="num">{{ $unitGroups->whereNotNull('weight')->isEmpty() ? '—' : $formatKg($unitGroups->sum('weight')) }}</th><th></th><th class="num">{{ $formatMoney($rows->sum('amount')) }}</th></tr>
+        <tr class="summary"><th colspan="8">TỔNG CỘNG</th><th class="num">{{ $formatMoney($rows->sum('amount')) }}</th></tr>
     </tfoot>
 </table>
