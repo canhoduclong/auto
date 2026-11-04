@@ -23,7 +23,7 @@
 
 <h3>B. PHIẾU ĐIỀU CHUYỂN HÀNG</h3>
 <table class="transfer-table"><thead><tr><th class="center">STT</th><th>Mã phiếu điều chuyển</th><th class="num">Số mặt hàng</th><th class="num">Tổng số lượng</th><th class="num">Tổng khối lượng</th><th>Ghi chú điều chuyển</th></tr></thead><tbody>
-@forelse($inventoryTransferRows as $row)<tr><td class="center">{{ $loop->iteration }}</td><td><strong>{{ $row['code'] }}</strong></td><td class="num">{{ number_format($row['item_count']) }}</td><td class="num">{{ number_format($row['quantity']) }}</td><td class="num">{{ $formatKg($row['weight']) }}</td><td class="order-note">{{ filled($row['note']) ? $row['note'] : '—' }}</td></tr>@empty<tr><td colspan="6" class="center">Phiếu không có hàng điều chuyển.</td></tr>@endforelse
+@forelse($inventoryTransferRows as $row)<tr><td class="center">{{ $loop->iteration }}</td><td><strong>{{ $row['code'] }}</strong></td><td class="num">{{ number_format($row['item_count']) }}</td><td class="num">@include('warehouse.dispatch-slips._quantity_by_unit', ['quantityRows' => $row['items']])</td><td class="num">{{ $formatKg($row['weight']) }}</td><td class="order-note">{{ filled($row['note']) ? $row['note'] : '—' }}</td></tr>@empty<tr><td colspan="6" class="center">Phiếu không có hàng điều chuyển.</td></tr>@endforelse
 </tbody></table>
 @foreach($inventoryTransferRows as $transferRow)
 <div class="box">
@@ -31,7 +31,7 @@
 @if(filled($transferRow['note']))<span class="muted">Ghi chú: {{ $transferRow['note'] }}</span>@endif
 <table class="transfer-goods-table"><thead><tr><th class="center">STT</th><th>Hàng hóa điều chuyển</th><th>SKU / Size</th><th class="center">ĐVT</th><th class="num">Số lượng</th><th class="num">Khối lượng</th></tr></thead><tbody>
 @foreach($transferRow['items'] as $item)<tr><td class="center">{{ $loop->iteration }}</td><td><strong>{{ $item['product_name'] }}</strong></td><td>{{ $item['sku'] ?: '—' }}<span class="muted">Size: {{ $item['size'] ?: '—' }}</span></td><td class="center">{{ $item['unit'] }}</td><td class="num"><strong>{{ number_format($item['quantity']) }}</strong></td><td class="num">{{ $item['is_piece_unit'] ? '-' : $formatKg($item['weight']) }}</td></tr>@endforeach
-</tbody><tfoot><tr><th colspan="4">TỔNG HÀNG ĐIỀU CHUYỂN</th><th class="num">{{ number_format($transferRow['quantity']) }}</th><th class="num">{{ $transferRow['items']->every('is_piece_unit') ? '-' : $formatKg($transferRow['items']->reject(fn ($item) => $item['is_piece_unit'])->sum('weight')) }}</th></tr></tfoot></table>
+</tbody><tfoot><tr><th colspan="4">TỔNG HÀNG ĐIỀU CHUYỂN</th><th class="num">@include('warehouse.dispatch-slips._quantity_by_unit', ['quantityRows' => $transferRow['items']])</th><th class="num">{{ $transferRow['items']->every('is_piece_unit') ? '-' : $formatKg($transferRow['items']->reject(fn ($item) => $item['is_piece_unit'])->sum('weight')) }}</th></tr></tfoot></table>
 </div>
 @endforeach
 

@@ -24,7 +24,7 @@
     <div class="meta">
         <div>Tổng tài xế/phiếu: <strong>{{ number_format($documents->count()) }}</strong></div>
         <div>Tổng đơn hàng: <strong>{{ number_format($totalOrders) }}</strong></div>
-        <div>Tổng số lượng: <strong>{{ number_format($totalQuantity) }}</strong></div>
+        <div>Tổng số lượng: <strong>@include('warehouse.dispatch-slips._quantity_by_unit', ['quantityRows' => $totalExportSummaryRows])</strong></div>
         <div>Tổng khối lượng: <strong>{{ $formatKg($totalWeight) }}</strong></div>
     </div>
     <h2>DANH SÁCH PHIẾU XUẤT THEO TÀI XẾ</h2>
@@ -33,10 +33,10 @@
         <tbody>
         @foreach($documents as $document)
             @php($slip = $document['slip'])
-            <tr><td class="center">{{ $loop->iteration }}</td><td><strong>{{ $slip->code }}</strong><div class="muted">{{ $slip->business_date->format('d/m/Y') }}</div></td><td><strong>{{ $slip->shipper?->short_name ?: $slip->shipper?->name }}</strong><div class="muted">{{ $slip->shipper?->phone }}</div></td><td>{{ $slip->sourceWarehouse?->name }} → {{ $slip->targetWarehouse?->name }}</td><td class="num">{{ number_format($document['orderRows']->count()) }}</td><td class="num">{{ number_format($document['summaryRows']->sum('quantity')) }}</td><td class="num">{{ $formatKg($document['summaryRows']->sum('weight')) }}</td></tr>
+            <tr><td class="center">{{ $loop->iteration }}</td><td><strong>{{ $slip->code }}</strong><div class="muted">{{ $slip->business_date->format('d/m/Y') }}</div></td><td><strong>{{ $slip->shipper?->short_name ?: $slip->shipper?->name }}</strong><div class="muted">{{ $slip->shipper?->phone }}</div></td><td>{{ $slip->sourceWarehouse?->name }} → {{ $slip->targetWarehouse?->name }}</td><td class="num">{{ number_format($document['orderRows']->count()) }}</td><td class="num">@include('warehouse.dispatch-slips._quantity_by_unit', ['quantityRows' => $document['summaryRows']])</td><td class="num">{{ $formatKg($document['summaryRows']->sum('weight')) }}</td></tr>
         @endforeach
         </tbody>
-        <tfoot><tr class="summary"><td colspan="4">TỔNG CỘNG</td><td class="num">{{ number_format($totalOrders) }}</td><td class="num">{{ number_format($totalQuantity) }}</td><td class="num">{{ $formatKg($totalWeight) }}</td></tr></tfoot>
+        <tfoot><tr class="summary"><td colspan="4">TỔNG CỘNG</td><td class="num">{{ number_format($totalOrders) }}</td><td class="num">@include('warehouse.dispatch-slips._quantity_by_unit', ['quantityRows' => $totalExportSummaryRows])</td><td class="num">{{ $formatKg($totalWeight) }}</td></tr></tfoot>
     </table>
     @if($documents->contains(fn ($document) => filled($document['slip']->notes)))
         <h2>GHI CHÚ XUẤT PHIẾU TỔNG</h2>

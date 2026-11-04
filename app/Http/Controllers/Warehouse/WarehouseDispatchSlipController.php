@@ -653,12 +653,15 @@ class WarehouseDispatchSlipController extends Controller
                 $row['variant_id'] ?? null,
                 number_format((float) $row['price'], 2, '.', ''),
                 (bool) $row['priced_by_kg'],
+                $row['unit'],
             ]))
             ->map(function (Collection $rows): array {
                 $first = $rows->first();
 
                 return [
                     'product_name' => $first['product_name'],
+                    'unit' => $first['unit'],
+                    'is_piece_unit' => $first['is_piece_unit'],
                     'sku' => $first['sku'],
                     'size' => $first['size'],
                     'quantity' => (int) $rows->sum('quantity'),
@@ -954,7 +957,7 @@ class WarehouseDispatchSlipController extends Controller
                 'received_weight' => $receivedRows->isEmpty() ? null : round((float) $receivedRows->sum('received_weight'), 3),
             ];
         };
-        $summaryRows = $itemRows->groupBy('variant_id')->map($summarizeRows)->values();
+        $summaryRows = $itemRows->groupBy(fn (array $row) => json_encode([$row['variant_id'], Str::lower(Str::ascii(trim($row['unit'])))]))->map($summarizeRows)->values();
         $exportSummaryRows = $itemRows->groupBy(fn (array $row) => json_encode([
             $row['variant_id'], number_format($row['price'], 2, '.', ''), $row['priced_by_kg'], $row['unit'],
         ]))->map($summarizeRows)->values();

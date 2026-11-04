@@ -113,3 +113,5 @@ readme.txt
 
 !/tests/Feature/AdminTaskAssigneesTest.php
 !/tests/Feature/TaskPublicationTest.php
+
+!/tests/Feature/QuantityByUnitTest.php
