@@ -312,29 +312,13 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                 </tbody>
                 @if($journalRows->isNotEmpty())
                     <tfoot class="table-light fw-semibold">
-                    @foreach(\App\Support\DailySalesUnitSummary::groups($items) as $group)
-                    <tr>
-                        <td colspan="8" class="text-end">Tổng {{ $group['unit'] }} (trang này)</td>
-                        <td class="text-center">{{ $fmtN($group['eff_qty']) }}</td>
-                        <td>{{ $group['unit'] }}</td>
-                        <td class="text-center">{{ \App\Support\QuantityByUnit::hasWeight($group['unit']) ? $fmtN($group['eff_weight']).' kg' : '—' }}</td>
-                        <td></td><td></td>
-                        <td class="text-end text-success">{{ number_format($group['eff_total'], 0, ',', '.') }}đ</td>
-                        <td class="text-end text-primary">{{ number_format($group['customer_shipping_fee'], 0, ',', '.') }}đ</td>
-                        <td class="text-end">{{ number_format($group['price_adjustment'], 0, ',', '.') }}đ</td>
-                    </tr>
-                    @endforeach
-                    <tr>
-                        <td colspan="13" class="text-end">TỔNG TIỀN HÀNG (TRANG NÀY)</td>
-                        <td class="text-end text-success">{{ number_format($items->sum('eff_total'), 0, ',', '.') }}đ</td>
-                        <td class="text-end text-primary">{{ number_format($items->sum('customer_shipping_fee'), 0, ',', '.') }}đ</td>
-                        <td class="text-end">{{ number_format($items->sum('price_adjustment'), 0, ',', '.') }}đ</td>
-                    </tr>
-                    <tr>
-                        <td colspan="13" class="text-end text-muted small">Tiền hàng + phí giao hàng thu khách (trang này):</td>
-                        <td colspan="2" class="text-end text-success">{{ number_format((float)$items->sum('eff_total') + (float)$items->sum('customer_shipping_fee'), 0, ',', '.') }}đ</td><td></td>
-                    </tr>
-                </tfoot>
+                        <tr>
+                            <td colspan="8" class="text-end">Tổng trang:</td>
+                            <td class="text-end">{{ $fmtN((float) $journalRows->sum('total_quantity'), 1) }}</td>
+                            <td></td>
+                            <td class="text-end text-success">{{ number_format((float) $journalRows->sum('total_amount'), 0, ',', '.') }}đ</td>
+                        </tr>
+                    </tfoot>
                 @endif
             </table>
         </div>
@@ -600,30 +584,27 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                 </tbody>
                 @if($items->isNotEmpty())
                 <tfoot class="table-light fw-semibold">
+                    @foreach(\App\Support\DailySalesUnitSummary::groups($items) as $group)
                     <tr>
-                        <td colspan="8" class="text-end text-muted small">Tổng tiền hàng trang này:</td>
-                        <td class="text-end">
-                            {{ $fmtN((float)$items->sum('eff_qty')) }}
-                        </td>
-                        <td></td>
-                        <td class="text-end">
-                            {{ $fmtN((float)$items->sum('eff_weight')) }}
-                        </td>
-                        <td></td>
-                        <td></td>
-                        <td class="text-end text-success">
-                            {{ number_format($items->sum('eff_total'), 0, ',', '.') }}đ
-                        </td>
-                        <td class="text-end text-primary">{{ number_format((float) $items->sum('customer_shipping_fee'), 0, ',', '.') }}đ</td>
-                        @php $pageAdjustment = (float) $items->sum('price_adjustment'); @endphp
-                        <td class="text-end {{ $pageAdjustment > 0 ? 'ds-price-increase' : ($pageAdjustment < 0 ? 'text-danger' : 'text-muted') }}">
-                            {{ $pageAdjustment > 0 ? '+' : '' }}{{ number_format($pageAdjustment, 0, ',', '.') }}đ
-                        </td>
+                        <td colspan="8" class="text-end">Tổng {{ $group['unit'] }} (trang này)</td>
+                        <td class="text-center">{{ $fmtN($group['eff_qty']) }}</td>
+                        <td>{{ $group['unit'] }}</td>
+                        <td class="text-center">{{ \App\Support\QuantityByUnit::hasWeight($group['unit']) ? $fmtN($group['eff_weight']).' kg' : '—' }}</td>
+                        <td></td><td></td>
+                        <td class="text-end text-success">{{ number_format($group['eff_total'], 0, ',', '.') }}đ</td>
+                        <td class="text-end text-primary">{{ number_format($group['customer_shipping_fee'], 0, ',', '.') }}đ</td>
+                        <td class="text-end">{{ number_format($group['price_adjustment'], 0, ',', '.') }}đ</td>
+                    </tr>
+                    @endforeach
+                    <tr>
+                        <td colspan="13" class="text-end">TỔNG TIỀN HÀNG (TRANG NÀY)</td>
+                        <td class="text-end text-success">{{ number_format($items->sum('eff_total'), 0, ',', '.') }}đ</td>
+                        <td class="text-end text-primary">{{ number_format($items->sum('customer_shipping_fee'), 0, ',', '.') }}đ</td>
+                        <td class="text-end">{{ number_format($items->sum('price_adjustment'), 0, ',', '.') }}đ</td>
                     </tr>
                     <tr>
                         <td colspan="13" class="text-end text-muted small">Tiền hàng + phí giao hàng thu khách (trang này):</td>
-                        <td colspan="2" class="text-end text-success">{{ number_format((float) $items->sum('eff_total') + (float) $items->sum('customer_shipping_fee'), 0, ',', '.') }}đ</td>
-                        <td></td>
+                        <td colspan="2" class="text-end text-success">{{ number_format((float)$items->sum('eff_total') + (float)$items->sum('customer_shipping_fee'), 0, ',', '.') }}đ</td><td></td>
                     </tr>
                 </tfoot>
                 @endif
