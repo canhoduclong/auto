@@ -1720,10 +1720,10 @@ class CeoDashboardController extends Controller
         $customerId = (int) $request->input('customer_id', 0);
         $sort = (string) $request->input('sort', 'date_desc');
 
-        $allowedPerPage = [10, 20, 50, 100, 200];
-        $perPage = (int) $request->input('per_page', 20);
+        $allowedPerPage = [10, 20, 40, 50, 100, 200];
+        $perPage = (int) $request->input('per_page', 40);
         if (! in_array($perPage, $allowedPerPage, true)) {
-            $perPage = 20;
+            $perPage = 40;
         }
 
         // Sub-query: one approved adjustment item per order_item (latest id wins)
@@ -1760,6 +1760,7 @@ class CeoDashboardController extends Controller
             'orders.status as order_status',
             'ar.status as reconciliation_status',
             'ar.recognized_revenue',
+            'products.id as product_id',
             'products.name as product_name',
             'products.unit as product_unit',
             DB::raw("COALESCE(product_variants.size, '') as variant_size"),

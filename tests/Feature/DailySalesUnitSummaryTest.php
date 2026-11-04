@@ -28,4 +28,26 @@ class DailySalesUnitSummaryTest extends TestCase
         self::assertSame(150000.0, $groups['cái']['actual_total']);
         self::assertSame([], DailySalesUnitSummary::groups([]));
     }
+    public function test_product_groups_merge_sizes_but_keep_different_products_and_units_separate(): void
+    {
+        $rows = [
+            (object)['product_id'=>1,'product_name'=>'Vịt Nguyên Con','variant_size'=>'2.7','product_unit'=>'con','eff_qty'=>20,'eff_weight'=>54,'eff_total'=>3132000,'customer_shipping_fee'=>50000],
+            (object)['product_id'=>1,'product_name'=>'Vịt Nguyên Con','variant_size'=>'2.8','product_unit'=>'con','eff_qty'=>40,'eff_weight'=>112,'eff_total'=>6720000],
+            (object)['product_id'=>2,'product_name'=>'Vịt Bọng không đầu chân','product_unit'=>'kg','eff_qty'=>120,'eff_weight'=>300,'eff_total'=>16500000],
+            (object)['product_id'=>3,'product_name'=>'Ức vịt','product_unit'=>'kg','eff_qty'=>102,'eff_weight'=>102,'eff_total'=>6120000],
+            (object)['product_id'=>4,'product_name'=>'Thùng Xốp','product_unit'=>'cai','eff_qty'=>2,'eff_weight'=>2,'eff_total'=>150000],
+            (object)['product_id'=>1,'product_name'=>'Vịt Nguyên Con','product_unit'=>'kg','eff_qty'=>3,'eff_weight'=>3,'eff_total'=>100000],
+        ];
+        $groups = DailySalesUnitSummary::productGroups($rows);
+        self::assertCount(5, $groups);
+        self::assertSame('Vịt Nguyên Con', $groups[0]['product_name']);
+        self::assertSame(60.0, $groups[0]['eff_qty']);
+        self::assertSame(166.0, $groups[0]['eff_weight']);
+        self::assertSame(9852000.0, $groups[0]['eff_total']);
+        self::assertSame(0.0, $groups[3]['eff_weight']);
+        self::assertSame('kg', $groups[4]['unit']);
+        self::assertSame(32722000.0, array_sum(array_column($groups, 'eff_total')));
+        self::assertSame(50000.0, array_sum(array_column($groups, 'customer_shipping_fee')));
+        self::assertSame([], DailySalesUnitSummary::productGroups([]));
+    }
 }

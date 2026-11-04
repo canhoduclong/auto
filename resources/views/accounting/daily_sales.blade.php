@@ -149,7 +149,7 @@
                     <label class="form-label small fw-semibold">Số dòng / trang</label>
                     <div class="d-flex gap-2">
                         <select class="form-select form-select-sm" name="per_page">
-                            @foreach([10, 20, 50, 100, 200] as $pp)
+                            @foreach([10, 20, 40, 50, 100, 200] as $pp)
                                 <option value="{{ $pp }}" {{ $perPage === $pp ? 'selected' : '' }}>{{ $pp }}</option>
                             @endforeach
                         </select>
@@ -584,9 +584,9 @@ $fmtN = fn(float $v, int $d = 3): string => rtrim(rtrim(number_format($v, $d, ',
                 </tbody>
                 @if($items->isNotEmpty())
                 <tfoot class="table-light fw-semibold">
-                    @foreach(\App\Support\DailySalesUnitSummary::groups($items) as $group)
+                    @foreach(\App\Support\DailySalesUnitSummary::productGroups($items) as $group)
                     <tr>
-                        <td colspan="8" class="text-end">Tổng {{ $group['unit'] }} (trang này)</td>
+                        <td colspan="8" class="text-end">{{ $group['product_name'] }} (trang này)</td>
                         <td class="text-center">{{ $fmtN($group['eff_qty']) }}</td>
                         <td>{{ $group['unit'] }}</td>
                         <td class="text-center">{{ \App\Support\QuantityByUnit::hasWeight($group['unit']) ? $fmtN($group['eff_weight']).' kg' : '—' }}</td>

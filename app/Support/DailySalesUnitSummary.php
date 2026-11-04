@@ -6,6 +6,23 @@ use App\Enums\ProductUnit;
 
 class DailySalesUnitSummary
 {
+    public static function productGroups(iterable $rows): array
+    {
+        $products = [];
+        foreach ($rows as $row) {
+            $unit = QuantityByUnit::unit((string) ($row->product_unit ?? 'cai'));
+            $key = json_encode([$row->product_id ?? ($row->product_name ?? ''), $unit]);
+            $products[$key][] = $row;
+        }
+        $result = [];
+        foreach ($products as $rows) {
+            $group = self::groups($rows)[0];
+            $group['product_name'] = $rows[0]->product_name ?? 'Chưa rõ mặt hàng';
+            $result[] = $group;
+        }
+        return $result;
+    }
+
     public static function groups(iterable $rows): array
     {
         $groups = [];

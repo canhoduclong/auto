@@ -2040,10 +2040,11 @@ class AccountingDashboardController extends Controller
         $customerId = (int) $request->input('customer_id', 0);
         $sort = (string) $request->input('sort', 'date_desc');
 
-        $allowedPerPage = [10, 20, 50, 100, 200];
-        $perPage = (int) $request->input('per_page', 20);
+        $allowedPerPage = [10, 20, 40, 50, 100, 200];
+        $defaultPerPage = $request->routeIs('ceo.*') ? 40 : 20;
+        $perPage = (int) $request->input('per_page', $defaultPerPage);
         if (! in_array($perPage, $allowedPerPage, true)) {
-            $perPage = 20;
+            $perPage = $defaultPerPage;
         }
 
         $sales = User::query()->orderBy('name')->select('id', 'name', 'short_name')->get();
@@ -2178,6 +2179,7 @@ class AccountingDashboardController extends Controller
                 THEN {$customerShippingFeeExpr} ELSE 0 END as customer_shipping_fee"),
             'orders.code as order_code',
             'orders.daily_sequence',
+            'products.id as product_id',
             'products.name as product_name',
             'products.unit as product_unit',
             DB::raw("COALESCE(product_variants.size, '') as variant_size"),
