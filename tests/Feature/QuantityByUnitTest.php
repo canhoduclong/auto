@@ -26,4 +26,26 @@ class QuantityByUnitTest extends TestCase
         ], 'received_quantity'));
         self::assertSame([], QuantityByUnit::totals([]));
     }
+    public function test_subtotals_exclude_piece_and_set_weights_but_preserve_money(): void
+    {
+        $groups = QuantityByUnit::groups([
+            ['unit'=>'con', 'quantity'=>80, 'weight'=>204, 'amount'=>11220000, 'received_quantity'=>80, 'received_weight'=>204],
+            ['unit'=>'CON', 'quantity'=>30, 'weight'=>82.5, 'amount'=>5115000],
+            ['unit'=>'bo', 'quantity'=>40, 'weight'=>40, 'amount'=>400000, 'received_quantity'=>40, 'received_weight'=>40],
+            ['unit'=>'cái', 'quantity'=>1, 'weight'=>1, 'amount'=>75000],
+        ]);
+        self::assertSame(110.0, $groups[0]['quantity']);
+        self::assertSame(286.5, $groups[0]['weight']);
+        self::assertSame(16335000.0, $groups[0]['amount']);
+        self::assertSame(204.0, $groups[0]['received_weight']);
+        self::assertNull($groups[1]['weight']);
+        self::assertNull($groups[1]['received_weight']);
+        self::assertSame(400000.0, $groups[1]['amount']);
+        self::assertNull($groups[2]['weight']);
+        self::assertSame(16810000.0, array_sum(array_column($groups, 'amount')));
+        self::assertSame(286.5, array_sum(array_column($groups, 'weight')));
+        self::assertFalse(QuantityByUnit::hasWeight(' BỘ '));
+        self::assertFalse(QuantityByUnit::hasWeight('CAI'));
+        self::assertTrue(QuantityByUnit::hasWeight('con'));
+    }
 }

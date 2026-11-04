@@ -759,7 +759,7 @@ class WarehouseDispatchSlipController extends Controller
         $resolveUnit = static fn ($item, $variant): string => trim((string) (
             $item->unit ?? $variant?->product?->unit ?? '—'
         )) ?: '—';
-        $isPieceUnit = static fn (string $unit): bool => Str::lower(Str::ascii(trim($unit))) === 'cai';
+        $isPieceUnit = static fn (string $unit): bool => !\App\Support\QuantityByUnit::hasWeight($unit);
 
         foreach ($slip->entries as $entry) {
             if ($entry->orderTransfer) {
