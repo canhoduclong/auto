@@ -1,6 +1,8 @@
 <style>
     .mcl-page { padding-bottom: 36px; }
-    .mcl-title { margin: 0 0 34px; color: #111827; font-size: 1.22rem; font-weight: 800; }
+    .mcl-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+    .mcl-heading .btn { flex-shrink:0; font-size:.75rem; }
+    .mcl-title { margin: 0; color: #111827; font-size: 1.22rem; font-weight: 800; }
     .mcl-classification-panel { margin-bottom: 18px; border: 1px solid #dbe5ef; border-radius: 10px; background: #fff; overflow: hidden; }
     .mcl-classification-panel summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 16px; color: #0f3b76; font-weight: 900; cursor: pointer; list-style: none; }
     .mcl-classification-panel summary::-webkit-details-marker { display: none; }
@@ -27,8 +29,9 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 18px;
-        margin-bottom: 16px;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-bottom: 20px;
     }
     .mcl-toolbar-left,
     .mcl-toolbar-right,
@@ -38,8 +41,18 @@
     .mcl-toolbar .form-control,
     .mcl-toolbar .btn { min-height: 39px; font-size: .75rem; }
     .mcl-toolbar .btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; font-weight: 700; white-space: nowrap; }
-    .mcl-per-page { width: 166px; }
-    .mcl-filter-form select[name="per_page"], .mcl-filter-form select[name="per_page"] + .nice-select { min-width:165px; }
+    .mcl-toolbar-left { flex:1 1 auto; min-width:0; flex-wrap:wrap; }
+    .mcl-toolbar-right { flex:0 1 260px; min-width:180px; }
+    .mcl-toolbar-actions { display:flex; align-items:center; gap:8px; margin-right:12px; }
+    .mcl-toolbar-actions .btn { width:39px; padding:0; }
+    .mcl-per-page { width:145px; }
+    .mcl-filter-form .mcl-sort-select { width:120px; }
+    .mcl-filter-form select { display:block !important; height:39px; padding-right:28px; }
+    .mcl-filter-form select + .nice-select { display:none !important; }
+    .mcl-view-switch { flex-shrink:0; }
+    .mcl-search-form.input-group { flex-wrap:nowrap; gap:0; width:100%; }
+    .mcl-search-form.input-group .form-control { flex:1 1 auto; width:1%; }
+    .mcl-search-form.input-group .btn { flex-shrink:0; }
     .mcl-owner { margin-top:8px;font-size:13px;color:#475569;display:flex;gap:8px;align-items:center;flex-wrap:wrap; }
     .mcl-transfer-dialog { border:0;border-radius:12px;padding:24px;width:440px;max-width:calc(100vw - 32px);box-shadow:0 20px 60px #0003; }
     .mcl-transfer-dialog::backdrop { background:#0006; }
@@ -146,11 +159,11 @@
     @media (max-width: 991.98px) {
         .mcl-toolbar { align-items: stretch; flex-direction: column; }
         .mcl-toolbar-left, .mcl-toolbar-right { flex-wrap: wrap; }
-        .mcl-toolbar-right { justify-content: space-between; }
+        .mcl-toolbar-right { flex-basis:auto; justify-content:space-between; }
         .mcl-row, .mcl-row.is-compact { grid-template-columns: minmax(0, 1fr) 128px; }
     }
     @media (max-width: 767.98px) {
-        .mcl-title { margin-bottom: 20px; }
+        .mcl-heading { align-items:flex-start; }
         .mcl-toolbar-left, .mcl-toolbar-right, .mcl-filter-form { width: 100%; }
         .mcl-filter-form { flex-wrap: wrap; }
         .mcl-per-page { flex: 1; width: auto; }
@@ -193,7 +206,10 @@
 @endphp
 
 <section class="mcl-page">
-    <h1 class="mcl-title">Danh sách khách hàng</h1>
+    <div class="mcl-heading">
+        <h1 class="mcl-title">Danh sách khách hàng</h1>
+        <a href="{{ route('my_customer.create') }}" class="btn btn-success"><i class="bi bi-plus-circle"></i> Thêm mới</a>
+    </div>
 
     <details class="mcl-classification-panel" @if($errors->has('criteria') || $errors->has('overall')) open @endif>
         <summary>
@@ -257,8 +273,11 @@
 
     <div class="mcl-toolbar">
         <div class="mcl-toolbar-left">
+            <div class="mcl-toolbar-actions">
             <a class="btn btn-outline-primary" href="{{ route('pages.my_orders.monitoring.customers.print', request()->except(['page', 'ajax'])) }}" target="_blank" rel="noopener" title="In toàn bộ khách hàng theo bộ lọc hiện tại" aria-label="In danh sách khách hàng"><i class="bi bi-printer"></i></a>
-            <button type="button" class="btn btn-outline-danger" id="mclBulkDelete" disabled><i class="bi bi-trash"></i> Xóa</button>
+            <button type="button" class="btn btn-outline-danger" id="mclBulkDelete" disabled title="Xóa khách hàng đã chọn" aria-label="Xóa khách hàng đã chọn"><i class="bi bi-trash"></i></button>
+            <button type="button" class="btn btn-outline-info" onclick="window.location.reload()" title="Tải lại danh sách" aria-label="Tải lại danh sách"><i class="bi bi-arrow-clockwise"></i></button>
+            </div>
             <form method="GET" action="{{ route('pages.my_orders.monitoring') }}" class="mcl-filter-form">
                 @foreach($sharedFilters as $name => $value)
                     @if(!in_array($name, ['per_page', 'classification_sort'], true))<input type="hidden" name="{{ $name }}" value="{{ $value }}">@endif
@@ -269,8 +288,8 @@
                         <option value="{{ $size }}" @selected($perPage === $size)>{{ $size }} khách/trang</option>
                     @endforeach
                 </select>
-                <select name="classification_sort" class="form-select mcl-per-page" onchange="this.form.submit()" aria-label="Sắp xếp theo phân loại">
-                    <option value="">Sắp xếp mặc định</option>
+                <select name="classification_sort" class="form-select mcl-sort-select" onchange="this.form.submit()" aria-label="Sắp xếp theo phân loại">
+                    <option value="">Sắp xếp</option>
                     <option value="a_first" @selected($classificationSort === 'a_first')>Phân loại A → D</option>
                     <option value="d_first" @selected($classificationSort === 'd_first')>Phân loại D → A</option>
                     <option value="score_desc" @selected($classificationSort === 'score_desc')>Điểm cao → thấp</option>
@@ -285,11 +304,9 @@
         <div class="mcl-toolbar-right">
             <form method="GET" action="{{ route('pages.my_orders.monitoring') }}" class="input-group mcl-search-form">
                 @foreach($sharedFilters as $name => $value)<input type="hidden" name="{{ $name }}" value="{{ $value }}">@endforeach
-                <input name="search" class="form-control" value="{{ $search }}" placeholder="Tìm khách hàng..." aria-label="Tìm khách hàng">
+                <input name="search" class="form-control" value="{{ $search }}" placeholder="Tìm" aria-label="Tìm khách hàng">
                 <button class="btn btn-outline-secondary" type="submit" aria-label="Tìm kiếm"><i class="bi bi-search"></i></button>
             </form>
-            <button type="button" class="btn btn-outline-info" onclick="window.location.reload()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
-            <a href="{{ route('my_customer.create') }}" class="btn btn-success"><i class="bi bi-plus-circle"></i> Thêm mới</a>
         </div>
     </div>
 
