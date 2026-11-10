@@ -6,7 +6,7 @@ use App\Models\Order;
 
 class WarehousePackedOrderService
 {
-    public function summary(Order $order, bool $useActualWeight = false): array
+    public function summary(Order $order, bool $useActualWeight = false, bool $usePackedQuantity = false): array
     {
         $order->loadMissing('items.variant.product');
         $weightAttribute = $useActualWeight ? 'export_actual_weight' : 'warehouse_packed_weight';
@@ -15,7 +15,7 @@ class WarehousePackedOrderService
         foreach ($order->items as $item) {
             $factor = $item->effective_priced_by_kg
                 ? ($item->$weightAttribute ?? $item->display_total_value)
-                : (float) $item->quantity;
+                : (float) ($usePackedQuantity ? ($item->packed_quantity ?? $item->quantity) : $item->quantity);
             $subtotal += round($factor * (float) $item->price, 2);
             $baseSubtotal += round($factor * (float) ($item->base_price ?? $item->price), 2);
         }
