@@ -26,7 +26,7 @@ class CustomerDebtPolicyServiceTest extends TestCase
         self::assertSame(2, $alert['unpaid_orders']);
         self::assertSame('2026-10-30', $alert['oldest_date']);
         self::assertSame(13, $alert['age_days']);
-        self::assertSame(6, $alert['overdue_days']);
+        self::assertSame(0, $alert['overdue_days']);
         self::assertTrue($alert['remind']);
         self::assertNull($alert['risk']);
     }
@@ -69,7 +69,7 @@ class CustomerDebtPolicyServiceTest extends TestCase
     {
         $service = new CustomerDebtPolicyService;
         $policy = $service->effective(['customer_id' => 1], []);
-        self::assertSame(['allowed_orders' => 0, 'credit_limit' => 0, 'due_days' => 1], $policy);
+        self::assertSame(['allowed_orders' => 0, 'credit_limit' => 0, 'due_days' => 1], array_intersect_key($policy, $service->defaults()));
         $result = $service->evaluate([$this->sale('2026-11-10')], [], '2026-11-12');
         self::assertTrue($result['remind']);
         self::assertSame('2026-11-11', $result['due_date']);
@@ -82,9 +82,9 @@ class CustomerDebtPolicyServiceTest extends TestCase
     {
         $service = new CustomerDebtPolicyService;
         $custom = ['allowed_orders' => 3, 'credit_limit' => 10000000, 'due_days' => 7];
-        self::assertSame($custom, $service->effective(['customer_id' => 1], ['customer_1' => $custom]));
-        self::assertSame($service->defaults(), $service->effective(['customer_id' => 1], ['customer_1' => ['allowed_orders' => null, 'credit_limit' => null, 'due_days' => null]]));
-        self::assertSame(['allowed_orders' => 0, 'credit_limit' => 0, 'due_days' => 0], $service->effective(['customer_id' => 1], ['customer_1' => ['allowed_orders' => 0, 'credit_limit' => 0, 'due_days' => 0]]));
+        self::assertSame($custom, array_intersect_key($service->effective(['customer_id' => 1], ['customer_1' => $custom]), $service->defaults()));
+        self::assertSame($service->defaults(), array_intersect_key($service->effective(['customer_id' => 1], ['customer_1' => ['allowed_orders' => null, 'credit_limit' => null, 'due_days' => null]]), $service->defaults()));
+        self::assertSame(['allowed_orders' => 0, 'credit_limit' => 0, 'due_days' => 0], array_intersect_key($service->effective(['customer_id' => 1], ['customer_1' => ['allowed_orders' => 0, 'credit_limit' => 0, 'due_days' => 0]]), $service->defaults()));
     }
 
     public function test_future_sales_and_receipts_do_not_change_todays_warning(): void
@@ -92,5 +92,25 @@ class CustomerDebtPolicyServiceTest extends TestCase
         $result = (new CustomerDebtPolicyService)->evaluate([$this->sale('2026-11-13'), ['date' => '2026-11-14', 'type' => 'payment', 'amount' => 1000]], ['due_days' => 0], '2026-11-12');
         self::assertSame(0, $result['balance']);
         self::assertFalse($result['remind']);
+    }
+
+    public function test_due_days_start_at_latest_delivery_while_risk_keeps_fifo_age(): void
+    {
+        $result = (new CustomerDebtPolicyService)->evaluate([
+            $this->sale('2026-10-01', 1000), $this->sale('2026-11-10', 300),
+            ['date' => '2026-11-12', 'type' => 'payment', 'amount' => 100],
+        ], ['due_days' => 1], '2026-11-12');
+        self::assertSame('2026-11-11', $result['due_date']);
+        self::assertSame(1, $result['overdue_days']);
+        self::assertSame(42, $result['age_days']);
+        self::assertSame('high', $result['risk']);
+    }
+
+    public function test_legacy_saved_policies_are_locked_until_admin_reopens(): void
+    {
+        $service = new CustomerDebtPolicyService;
+        self::assertFalse($service->isLocked([]));
+        self::assertTrue($service->isLocked(['updated_at' => '2026-11-12T09:00:00+07:00']));
+        self::assertFalse($service->isLocked(['updated_at' => '2026-11-12T09:00:00+07:00', 'staff_edit_locked' => false]));
     }
 }

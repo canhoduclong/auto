@@ -71,7 +71,10 @@
                     <td class="debt-alert-cell">@include('customer-debt.alerts', ['alert'=>$debt['alerts'], 'compact'=>true])
                         <div class="debt-policy-inline"><div class="debt-terms" title="Số Bill được phép nợ · Trần nợ · Hạn thanh toán từ ngày giao hàng">{{ $debt['policy']['allowed_orders'] }} Bill · {{ number_format($debt['policy']['credit_limit'], 0, ',', '.') }} đ · {{ $debt['policy']['due_days'] }} ngày</div>
 
-                        <button type="button" class="btn btn-link btn-sm debt-policy-button" data-key="{{ $debt['key'] }}" data-name="{{ $debt['system_customer']?->name ?? $debt['name'] }}" data-orders="{{ $debt['policy']['allowed_orders'] }}" data-limit="{{ $debt['policy']['credit_limit'] }}" data-days="{{ $debt['policy']['due_days'] }}">Sửa tiêu chí</button></div>
+                        <button type="button" class="btn btn-link btn-sm debt-policy-button" data-key="{{ $debt['key'] }}" data-name="{{ $debt['system_customer']?->name ?? $debt['name'] }}" data-orders="{{ $debt['policy']['allowed_orders'] }}" data-limit="{{ $debt['policy']['credit_limit'] }}" data-days="{{ $debt['policy']['due_days'] }}" data-version="{{ $debt['policy']['edit_version'] }}" @disabled($debt['policy']['staff_edit_locked'] && !auth()->user()->isAdmin())>Sửa tiêu chí</button>
+                        @if($debt['policy']['staff_edit_locked'])<span class="small text-muted">Đã khóa</span>@endif
+                        @if(auth()->user()->isAdmin() && $debt['policy']['staff_edit_locked'])<form method="POST" action="{{ route('customer-debt.policy.unlock') }}">@csrf<input type="hidden" name="source_key" value="{{ $debt['key'] }}"><button class="btn btn-link btn-sm" type="submit">Mở khóa 1 lần</button></form>@endif
+                        </div>
                     </td>
                     <td><a class="btn btn-sm btn-outline-primary" href="{{ request()->fullUrlWithQuery(['customer'=>$debt['key'],'system_customer'=>null,'window'=>$tab === 'orders' ? 'recent' : 'all','detail_page'=>null,'purchase_page'=>1,'payment_page'=>1,'report_from'=>null,'report_to'=>null]) }}#debt-detail">{{ $tab === 'orders' ? 'Xem nhanh' : 'Chi tiết' }}</a></td></tr>
             @empty<tr><td colspan="11" class="text-center text-muted">Chưa có dữ liệu khách hàng phù hợp.</td></tr>@endforelse
@@ -95,11 +98,11 @@
     <div class="d-flex justify-content-between align-items-center mb-3"><h5 id="debt-policy-title" class="mb-0">Sửa nhanh tiêu chí công nợ</h5><button type="button" id="debt-policy-close" class="btn btn-sm btn-light">Đóng</button></div>
     <p id="debt-policy-name" class="fw-bold"></p>
     <form method="POST" action="{{ route('customer-debt.policy') }}">@csrf @method('PATCH')
-        <input type="hidden" id="debt-policy-key" name="source_key">
+        <input type="hidden" id="debt-policy-key" name="source_key"><input type="hidden" id="debt-policy-version" name="policy_version">
         <label for="debt-policy-orders" class="form-label">Số Bill được phép nợ</label><input id="debt-policy-orders" name="allowed_orders" type="number" min="0" max="100000" step="1" class="form-control mb-3" placeholder="Mặc định: 0 Bill">
         <label for="debt-policy-limit" class="form-label">Trần công nợ (đ)</label><input id="debt-policy-limit" name="credit_limit" inputmode="numeric" class="form-control mb-3" placeholder="Mặc định: 0 đ">
-        <label for="debt-policy-days" class="form-label">Hạn thanh toán (ngày kể từ ngày giao hàng)</label><input id="debt-policy-days" name="due_days" type="number" min="0" max="3650" step="1" class="form-control mb-3" placeholder="Mặc định: 1 ngày">
-        <p class="small text-muted">Để trống để dùng mặc định: cho nợ 0 Bill, trần nợ 0 đ, hạn thanh toán 1 ngày kể từ ngày giao hàng. Nhập hạn thanh toán 0 ngày nếu cần thanh toán trong ngày. Tiêu chí của khách đã ghép áp dụng chung cho mọi nguồn của khách đó.</p>
+        <label for="debt-policy-days" class="form-label">Ngày nợ (từ ngày giao hàng gần nhất)</label><input id="debt-policy-days" name="due_days" type="number" min="0" max="3650" step="1" class="form-control mb-3" placeholder="Mặc định: 1 ngày">
+        <p class="small text-muted">Để trống để dùng mặc định: cho nợ 0 Bill, trần nợ 0 đ, hạn thanh toán 1 ngày kể từ ngày giao hàng gần nhất. Nhập hạn thanh toán 0 ngày nếu cần thanh toán trong ngày. Tiêu chí dùng chung cho mọi nguồn đã ghép. Nhân viên lưu một lần rồi khóa; chỉ admin được mở khóa.</p>
         <button type="submit" class="btn btn-primary">Lưu & cập nhật cảnh báo</button>
     </form>
 </dialog>
@@ -280,6 +283,7 @@
     const dialog = document.getElementById('debt-policy-dialog');
     document.querySelectorAll('.debt-policy-button').forEach(button => button.addEventListener('click', () => {
         document.getElementById('debt-policy-key').value = button.dataset.key;
+        document.getElementById('debt-policy-version').value = button.dataset.version;
         document.getElementById('debt-policy-name').textContent = button.dataset.name;
         document.getElementById('debt-policy-orders').value = button.dataset.orders;
         document.getElementById('debt-policy-limit').value = button.dataset.limit === '' ? '' : Number(button.dataset.limit).toLocaleString('vi-VN');

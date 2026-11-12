@@ -111,7 +111,7 @@ class CustomerDebtMonitorTest extends TestCase
 
     private function request(array $params = [], string $role = 'sale'): Request
     {
-        $request = Request::create('/customer-debt', 'GET', $params);
+        $request = Request::create('/customer-debt', 'GET', $params + ['policy_version' => 0]);
         $this->app->instance('request', $request);
         $request->setUserResolver(fn () => $this->user($role));
 
@@ -369,8 +369,8 @@ class CustomerDebtMonitorTest extends TestCase
         $service = $this->service([$this->entry('OLD01', 'Chị Bình')]);
         $key = array_key_first($service->summarize($service->snapshot()['entries']));
         $controller = new CustomerDebtMonitorController;
-        $controller->updatePolicy($this->request(['source_key' => $key, 'allowed_orders' => 1, 'credit_limit' => 100000, 'due_days' => 7]), $service);
-        $controller->updatePolicy($this->request(['source_key' => $key, 'allowed_orders' => '', 'credit_limit' => '', 'due_days' => '']), $service);
+        $controller->updatePolicy($this->request(['source_key' => $key, 'allowed_orders' => 1, 'credit_limit' => 100000, 'due_days' => 7], 'admin'), $service);
+        $controller->updatePolicy($this->request(['source_key' => $key, 'allowed_orders' => '', 'credit_limit' => '', 'due_days' => '', 'policy_version' => 1], 'admin'), $service);
         $policy = app(\App\Services\CustomerDebtPolicyService::class)->policies()['customer_1'];
         self::assertNull($policy['allowed_orders']);
         self::assertNull($policy['credit_limit']);
@@ -551,7 +551,7 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(1, $data['payments']->total());
         self::assertSame('2026-11-10', $data['reportLastPurchase']);
         self::assertSame('2026-11-05', $data['reportLastPayment']);
-        self::assertSame(39, $data['reportAlerts']['overdue_days']);
+        self::assertSame(0, $data['reportAlerts']['overdue_days']);
         self::assertSame('high', $data['reportAlerts']['risk']);
     }
 
@@ -621,8 +621,128 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame('Chị Bình', $data['selected']['name']);
         self::assertSame(1000, $data['detailSales']);
         self::assertSame(300, $data['detailPayments']);
-        self::assertSame(700,$data['closing']);
-        self::assertSame(1,$data['purchases']->total());
-        self::assertSame(1,$data['payments']->total());
+        self::assertSame(700, $data['closing']);
+        self::assertSame(1, $data['purchases']->total());
+        self::assertSame(1, $data['payments']->total());
+    }
+
+    private function policyUpdate(array $params = [], string $role = 'sale', int $customerId = 1): array
+    {
+        $request = $this->request($params + ['allowed_orders' => 2, 'credit_limit' => '10.000.000', 'due_days' => 7], $role);
+
+        return (new \App\Http\Controllers\CustomerDebtPolicyController)->update($request, \App\Models\Customer::findOrFail($customerId), app(\App\Services\CustomerDebtPolicyService::class))->getData(true);
+    }
+
+    public function test_customer_card_staff_save_is_once_for_all_staff_roles(): void
+    {
+        $first = $this->policyUpdate();
+        self::assertTrue($first['policy']['staff_edit_locked']);
+        self::assertSame(1, $first['policy']['edit_version']);
+        self::assertSame(10000000, $first['policy']['credit_limit']);
+        foreach (['sale', 'leader', 'manager'] as $role) {
+            try {
+                $this->policyUpdate(['policy_version' => 1, 'allowed_orders' => 9], $role);
+                self::fail('Locked policy accepted');
+            } catch (\Illuminate\Validation\ValidationException $e) {
+                self::assertArrayHasKey('policy', $e->errors());
+            }
+        }
+        self::assertSame(2, app(\App\Services\CustomerDebtPolicyService::class)->policies()['customer_1']['allowed_orders']);
+    }
+
+    public function test_admin_unlock_allows_only_one_further_save_and_does_not_bank_credits(): void
+    {
+        $this->policyUpdate();
+        $controller = new \App\Http\Controllers\CustomerDebtPolicyController;
+        $service = app(\App\Services\CustomerDebtPolicyService::class);
+        $customer = \App\Models\Customer::findOrFail(1);
+        for ($cycle = 0; $cycle < 2; $cycle++) {
+            $unlocked = $controller->unlock($this->request([], 'admin'), $customer, $service)->getData(true)['policy'];
+            $again = $controller->unlock($this->request([], 'admin'), $customer, $service)->getData(true)['policy'];
+            self::assertFalse($again['staff_edit_locked']);
+            self::assertSame($unlocked['edit_version'], $again['edit_version']);
+            $saved = $this->policyUpdate(['policy_version' => $again['edit_version']], 'leader')['policy'];
+            self::assertTrue($saved['staff_edit_locked']);
+            self::assertSame($cycle + 2, $saved['staff_edit_count']);
+        }
+        $audits = DB::table('settings')->where('key', 'like', 'customer_debt_policy_audit_%')->count();
+        self::assertSame(5, $audits);
+    }
+
+    public function test_non_admin_cannot_unlock_even_through_service(): void
+    {
+        $this->policyUpdate();
+        $service = app(\App\Services\CustomerDebtPolicyService::class);
+        foreach (['sale', 'leader', 'manager', 'accounting'] as $role) {
+            try {
+                $service->unlock(['customer_id' => 1], $this->user($role));
+                self::fail('Non-admin unlocked');
+            } catch (HttpException $e) {
+                self::assertSame(403, $e->getStatusCode());
+            }
+        }
+        self::assertTrue($service->policies()['customer_1']['staff_edit_locked']);
+    }
+
+    public function test_stale_tab_cannot_consume_an_admin_reopened_edit_slot(): void
+    {
+        $this->policyUpdate();
+        $service = app(\App\Services\CustomerDebtPolicyService::class);
+        $service->unlock(['customer_id' => 1], $this->user('admin'));
+        try {
+            $this->policyUpdate(['policy_version' => 0]);
+            self::fail('Stale version accepted');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            self::assertArrayHasKey('policy_version', $e->errors());
+        }
+        self::assertFalse($service->policies()['customer_1']['staff_edit_locked']);
+        self::assertTrue($this->policyUpdate(['policy_version' => 2])['policy']['staff_edit_locked']);
+    }
+
+    public function test_card_lock_cannot_be_bypassed_on_the_sheet_page(): void
+    {
+        $this->policyUpdate();
+        $service = $this->service([$this->entry('OLD01', 'Chị Bình')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        (new CustomerDebtMonitorController)->updatePolicy($this->request(['source_key' => $key, 'policy_version' => 1, 'allowed_orders' => 99]), $service);
+    }
+
+    public function test_customer_card_editor_cannot_modify_another_sales_customer(): void
+    {
+        $this->expectException(HttpException::class);
+        $this->policyUpdate([], 'sale', 2);
+    }
+
+    public function test_customer_card_edit_rejects_bad_values_without_consuming_the_slot(): void
+    {
+        try {
+            $this->policyUpdate(['credit_limit' => -1]);
+            self::fail('Negative limit accepted');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            self::assertArrayHasKey('credit_limit', $e->errors());
+        }
+        $service = app(\App\Services\CustomerDebtPolicyService::class);
+        self::assertFalse($service->effective(['customer_id' => 1], $service->policies())['staff_edit_locked']);
+        self::assertTrue($this->policyUpdate()['policy']['staff_edit_locked']);
+    }
+
+    public function test_admin_can_edit_locked_settings_without_granting_staff_an_extra_edit(): void
+    {
+        $this->policyUpdate();
+        $changed = $this->policyUpdate(['policy_version' => 1, 'allowed_orders' => 5], 'admin')['policy'];
+        self::assertSame(5, $changed['allowed_orders']);
+        self::assertTrue($changed['staff_edit_locked']);
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->policyUpdate(['policy_version' => 2]);
+    }
+
+    public function test_customer_policy_rechecks_ownership_under_the_write_lock(): void
+    {
+        $stale = \App\Models\Customer::findOrFail(1);
+        DB::table('customers')->where('id', 1)->update(['current_owner_sale_id' => 8]);
+        $request = $this->request(['allowed_orders' => 2, 'credit_limit' => 100000, 'due_days' => 7]);
+        $this->expectException(HttpException::class);
+        (new \App\Http\Controllers\CustomerDebtPolicyController)->update($request, $stale, app(\App\Services\CustomerDebtPolicyService::class));
     }
 }

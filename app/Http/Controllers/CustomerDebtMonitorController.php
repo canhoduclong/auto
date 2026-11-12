@@ -237,6 +237,7 @@ class CustomerDebtMonitorController extends Controller
         ]);
         $data = $request->validate([
             'source_key' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/',
+            'policy_version' => 'required|integer|min:0',
             'allowed_orders' => 'nullable|integer|min:0|max:100000',
             'credit_limit' => 'nullable|integer|min:0|max:999999999999999',
             'due_days' => 'nullable|integer|min:0|max:3650',
@@ -244,9 +245,21 @@ class CustomerDebtMonitorController extends Controller
         $context = $this->resolveGroups($request, $service);
         $group = $context['groups'][$data['source_key']] ?? null;
         abort_unless($group, 404);
-        app(CustomerDebtPolicyService::class)->save($group, $data, $request->user()->id);
+        app(CustomerDebtPolicyService::class)->save($group, $data, $request->user()->id, $request->user()->isAdmin(), (int) $data['policy_version'], $request->user()->isSalesFlowRole() || $request->user()->isAdmin() ? $request->user() : null);
 
         return back()->with('success', 'Đã cập nhật tiêu chí công nợ và tính lại cảnh báo khách hàng.');
+    }
+
+    public function unlockPolicy(Request $request, CustomerDebtSheetService $service)
+    {
+        abort_unless($request->user()->isAdmin(), 403);
+        $data = $request->validate(['source_key' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/']);
+        $context = $this->resolveGroups($request, $service);
+        $group = $context['groups'][$data['source_key']] ?? null;
+        abort_unless($group, 404);
+        app(CustomerDebtPolicyService::class)->unlock($group, $request->user());
+
+        return back()->with('success', 'Đã mở khóa tiêu chí. Nhân viên được lưu thêm một lần rồi tự khóa lại.');
     }
 
     public function customers(Request $request)

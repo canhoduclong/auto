@@ -367,6 +367,7 @@
                     @elseif($canManage)
                         <input type="checkbox" class="form-check-input mcl-check mt-2" value="{{ $customer->id }}" aria-label="Chọn {{ $customer->name }}">
                     @endif
+                    @include('site.my_customer.debt-policy-card', ['debtPolicy' => $debtPolicyService->effective(['customer_id'=>$customer->id], $debtPolicies), 'canEditDebtPolicy' => $debtPolicyService->canEditCustomer(auth()->user(), $customer)])
                 </div>
 
                 <div class="mcl-row-controls">
@@ -540,3 +541,5 @@
     });
 })();
 </script>
+
+@include('site.my_customer.debt-policy-dialog')

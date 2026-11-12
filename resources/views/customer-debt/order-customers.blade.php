@@ -20,11 +20,11 @@
                     <div class="alert alert-warning py-2 mb-2"><strong>Chưa xác định được công nợ</strong><br>Chưa có dữ liệu Google Sheet đã ghép với khách này. Cần cập nhật Sheet hoặc ghép khách trước khi xác định số nợ và mức cảnh báo.</div>
                     @if($canLoad)<a class="btn btn-sm btn-outline-primary mb-2" href="{{ route('customer-debt.index', ['tab'=>'all','search'=>$debt['name']]) }}">Kiểm tra & ghép dữ liệu khách</a>@endif
                 @endif
-                <div class="small border-top pt-2 mt-2">Cho nợ: <strong>{{ $debt['policy']['allowed_orders'] }} Bill</strong> · Trần nợ: <strong>{{ number_format($debt['policy']['credit_limit'], 0, ',', '.') }} đ</strong><br>Hạn thanh toán: {{ $debt['policy']['due_days'] }} ngày kể từ ngày giao hàng</div>
+                <div class="small border-top pt-2 mt-2">Cho nợ: <strong>{{ $debt['policy']['allowed_orders'] }} Bill</strong> · Trần nợ: <strong>{{ number_format($debt['policy']['credit_limit'], 0, ',', '.') }} đ</strong><br>Hạn thanh toán: {{ $debt['policy']['due_days'] }} ngày kể từ ngày giao hàng gần nhất</div>
                 @if($debt['data_available'])
                 <div class="d-flex flex-wrap gap-2 mt-2">
                     <a class="btn btn-sm btn-primary" href="{{ request()->fullUrlWithQuery(['customer'=>null,'system_customer'=>$debt['customer_id'],'window'=>'recent','detail_page'=>null,'purchase_page'=>1,'payment_page'=>1,'report_from'=>null,'report_to'=>null]) }}#debt-detail">Xem nhanh công nợ 14 ngày</a>
-                    <button type="button" class="btn btn-sm btn-outline-primary debt-policy-button" data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}" data-orders="{{ $debt['policy']['allowed_orders'] }}" data-limit="{{ $debt['policy']['credit_limit'] }}" data-days="{{ $debt['policy']['due_days'] }}">Sửa nhanh tiêu chí</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary debt-policy-button" data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}" data-orders="{{ $debt['policy']['allowed_orders'] }}" data-limit="{{ $debt['policy']['credit_limit'] }}" data-days="{{ $debt['policy']['due_days'] }}" data-version="{{ $debt['policy']['edit_version'] }}" @disabled($debt['policy']['staff_edit_locked'] && !auth()->user()->isAdmin())>Sửa nhanh tiêu chí</button>
                 </div>
                 <div class="small text-muted mt-2">Công nợ và cảnh báo đã gộp tất cả nguồn Sheet được ghép với khách này.</div>
                 @endif

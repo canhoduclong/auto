@@ -1867,7 +1867,11 @@ class PageController extends Controller
         $canConfigureClassification = $user->isAdmin()
             || $user->hasRole(['leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale', 'director']);
 
+        $debtPolicyService = app(\App\Services\CustomerDebtPolicyService::class);
+        $debtPolicies = $debtPolicyService->policies();
         return view('site.my_customer.monitoring-list', [
+            'debtPolicyService' => $debtPolicyService,
+            'debtPolicies' => $debtPolicies,
             'transferSales' => $user->isAdmin() ? User::whereHas('roles', fn ($query) => $query->whereIn(DB::raw('LOWER(name)'), ['sale', 'leader', 'leader_sale', 'sale_manager']))->orderBy('name')->get(['id', 'name']) : collect(),
             'customers' => $customers,
             'perPage' => $perPage,
