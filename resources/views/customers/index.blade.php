@@ -196,7 +196,7 @@
 
             <div class="vr d-none d-sm-block" style="height:24px;"></div>
 
-            @can('import', \App\Models\Customer::class)<a href="{{ route('customers.sheet-import.index') }}" class="btn btn-sm btn-primary text-nowrap">Import Google Sheet</a>@endcan
+            @can('import', \App\Models\Customer::class)<a href="{{ route('customers.sheet-import.index') }}" class="btn btn-sm btn-primary text-nowrap">Import / Đồng bộ Google Sheet</a>@endcan
             <a href="{{ route('customers.import.form') }}" class="btn btn-sm btn-outline-primary text-nowrap">
                 <i class="ph ph-table me-1"></i>Import văn bản
             </a>

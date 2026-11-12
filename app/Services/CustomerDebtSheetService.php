@@ -81,10 +81,12 @@ class CustomerDebtSheetService
     /** Trusted source group from a server-side import preview; caller holds customer-debt-load. */
     public function mapSourceGroupWithinLock(array $group, int $customerId, int $userId): void
     {
+        $existing = json_decode(Setting::get($this->mappingPrefix().$group['key'], '{}'), true) ?? [];
+        $sync = array_key_exists('sync_preferences', $group) ? ['sync_fields' => $group['sync_preferences']] : array_intersect_key($existing, ['sync_fields' => true]);
         Setting::set($this->mappingPrefix().$group['key'], json_encode([
             'customer_id' => $customerId, 'mapped_by' => $userId, 'mapped_at' => now()->toIso8601String(),
             'source_name' => $group['name'], 'source_code' => $group['code'],
-        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+        ] + $sync, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     }
 
     public function unmapCustomer(string $sourceKey): void
@@ -200,6 +202,8 @@ class CustomerDebtSheetService
             'code' => ['ma kh', 'ma khach hang', 'customer code'],
             'name' => ['khach hang', 'ten khach hang', 'ten kh', 'ten kh/ncc', 'customer'],
             'sale_name' => ['nvkd', 'sale', 'nhan vien kinh doanh'],
+            'phone' => ['sdt', 'so dien thoai', 'dien thoai', 'phone'],
+            'address' => ['dia chi', 'address'],
             'amount' => $type === 'sale' ? ['tong tien', 'thanh tien', 'amount'] : ['tien thu', 'so tien thu', 'thu'],
             'gift' => ['tang', 'tien tang'],
             'category' => ['loai'],
@@ -307,7 +311,7 @@ class CustomerDebtSheetService
             if ($giftNote !== '') {
                 $note = ($note !== '' ? $note.' · ' : '').'Ghi chú cột Tặng: '.$giftNote;
             }
-            $entries[] = ['date' => $date, 'code' => $row['code'], 'name' => $row['name'], 'type' => $type, 'sale_name' => $row['sale_name'] ?? '', 'amount' => $this->money($amount), 'gift' => $giftAmount, 'gift_note' => $giftNote, 'note' => $note, 'row' => $index + 1];
+            $entries[] = ['date' => $date, 'code' => $row['code'], 'name' => $row['name'], 'type' => $type, 'sale_name' => $row['sale_name'] ?? '', 'phone' => $row['phone'] ?? '', 'address' => $row['address'] ?? '', 'amount' => $this->money($amount), 'gift' => $giftAmount, 'gift_note' => $giftNote, 'note' => $note, 'row' => $index + 1];
         }
         if (! $headers) {
             throw new RuntimeException('Không nhận diện tiêu đề tab '.($type === 'sale' ? 'nhatkybanhang (Ngày, Mã KH, Khách hàng, Tổng tiền).' : 'Dongtienhoatdong (Ngày, Mã KH, Khách hàng, Tiền thu hoặc Số tiền và Thu/Chi).'));

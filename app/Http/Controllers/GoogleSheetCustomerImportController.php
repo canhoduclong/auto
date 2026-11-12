@@ -19,10 +19,13 @@ class GoogleSheetCustomerImportController extends Controller
     public function index(Request $request, GoogleSheetCustomerImportService $service, CustomerDebtSheetService $sheets)
     {
         $this->authorizeImport($request);
-        $data = $request->validate(['preview' => 'nullable|uuid', 'search' => 'nullable|string|max:150', 'status' => 'nullable|in:all,link,create,conflict,imported,skip,error', 'page' => 'nullable|integer|min:1']);
+        $data = $request->validate(['preview' => 'nullable|uuid', 'search' => 'nullable|string|max:150', 'status' => 'nullable|in:all,link,create,update,unchanged,conflict,imported,skip,error', 'page' => 'nullable|integer|min:1']);
         $snapshot = ! empty($data['preview']) ? $service->snapshot($data['preview'], $request->user()) : null;
         $rows = collect($snapshot ? $service->plan($snapshot) : []);
+        $rows = $rows->map(fn ($row) => $row + ['can_update' => $row['target'] && Gate::forUser($request->user())->allows('update', $row['target'])]);
         $counts = $rows->countBy('status');
+        $canCreate = Gate::forUser($request->user())->allows('create', Customer::class);
+        $readyCount = $rows->filter(fn ($row) => $row['status'] === 'link' || ($canCreate && $row['status'] === 'create') || ($row['status'] === 'update' && $row['can_update']))->count();
         $visible = $rows->filter(function ($row) use ($data) {
             $status = $data['status'] ?? 'all';
             if ($status === 'error' ? empty($row['result']) || ($row['result']['ok'] ?? true) : ($status !== 'all' && $row['status'] !== $status)) {
@@ -35,14 +38,17 @@ class GoogleSheetCustomerImportController extends Controller
         $page = (int) ($data['page'] ?? 1);
         $rows = new \Illuminate\Pagination\LengthAwarePaginator($visible->forPage($page, 40)->values(), $visible->count(), 40, $page, ['path' => $request->url(), 'query' => $request->except('page')]);
 
-        return view('customers.google-sheet-import', ['snapshot' => $snapshot, 'rows' => $rows, 'counts' => $counts, 'total' => $counts->sum(), 'sales' => $service->sales(), 'canCreate' => Gate::forUser($request->user())->allows('create', Customer::class), 'connectionEmail' => $sheets->connectionEmail()]);
+        return view('customers.google-sheet-import', ['snapshot' => $snapshot, 'rows' => $rows, 'counts' => $counts, 'total' => $counts->sum(), 'sales' => $service->sales(), 'canCreate' => Gate::forUser($request->user())->allows('create', Customer::class), 'connectionEmail' => $sheets->connectionEmail(), 'readyCount' => $readyCount, 'syncMode' => ($snapshot['mode'] ?? 'import') === 'sync', 'canReassign' => $request->user()->isAdmin() || $request->user()->hasPermission('customers.assign-sale')]);
     }
 
     public function load(Request $request, GoogleSheetCustomerImportService $service)
     {
         $this->authorizeImport($request);
+        $data = $request->validate(['mode' => 'nullable|in:import,sync', 'sync_fields' => 'nullable|required_if:mode,sync|array|min:1', 'sync_fields.*' => [Rule::in(array_keys(GoogleSheetCustomerImportService::SYNC_FIELDS))]]);
+        $fields = $data['sync_fields'] ?? ['name', 'phone', 'address'];
+        abort_if(in_array('sale_id', $fields, true) && ! $request->user()->isAdmin() && ! $request->user()->hasPermission('customers.assign-sale'), 403);
         try {
-            $token = $service->load($request->user());
+            $token = $service->load($request->user(), $data['mode'] ?? 'import', $fields);
         } catch (\Throwable $e) {
             report($e);
 
@@ -57,7 +63,9 @@ class GoogleSheetCustomerImportController extends Controller
         $this->authorizeImport($request);
         $data = $request->validate(['search' => 'nullable|string|max:150', 'page' => 'nullable|integer|min:1']);
         $search = trim($data['search'] ?? '');
-        $customers = Customer::query()->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('name', 'like', '%'.$search.'%')->orWhere('customer_code', 'like', '%'.$search.'%')->orWhere('phone', 'like', '%'.$search.'%')))->orderBy('name')->paginate(20, ['id', 'name', 'customer_code', 'phone']);
+        $customers = Customer::query()->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('name', 'like', '%'.$search.'%')->orWhere('customer_code', 'like', '%'.$search.'%')->orWhere('phone', 'like', '%'.$search.'%')))->orderBy('name')->paginate(20, ['id', 'name', 'customer_code', 'phone', 'address', 'assigned_to', 'current_owner_sale_id', 'customer_status', 'assigned_at']);
+        $service = app(GoogleSheetCustomerImportService::class);
+        $customers->getCollection()->each(fn ($customer) => $customer->setAttribute('revision', $service->customerRevision($customer)));
 
         return response()->json(['customers' => $customers->items(), 'page' => $customers->currentPage(), 'last_page' => $customers->lastPage(), 'total' => $customers->total()])->header('Cache-Control', 'no-store');
     }
@@ -67,15 +75,20 @@ class GoogleSheetCustomerImportController extends Controller
         $this->authorizeImport($request);
         $data = $request->validate([
             'preview' => 'required|uuid', 'source_key' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/',
-            'action' => 'required|in:auto,link,create,skip',
-            'customer_id' => ['nullable', 'required_if:action,link', 'integer', Rule::exists('customers', 'id')->whereNull('deleted_at')],
+            'action' => 'required|in:auto,link,create,update,skip',
+            'sync_fields' => 'nullable|required_if:action,update|array|min:1',
+            'sync_fields.*' => [Rule::in(array_keys(GoogleSheetCustomerImportService::SYNC_FIELDS))],
+            'customer_revision' => 'nullable|required_if:action,update|string|size:64',
+            'customer_id' => ['nullable', 'required_if:action,link,update', 'integer', Rule::exists('customers', 'id')->whereNull('deleted_at')],
             'name' => 'nullable|required_if:action,create|string|max:255', 'customer_code' => 'nullable|string|max:255',
             'phone' => 'nullable|string|max:30', 'address' => 'nullable|string|max:255',
             'sale_id' => ['nullable', 'integer', Rule::in($service->sales()->pluck('id')->all())],
         ]);
         abort_if($data['action'] === 'create' && ! Gate::forUser($request->user())->allows('create', Customer::class), 403);
         foreach (['phone', 'address'] as $field) {
-            $data[$field] = trim($data[$field] ?? '');
+            if (array_key_exists($field, $data)) {
+                $data[$field] = trim($data[$field] ?? '');
+            }
         }
         $service->decide($data['preview'], $request->user(), $data);
 
@@ -89,10 +102,11 @@ class GoogleSheetCustomerImportController extends Controller
         $canCreate = Gate::forUser($request->user())->allows('create', Customer::class);
         $counts = $service->commit($data['preview'], $request->user(), $canCreate);
         $rows = collect($service->plan($service->snapshot($data['preview'], $request->user())));
-        $remaining = $rows->filter(fn ($row) => $row['status'] === 'link' || ($canCreate && $row['status'] === 'create'))->count();
+        $remaining = $rows->filter(fn ($row) => $row['status'] === 'link' || ($canCreate && $row['status'] === 'create') || ($row['status'] === 'update' && Gate::forUser($request->user())->allows('update', $row['target'])))->count();
         $created = $rows->filter(fn ($row) => ($row['result']['ok'] ?? false) && $row['result']['action'] === 'create')->count();
         $linked = $rows->filter(fn ($row) => ($row['result']['ok'] ?? false) && $row['result']['action'] === 'link')->count();
-        $message = "Bản import này đã tạo {$created} khách mới, ghép {$linked} khách hiện có. Còn {$remaining} khách sẵn sàng chưa import.";
+        $updated = $rows->filter(fn ($row) => ($row['result']['ok'] ?? false) && $row['result']['action'] === 'update')->count();
+        $message = "Bản import này đã tạo {$created} khách mới, ghép {$linked} khách hiện có, cập nhật {$updated} khách. Còn {$remaining} khách sẵn sàng chưa import.";
         if ($counts['errors'] > 0) {
             $message .= ' Có dòng lỗi, vui lòng kiểm tra danh sách.';
         }

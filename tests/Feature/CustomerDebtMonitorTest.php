@@ -78,6 +78,15 @@ class CustomerDebtMonitorTest extends TestCase
             $t->softDeletes();
         });
         $this->tables[] = 'customers';
+        Schema::create('customer_addresses', function (Blueprint $t) {
+            $t->temporary();
+            $t->id();
+            $t->unsignedBigInteger('customer_id');
+            $t->text('note')->nullable();
+            $t->boolean('is_default')->default(false);
+            $t->timestamps();
+        });
+        $this->tables[] = 'customer_addresses';
         Schema::create('orders', function (Blueprint $t) {
             $t->temporary();
             $t->id();
@@ -563,6 +572,132 @@ class CustomerDebtMonitorTest extends TestCase
     {
         $this->expectException(HttpException::class);
         (new \App\Http\Controllers\GoogleSheetCustomerImportController)->index($this->request(), $this->sheetCustomerImporter([]), new CustomerDebtSheetService);
+    }
+
+    public function test_google_customer_sync_updates_selected_fields_and_creates_new_customers(): void
+    {
+        \Illuminate\Support\Facades\Event::fake(['eloquent.created: App\Models\Customer', 'eloquent.updated: App\Models\Customer']);
+        DB::table('customers')->where('id', 1)->update(['phone' => '0900000000']);
+        $importer = $this->sheetCustomerImporter($this->customerSheetValues([['CRM01', 'Chị Bình mới', '', '1000'], ['NEW01', 'Khách mới', '', '1000']]));
+        $actor = $this->user('admin');
+        $token = $importer->load($actor, 'sync');
+        $rows = $importer->plan($importer->snapshot($token, $actor));
+        self::assertSame(1, collect($rows)->where('status', 'update')->count());
+        $counts = $importer->commit($token, $actor, true);
+        self::assertSame(1, $counts['updated']);
+        self::assertSame(1, $counts['created']);
+        self::assertSame('Chị Bình mới', DB::table('customers')->where('id', 1)->value('name'));
+        self::assertSame('0900000000', DB::table('customers')->where('id', 1)->value('phone'));
+        self::assertEquals(7, DB::table('customers')->where('id', 1)->value('assigned_to'));
+        $audit = DB::table('settings')->where('key', 'like', 'customer_sheet_import_audit_%')->get()->map(fn ($record) => json_decode($record->value, true))->firstWhere('action', 'update');
+        self::assertSame('Chị Bình', $audit['before']['name']);
+        self::assertSame('Chị Bình mới', $audit['after']['name']);
+        $next = $importer->load($actor, 'sync');
+        self::assertCount(2, collect($importer->plan($importer->snapshot($next, $actor)))->where('status', 'unchanged'));
+    }
+
+    public function test_google_customer_sync_keeps_latest_nonempty_contact_information(): void
+    {
+        \Illuminate\Support\Facades\Event::fake(['eloquent.updated: App\Models\Customer']);
+        $importer = $this->sheetCustomerImporter([
+            ['Ngày', 'Mã KH', 'Khách hàng', 'Tổng tiền', 'SĐT', 'Địa chỉ'],
+            ['01/11/2026', 'CRM01', 'Tên cũ', '1000', '0901111111', 'Địa chỉ mới'],
+            ['12/11/2026', 'CRM01', 'Tên mới', '1000', '', ''],
+        ]);
+        $actor = $this->user('admin');
+        $token = $importer->load($actor, 'sync');
+        $row = array_values($importer->plan($importer->snapshot($token, $actor)))[0];
+        self::assertSame('Tên mới', $row['new_name']);
+        self::assertSame('0901111111', $row['phone']);
+        self::assertSame(1, $importer->commit($token, $actor, true)['updated']);
+        self::assertSame('0901111111', DB::table('customers')->where('id', 1)->value('phone'));
+        self::assertSame('Địa chỉ mới', DB::table('customer_addresses')->where('customer_id', 1)->value('note'));
+    }
+
+    public function test_google_customer_sync_preserves_unselected_fields(): void
+    {
+        \Illuminate\Support\Facades\Event::fake(['eloquent.updated: App\Models\Customer']);
+        $importer = $this->sheetCustomerImporter([['Ngày', 'Mã KH', 'Khách hàng', 'Tổng tiền', 'SĐT'], ['12/11/2026', 'CRM01', 'Tên nguồn khác', '1000', '0901111111']]);
+        $actor = $this->user('admin');
+        $token = $importer->load($actor, 'sync', ['phone']);
+        self::assertSame(1, $importer->commit($token, $actor, true)['updated']);
+        self::assertSame('Chị Bình', DB::table('customers')->where('id', 1)->value('name'));
+        self::assertSame('0901111111', DB::table('customers')->where('id', 1)->value('phone'));
+    }
+
+    public function test_google_customer_sync_rejects_stale_customer_changes(): void
+    {
+        $importer = $this->sheetCustomerImporter($this->customerSheetValues([['CRM01', 'Tên mới', '', '1000']]));
+        $actor = $this->user('admin');
+        $token = $importer->load($actor, 'sync');
+        DB::table('customers')->where('id', 1)->update(['phone' => '0903333333']);
+        self::assertSame(1, $importer->commit($token, $actor, true)['errors']);
+        self::assertSame('Chị Bình', DB::table('customers')->where('id', 1)->value('name'));
+    }
+
+    public function test_google_customer_sync_requires_one_authoritative_source_for_conflicting_aliases(): void
+    {
+        \Illuminate\Support\Facades\Event::fake(['eloquent.updated: App\Models\Customer']);
+        $values = $this->customerSheetValues([['OLD1', 'Tên nguồn A', '', '1000'], ['OLD2', 'Tên nguồn B', '', '1000']]);
+        $importer = $this->sheetCustomerImporter($values);
+        $actor = $this->user('admin');
+        $token = $importer->load($actor);
+        $snapshot = $importer->snapshot($token, $actor);
+        $sheets = new CustomerDebtSheetService;
+        foreach ($snapshot['groups'] as $group) {
+            $sheets->mapSourceGroupWithinLock($group, 1, 7);
+        }
+        $token = $importer->load($actor, 'sync');
+        $snapshot = $importer->snapshot($token, $actor);
+        self::assertCount(2, collect($importer->plan($snapshot))->where('status', 'conflict'));
+        $keys = array_keys($snapshot['groups']);
+        $importer->decide($token, $actor, ['source_key' => $keys[0], 'action' => 'link', 'customer_id' => 1]);
+        self::assertSame(1, $importer->commit($token, $actor, true)['updated']);
+        self::assertSame('Tên nguồn B', DB::table('customers')->where('id', 1)->value('name'));
+        $next = $importer->load($actor, 'sync');
+        self::assertCount(2, collect($importer->plan($importer->snapshot($next, $actor)))->where('status', 'unchanged'));
+    }
+
+    public function test_google_customer_sync_updates_a_shared_customer_only_once_for_identical_source_values(): void
+    {
+        \Illuminate\Support\Facades\Event::fake(['eloquent.updated: App\Models\Customer']);
+        $importer = $this->sheetCustomerImporter($this->customerSheetValues([['OLD1', 'Tên mới', '', '1000'], ['OLD2', 'Tên mới', '', '1000']]));
+        $actor = $this->user('admin');
+        $token = $importer->load($actor);
+        foreach ($importer->snapshot($token, $actor)['groups'] as $group) {
+            (new CustomerDebtSheetService)->mapSourceGroupWithinLock($group, 1, 7);
+        }
+        $token = $importer->load($actor, 'sync');
+        $counts = $importer->commit($token, $actor, true);
+        self::assertSame(1, $counts['updated']);
+        self::assertSame(1, $counts['linked']);
+        self::assertSame(0, $counts['errors']);
+        self::assertSame('Tên mới', DB::table('customers')->where('id', 1)->value('name'));
+    }
+
+    public function test_google_customer_sync_respects_global_field_selection_with_saved_source_preferences(): void
+    {
+        \Illuminate\Support\Facades\Event::fake(['eloquent.updated: App\Models\Customer']);
+        $importer = $this->sheetCustomerImporter([['Ngày', 'Mã KH', 'Khách hàng', 'Tổng tiền', 'SĐT'], ['12/11/2026', 'CRM01', 'Tên nguồn mới', '1000', '0901111111']]);
+        $actor = $this->user('admin');
+        $token = $importer->load($actor);
+        $group = array_values($importer->snapshot($token, $actor)['groups'])[0];
+        (new CustomerDebtSheetService)->mapSourceGroupWithinLock($group + ['sync_preferences' => ['name', 'phone']], 1, 7);
+        $token = $importer->load($actor, 'sync', ['phone']);
+        $row = array_values($importer->plan($importer->snapshot($token, $actor)))[0];
+        self::assertSame(['phone'], array_keys($row['changes']));
+        self::assertSame(1, $importer->commit($token, $actor, true)['updated']);
+        self::assertSame('Chị Bình', DB::table('customers')->where('id', 1)->value('name'));
+    }
+
+    public function test_google_customer_sync_enforces_customer_update_permission(): void
+    {
+        $importer = $this->sheetCustomerImporter($this->customerSheetValues([['CRM01', 'Tên nguồn mới', '', '1000']]));
+        $actor = $this->user('admin');
+        $token = $importer->load($actor, 'sync');
+        \Illuminate\Support\Facades\Gate::before(fn ($user, $ability) => $ability === 'update' ? false : null);
+        self::assertSame(1, $importer->commit($token, $actor, true)['errors']);
+        self::assertSame('Chị Bình', DB::table('customers')->where('id', 1)->value('name'));
     }
 
     public function test_sales_can_only_see_their_customers_and_unique_name_fallback(): void
