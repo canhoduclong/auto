@@ -15,6 +15,9 @@
     @foreach(['success' => 'success', 'error' => 'danger'] as $key => $color)
         @if(session($key))<div class="alert alert-{{ $color }} py-2">{{ session($key) }}</div>@endif
     @endforeach
+    @if($canLoad && session('error') && str_contains((string) session('error'), 'Google Sheet'))
+        @include('customer-debt.connection-info')
+    @endif
     @if($errors->any())<div class="alert alert-danger py-2">{{ $errors->first() }}</div>@endif
     @if(!$snapshot)<div class="alert alert-warning py-2">Chưa có dữ liệu Google Sheet để xác định công nợ.</div>@endif
     <nav class="nav debt-tabs">
@@ -312,6 +315,22 @@
     document.querySelectorAll('[data-open-debt-issues]').forEach(link => link.addEventListener('click', () => {
         const issues = document.getElementById('debt-issues');
         if (issues) issues.open = true;
+    }));
+    document.querySelectorAll('[data-copy-sheet-account]').forEach(button => button.addEventListener('click', async () => {
+        const input = button.closest('.debt-connection-account').querySelector('input');
+        const status = button.closest('.debt-connection-account').querySelector('[role="status"]');
+        try {
+            if (window.isSecureContext && navigator.clipboard) {
+                await navigator.clipboard.writeText(input.value);
+            } else {
+                input.focus(); input.select();
+                if (!document.execCommand('copy')) throw new Error('copy');
+            }
+            status.textContent = 'Đã sao chép';
+        } catch (_) {
+            input.focus(); input.select();
+            status.textContent = 'Nhấn Ctrl+C hoặc sao chép email đã chọn.';
+        }
     }));
     document.querySelectorAll('form[data-sheet-refresh]').forEach(form => form.addEventListener('submit', () => {
         const button = form.querySelector('button');

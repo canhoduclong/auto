@@ -1,6 +1,7 @@
 <details class="debt-tools">
 <summary class="btn btn-light">Thông tin & nguồn</summary>
 <div class="debt-tools-panel">
+    @if($canLoad) @include('customer-debt.connection-info') @endif
     <h6>Thông tin dữ liệu</h6>
     @if($snapshot && ($snapshot['spreadsheet_id'] ?? null) !== config('services.google_sheets.debt_spreadsheet_id'))<p class="text-warning">Bản dữ liệu đang hiển thị được tải trước khi đổi nguồn. Cập nhật Google Sheet để lấy dữ liệu từ file gốc.</p>@endif
     <p>Công nợ = Doanh thu − Tặng − Đã thanh toán + Điều chỉnh; không có số dư đầu kỳ. Số liệu tổng hợp từ hai tab Sheet, không cộng thêm giá trị đơn trong hệ thống.</p>

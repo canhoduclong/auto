@@ -129,7 +129,9 @@ class CustomerDebtMonitorController extends Controller
         $page = max(1, (int) $request->input('debt_page', 1));
         $debts = new \Illuminate\Pagination\LengthAwarePaginator($visible->forPage($page, 30)->values(), $visible->count(), 30, $page, ['path' => $request->url(), 'pageName' => 'debt_page', 'query' => $request->except('debt_page')]);
 
-        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments'));
+        $connectionEmail = $canLoad ? $service->connectionEmail() : null;
+
+        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail'));
     }
 
     public function adjustBalance(Request $request, CustomerDebtSheetService $service, CustomerDebtBalanceService $balances)

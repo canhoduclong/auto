@@ -96,6 +96,22 @@ class CustomerDebtSheetService
         return $rows;
     }
 
+    public function connectionEmail(): ?string
+    {
+        $path = trim((string) config('services.google_sheets.credentials'));
+        if ($path === '') {
+            return null;
+        }
+        $path = str_starts_with($path, '/') ? $path : base_path($path);
+        if (! is_file($path) || ! is_readable($path)) {
+            return null;
+        }
+        $credentials = json_decode(file_get_contents($path), true);
+        $email = is_array($credentials) ? ($credentials['client_email'] ?? null) : null;
+
+        return is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null;
+    }
+
     public function fetch(): array
     {
         $path = trim((string) config('services.google_sheets.credentials'));

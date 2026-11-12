@@ -195,3 +195,8 @@
 .debt-adjustment-history td:last-child { min-width: 180px; white-space: normal; overflow-wrap: anywhere; }
 
 .debt-balance-button { white-space: nowrap; }
+
+.debt-connection-info { padding: 12px 14px; margin-bottom: 14px; border: 1px solid #dbe3ee; border-radius: 8px; background: #fff; }
+.debt-connection-account { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.debt-connection-account input { flex: 1 1 260px; min-width: 0; max-width: 520px; }
+.debt-connection-account button { white-space: nowrap; }
