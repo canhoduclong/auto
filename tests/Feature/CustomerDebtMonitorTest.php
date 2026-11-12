@@ -103,6 +103,45 @@ class CustomerDebtMonitorTest extends TestCase
             $t->timestamps();
         });
         $this->tables[] = 'settings';
+        Schema::create('debt_collection_reminders', function (Blueprint $t) {
+            $t->temporary();
+            $t->id();
+            $t->uuid('request_id')->unique();
+            $t->string('spreadsheet_id');
+            $t->unsignedBigInteger('customer_id')->nullable();
+            $t->string('source_key', 64)->nullable();
+            $t->json('source_keys');
+            $t->string('customer_name');
+            $t->timestamp('reminded_at');
+            $t->bigInteger('balance_at_reminder');
+            $t->bigInteger('target_amount');
+            $t->date('promised_date')->nullable();
+            $t->date('follow_up_date')->nullable();
+            $t->string('channel');
+            $t->text('note');
+            $t->json('baseline_receipts');
+            $t->string('snapshot_loaded_at')->nullable();
+            $t->unsignedBigInteger('created_by');
+            $t->string('actor_name');
+            $t->timestamps();
+        });
+        $this->tables[] = 'debt_collection_reminders';
+        Schema::create('debt_collection_events', function (Blueprint $t) {
+            $t->temporary();
+            $t->id();
+            $t->uuid('request_id')->unique();
+            $t->unsignedBigInteger('reminder_id');
+            $t->string('type');
+            $t->text('note');
+            $t->bigInteger('promised_amount')->nullable();
+            $t->date('promised_date')->nullable();
+            $t->string('receipt_token', 64)->nullable()->unique();
+            $t->bigInteger('receipt_amount')->nullable();
+            $t->unsignedBigInteger('created_by');
+            $t->string('actor_name');
+            $t->timestamps();
+        });
+        $this->tables[] = 'debt_collection_events';
         Schema::create('customer_debt_balance_adjustments', function (Blueprint $t) {
             $t->temporary();
             $t->id();
@@ -135,6 +174,8 @@ class CustomerDebtMonitorTest extends TestCase
         foreach (array_reverse($this->tables) as $table) {
             DB::statement('DROP TEMPORARY TABLE IF EXISTS `'.$table.'`');
         }
+        \Carbon\Carbon::setTestNow();
+        \Carbon\CarbonImmutable::setTestNow();
         $this->app->flush();
         restore_error_handler();
         restore_exception_handler();
@@ -698,6 +739,240 @@ class CustomerDebtMonitorTest extends TestCase
         \Illuminate\Support\Facades\Gate::before(fn ($user, $ability) => $ability === 'update' ? false : null);
         self::assertSame(1, $importer->commit($token, $actor, true)['errors']);
         self::assertSame('Chị Bình', DB::table('customers')->where('id', 1)->value('name'));
+    }
+
+    private function collectionClock(string $at): void
+    {
+        \Carbon\Carbon::setTestNow($at);
+        \Carbon\CarbonImmutable::setTestNow($at);
+    }
+
+    private function collectionRow(array $payments = []): array
+    {
+        $sale = $this->entry('CRM01', 'Chị Bình');
+        $sale['date'] = '2026-11-01';
+        $sale['amount'] = 10000;
+        $entries = [$sale];
+        foreach ($payments as $index => $payment) {
+            $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', $index + 1), ['type' => 'payment', 'note' => 'Thu tiền'], $payment);
+        }
+
+        return ['key' => hash('sha256', 'code:CRM01'), 'source_keys' => [hash('sha256', 'code:CRM01')], 'customer_id' => 1, 'name' => 'Chị Bình', 'balance' => 10000 - collect($payments)->sum('amount'), 'entries' => $entries];
+    }
+
+    private function reminderData(array $overrides = []): array
+    {
+        return $overrides + ['request_id' => (string) \Illuminate\Support\Str::uuid(), 'target_amount' => 1000, 'channel' => 'phone', 'note' => 'Đã gọi điện nhắc thanh toán', 'promised_date' => null, 'follow_up_date' => null];
+    }
+
+    public function test_debt_report_is_admin_only_and_deduplicates_linked_sources(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình'), $this->entry('OLD02', 'Tên nguồn khác')]);
+        $keys = array_keys($service->summarize($service->snapshot()['entries']));
+        foreach ($keys as $key) {
+            $service->mapCustomer($key, 1, 7);
+        }
+        $controller = new \App\Http\Controllers\CustomerDebtReportController;
+        $data = $controller->index($this->request([], 'admin'), $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        self::assertSame(1, $data['rows']->total());
+        self::assertSame(2000, $data['rows']->first()['balance']);
+        $this->expectException(HttpException::class);
+        $controller->index($this->request(), $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService);
+    }
+
+    public function test_debt_report_filters_order_dates_without_truncating_historical_balance(): void
+    {
+        $this->collectionClock('2026-11-12 10:00:00');
+        $entries = [array_replace($this->entry('CRM01', 'Chị Bình'), ['date' => '2026-11-01']), array_replace($this->entry('CRM01', 'Chị Bình', 2), ['date' => '2026-10-01']), array_replace($this->entry('KH02', 'Anh Hải'), ['date' => '2026-11-05'])];
+        $data = (new \App\Http\Controllers\CustomerDebtReportController)->index($this->request(['scope' => 'orders', 'from' => '2026-11-01', 'to' => '2026-11-01'], 'admin'), $this->service($entries), new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        self::assertSame(1, $data['rows']->total());
+        self::assertSame(2000, $data['rows']->first()['balance']);
+        self::assertSame(11, $data['rows']->first()['days_without_purchase']);
+        self::assertNull($data['rows']->first()['days_without_payment']);
+    }
+
+    public function test_debt_report_all_balance_includes_system_customers_without_sheet_data(): void
+    {
+        $data = (new \App\Http\Controllers\CustomerDebtReportController)->index($this->request(['balance' => 'all'], 'admin'), $this->service([$this->entry('CRM01', 'Chị Bình')]), new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        self::assertSame(2, $data['rows']->total());
+        self::assertFalse($data['rows']->firstWhere('customer_id', 2)['data_available']);
+    }
+
+    public function test_collection_reminder_is_audited_and_idempotent(): void
+    {
+        $this->collectionClock('2026-11-12 10:00:00');
+        $service = new \App\Services\DebtCollectionService;
+        $row = $this->collectionRow([['date' => '2026-11-10', 'amount' => 500]]);
+        $data = $this->reminderData();
+        $id = $service->remind($row, ['loaded_at' => '2026-11-12T09:00:00+07:00'], $data, $this->user('admin'));
+        self::assertSame($id, $service->remind($row, [], $data, $this->user('admin')));
+        self::assertSame(1, DB::table('debt_collection_reminders')->count());
+        $record = DB::table('debt_collection_reminders')->first();
+        self::assertEquals(9500, $record->balance_at_reminder);
+        self::assertEquals(7, $record->created_by);
+        self::assertSame(0, $service->evaluate($row, $service->records())['latest']['paid']);
+    }
+
+    public function test_collection_evaluation_counts_new_payments_and_checks_the_promised_deadline(): void
+    {
+        $this->collectionClock('2026-11-12 10:00:00');
+        $service = new \App\Services\DebtCollectionService;
+        $service->remind($this->collectionRow(), ['loaded_at' => '2026-11-12'], $this->reminderData(['promised_date' => '2026-11-14']), $this->user('admin'));
+        $this->collectionClock('2026-11-15 10:00:00');
+        $row = $this->collectionRow([['date' => '2026-11-13', 'amount' => 1000]]);
+        $result = $service->evaluate($row, $service->records());
+        self::assertSame('met_on_time', $result['status']);
+        self::assertSame(1000, $result['latest']['paid']);
+        $row = $this->collectionRow([['date' => '2026-11-15', 'amount' => 1000]]);
+        self::assertSame('met_late', $service->evaluate($row, $service->records())['status']);
+    }
+
+    public function test_same_day_receipts_require_confirmation_and_are_not_counted_twice(): void
+    {
+        $this->collectionClock('2026-11-12 10:00:00');
+        $service = new \App\Services\DebtCollectionService;
+        $actor = $this->user('admin');
+        $id = $service->remind($this->collectionRow(), ['loaded_at' => '2026-11-12'], $this->reminderData(), $actor);
+        $row = $this->collectionRow([['date' => '2026-11-12', 'amount' => 1000]]);
+        $result = $service->evaluate($row, $service->records());
+        self::assertSame(0, $result['latest']['paid']);
+        self::assertSame('needs_review', $result['status']);
+        self::assertCount(1, $result['latest']['pending']);
+        $data = ['request_id' => (string) \Illuminate\Support\Str::uuid(), 'reminder_id' => $id, 'type' => 'payment_verified', 'receipt_token' => $result['latest']['pending'][0]['token'], 'note' => 'Đã đối chiếu thu sau nhắc'];
+        $event = $service->respond($row, $data, $actor);
+        self::assertSame($event, $service->respond($row, $data, $actor));
+        $result = $service->evaluate($row, $service->records());
+        self::assertSame(1000, $result['latest']['paid']);
+        self::assertSame('met', $result['status']);
+        self::assertCount(0, $result['latest']['pending']);
+    }
+
+    public function test_collection_payments_are_attributed_to_only_one_reminder(): void
+    {
+        $this->collectionClock('2026-11-12 10:00:00');
+        $service = new \App\Services\DebtCollectionService;
+        $actor = $this->user('admin');
+        $first = $service->remind($this->collectionRow(), ['loaded_at' => '2026-11-12'], $this->reminderData(), $actor);
+        $this->collectionClock('2026-11-13 10:00:00');
+        $row = $this->collectionRow([['date' => '2026-11-13', 'amount' => 200]]);
+        $second = $service->remind($row, ['loaded_at' => '2026-11-13'], $this->reminderData(), $actor);
+        $this->collectionClock('2026-11-14 10:00:00');
+        $row = $this->collectionRow([['date' => '2026-11-13', 'amount' => 200], ['date' => '2026-11-14', 'amount' => 300]]);
+        $result = $service->evaluate($row, $service->records());
+        self::assertSame(500, $result['received_total']);
+        $logs = collect($result['logs'])->keyBy(fn ($log) => $log['record']->id);
+        self::assertSame(200, $logs[$first]['paid']);
+        self::assertSame(300, $logs[$second]['paid']);
+    }
+
+    public function test_collection_response_updates_promise_and_records_customer_feedback(): void
+    {
+        $this->collectionClock('2026-11-12 10:00:00');
+        $service = new \App\Services\DebtCollectionService;
+        $actor = $this->user('admin');
+        $id = $service->remind($this->collectionRow(), ['loaded_at' => '2026-11-12'], $this->reminderData(['promised_date' => '2026-11-12', 'follow_up_date' => '2026-11-13']), $actor);
+        $service->respond($this->collectionRow(), ['request_id' => (string) \Illuminate\Support\Str::uuid(), 'reminder_id' => $id, 'type' => 'response', 'note' => 'Khách hứa trả 500 ngày mai', 'promised_amount' => 500, 'promised_date' => '2026-11-13'], $actor);
+        $this->collectionClock('2026-11-14 10:00:00');
+        $row = $this->collectionRow([['date' => '2026-11-13', 'amount' => 500]]);
+        $result = $service->evaluate($row, $service->records());
+        self::assertSame('met_on_time', $result['status']);
+        self::assertSame(500, $result['latest']['target']);
+        self::assertFalse($result['latest']['follow_up_due']);
+        self::assertCount(1, $result['latest']['events']);
+    }
+
+    public function test_collection_does_not_treat_adjustments_as_payments_and_detects_missed_promises(): void
+    {
+        $this->collectionClock('2026-11-12 10:00:00');
+        $service = new \App\Services\DebtCollectionService;
+        $service->remind($this->collectionRow(), ['loaded_at' => '2026-11-12'], $this->reminderData(['promised_date' => '2026-11-13', 'follow_up_date' => '2026-11-14']), $this->user('admin'));
+        $this->collectionClock('2026-11-15 10:00:00');
+        $row = $this->collectionRow();
+        $row['entries'][] = ['type' => 'adjustment', 'date' => '2026-11-14', 'amount' => -5000, 'row' => 1];
+        $result = $service->evaluate($row, $service->records());
+        self::assertSame(0, $result['latest']['paid']);
+        self::assertSame('overdue', $result['status']);
+        self::assertTrue($result['latest']['follow_up_due']);
+    }
+
+    public function test_unmapped_collection_history_survives_customer_mapping(): void
+    {
+        $this->collectionClock('2026-11-12 10:00:00');
+        $service = new \App\Services\DebtCollectionService;
+        $row = $this->collectionRow();
+        $row['customer_id'] = null;
+        $service->remind($row, ['loaded_at' => '2026-11-12'], $this->reminderData(), $this->user('admin'));
+        $row['customer_id'] = 1;
+        self::assertCount(1, $service->evaluate($row, $service->records())['logs']);
+        $row['source_keys'] = [str_repeat('a', 64)];
+        self::assertCount(0, $service->evaluate($row, $service->records())['logs']);
+    }
+
+    public function test_collection_edited_existing_receipt_is_not_automatically_treated_as_new_money(): void
+    {
+        $this->collectionClock('2026-11-12 10:00:00');
+        $service = new \App\Services\DebtCollectionService;
+        $actor = $this->user('admin');
+        $service->remind($this->collectionRow([['date' => '2026-11-01', 'amount' => 500]]), ['loaded_at' => '2026-11-12'], $this->reminderData(), $actor);
+        $this->collectionClock('2026-11-13 10:00:00');
+        $row = $this->collectionRow([['date' => '2026-11-13', 'amount' => 600]]);
+        $result = $service->evaluate($row, $service->records());
+        self::assertSame(0, $result['latest']['paid']);
+        self::assertCount(1, $result['latest']['pending']);
+        self::assertSame('needs_review', $result['status']);
+    }
+
+    public function test_collection_reminder_endpoint_resolves_current_customer_and_rejects_excess_target(): void
+    {
+        $this->collectionClock('2026-11-12 10:00:00');
+        $sheets = $this->service([$this->entry('CRM01', 'Chị Bình')]);
+        $key = hash('sha256', 'code:CRM01');
+        $controller = new \App\Http\Controllers\CustomerDebtReportController;
+        $service = new \App\Services\DebtCollectionService;
+        try {
+            $controller->remind($this->request($this->reminderData(['source_key' => $key, 'target_amount' => 2000]), 'admin'), $sheets, $service);
+            self::fail('Excess target accepted');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            self::assertArrayHasKey('target_amount', $e->errors());
+        }
+        self::assertSame(0, DB::table('debt_collection_reminders')->count());
+        $response = $controller->remind($this->request($this->reminderData(['source_key' => $key, 'target_amount' => '500']), 'admin'), $sheets, $service)->getData(true);
+        self::assertGreaterThan(0, $response['id']);
+        self::assertEquals(1, DB::table('debt_collection_reminders')->value('customer_id'));
+    }
+
+    public function test_collection_responses_cannot_be_attached_to_another_customer(): void
+    {
+        $this->collectionClock('2026-11-12 10:00:00');
+        $service = new \App\Services\DebtCollectionService;
+        $actor = $this->user('admin');
+        $id = $service->remind($this->collectionRow(), ['loaded_at' => '2026-11-12'], $this->reminderData(), $actor);
+        $other = $this->collectionRow();
+        $other['customer_id'] = 2;
+        $this->expectException(HttpException::class);
+        $service->respond($other, ['request_id' => (string) \Illuminate\Support\Str::uuid(), 'reminder_id' => $id, 'type' => 'response', 'note' => 'Phản hồi nhầm khách'], $actor);
+    }
+
+    public function test_debt_report_pagination_search_and_recovery_filter(): void
+    {
+        $entries = [];
+        for ($i = 1; $i <= 41; $i++) {
+            $entries[] = $this->entry('NEW'.$i, 'Khách nguồn '.$i, $i);
+        }
+        $sheets = $this->service($entries);
+        $controller = new \App\Http\Controllers\CustomerDebtReportController;
+        $report = new \App\Services\CustomerDebtReportService;
+        $collection = new \App\Services\DebtCollectionService;
+        $data = $controller->index($this->request(['per_page' => 20, 'page' => 2], 'admin'), $sheets, $report, $collection)->getData();
+        self::assertSame(41, $data['rows']->total());
+        self::assertSame(21, $data['rows']->firstItem());
+        self::assertCount(20, $data['rows']);
+        $key = collect($sheets->summarize($entries))->firstWhere('code', 'NEW20')['key'];
+        $this->markRecovery($sheets, $key, 'difficult');
+        $data = $controller->index($this->request(['search' => 'Khách nguồn 20'], 'admin'), $sheets, $report, $collection)->getData();
+        self::assertSame(0, $data['rows']->total());
+        $data = $controller->index($this->request(['search' => 'Khách nguồn 20', 'recovery' => 'all'], 'admin'), $sheets, $report, $collection)->getData();
+        self::assertSame(1, $data['rows']->total());
     }
 
     public function test_sales_can_only_see_their_customers_and_unique_name_fallback(): void

@@ -247,7 +247,7 @@ class CustomerDebtMonitorController extends Controller
         return response()->json(['message' => 'Đã cập nhật công nợ.', 'adjustment_id' => $record->id, 'new_balance' => (int) $record->new_balance, 'delta' => (int) $record->delta]);
     }
 
-    private function debtContext(Request $request, CustomerDebtSheetService $service): array
+    public function debtContext(Request $request, CustomerDebtSheetService $service): array
     {
         ['canLoad' => $canLoad, 'customers' => $customers, 'allowedIds' => $allowedIds, 'snapshot' => $snapshot, 'groups' => $groups] = $this->resolveGroups($request, $service);
         $byId = $customers->keyBy('id');

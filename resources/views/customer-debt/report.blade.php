@@ -1,0 +1,63 @@
+@extends('layouts.admin')
+@section('title','Báo cáo công nợ')
+@section('content')
+<div class="debt-page debt-collection-page">
+    <header class="debt-page-header"><div><h1>Báo cáo công nợ</h1><div class="debt-updated">@if($snapshot)Dữ liệu Sheet {{ \Carbon\Carbon::parse($snapshot['loaded_at'])->timezone(config('app.timezone'))->format('d/m/Y H:i') }} @else Chưa có dữ liệu Sheet @endif</div></div><div class="debt-header-actions"><a class="btn btn-light" href="{{ route('customer-debt.index',['tab'=>'all']) }}">Nguồn & quản lý công nợ</a><form method="POST" action="{{ route('customer-debt.load') }}" data-report-sheet-refresh>@csrf<input type="hidden" name="source" value="google"><button class="btn btn-primary">Cập nhật Google Sheet</button></form></div></header>
+    @foreach(['success'=>'success','error'=>'danger'] as $key=>$color)
+    @if(session($key))<div class="alert alert-{{ $color }} py-2">{{ session($key) }}</div>@endif
+    @endforeach
+    @if($errors->any())<div class="alert alert-danger py-2">{{ $errors->first() }}</div>@endif
+    <form method="GET" class="debt-filters collection-filters">
+        <div class="debt-filter-field"><label class="form-label" for="collection-scope">Phạm vi khách</label><select id="collection-scope" class="form-select" name="scope"><option value="all" @selected(request('scope','all')==='all')>Tất cả khách hàng</option><option value="orders" @selected(request('scope')==='orders')>Có phát sinh đơn</option></select></div>
+        <div class="debt-filter-field"><label class="form-label" for="collection-from">Đơn từ ngày</label><input id="collection-from" class="form-control" type="date" name="from" value="{{ request('from') }}" @disabled(request('scope','all')!=='orders')></div>
+        <div class="debt-filter-field"><label class="form-label" for="collection-to">Đến ngày</label><input id="collection-to" class="form-control" type="date" name="to" value="{{ request('to') }}" @disabled(request('scope','all')!=='orders')></div>
+        <div class="debt-filter-field debt-filter-search"><label class="form-label" for="collection-search">Tên / mã khách</label><input id="collection-search" class="form-control" name="search" value="{{ request('search') }}" maxlength="150"></div>
+        <div class="debt-filter-field"><label class="form-label" for="collection-sale">Sale phụ trách</label><select id="collection-sale" class="form-select" name="sale"><option value="">Tất cả sale</option>@foreach($sales as $sale)<option value="{{ $sale['key'] }}" @selected(request('sale')===$sale['key'])>{{ $sale['label'] }}</option>@endforeach</select></div>
+        <div class="debt-filter-field"><label class="form-label" for="collection-balance">Công nợ</label><select id="collection-balance" class="form-select" name="balance">@foreach(['debt'=>'Đang có nợ','all'=>'Tất cả số dư','settled'=>'Đã cân đối','credit'=>'Khách trả trước'] as $value=>$label)<option value="{{ $value }}" @selected(request('balance','debt')===$value)>{{ $label }}</option>@endforeach</select></div>
+        <div class="debt-filter-field"><label class="form-label" for="collection-status">Kết quả nhắc nợ</label><select id="collection-status" class="form-select" name="status"><option value="all">Tất cả</option>@foreach(\App\Services\DebtCollectionService::STATUSES+['follow_up_due'=>'Đến lần nhắc tiếp'] as $value=>$label)<option value="{{ $value }}" @selected(request('status')===$value)>{{ $label }}</option>@endforeach</select></div>
+        <div class="debt-filter-field"><label class="form-label" for="collection-recovery">Khả năng thu hồi</label><select id="collection-recovery" class="form-select" name="recovery">@foreach(['normal'=>'Đang theo dõi','all'=>'Tất cả','difficult'=>'Khó thu hồi','unrecoverable'=>'Không có khả năng thu hồi'] as $value=>$label)<option value="{{ $value }}" @selected(request('recovery','normal')===$value)>{{ $label }}</option>@endforeach</select></div>
+        <div class="debt-filter-actions"><button class="btn btn-primary">Lọc</button><a class="btn btn-light" href="{{ route('customer-debt.report') }}">Xóa lọc</a></div>
+    </form>
+    <div class="collection-summary"><span><strong>{{ number_format($summary['customers'],0,',','.') }}</strong> khách</span><span>Công nợ <strong class="text-danger">{{ number_format($summary['balance'],0,',','.') }} đ</strong></span><span>Thanh toán ghi nhận sau nhắc <strong>{{ number_format($summary['received'],0,',','.') }} đ</strong></span></div>
+    <div class="card"><div class="table-responsive collection-table-scroll"><table class="table table-hover collection-table"><thead><tr><th>STT</th><th>Mã KH</th><th>Tên khách hàng</th><th>Sale phụ trách</th><th class="text-end">Doanh thu</th><th class="text-end">Thanh toán</th>
+        @foreach(['balance'=>'Công nợ','days_without_purchase'=>'Chưa mua','days_without_payment'=>'Chưa thanh toán'] as $sort=>$label)<th class="text-end"><a class="debt-sort-link" href="{{ request()->fullUrlWithQuery(['sort'=>$sort,'direction'=>request('sort','balance')===$sort&&request('direction','desc')==='desc'?'asc':'desc','page'=>1]) }}">{{ $label }} <span aria-hidden="true">{{ request('sort','balance')===$sort?(request('direction','desc')==='desc'?'↓':'↑'):'↕' }}</span></a></th>@endforeach
+        <th>Trạng thái</th><th>Công cụ</th></tr></thead><tbody>
+        @forelse($rows as $debt)
+        @php($latest=$debt['collection']['latest'])
+        <tr><td>{{ $rows->firstItem()+$loop->index }}</td><td>{{ $debt['code'] ?: '—' }}</td><td class="collection-name"><strong>{{ $debt['name'] }}</strong>@if(!$debt['customer_id'])<div class="small text-muted">Khách nguồn · chưa ghép</div>@endif @if($debt['recovery']['status']!=='normal')<span class="badge bg-warning text-dark">{{ $debt['recovery']['label'] }}</span>@endif</td><td>{{ $debt['sale_label'] }}</td><td class="text-end collection-money">{{ $debt['data_available']?number_format($debt['sales'],0,',','.'):'—' }}</td><td class="text-end collection-money">{{ $debt['data_available']?number_format($debt['payments'],0,',','.'):'—' }}</td><td class="text-end collection-money fw-semibold {{ $debt['balance']>0?'text-danger':'' }}">{{ $debt['data_available']?number_format($debt['balance'],0,',','.').' đ':'Chưa có dữ liệu' }}</td><td class="text-end text-nowrap" title="Ngày mua: {{ $debt['last_purchase_date'] ?? 'Chưa có' }}">{{ $debt['days_without_purchase']!==null?$debt['days_without_purchase'].' ngày':'—' }}</td><td class="text-end text-nowrap" title="Ngày thanh toán: {{ $debt['last_payment_date'] ?? 'Chưa có' }}">{{ $debt['days_without_payment']!==null?$debt['days_without_payment'].' ngày':'Chưa có' }}</td>
+        <td class="collection-status">
+            @if(!$debt['data_available'])<span class="badge bg-light text-dark">Chưa có dữ liệu</span>@elseif($debt['balance']===0)<span class="badge bg-success">Đã cân đối</span>@elseif($debt['balance']<0)<span class="badge bg-info text-dark">Khách trả trước</span>@endif
+
+            @if(($debt['alerts']['overdue_days'] ?? 0)>0)<span class="badge bg-danger">Trễ {{ $debt['alerts']['overdue_days'] }} ngày</span>@endif
+            <span class="badge {{ in_array($debt['collection']['status'],['met','met_on_time'],true)?'bg-success':($debt['collection']['status']==='overdue'?'bg-danger':'bg-light text-dark') }}">{{ $debt['collection']['label'] }}</span>
+            @if($latest)<div class="small text-muted mt-1">Nhắc {{ \Carbon\Carbon::parse($latest['record']->reminded_at)->format('d/m H:i') }} · Thu {{ number_format($latest['paid'],0,',','.') }} / {{ number_format($latest['target'],0,',','.') }} đ</div>@if($latest['follow_up_due'])<span class="small text-danger">Đến lần nhắc tiếp</span>@endif @endif
+        </td>
+        <td class="collection-tools"><div class="d-flex flex-wrap gap-1">
+            @if($debt['data_available'] && $debt['balance']>0)<button type="button" class="btn btn-sm btn-primary collection-remind" title="Ghi nhận đã nhắc nợ" data-key="{{ $debt['key'] }}" data-customer="{{ $debt['customer_id'] }}" data-name="{{ $debt['name'] }}" data-balance="{{ $debt['balance'] }}" data-request-id="{{ \Illuminate\Support\Str::uuid() }}">Đã nhắc</button>@endif
+            <button type="button" class="btn btn-sm btn-light collection-history" data-key="{{ $debt['key'] }}" data-customer="{{ $debt['customer_id'] }}" data-name="{{ $debt['name'] }}">Lịch sử</button>
+            <details class="collection-more"><summary class="btn btn-sm btn-light" aria-label="Công cụ khác">⋯</summary><div>
+                @if($debt['data_available'])
+                    @include('customer-debt.balance-button')
+                    <button type="button" class="btn btn-sm btn-light debt-recovery-button" data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}" data-status="{{ $debt['recovery']['status'] }}" data-note="{{ $debt['recovery']['note'] }}" data-version="{{ $debt['recovery']['version'] }}">Khả năng thu hồi</button>
+                    <a class="btn btn-sm btn-light" href="{{ route('customer-debt.index',['tab'=>'all','customer'=>$debt['key'],'window'=>'all','recovery'=>'all']) }}#debt-detail">Chi tiết / tiêu chí nợ</a>
+                @else<a class="btn btn-sm btn-light" href="{{ route('customer-debt.index',['tab'=>'all','search'=>$debt['name'],'recovery'=>'all']) }}">Kiểm tra nguồn / ghép khách</a>@endif
+                @if($debt['customer_id'])<a class="btn btn-sm btn-light" href="{{ route('customers.show',$debt['customer_id']) }}">Hồ sơ khách</a>@endif
+            </div></details>
+        </div></td></tr>
+        @empty<tr><td colspan="11" class="text-center text-muted py-4">Không có khách phù hợp với bộ lọc.</td></tr>@endforelse
+        </tbody></table></div>
+        <div class="card-body collection-pagination">{{ $rows->links() }}<form method="GET">@foreach(request()->except(['page','per_page']) as $key=>$value)@if(is_scalar($value))<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif @endforeach<select class="form-select form-select-sm" name="per_page" aria-label="Khách mỗi trang" onchange="this.form.submit()">@foreach([20,30,50,100] as $size)<option value="{{ $size }}" @selected((int)request('per_page',30)===$size)>{{ $size }} khách/trang</option>@endforeach</select></form></div>
+    </div>
+    <details class="small text-muted mt-2"><summary>Cách đọc báo cáo</summary><p class="mt-2">Mỗi khách hệ thống hiển thị một dòng, gộp các mã nguồn đã ghép. Doanh thu, thanh toán và công nợ là tổng lịch sử nguồn; bộ lọc ngày chọn khách phát sinh đơn trong Sheet hoặc hệ thống, không giới hạn số dư theo kỳ. Công nợ = doanh thu − tặng − thanh toán + điều chỉnh. Ngày chưa mua / chưa thanh toán tính từ giao dịch gần nhất; chưa có thanh toán hiển thị “Chưa có”.</p><p>Thanh toán được đối chiếu với bản dữ liệu tại lần nhắc, mỗi khoản chỉ ghi nhận cho một lần nhắc. Khoản cùng ngày hoặc dòng thu bị sửa cần admin xác nhận trong lịch sử. “Đạt” khi thu đủ mục tiêu; ngày hẹn dùng để phân biệt đúng hẹn / trễ hẹn. Đây là kết quả đối chiếu thanh toán, không khẳng định việc nhắc là nguyên nhân thanh toán. Bấm cập nhật Sheet để đánh giá với dữ liệu mới nhất.</p></details>
+    @include('customer-debt.balance-adjustment-dialog')
+    @include('customer-debt.recovery-dialog')
+    @include('customer-debt.report-dialogs')
+</div>
+@endsection
+@push('styles')
+<link rel="stylesheet" href="{{ asset('css/customer-debt.css') }}?v={{ filemtime(public_path('css/customer-debt.css')) }}">
+<link rel="stylesheet" href="{{ asset('css/customer-debt-report.css') }}?v={{ filemtime(public_path('css/customer-debt-report.css')) }}">
+@endpush
+@push('scripts')
+<script src="{{ asset('js/customer-debt-report.js') }}?v={{ filemtime(public_path('js/customer-debt-report.js')) }}"></script>
+@endpush

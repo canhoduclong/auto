@@ -1423,6 +1423,10 @@ Route::middleware('auth')->group(function () {
 
 // Sales debt monitoring: sheet-derived balances are separate from order accounting.
 Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,manager,manager_sale,account,accountant,accounting,director,ceo'])->group(function () {
+    Route::get('/customer-debt/report', [\App\Http\Controllers\CustomerDebtReportController::class, 'index'])->middleware('role:admin')->name('customer-debt.report');
+    Route::get('/customer-debt/report/history', [\App\Http\Controllers\CustomerDebtReportController::class, 'history'])->middleware('role:admin')->name('customer-debt.report.history');
+    Route::post('/customer-debt/report/reminders', [\App\Http\Controllers\CustomerDebtReportController::class, 'remind'])->middleware('role:admin')->name('customer-debt.report.remind');
+    Route::post('/customer-debt/report/responses', [\App\Http\Controllers\CustomerDebtReportController::class, 'respond'])->middleware('role:admin')->name('customer-debt.report.respond');
     Route::post('/customer-debt/customers', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'createCustomer'])->name('customer-debt.customers.store');
     Route::patch('/customer-debt/recovery', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'updateRecovery'])->name('customer-debt.recovery');
     Route::post('/customer-debt/balance-adjustments', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'adjustBalance'])->name('customer-debt.balance-adjustments');

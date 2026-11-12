@@ -130,7 +130,13 @@
 						</li>
 
                         @if(auth()->user()->hasRole(['admin','sale','leader','leader_sale','sale_manager','manager','manager_sale','account','accountant','accounting','director','ceo']))
-                        <li class="nav-item"><a href="{{ route('customer-debt.index') }}" class="nav-link{{ request()->routeIs('customer-debt.*') ? ' active' : '' }}"><i class="ph-wallet"></i><span>Công nợ & cảnh báo đơn</span></a></li>
+                        <li class="nav-item nav-item-submenu{{ request()->routeIs('customer-debt.*') ? ' nav-item-expanded nav-item-open' : '' }}">
+                            <a href="#" class="nav-link"><i class="ph-wallet"></i><span>Công nợ</span></a>
+                            <ul class="nav-group-sub collapse{{ request()->routeIs('customer-debt.*') ? ' show' : '' }}">
+                                <li class="nav-item"><a href="{{ route('customer-debt.index') }}" class="nav-link{{ request()->routeIs('customer-debt.index') ? ' active' : '' }}">Công nợ & cảnh báo đơn</a></li>
+                                @if(auth()->user()->isAdmin())<li class="nav-item"><a href="{{ route('customer-debt.report') }}" class="nav-link{{ request()->routeIs('customer-debt.report*') ? ' active' : '' }}">Báo cáo công nợ</a></li>@endif
+                            </ul>
+                        </li>
                         @endif
 
                         @include('layouts.partials.task-sidebar-menu', ['taskNavList'=>true, 'taskNavExcludedRoutes'=>['users.index','roles.index','permissions.index']])
