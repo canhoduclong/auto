@@ -42,6 +42,8 @@ return [
     ],
 
     'google_sheets' => [
+        'debt_payment_sheet_id' => (int) env('GOOGLE_SHEETS_DEBT_PAYMENT_SHEET_ID', 241453650),
+        'debt_spreadsheet_id' => env('GOOGLE_SHEETS_DEBT_SPREADSHEET_ID', '1oU0MBwvhZmMDPXoGqAswdjjqd-PPUU62Jahvz1uL8oc'),
         'credentials' => env(
             'GOOGLE_SHEETS_CREDENTIALS',
             env('GOOGLE_APPLICATION_CREDENTIALS', storage_path('app/google/service-account.json'))

@@ -129,6 +129,10 @@
 							</a>
 						</li>
 
+                        @if(auth()->user()->hasRole(['admin','sale','leader','leader_sale','sale_manager','manager','manager_sale','account','accountant','accounting','director','ceo']))
+                        <li class="nav-item"><a href="{{ route('customer-debt.index') }}" class="nav-link{{ request()->routeIs('customer-debt.*') ? ' active' : '' }}"><i class="ph-wallet"></i><span>Công nợ & cảnh báo đơn</span></a></li>
+                        @endif
+
                         @include('layouts.partials.task-sidebar-menu', ['taskNavList'=>true, 'taskNavExcludedRoutes'=>['users.index','roles.index','permissions.index']])
 
 						<!-- Đơn hàng -->

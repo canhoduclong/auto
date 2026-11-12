@@ -1,4 +1,4 @@
-@php($purchaseFormOpen = isset($errors) && $errors->any() && old('paste_data') === null)
+@php($purchaseFormOpen = isset($editingPurchase) || isset($errors) && $errors->any() && old('paste_data') === null)
 @php($selectedPurchaseFarm = $purchaseFarms->firstWhere('id', (int) old('duck_farm_id')))
 <div class="card border-0 shadow-sm mb-4 {{ $purchaseFormOpen ? '' : 'd-none' }}" id="purchaseFormCard">
     <div class="card-header bg-white d-flex justify-content-between align-items-center">
@@ -6,8 +6,9 @@
         <button type="button" class="btn-close" data-purchase-form-close aria-label="Đóng"></button>
     </div>
     <div class="card-body p-3 p-lg-4">
-        <form method="POST" action="{{ route('procurement.purchases.store') }}" id="purchaseForm">
+        <form method="POST" action="{{ isset($editingPurchase) ? route('procurement.purchases.update', $editingPurchase) : route('procurement.purchases.store') }}" id="purchaseForm">
             @csrf
+            @isset($editingPurchase) @method('PUT') @endisset
             <div class="purchase-section mb-3">
                 <div class="purchase-section-title"><i class="bi bi-info-circle me-1"></i>Thông tin chuyến thu mua</div>
                 <div class="row g-3">
@@ -18,9 +19,9 @@
                     <div class="col-xl-3 col-md-6">
                         <label class="form-label">Hình thức mua <span class="text-danger">*</span></label>
                     <select class="form-select" name="purchase_type" id="purchaseType" required>
-                        <option value="live_duck" @selected(old('purchase_type', 'live_duck') === 'live_duck')>Mua vịt lông tại trại</option>
-                        <option value="processed_duck" @selected(old('purchase_type') === 'processed_duck')>Mua vịt thịt đã sơ chế</option>
-                        <option value="product_purchase" @selected(old('purchase_type') === 'product_purchase')>Mua theo sản phẩm bán (đùi, lòng, huyết...)</option>
+                        <option value="live_duck" @selected(old('purchase_type', request('supplier_id') ? 'product_purchase' : (request('purchase_type') === 'processed_duck' ? 'product_purchase' : 'live_duck')) === 'live_duck')>Mua vịt lông tại trại</option>
+                        @if(isset($editingPurchase) && $editingPurchase->entry_mode !== 'product_lines')<option value="processed_duck" @selected(old('purchase_type', request('supplier_id') ? 'product_purchase' : (request('purchase_type') === 'processed_duck' ? 'product_purchase' : 'live_duck')) === 'processed_duck')>Vịt sơ chế theo lô (phiếu cũ)</option>@endif
+                        <option value="product_purchase" @selected(old('purchase_type', request('supplier_id') ? 'product_purchase' : (request('purchase_type') === 'processed_duck' ? 'product_purchase' : 'live_duck')) === 'product_purchase')>Thu mua vịt sơ chế theo biến thể</option>
                     </select>
                     </div>
                     <div class="col-xl-6 live-field">
@@ -31,9 +32,10 @@
                         </button>
                     </div>
                     <div class="col-xl-6 processed-field d-none">
-                        <label class="form-label">Nhà cung cấp vịt thịt <span class="text-danger">*</span></label>
-                        <select class="form-select" name="supplier_id" id="supplierSelect"><option value="">Chọn nhà cung cấp</option>@foreach($suppliers as $supplier)<option value="{{ $supplier->id }}" @selected((string) old('supplier_id') === (string) $supplier->id)>{{ $supplier->name }}</option>@endforeach</select>
+                        <label class="form-label">Nhà cung cấp hàng sơ chế <span class="text-danger">*</span></label>
+                        <select class="form-select" name="supplier_id" id="supplierSelect"><option value="">Chọn nhà cung cấp</option>@foreach($suppliers as $supplier)<option value="{{ $supplier->id }}" @selected((string) old('supplier_id', request('supplier_id')) === (string) $supplier->id)>{{ $supplier->name }}</option>@endforeach</select>
                     </div>
+                    <div class="col-md-6 product-purchase-field d-none"><label class="form-label">Kho nhận hàng <span class="text-danger">*</span></label><select name="warehouse_id" id="purchaseWarehouse" class="form-select"><option value="">Chọn kho nhập</option>@foreach($warehouses as $warehouse)<option value="{{ $warehouse->id }}" @selected(old('warehouse_id') == $warehouse->id)>{{ $warehouse->name }}</option>@endforeach</select></div>
                     <div class="col-md-6 duck-meta-field">
                         <label class="form-label">Loại vịt <span class="text-danger">*</span></label>
                         <div class="d-flex gap-2"><select class="form-select js-other-select" name="duck_type" data-other-target="duckTypeOther" required><option value="">Chọn loại vịt</option><option value="Chery" @selected(old('duck_type') === 'Chery')>Chery</option><option value="Grimoud" @selected(old('duck_type') === 'Grimoud')>Grimoud</option><option value="other" @selected(old('duck_type') === 'other')>Khác</option></select><input class="form-control d-none" id="duckTypeOther" name="duck_type_other" value="{{ old('duck_type_other') }}" placeholder="Loại vịt khác"></div>
@@ -57,21 +59,28 @@
             </div>
 
             <div class="purchase-section mb-3 product-purchase-field d-none">
-                <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2"><div class="purchase-section-title mb-0"><i class="bi bi-basket me-1"></i>Sản phẩm thu mua</div><button type="button" class="btn btn-sm btn-outline-primary" id="btnSelectPurchaseProduct" data-bs-toggle="modal" data-bs-target="#productSelectionModal"><i class="bi bi-search me-1"></i>Chọn sản phẩm</button></div>
+                <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2"><div class="purchase-section-title mb-0"><i class="bi bi-basket me-1"></i>Sản phẩm thu mua</div><button type="button" class="btn btn-sm btn-outline-primary" id="btnSelectPurchaseProduct" data-bs-toggle="modal" data-bs-target="#productSelectionModal"><i class="bi bi-search me-1"></i>Thêm biến thể</button></div>
                 <div class="card border-primary-subtle bg-primary-subtle mb-3"><div class="card-body py-2"><div class="d-flex justify-content-between gap-2 flex-wrap"><div><strong>Mẫu thu mua</strong><div class="small text-muted">Lưu và áp dụng nhanh nhà cung cấp cùng danh sách sản phẩm.</div></div><button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#savePurchaseTemplateModal"><i class="bi bi-bookmark-plus me-1"></i>Lưu thành mẫu</button></div><div class="row g-2 mt-1"><div class="col-md-8"><select class="form-select form-select-sm" id="purchaseTemplateSelect"><option value="">-- Chọn mẫu thu mua --</option></select></div><div class="col-md-4 d-flex gap-2"><button type="button" class="btn btn-sm btn-success flex-grow-1" id="btnApplyPurchaseTemplate">Áp dụng mẫu</button><button type="button" class="btn btn-sm btn-outline-danger" id="btnDeletePurchaseTemplate"><i class="bi bi-trash"></i></button></div></div><div class="small text-muted mt-1" id="purchaseTemplateSummary"></div></div></div>
-                <div class="alert alert-warning py-2 small" id="purchaseSupplierNotice">Vui lòng chọn nhà cung cấp trước khi chọn sản phẩm.</div>
-                <div class="table-responsive"><table class="table table-sm table-bordered align-middle mb-0" style="min-width:1050px"><thead class="table-light"><tr><th style="width:42px">#</th><th>Sản phẩm / Biến thể</th><th style="width:110px">Số lượng</th><th style="width:85px">ĐVT</th><th style="width:125px">Khối lượng kg</th><th style="width:145px">Đơn giá mua</th><th style="width:140px">Thành tiền</th><th>Ghi chú</th><th style="width:42px"></th></tr></thead><tbody id="purchaseProductRows"><tr data-empty-products><td colspan="9" class="text-center text-muted py-3">Chưa chọn sản phẩm.</td></tr></tbody></table></div>
+                <div class="alert alert-warning py-2 small" id="purchaseSupplierNotice">Chọn một hoặc nhiều biến thể; giá mua tính theo kg. Tiền tạm tính theo kg dự kiến; chốt theo kg thực giao do kho xác nhận.</div>
+                <div class="table-responsive"><table class="table table-sm table-bordered align-middle mb-0" style="min-width:1050px"><thead class="table-light"><tr><th style="width:42px">#</th><th>Sản phẩm / Biến thể</th><th style="width:110px">Số lượng</th><th style="width:85px">ĐVT</th><th style="width:125px">Khối lượng kg</th><th style="width:145px">Giá mua / kg</th><th style="width:140px">Thành tiền</th><th>Ghi chú</th><th style="width:42px"></th></tr></thead><tbody id="purchaseProductRows"><tr data-empty-products><td colspan="9" class="text-center text-muted py-3">Chưa chọn sản phẩm.</td></tr></tbody></table></div>
             </div>
 
             <div class="purchase-section mb-3">
                 <div class="purchase-section-title"><i class="bi bi-receipt me-1"></i>Chi phí chuyến</div>
                 <div class="row g-2">
                     @foreach([['Phí cò', 'broker_fee', 'brokerFee'], ['Phí sơ chế', 'processing_fee', 'processingFee'], ['Chi phí thu mua', 'procurement_fee', 'procurementFee'], ['Phí vận chuyển', 'transportation_fee', 'transportationFee'], ['Chi phí khác', 'other_fee', 'otherFee']] as [$label, $name, $id])
-                        <div class="col-6 col-lg"><label class="form-label">{{ $label }}</label><div class="input-group"><input type="number" min="0" step=".01" class="form-control calc" name="{{ $name }}" id="{{ $id }}" value="{{ old($name, 0) }}"><span class="input-group-text">đ</span></div></div>
+                        <div class="col-6 col-lg {{ $name !== 'other_fee' ? 'live-cost-field' : '' }}"><label class="form-label">{{ $label }}</label><div class="input-group"><input type="number" min="0" step=".01" class="form-control calc" name="{{ $name }}" id="{{ $id }}" value="{{ old($name, 0) }}"><span class="input-group-text">đ</span></div></div>
                     @endforeach
                 </div>
             </div>
 
+            <div class="purchase-section mb-3 product-purchase-field d-none">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3"><label class="form-label">VAT toàn đơn (%)</label><input type="number" class="form-control calc" id="vatRate" name="vat_rate" min="0" max="100" step=".01" value="{{ old('vat_rate', 5) }}"></div>
+                    <div class="col-md-4"><label class="form-label">Tiền VAT</label><input id="vatPreview" class="form-control" readonly value="0đ"></div>
+                    <div class="col-md-5 small text-muted">VAT tính trên tổng tiền hàng. Tổng đơn = tiền hàng + VAT + chi phí khác.</div>
+                </div>
+            </div>
             <div class="purchase-section mb-3">
                 <div class="purchase-section-title"><i class="bi bi-wallet2 me-1"></i>Thanh toán và ghi chú</div>
                 <div class="row g-2">
@@ -83,7 +92,7 @@
             </div>
             <div class="processed-field duck-batch-field d-none border rounded-3 p-3 mb-3 bg-light">
                 <label class="fw-semibold mb-2">Phân loại size vịt thịt</label>
-                <div class="row g-2">@foreach($processedSizes as $size)<div class="col-4 col-md-2"><label class="small">Size {{ number_format($size, 1) }}</label><input type="number" min="0" value="{{ old('sizes.' . $size, 0) }}" class="form-control form-control-sm" name="sizes[{{ $size }}]"></div>@endforeach</div>
+                <div class="row g-2">@foreach($processedSizes as $size)<div class="col-4 col-md-2"><label class="small">Size {{ number_format($size, 1) }}</label><input type="number" min="0" value="{{ (old('sizes', [])[number_format($size, 1)] ?? 0) }}" class="form-control form-control-sm" name="sizes[{{ $size }}]"></div>@endforeach</div>
             </div>
             <div class="purchase-total-bar d-flex justify-content-between align-items-center flex-wrap gap-3">
                 <div><div class="small text-muted">Tổng giá trị chuyến thu mua</div><strong class="fs-4 text-danger" id="totalPreview">0đ</strong></div>
@@ -93,7 +102,7 @@
     </div>
 </div>
 
-@include('warehouse.stock-in.product-selection-modal', ['availableVariants' => $purchaseProductVariants ?? [], 'productSelectionTitle' => 'Chọn sản phẩm thu mua'])
+@include('warehouse.stock-in.product-selection-modal', ['availableVariants' => $purchaseProductVariants ?? [], 'productSelectionTitle' => 'Chọn biến thể thu mua', 'keepSelectionOpen' => true, 'manualPurchasePrices' => true])
 <div class="modal fade" id="savePurchaseTemplateModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Lưu mẫu thu mua</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="form-label">Tên mẫu</label><input id="purchaseTemplateName" class="form-control" maxlength="150" placeholder="Ví dụ: Thu mua phụ phẩm buổi sáng"><div id="purchaseTemplateError" class="alert alert-danger py-2 small mt-2 d-none"></div></div><div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Đóng</button><button type="button" class="btn btn-primary" id="btnSavePurchaseTemplate">Lưu mẫu</button></div></div></div></div>
 
 <div class="modal fade" id="farmPickerModal" tabindex="-1" aria-hidden="true">
@@ -171,7 +180,7 @@
                 const farmPickerPageLabel = document.getElementById('farmPickerPage');
                 const farmPickerRange = document.getElementById('farmPickerRange');
                 const productRows = document.getElementById('purchaseProductRows');
-                let purchaseVariants = [];
+                let purchaseVariants = @json($purchaseProductVariants ?? []);
                 let purchaseTemplates = @json($purchaseTemplates ?? []);
                 const oldProductItems = @json(old('product_items', []));
                 let productRowIndex = 0;
@@ -188,12 +197,17 @@
                     document.querySelectorAll('.live-field').forEach(element => element.classList.toggle('d-none', !live));
                     document.querySelectorAll('.processed-field').forEach(element => element.classList.toggle('d-none', live));
                     document.querySelectorAll('.duck-batch-field').forEach(element => element.classList.toggle('d-none', products));
+                    document.querySelectorAll('.live-cost-field').forEach(element => { element.classList.toggle('d-none', products); element.querySelectorAll('input').forEach(input => input.disabled = products); });
                     document.querySelectorAll('.duck-meta-field').forEach(element => element.classList.toggle('d-none', products));
                     document.querySelectorAll('.product-purchase-field').forEach(element => element.classList.toggle('d-none', !products));
                     if (farm) farm.required = live;
                     if (supplier) supplier.required = !live;
                     ['quantity','averageSize','weight','price'].forEach(id => { const input=document.getElementById(id); if(input) input.required=!products; });
+                    document.querySelectorAll('.duck-meta-field input, .duck-meta-field select, .duck-batch-field input').forEach(input => input.disabled = products);
                     document.querySelectorAll('.duck-meta-field select').forEach(input => input.required=!products);
+                    document.getElementById('vatRate').disabled = !products;
+                    document.getElementById('purchaseWarehouse').disabled = !products;
+                    document.getElementById('purchaseWarehouse').required = products;
                     syncPurchaseSupplierState();
                     calculate();
                 };
@@ -250,16 +264,17 @@
                         const input = document.getElementById(select.dataset.otherTarget);
                         const show = select.value === 'other';
                         input.classList.toggle('d-none', !show);
-                        input.required = show;
+                        input.required = show && type.value !== 'product_purchase';
                     };
                     select.addEventListener('change', syncOther);
                     syncOther();
                 });
                 const normalizeNumber = value => Number(String(value ?? '').replace(',', '.')) || 0;
+                const escapeHtml = value => { const span = document.createElement('span'); span.textContent = String(value ?? ''); return span.innerHTML; };
                 const money = value => Math.round(value).toLocaleString('vi-VN')+'đ';
                 const variantById = id => purchaseVariants.find(item => String(item.id ?? item.variant_id) === String(id));
                 const syncPurchaseSupplierState = () => {
-                    const enabled = !!supplier?.value && type.value === 'product_purchase';
+                    const enabled = type.value === 'product_purchase';
                     document.getElementById('btnSelectPurchaseProduct')?.toggleAttribute('disabled', !enabled);
                     document.getElementById('purchaseSupplierNotice')?.classList.toggle('d-none', enabled);
                 };
@@ -273,22 +288,20 @@
                     window.syncProductSelectionGroups?.();
                 };
                 const loadPurchaseSupplierProducts = async supplierId => {
-                    purchaseVariants=[]; refreshProductModal(); if(!supplierId)return;
-                    const response=await fetch(`{{ url('/api/suppliers') }}/${supplierId}/products`,{headers:{Accept:'application/json'}}); const payload=await response.json();
-                    purchaseVariants=(payload.data||[]).flatMap(product=>product.variants||[]).map(item=>({...item,id:item.id??item.variant_id})); refreshProductModal();
+                    refreshProductModal();
                 };
-                const productSubtotal = () => [...document.querySelectorAll('#purchaseProductRows [data-product-row]')].reduce((sum,row)=>sum+normalizeNumber(row.querySelector('[name*="[quantity]"]')?.value)*normalizeNumber(row.querySelector('[name*="[unit_cost]"]')?.value),0);
-                const updateProductRow = row => { const qty=normalizeNumber(row.querySelector('[name*="[quantity]"]')?.value); const cost=normalizeNumber(row.querySelector('[name*="[unit_cost]"]')?.value); row.querySelector('.purchase-product-line-total').textContent=money(qty*cost); calculate(); };
+                const productSubtotal = () => [...document.querySelectorAll('#purchaseProductRows [data-product-row]')].reduce((sum,row)=>sum+normalizeNumber(row.querySelector('[name*="[weight]"]')?.value)*normalizeNumber(row.querySelector('[name*="[unit_cost]"]')?.value),0);
+                const updateProductRow = row => { const qty=normalizeNumber(row.querySelector('[name*="[quantity]"]')?.value); const cost=normalizeNumber(row.querySelector('[name*="[unit_cost]"]')?.value); row.querySelector('.purchase-product-line-total').textContent=money(normalizeNumber(row.querySelector('[name*="[weight]"]')?.value)*cost); calculate(); };
                 window.addOrIncreaseVariantRow = (data, quantityToAdd=1) => {
                     const id=String(data.product_variant_id ?? data.id ?? ''); if(!id)return {status:'invalid'};
                     const existing=[...document.querySelectorAll('#purchaseProductRows [data-product-row]')].find(row=>String(row.dataset.variantId)===id);
                     if(existing){const input=existing.querySelector('[name*="[quantity]"]');input.value=normalizeNumber(input.value)+normalizeNumber(quantityToAdd);updateProductRow(existing);return {status:'incremented'};}
-                    productRows.querySelector('[data-empty-products]')?.remove(); const meta=variantById(id)||data; const idx=productRowIndex++; const qty=normalizeNumber(data.quantity||quantityToAdd)||1; const weight=normalizeNumber(data.weight)||(qty*normalizeNumber(meta.weight_per_unit||1)); const cost=normalizeNumber(data.unit_cost ?? meta.latest_price);
-                    productRows.insertAdjacentHTML('beforeend',`<tr data-product-row data-variant-id="${id}"><td class="text-center">${idx+1}</td><td><strong>${meta.label||'Sản phẩm'}</strong><input type="hidden" name="product_items[${idx}][product_variant_id]" value="${id}"><input type="hidden" name="product_items[${idx}][source_price_id]" value="${meta.price_id||data.source_price_id||''}"></td><td><input type="number" min="0.001" step=".001" class="form-control form-control-sm" name="product_items[${idx}][quantity]" value="${qty}" required></td><td class="text-center">${meta.unit_label||''}</td><td><input type="number" min="0" step=".001" class="form-control form-control-sm" name="product_items[${idx}][weight]" value="${weight}"></td><td><input type="number" min="0" step=".01" class="form-control form-control-sm" name="product_items[${idx}][unit_cost]" value="${cost}" required></td><td class="purchase-product-line-total">${money(qty*cost)}</td><td><input class="form-control form-control-sm" name="product_items[${idx}][note]"></td><td><button type="button" class="btn btn-sm text-danger" data-remove-product><i class="bi bi-x-circle"></i></button></td></tr>`); calculate(); return {status:'added'};
+                    productRows.querySelector('[data-empty-products]')?.remove(); const meta=variantById(id)||data; const idx=productRowIndex++; const qty=normalizeNumber(data.quantity||quantityToAdd)||1; const weight=data.weight != null ? normalizeNumber(data.weight) : (qty*normalizeNumber(meta.weight_per_unit||1)); const cost=normalizeNumber(data.unit_cost ?? meta.latest_price);
+                    productRows.insertAdjacentHTML('beforeend',`<tr data-product-row data-variant-id="${id}"><td class="text-center">${idx+1}</td><td><strong>${escapeHtml(meta.label||'Sản phẩm')}</strong><input type="hidden" name="product_items[${idx}][product_variant_id]" value="${id}"><input type="hidden" name="product_items[${idx}][source_price_id]" value=""></td><td><input type="number" min="0.001" step=".001" class="form-control form-control-sm" name="product_items[${idx}][quantity]" value="${qty}" required></td><td class="text-center">${escapeHtml(meta.unit_label||'')}</td><td><input type="number" min="0" step=".001" class="form-control form-control-sm" name="product_items[${idx}][weight]" value="${weight}" required></td><td><input type="number" min="0" step=".01" class="form-control form-control-sm" name="product_items[${idx}][unit_cost]" value="${cost}" required></td><td class="purchase-product-line-total">${money(weight*cost)}</td><td><input class="form-control form-control-sm" name="product_items[${idx}][note]"></td><td><button type="button" class="btn btn-sm text-danger" data-remove-product><i class="bi bi-x-circle"></i></button></td></tr>`); const addedRow = productRows.lastElementChild; addedRow.querySelector('[name*="[note]"]').value = data.note || ''; calculate(); return {status:'added'};
                 };
                 productRows?.addEventListener('input',event=>{const row=event.target.closest('[data-product-row]');if(row)updateProductRow(row);});
                 productRows?.addEventListener('click',event=>{if(event.target.closest('[data-remove-product]')){event.target.closest('[data-product-row]').remove();if(!productRows.querySelector('[data-product-row]'))productRows.innerHTML='<tr data-empty-products><td colspan="9" class="text-center text-muted py-3">Chưa chọn sản phẩm.</td></tr>';calculate();}});
-                supplier?.addEventListener('change',()=>{ if(type.value==='product_purchase'){productRows.innerHTML='<tr data-empty-products><td colspan="9" class="text-center text-muted py-3">Chưa chọn sản phẩm.</td></tr>';loadPurchaseSupplierProducts(supplier.value);} syncPurchaseSupplierState(); });
+                supplier?.addEventListener('change',()=>{ syncPurchaseSupplierState(); });
                 let averageWasEdited = document.getElementById('averageSize').value !== '';
                 document.getElementById('averageSize').addEventListener('input', () => averageWasEdited = true);
                 const calculate = () => {
@@ -302,7 +315,9 @@
                     const other = +document.getElementById('otherFee').value || 0;
                     const paid = +document.getElementById('paidAmount').value || 0;
                     const subtotal = type.value === 'product_purchase' ? productSubtotal() : weight * price;
-                    const total = subtotal + broker + processing + procurement + transportation + other;
+                    const vat = type.value === 'product_purchase' ? Math.round(subtotal * normalizeNumber(document.getElementById('vatRate').value)) / 100 : 0;
+                    document.getElementById('vatPreview').value = money(vat);
+                    const total = subtotal + vat + other + (type.value === 'product_purchase' ? 0 : broker + processing + procurement + transportation);
                     if (!averageWasEdited && quantity && weight) document.getElementById('averageSize').value = (weight / quantity).toFixed(3);
                     document.getElementById('subtotalPreview').value = subtotal.toLocaleString('vi-VN') + 'đ';
                     document.getElementById('totalPreview').textContent = total.toLocaleString('vi-VN') + 'đ';
@@ -318,7 +333,8 @@
                 document.getElementById('purchaseForm')?.addEventListener('submit',event=>{if(type.value==='product_purchase'&&!productRows.querySelector('[data-product-row]')){event.preventDefault();alert('Vui lòng chọn ít nhất một sản phẩm thu mua.');}});
                 renderTemplates();
                 syncType();
-                if(type.value==='product_purchase'&&supplier?.value)loadPurchaseSupplierProducts(supplier.value).then(()=>oldProductItems.forEach(item=>{const meta=variantById(item.product_variant_id);if(meta)window.addOrIncreaseVariantRow({...item,...meta,product_variant_id:item.product_variant_id,unit_cost:item.unit_cost,source_price_id:item.source_price_id},item.quantity);}));
+                refreshProductModal();
+                if(type.value==='product_purchase')loadPurchaseSupplierProducts(supplier.value).then(()=>oldProductItems.forEach(item=>{const meta=variantById(item.product_variant_id);if(meta)window.addOrIncreaseVariantRow({...item,...meta,product_variant_id:item.product_variant_id,unit_cost:item.unit_cost,source_price_id:item.source_price_id},item.quantity);}));
                 calculate();
                 document.querySelectorAll('.farm-card').forEach(farmCard => farmCard.addEventListener('click', () => {
                     document.querySelectorAll('.farm-card').forEach(item => item.classList.remove('selected'));

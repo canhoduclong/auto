@@ -15,6 +15,7 @@ class InventoryDocumentItem extends Model
         'quantity',
         'weight_kg',
         'unit_cost',
+        'unit_cost_basis',
         'note',
         'source_price_id',
     ];
@@ -34,7 +35,7 @@ class InventoryDocumentItem extends Model
 
     public function getImportLineTotalAttribute(): float
     {
-        $basis = ($this->productVariant?->effective_priced_by_kg ?? false)
+        $basis = ($this->unit_cost_basis === 'kg' || ($this->unit_cost_basis === null && ($this->productVariant?->effective_priced_by_kg ?? false)))
             ? $this->import_weight_kg
             : (float) $this->quantity;
 

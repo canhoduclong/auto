@@ -36,6 +36,10 @@
             visibility: visible;
         }
 
+        .page-content > .content-wrapper { min-width: 0; }
+        .content-wrapper > .navbar { flex-shrink: 0; min-width: 0; --navbar-padding-y: .5rem; }
+        .content-wrapper > .content-inner { min-height: 0; }
+
         @media (max-width: 991.98px) {
             .sidebar.sidebar-main {
                 position: fixed;
@@ -69,7 +73,6 @@
 		<div class="sidebar sidebar-dark sidebar-main sidebar-expand-lg">
              @include('layouts.sidebar')
         </div>
-        <div class="mobile-drawer-overlay d-lg-none js-mobile-drawer-overlay"></div>
         <div class="content-wrapper">
             <div class="navbar navbar-expand-lg navbar-static shadow mobile-admin-header">
 
@@ -93,8 +96,10 @@
                         <i class="ph ph-list"></i>
                     </button>
 
+                    <button type="button" class="btn btn-light btn-sm d-none d-lg-inline-flex me-2 sidebar-main-resize" aria-label="Thu gọn hoặc mở rộng menu"><i class="ph-arrows-left-right"></i></button>
+                    <span class="d-none d-lg-inline text-muted small">@yield('title', 'Quản trị')</span>
                     @include('layouts.partials.role_switcher', ['roleSwitcherVariant'=>'mobile'])
-                    <div class="ms-auto d-flex align-items-center gap-2 py-2">
+                    <div class="ms-auto d-flex align-items-center gap-2">
                         <span class="mobile-admin-identity"><span class="mobile-header-name">{{ auth()->user()->name }}</span><span class="mobile-header-time">{{ now()->format('d/m/Y H:i') }}</span></span>
                         <!-- Role Switcher Dropdown -->
                         @if($currentUser->roles->count() > 1)
@@ -165,30 +170,19 @@
                     </div>
 			</div>
 
-            <div class="content pt-3">
-                {{-- Hiển thị lỗi --}}
-                @if ($errors->any())
-                    <div class="mb-4 p-4 text-red-800 bg-red-100 border border-red-300 rounded">
-                        <ul class="mb-0">
-                            @foreach ($errors->all() as $e)
-                                <li>{{ $e }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                @endif
+            @if($errors->any())
+            <div class="px-3 pt-3"><div class="alert alert-danger mb-0"><ul class="mb-0">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div></div>
+            @endif
 
-
-
- </div>
-
-
-            <div class="content-inner"> 
+            <div class="content-inner" id="admin-main-content">
 
                 @yield('content')
             </div>  
         </div>
 
 
+
+        <div class="mobile-drawer-overlay d-lg-none js-mobile-drawer-overlay"></div>
 
         {{-- Plugins thường dùng của Limitless (tùy gói bạn có) --}}
         {{-- <script src="{{ asset('assets/js/plugins/forms/styling/uniform.min.js') }}"></script> --}}

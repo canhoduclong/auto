@@ -532,8 +532,16 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     });
 
     Route::prefix('procurement')->name('procurement.')->middleware('role:procurement_manager,admin')->group(function () {
+        Route::get('/suppliers', [\App\Http\Controllers\ProcurementSupplierController::class, 'index'])->name('suppliers.index');
+        Route::post('/suppliers', [\App\Http\Controllers\ProcurementSupplierController::class, 'store'])->name('suppliers.store');
+        Route::get('/suppliers/{supplier}', [\App\Http\Controllers\ProcurementSupplierController::class, 'show'])->name('suppliers.show');
+        Route::put('/suppliers/{supplier}', [\App\Http\Controllers\ProcurementSupplierController::class, 'update'])->name('suppliers.update');
+        Route::post('/suppliers/{supplier}/products', [\App\Http\Controllers\ProcurementSupplierController::class, 'attachProduct'])->name('suppliers.products.store');
         Route::get('/', [\App\Http\Controllers\ProcurementController::class, 'dashboard'])->name('dashboard');
         Route::get('/purchases', [\App\Http\Controllers\ProcurementController::class, 'purchases'])->name('purchases.index');
+        Route::get('/purchases/{purchase}/edit', [\App\Http\Controllers\ProcurementController::class, 'editPurchase'])->name('purchases.edit');
+        Route::put('/purchases/{purchase}', [\App\Http\Controllers\ProcurementController::class, 'updatePurchase'])->name('purchases.update');
+        Route::delete('/purchases/{purchase}', [\App\Http\Controllers\ProcurementController::class, 'destroyPurchase'])->name('purchases.destroy');
         Route::post('/purchases', [\App\Http\Controllers\ProcurementController::class, 'storePurchase'])->name('purchases.store');
         Route::post('/purchases/import-pasted', [\App\Http\Controllers\ProcurementController::class, 'importPastedPurchases'])->name('purchases.import-pasted');
         Route::post('/purchases/{purchase}/send-warehouse', [\App\Http\Controllers\ProcurementController::class, 'sendToWarehouse'])->name('purchases.send-warehouse');
@@ -1408,6 +1416,16 @@ Route::middleware('auth')->group(function () {
     Route::post('/shipping-expenses/{claim}/payment', [\App\Http\Controllers\ShippingExpenseController::class,'payment'])->name('shipping-expenses.payment');
 });
 
+// Sales debt monitoring: sheet-derived balances are separate from order accounting.
+Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,manager,manager_sale,account,accountant,accounting,director,ceo'])->group(function () {
+    Route::get('/customer-debt', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'index'])->name('customer-debt.index');
+    Route::patch('/customer-debt/policy', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'updatePolicy'])->name('customer-debt.policy');
+    Route::get('/customer-debt/customers', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'customers'])->name('customer-debt.customers');
+    Route::post('/customer-debt/mapping', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'map'])->name('customer-debt.mapping');
+    Route::delete('/customer-debt/mapping', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'unmap'])->name('customer-debt.mapping.destroy');
+    Route::post('/customer-debt/load', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'load'])->middleware('throttle:6,1')->name('customer-debt.load');
+});
+
 Route::get('/{slug}', [PageController::class, 'show'])->name('page.show');
 
 // Posts
@@ -1435,6 +1453,16 @@ Route::get('/test-variant', function () {
     } catch (\Exception $e) {
         return response()->json(['error' => $e->getMessage()], 500);
     }
+});
+
+// Sales debt monitoring: sheet-derived balances are separate from order accounting.
+Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,manager,manager_sale,account,accountant,accounting,director,ceo'])->group(function () {
+    Route::get('/customer-debt', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'index'])->name('customer-debt.index');
+    Route::patch('/customer-debt/policy', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'updatePolicy'])->name('customer-debt.policy');
+    Route::get('/customer-debt/customers', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'customers'])->name('customer-debt.customers');
+    Route::post('/customer-debt/mapping', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'map'])->name('customer-debt.mapping');
+    Route::delete('/customer-debt/mapping', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'unmap'])->name('customer-debt.mapping.destroy');
+    Route::post('/customer-debt/load', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'load'])->middleware('throttle:6,1')->name('customer-debt.load');
 });
 
 Route::get('/{slug}', [PageController::class, 'show'])->name('page.show');

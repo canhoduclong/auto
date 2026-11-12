@@ -39,7 +39,7 @@
                             </div>
                         </div>
                         @if($p->entry_mode === 'product_lines')
-                        <div class="mb-3"><strong>Sản phẩm từ thu mua:</strong><div class="table-responsive mt-2"><table class="table table-sm table-bordered"><thead><tr><th>Sản phẩm</th><th>SL đặt</th><th>Kg dự kiến</th><th>Đơn giá</th><th>Thành tiền</th></tr></thead><tbody>@foreach($p->productItems as $productItem)<tr><td>{{ $productItem->productVariant?->product?->name }} - {{ $productItem->productVariant?->name }}</td><td>{{ number_format((float)$productItem->quantity, 3) }} {{ $productItem->productVariant?->product?->unit_label }}</td><td>{{ number_format((float)$productItem->weight, 3) }}</td><td>{{ number_format($productItem->unit_cost) }}đ</td><td>{{ number_format($productItem->line_total) }}đ</td></tr>@endforeach</tbody></table></div></div>
+                        <div class="mb-3"><strong>Sản phẩm từ thu mua:</strong><div class="table-responsive mt-2"><table class="table table-sm table-bordered"><thead><tr><th>Sản phẩm</th><th>SL đặt</th><th>Kg dự kiến</th><th>Kg thực nhận</th><th>Giá mua / kg</th><th>Thành tiền</th></tr></thead><tbody>@foreach($p->productItems as $productItem)<tr data-receipt-line data-cost="{{ (float)$productItem->unit_cost }}"><td>{{ $productItem->productVariant?->product?->name }} - {{ $productItem->productVariant?->name }}</td><td>{{ number_format((float)$productItem->quantity, 3) }} {{ $productItem->productVariant?->product?->unit_label }}</td><td>{{ number_format((float)$productItem->weight, 3) }}</td><td>{{ $productItem->received_weight !== null ? number_format((float)$productItem->received_weight, 3) : 'Chưa nhận' }}</td><td>{{ number_format($productItem->unit_cost) }}đ/kg</td><td>{{ number_format($productItem->line_total) }}đ</td></tr>@endforeach</tbody></table></div></div>
                         @else
                         <div class="mb-3"><strong>Dự kiến từ thu mua:</strong>
                             @forelse($p->items->where('stage', 'expected') as $i)
@@ -48,7 +48,7 @@
                         </div>
                         @endif
                         @if($p->status === 'sent_to_warehouse')
-                            <form method="POST" action="{{ route('warehouse.procurement-receipts.receive', $p) }}">@csrf
+                            <form method="POST" action="{{ route('warehouse.procurement-receipts.receive', $p) }}" data-receipt-form data-vat="{{ (float)$p->vat_rate }}" data-fees="{{ (float)$p->other_fee + (float)$p->transportation_fee + (float)$p->broker_fee + (float)$p->processing_fee + (float)$p->procurement_fee }}">@csrf
                                 <div class="border rounded-3 p-3 mb-3">
                                     <h6 class="fw-bold"><i class="bi bi-star me-1"></i>Đánh giá chuyến thu mua</h6>
                                     <div class="row g-2">
@@ -58,7 +58,8 @@
                                     </div>
                                 </div>
                                 @if($p->entry_mode === 'product_lines')
-                                <h6 class="fw-bold">Đối chiếu sản phẩm thực nhập</h6><div class="table-responsive"><table class="table table-sm table-bordered align-middle"><thead><tr><th>Sản phẩm</th><th>SL đặt</th><th>SL thực nhận</th><th>Kg thực nhận</th><th>Tình trạng</th></tr></thead><tbody>@foreach($p->productItems as $productItem)<tr><td>{{ $productItem->productVariant?->product?->name }} - {{ $productItem->productVariant?->name }}<input type="hidden" name="product_items[{{ $loop->index }}][id]" value="{{ $productItem->id }}"></td><td>{{ number_format((float)$productItem->quantity, 3) }} {{ $productItem->productVariant?->product?->unit_label }}</td><td><input type="number" min="0" step=".001" class="form-control form-control-sm" name="product_items[{{ $loop->index }}][received_quantity]" value="{{ (float)$productItem->quantity }}" required></td><td><input type="number" min="0" step=".001" class="form-control form-control-sm" name="product_items[{{ $loop->index }}][received_weight]" value="{{ (float)$productItem->weight }}"></td><td><input class="form-control form-control-sm" name="product_items[{{ $loop->index }}][condition]" placeholder="Tươi, đạt..."></td></tr>@endforeach</tbody></table></div>
+                                <h6 class="fw-bold">Đối chiếu sản phẩm thực nhập</h6><p class="small text-muted">Nhập kg đã cân thực tế. Tiền hàng = kg thực nhận × giá mua/kg. Dòng không giao nhập số lượng và kg bằng 0.</p><div class="table-responsive"><table class="table table-sm table-bordered align-middle"><thead><tr><th>Sản phẩm</th><th>SL đặt</th><th>SL thực nhận</th><th>Kg thực nhận</th><th>Giá mua/kg</th><th>Tiền thực giao</th><th>Tình trạng</th></tr></thead><tbody>@foreach($p->productItems as $productItem)<tr data-receipt-line data-cost="{{ (float)$productItem->unit_cost }}"><td>{{ $productItem->productVariant?->product?->name }} - {{ $productItem->productVariant?->name }}<input type="hidden" name="product_items[{{ $loop->index }}][id]" value="{{ $productItem->id }}"></td><td>{{ number_format((float)$productItem->quantity, 3) }} {{ $productItem->productVariant?->product?->unit_label }}</td><td><input type="number" min="0" step=".001" class="form-control form-control-sm" name="product_items[{{ $loop->index }}][received_quantity]" value="{{ (float)$productItem->quantity }}" required></td><td><input type="number" min="0" step=".001" class="form-control form-control-sm" name="product_items[{{ $loop->index }}][received_weight]" value="{{ old('product_items.'.$loop->index.'.received_weight') }}" data-received-weight required></td><td>{{ number_format($productItem->unit_cost) }}đ</td><td data-line-total>0đ</td><td><input class="form-control form-control-sm" name="product_items[{{ $loop->index }}][condition]" placeholder="Tươi, đạt..."></td></tr>@endforeach</tbody></table></div>
+                                <div class="alert alert-info mt-2" data-receipt-total></div>
                                 @else
                                 <h6 class="fw-bold">Chi tiết thực nhập vịt sơ chế</h6>
                                 <div id="items{{ $p->id }}">
@@ -76,7 +77,7 @@
                             <div class="received-summary p-3">
                                 <div class="d-flex justify-content-between gap-3 flex-wrap"><strong>Kho đã đánh giá: <span class="text-warning">{{ str_repeat('★', (int) $p->warehouse_rating) }}</span></strong><span>{{ $p->received_at?->format('d/m/Y H:i') }}</span></div>
                                 <div class="mt-2">{{ $p->warehouse_condition }} @if($p->warehouse_comment) — {{ $p->warehouse_comment }} @endif</div>
-                                @if($p->entry_mode === 'product_lines')<div class="small text-muted mt-2">Thực nhập {{ number_format((float)$p->productItems->sum('received_quantity'), 3) }} đơn vị · {{ number_format((float)$p->productItems->sum('received_weight'), 3) }} kg @if($p->inventoryDocument)· Phiếu kho {{ $p->inventoryDocument->document_number }}@endif</div>@else<div class="small text-muted mt-2">Thực nhập {{ number_format($receivedQty) }} đơn vị · Hàng loại {{ number_format($rejectQty) }} con</div>@endif
+                                @if($p->entry_mode === 'product_lines')<div class="mt-2">Tiền hàng: {{ number_format($p->subtotal) }}đ · VAT: {{ number_format($p->vat_amount) }}đ · Tổng thực giao và chi phí: <strong>{{ number_format($p->total_amount) }}đ</strong> · Còn phải trả: {{ number_format($p->remaining_amount) }}đ</div><div class="small text-muted mt-2">Thực nhập {{ number_format((float)$p->productItems->sum('received_quantity'), 3) }} đơn vị · {{ number_format((float)$p->productItems->sum('received_weight'), 3) }} kg @if($p->inventoryDocument)· Phiếu kho {{ $p->inventoryDocument->document_number }}@endif</div>@else<div class="small text-muted mt-2">Thực nhập {{ number_format($receivedQty) }} đơn vị · Hàng loại {{ number_format($rejectQty) }} con</div>@endif
                             </div>
                         @endif
                     </div>
@@ -89,3 +90,26 @@
     <div class="card-footer">{{ $purchases->links() }}</div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.querySelectorAll('[data-receipt-form]').forEach(form => {
+    const money = value => value.toLocaleString('vi-VN') + 'đ';
+    const calculate = () => {
+        let subtotal = 0;
+        form.querySelectorAll('[data-receipt-line]').forEach(row => {
+            const input = row.querySelector('[data-received-weight]');
+            if (!input) return;
+            const total = Math.round(Number(input.value || 0) * Number(row.dataset.cost) * 100) / 100;
+            subtotal += total;
+            row.querySelector('[data-line-total]').textContent = money(total);
+        });
+        const summary = form.querySelector('[data-receipt-total]');
+        const vat = Math.round(subtotal * Number(form.dataset.vat)) / 100;
+        if (summary) summary.textContent = `Tiền hàng thực giao: ${money(subtotal)} · VAT ${form.dataset.vat}%: ${money(vat)} · Tổng thanh toán: ${money(subtotal + vat + Number(form.dataset.fees))}`;
+    };
+    form.addEventListener('input', calculate);
+    calculate();
+});
+</script>
+@endpush

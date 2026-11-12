@@ -92,6 +92,7 @@
                     </div>
                 </div>
             </div>
+            @if($keepSelectionOpen ?? false)<div class="modal-footer"><button type="button" class="btn btn-primary" data-bs-dismiss="modal">Xong</button></div>@endif
         </div>
     </div>
 </div>
@@ -207,14 +208,14 @@
                     note: ''
                 }, 1);
 
-                if (result.status === 'added' && !latestPrice) {
+                if (!@json($manualPurchasePrices ?? false) && result.status === 'added' && !latestPrice) {
                     alert('Sản phẩm chưa có bảng giá hiện hành. Bạn có thể nhập tay đơn giá hoặc cập nhật bảng giá thu mua.');
                 }
             }
 
             const modalEl = document.getElementById('productSelectionModal');
             const bsModal = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
-            if (bsModal) bsModal.hide();
+            if (bsModal && !@json($keepSelectionOpen ?? false)) bsModal.hide();
         });
     });
 

@@ -117,3 +117,10 @@ readme.txt
 !/tests/Feature/QuantityByUnitTest.php
 
 !/tests/Feature/DailySalesUnitSummaryTest.php
+
+!/tests/Feature/ProcurementSupplierTest.php
+
+!/tests/Unit/CustomerDebtSheetServiceTest.php
+!/tests/Feature/CustomerDebtMonitorTest.php
+
+!/tests/Unit/CustomerDebtPolicyServiceTest.php

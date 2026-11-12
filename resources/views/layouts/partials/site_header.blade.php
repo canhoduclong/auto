@@ -428,6 +428,9 @@
                     @if(Auth::user()->isSalesFlowRole())
                         <li><a href="{{ $offcanvasCanViewMonitoring ? route('pages.my_orders.monitoring', ['tab' => 'drafts']) : route('pages.my_order_drafts') }}" class="d-block py-1"><i class="bi bi-file-earmark-text me-1"></i> Đơn nháp</a></li>
                     @endif
+                    @if(auth()->user()?->hasRole(['admin','sale','leader','leader_sale','sale_manager','manager','manager_sale','account','accountant','accounting','director','ceo']))
+                    <li><a href="{{ route('customer-debt.index') }}" class="d-block py-1"><i class="bi bi-wallet2 me-1"></i> Công nợ & cảnh báo đơn</a></li>
+                    @endif
                     <li><a href="{{ $offcanvasCanViewMonitoring ? route('pages.my_orders.monitoring', ['tab' => 'my_orders']) : route('pages.my_orders') }}" class="d-block py-1"><i class="bi bi-bag-check me-1"></i> {{ __('site.my_orders') }}</a></li>
                     @if(Auth::user()->canManageOrderAdjustments())
                         <li><a href="{{ route('site.order-adjustments.index') }}" class="d-block py-1"><i class="bi bi-arrow-left-right me-1"></i> Fix số liệu</a></li>
@@ -682,6 +685,7 @@
                                             <i class="bi bi-file-earmark-text"></i> Đơn nháp
                                         </a>
                                         <a class="dropdown-item" href="{{ route('process-inbox.index') }}"><i class="bi bi-inbox me-2"></i>Cần xử lý</a>
+                                        <a class="dropdown-item" href="{{ route('customer-debt.index') }}"><i class="bi bi-wallet2 me-1"></i> Công nợ & cảnh báo đơn</a>
                                         <a class="dropdown-item" href="{{ route('pages.my_orders.monitoring', ['tab' => 'my_orders']) }}">
                                             <i class="bi bi-bag-check"></i> {{ __('site.my_orders') }}
                                         </a>
