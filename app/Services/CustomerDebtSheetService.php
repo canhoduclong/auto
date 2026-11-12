@@ -43,7 +43,7 @@ class CustomerDebtSheetService
 
     private function mappingPrefix(): string
     {
-        return 'customer_debt_map_'.substr(hash('sha256', (string) config('services.google_sheets.debt_spreadsheet_id')), 0, 16).'_';
+        return 'customer_debt_map_'.substr(hash('sha256', (string) config('services.google_sheets.debt_identity_spreadsheet_id', config('services.google_sheets.debt_spreadsheet_id'))), 0, 16).'_';
     }
 
     public function mappings(): array
@@ -65,19 +65,21 @@ class CustomerDebtSheetService
 
     public function mapCustomer(string $sourceKey, int $customerId, int $userId): void
     {
-        $groups = $this->summarize($this->snapshot()['entries'] ?? []);
-        if (! isset($groups[$sourceKey])) {
-            throw new RuntimeException('Khách nguồn không còn trong bản dữ liệu hiện tại. Vui lòng tải lại trang.');
-        }
-        Setting::set($this->mappingPrefix().$sourceKey, json_encode([
-            'customer_id' => $customerId, 'mapped_by' => $userId, 'mapped_at' => now()->toIso8601String(),
-            'source_name' => $groups[$sourceKey]['name'], 'source_code' => $groups[$sourceKey]['code'],
-        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+        Cache::lock('customer-debt-load', 60)->block(5, function () use ($sourceKey, $customerId, $userId) {
+            $groups = $this->summarize($this->snapshot()['entries'] ?? []);
+            if (! isset($groups[$sourceKey])) {
+                throw new RuntimeException('Khách nguồn không còn trong bản dữ liệu hiện tại. Vui lòng tải lại trang.');
+            }
+            Setting::set($this->mappingPrefix().$sourceKey, json_encode([
+                'customer_id' => $customerId, 'mapped_by' => $userId, 'mapped_at' => now()->toIso8601String(),
+                'source_name' => $groups[$sourceKey]['name'], 'source_code' => $groups[$sourceKey]['code'],
+            ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+        });
     }
 
     public function unmapCustomer(string $sourceKey): void
     {
-        Setting::query()->where('key', $this->mappingPrefix().$sourceKey)->delete();
+        Cache::lock('customer-debt-load', 60)->block(5, fn () => Setting::query()->where('key', $this->mappingPrefix().$sourceKey)->delete());
     }
 
     public function textValues(string $text): array
@@ -293,6 +295,10 @@ class CustomerDebtSheetService
 
     public function movement(array $entry): int
     {
+        if ($entry['type'] === 'adjustment') {
+            return $entry['amount'];
+        }
+
         return $entry['type'] === 'sale' ? $entry['amount'] - ($entry['gift'] ?? 0) : -$entry['amount'];
     }
 

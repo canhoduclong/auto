@@ -1418,6 +1418,7 @@ Route::middleware('auth')->group(function () {
 
 // Sales debt monitoring: sheet-derived balances are separate from order accounting.
 Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,manager,manager_sale,account,accountant,accounting,director,ceo'])->group(function () {
+    Route::post('/customer-debt/balance-adjustments', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'adjustBalance'])->name('customer-debt.balance-adjustments');
     Route::get('/customer-debt', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'index'])->name('customer-debt.index');
     Route::patch('/customers/{customer}/debt-policy', [\App\Http\Controllers\CustomerDebtPolicyController::class, 'update'])->name('customers.debt-policy.update');
     Route::post('/customers/{customer}/debt-policy/unlock', [\App\Http\Controllers\CustomerDebtPolicyController::class, 'unlock'])->middleware('role:admin')->name('customers.debt-policy.unlock');

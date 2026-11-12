@@ -61,6 +61,23 @@ class CustomerDebtMonitorTest extends TestCase
             $t->timestamps();
         });
         $this->tables[] = 'settings';
+        Schema::create('customer_debt_balance_adjustments', function (Blueprint $t) {
+            $t->temporary();
+            $t->id();
+            $t->uuid('request_id')->unique();
+            foreach (['spreadsheet_id', 'identity', 'source_key', 'customer_name', 'customer_code', 'sale_name', 'actor_name'] as $field) {
+                $t->string($field)->nullable();
+            }
+            $t->unsignedBigInteger('customer_id')->nullable();
+            foreach (['sheet_balance', 'previous_balance', 'new_balance', 'delta'] as $field) {
+                $t->bigInteger($field);
+            }
+            $t->date('effective_date');
+            $t->text('reason');
+            $t->unsignedBigInteger('created_by');
+            $t->timestamps();
+        });
+        $this->tables[] = 'customer_debt_balance_adjustments';
         DB::table('customers')->insert([
             ['id' => 1, 'name' => 'Chị Bình', 'customer_code' => 'CRM01', 'assigned_to' => 7],
             ['id' => 2, 'name' => 'Anh Hải', 'customer_code' => 'KH02', 'assigned_to' => 8],
@@ -114,8 +131,125 @@ class CustomerDebtMonitorTest extends TestCase
         $request = Request::create('/customer-debt', 'GET', $params + ['policy_version' => 0]);
         $this->app->instance('request', $request);
         $request->setUserResolver(fn () => $this->user($role));
+        $request->setLaravelSession($this->app['session']->driver('array'));
 
         return $request;
+    }
+
+    private function adjust(CustomerDebtSheetService $service, string $key, int|string $amount, ?string $revision = null, ?string $requestId = null): array
+    {
+        $controller = new CustomerDebtMonitorController;
+        $view = $controller->index($this->request(['tab' => 'all'], 'admin'), $service)->getData();
+        $data = ['source_key' => $key, 'new_balance' => $amount, 'reason' => 'Đối chiếu thực tế', 'revision' => $revision ?? $view['groups'][$key]['balance_revision'], 'request_id' => $requestId ?? (string) \Illuminate\Support\Str::uuid()];
+
+        return $controller->adjustBalance($this->request($data, 'admin'), $service, new \App\Services\CustomerDebtBalanceService)->getData(true);
+    }
+
+    public function test_actual_balance_adjustment_is_audited_and_survives_new_sheet_transactions(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $result = $this->adjust($service, $key, '500');
+        self::assertSame(-500, $result['delta']);
+        $audit = DB::table('customer_debt_balance_adjustments')->first();
+        self::assertSame('Đối chiếu thực tế', $audit->reason);
+        self::assertEquals(1000, $audit->previous_balance);
+        self::assertEquals(7, $audit->created_by);
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình'), $this->entry('CRM01', 'Chị Bình', 2)]);
+        $view = (new CustomerDebtMonitorController)->index($this->request(['customer' => $key, 'window' => 'all'], 'admin'), $service)->getData();
+        self::assertSame(1500, $view['closing']);
+        self::assertSame(2000, $view['detailSales']);
+        self::assertSame(0, $view['detailPayments']);
+        self::assertSame(-500, $view['detailAdjustments']);
+        self::assertSame(1, $view['balanceAdjustments']->total());
+        self::assertNull($view['reportLastPayment']);
+    }
+
+    public function test_adjustment_of_linked_aliases_applies_once_to_the_customer_total(): void
+    {
+        $service = $this->service([$this->entry('OLD1', 'Chị Bình'), $this->entry('OLD2', 'Tên khác')]);
+        $keys = array_keys($service->summarize($service->snapshot()['entries']));
+        foreach ($keys as $key) {
+            $service->mapCustomer($key, 1, 7);
+        }
+        $this->adjust($service, $keys[0], 800);
+        $view = (new CustomerDebtMonitorController)->index($this->request(['tab' => 'all'], 'admin'), $service)->getData();
+        self::assertSame(800, $view['customerDebts'][1]['balance']);
+        foreach ($view['groups'] as $group) {
+            self::assertSame(800, $group['display_balance']);
+        }
+        self::assertCount(1, DB::table('customer_debt_balance_adjustments')->get());
+    }
+
+    public function test_retry_is_idempotent_and_stale_balance_cannot_overwrite_a_newer_adjustment(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình')]);
+        $view = (new CustomerDebtMonitorController)->index($this->request([], 'admin'), $service)->getData();
+        $key = array_key_first($view['groups']);
+        $revision = $view['groups'][$key]['balance_revision'];
+        $requestId = (string) \Illuminate\Support\Str::uuid();
+        $first = $this->adjust($service, $key, 500, $revision, $requestId);
+        self::assertSame($first['adjustment_id'], $this->adjust($service, $key, 500, $revision, $requestId)['adjustment_id']);
+        self::assertSame(1, DB::table('customer_debt_balance_adjustments')->count());
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->adjust($service, $key, 200, $revision);
+    }
+
+    public function test_unmapped_adjustment_can_be_negative_and_follows_later_mapping(): void
+    {
+        $service = $this->service([$this->entry('OLD1', 'Khách chưa ghép')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $this->adjust($service, $key, '-2.000');
+        $service->mapCustomer($key, 1, 7);
+        $view = (new CustomerDebtMonitorController)->index($this->request([], 'admin'), $service)->getData();
+        self::assertSame(-2000, $view['customerDebts'][1]['balance']);
+        self::assertSame(0, $view['customerDebts'][1]['alerts']['unpaid_orders']);
+    }
+
+    public function test_manual_balance_remains_visible_when_sheet_source_disappears(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $this->adjust($service, $key, 1500);
+        $view = (new CustomerDebtMonitorController)->index($this->request([], 'admin'), $this->service([]))->getData();
+        self::assertSame(500, $view['customerDebts'][1]['balance']);
+        self::assertSame(0, $view['customerDebts'][1]['alerts']['unpaid_orders']);
+    }
+
+    public function test_sheet_refresh_invalidates_an_open_adjustment_form(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình')]);
+        $data = (new CustomerDebtMonitorController)->index($this->request([], 'admin'), $service)->getData();
+        $key = array_key_first($data['groups']);
+        $revision = $data['groups'][$key]['balance_revision'];
+        $newService = $this->service([$this->entry('CRM01', 'Chị Bình'), $this->entry('CRM01', 'Chị Bình', 2)]);
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->adjust($newService, $key, 500, $revision);
+    }
+
+    public function test_zero_actual_balance_clears_warning_without_recording_a_payment(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $this->adjust($service, $key, 0);
+        $data = (new CustomerDebtMonitorController)->index($this->request(['customer' => $key, 'window' => 'all'], 'admin'), $service)->getData();
+        self::assertSame(0, $data['closing']);
+        self::assertSame(0, $data['detailPayments']);
+        self::assertFalse($data['reportAlerts']['remind']);
+        self::assertFalse($data['reportAlerts']['overdue']);
+        self::assertSame(0, $data['reportAlerts']['unpaid_orders']);
+    }
+
+    public function test_sales_cannot_adjust_actual_balances(): void
+    {
+        $this->expectException(HttpException::class);
+        (new CustomerDebtMonitorController)->adjustBalance($this->request(), $this->service([]), new \App\Services\CustomerDebtBalanceService);
+    }
+
+    public function test_balance_adjustment_requires_a_reason(): void
+    {
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        (new CustomerDebtMonitorController)->adjustBalance($this->request(['source_key' => str_repeat('a', 64), 'new_balance' => 0, 'revision' => str_repeat('a', 64), 'request_id' => (string) \Illuminate\Support\Str::uuid(), 'reason' => ' '], 'admin'), $this->service([]), new \App\Services\CustomerDebtBalanceService);
     }
 
     public function test_sales_can_only_see_their_customers_and_unique_name_fallback(): void

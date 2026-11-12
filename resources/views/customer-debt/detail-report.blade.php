@@ -23,7 +23,7 @@
         <div class="debt-report-metric"><span>Trễ thanh toán</span><strong class="{{ $reportAlerts['overdue_days'] > 0 ? 'text-danger' : '' }}">{{ $reportAlerts['overdue_days'] }} ngày</strong>@if($reportAlerts['due_date'])<small>Hạn {{ \Carbon\Carbon::parse($reportAlerts['due_date'])->format('d/m/Y') }}</small>@endif</div>
         <div class="debt-report-metric"><span>Rủi ro công nợ</span><strong class="debt-report-risk {{ in_array($reportAlerts['risk'], ['high','very_high']) ? 'text-danger' : '' }}">{{ ['medium'=>'Trung bình','high'=>'Cao','very_high'=>'Rất cao'][$reportAlerts['risk']] ?? ($reportAlerts['balance'] > 0 ? 'Dưới 15 ngày' : 'Không còn nợ') }}</strong><small>Tuổi nợ {{ $reportAlerts['age_days'] }} ngày</small></div>
     </div>
-    <div class="debt-report-reconciliation"><span>Dư đầu kỳ <strong>{{ number_format($opening, 0, ',', '.') }} đ</strong></span><span>{{ \Carbon\Carbon::parse($reportFrom)->format('d/m/Y') }} – {{ \Carbon\Carbon::parse($reportTo)->format('d/m/Y') }} · Phát sinh theo kỳ; số dư, ngày giao dịch gần nhất và rủi ro tính đến cuối kỳ.</span></div>
+    <div class="debt-report-reconciliation"><span>Dư đầu kỳ <strong>{{ number_format($opening, 0, ',', '.') }} đ</strong></span>@if($detailAdjustments != 0)<span>Điều chỉnh trong kỳ <strong>{{ number_format($detailAdjustments, 0, ',', '.') }} đ</strong></span>@endif<span>{{ \Carbon\Carbon::parse($reportFrom)->format('d/m/Y') }} – {{ \Carbon\Carbon::parse($reportTo)->format('d/m/Y') }} · Phát sinh theo kỳ; số dư, ngày giao dịch gần nhất và rủi ro tính đến cuối kỳ.</span></div>
     @if(!empty($snapshot['issues']))<div class="small text-warning px-3 pb-3">Cần đối chiếu các khoản thu chưa xác định khách hàng để bảo đảm công nợ đầy đủ.</div>@endif
     <div class="debt-report-columns">
         <article class="debt-report-ledger">
@@ -49,4 +49,14 @@
             <footer>{{ $payments->links() }}</footer>
         </article>
     </div>
+    @if($balanceAdjustments->total())
+    <details class="debt-adjustment-history" open>
+        <summary>Lịch sử điều chỉnh trong kỳ · {{ $balanceAdjustments->total() }} lần</summary>
+        <div class="table-responsive"><table class="table"><thead><tr><th>Thời gian / Người sửa</th><th class="text-end">Số cũ</th><th class="text-end">Số mới</th><th class="text-end">Chênh lệch</th><th>Lý do</th></tr></thead><tbody>
+        @foreach($balanceAdjustments as $entry)
+        <tr><td class="text-nowrap">{{ \Carbon\Carbon::parse($entry['created_at'])->format('d/m/Y H:i') }}<br><small>{{ $entry['actor_name'] }}</small></td><td class="text-end text-nowrap">{{ number_format($entry['previous_balance'], 0, ',', '.') }} đ</td><td class="text-end text-nowrap">{{ number_format($entry['new_balance'], 0, ',', '.') }} đ</td><td class="text-end text-nowrap">{{ number_format($entry['amount'], 0, ',', '.') }} đ</td><td>{{ $entry['note'] }}</td></tr>
+        @endforeach
+        </tbody></table></div>{{ $balanceAdjustments->links() }}
+    </details>
+    @endif
 </section>

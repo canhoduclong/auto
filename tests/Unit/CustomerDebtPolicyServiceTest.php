@@ -12,6 +12,26 @@ class CustomerDebtPolicyServiceTest extends TestCase
         return ['date' => $date, 'amount' => $amount, 'gift' => $gift, 'type' => 'sale'];
     }
 
+    public function test_adjustments_change_debt_without_creating_a_bill_or_delivery(): void
+    {
+        $service = new CustomerDebtPolicyService;
+        $result = $service->evaluate([
+            $this->sale('2026-10-01'),
+            ['date' => '2026-11-12', 'type' => 'adjustment', 'amount' => 500, 'adjustment_id' => 1],
+        ], [], '2026-11-12');
+        self::assertSame(1500, $result['balance']);
+        self::assertSame(1, $result['unpaid_orders']);
+        self::assertSame('2026-10-01', $result['latest_delivery_date']);
+        self::assertSame('2026-10-02', $result['due_date']);
+        $result = $service->evaluate([
+            $this->sale('2026-09-01'), $this->sale('2026-11-11'),
+            ['date' => '2026-11-12', 'type' => 'adjustment', 'amount' => -1500, 'adjustment_id' => 1],
+        ], [], '2026-11-12');
+        self::assertSame(500, $result['balance']);
+        self::assertSame(1, $result['unpaid_orders']);
+        self::assertSame('2026-11-11', $result['oldest_date']);
+    }
+
     public function test_payments_clear_oldest_sales_and_partial_sales_still_count(): void
     {
         $service = new CustomerDebtPolicyService;

@@ -2,11 +2,13 @@
 <summary class="btn btn-light">Thông tin & nguồn</summary>
 <div class="debt-tools-panel">
     <h6>Thông tin dữ liệu</h6>
-    <p>Công nợ = Doanh thu − Tặng − Đã thanh toán; không có số dư đầu kỳ. Số liệu tổng hợp từ hai tab Sheet, không cộng thêm giá trị đơn trong hệ thống.</p>
+    @if($snapshot && ($snapshot['spreadsheet_id'] ?? null) !== config('services.google_sheets.debt_spreadsheet_id'))<p class="text-warning">Bản dữ liệu đang hiển thị được tải trước khi đổi nguồn. Cập nhật Google Sheet để lấy dữ liệu từ file gốc.</p>@endif
+    <p>Công nợ = Doanh thu − Tặng − Đã thanh toán + Điều chỉnh; không có số dư đầu kỳ. Số liệu tổng hợp từ hai tab Sheet, không cộng thêm giá trị đơn trong hệ thống.</p>
+    <p>Điều chỉnh công nợ lưu riêng, không phải khoản thanh toán. Khi tải lại Sheet, chênh lệch điều chỉnh vẫn được cộng vào số dư; các phát sinh mới tiếp tục tăng / giảm công nợ.</p>
     @if(!empty($snapshot['gift_note_count']))<p>{{ $snapshot['gift_note_count'] }} ô Tặng chứa ghi chú được giữ trong chi tiết, không tính thành tiền.</p>@endif
     @if($snapshot && !empty($snapshot['issues']))<p class="text-warning">Khoản thu chưa rõ khách hàng chưa được trừ vào công nợ từng khách. Cần đối chiếu trước khi kết luận số nợ.</p>@endif
     <details class="mb-3"><summary>Cách tính cảnh báo</summary><p class="mt-2">Một khách / một ngày giao hàng tính là một Bill. Thanh toán trừ nợ cũ nhất trước; Tặng giảm số phải thu. Hạn thanh toán tính từ ngày giao hàng gần nhất. Trễ hạn khi vượt số ngày nợ được phép. Tuổi khoản nợ cũ nhất vẫn dùng để phân loại rủi ro. Nhắc thu khi chạm / vượt hạn mức, còn tối đa 3 ngày đến hạn hoặc tuổi nợ từ 15 ngày. Rủi ro: Trung bình 15–30 ngày · Cao 31–60 ngày · Rất cao trên 60 ngày.</p></details>
-    @if($canLoad)<a href="https://docs.google.com/spreadsheets/d/{{ config('services.google_sheets.debt_spreadsheet_id') }}/edit" target="_blank" rel="noopener">Mở Google Sheet nguồn</a>@endif
+    @if($canLoad)<a href="https://docs.google.com/spreadsheets/d/{{ config('services.google_sheets.debt_spreadsheet_id') }}/edit?gid={{ config('services.google_sheets.debt_sales_sheet_id') }}" target="_blank" rel="noopener">Mở Sheet doanh thu gốc</a> · <a href="https://docs.google.com/spreadsheets/d/{{ config('services.google_sheets.debt_spreadsheet_id') }}/edit?range=Dongtienhoatdong!A1" target="_blank" rel="noopener">Mở Sheet thanh toán gốc</a>@endif
     @if($canLoad)
     <details class="mt-3"><summary class="fw-semibold">Nhập từ Excel / dữ liệu dán</summary><div class="pt-3">
         <p>Mỗi lần tải thay thế toàn bộ bản dữ liệu cũ. Cần đủ lịch sử của cả hai tab để tính đúng công nợ.</p>

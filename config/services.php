@@ -43,7 +43,11 @@ return [
 
     'google_sheets' => [
         'debt_payment_sheet_id' => (int) env('GOOGLE_SHEETS_DEBT_PAYMENT_SHEET_ID', 241453650),
-        'debt_spreadsheet_id' => env('GOOGLE_SHEETS_DEBT_SPREADSHEET_ID', '1oU0MBwvhZmMDPXoGqAswdjjqd-PPUU62Jahvz1uL8oc'),
+        // Use the same original workbook as /admin/import-orders.
+        'debt_spreadsheet_id' => \App\Services\GoogleSheetOrderImportService::SPREADSHEET,
+        'debt_sales_sheet_id' => \App\Services\GoogleSheetOrderImportService::GID,
+        // Keep existing mappings, policies and manual adjustments when switching from the copy.
+        'debt_identity_spreadsheet_id' => env('GOOGLE_SHEETS_DEBT_SPREADSHEET_ID', '1oU0MBwvhZmMDPXoGqAswdjjqd-PPUU62Jahvz1uL8oc'),
         'credentials' => env(
             'GOOGLE_SHEETS_CREDENTIALS',
             env('GOOGLE_APPLICATION_CREDENTIALS', storage_path('app/google/service-account.json'))

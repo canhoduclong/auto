@@ -15,7 +15,7 @@ class CustomerDebtPolicyService
 {
     private function prefix(): string
     {
-        return 'customer_debt_policy_'.substr(hash('sha256', (string) config('services.google_sheets.debt_spreadsheet_id')), 0, 16).'_';
+        return 'customer_debt_policy_'.substr(hash('sha256', (string) config('services.google_sheets.debt_identity_spreadsheet_id', config('services.google_sheets.debt_spreadsheet_id'))), 0, 16).'_';
     }
 
     public function identity(array $group): string
@@ -156,6 +156,16 @@ class CustomerDebtPolicyService
             if ($entry['date'] > $today->toDateString()) {
                 continue;
             }
+            if ($entry['type'] === 'adjustment') {
+                $balance += $entry['amount'];
+                if ($entry['amount'] < 0) {
+                    $credits -= $entry['amount'];
+                } elseif ($entry['amount'] > 0) {
+                    $buckets['adjustment_'.($entry['adjustment_id'] ?? $entry['row'])] = ['date' => $entry['date'], 'amount' => $entry['amount'], 'is_bill' => false];
+                }
+
+                continue;
+            }
             if ($entry['type'] === 'payment') {
                 $credits += $entry['amount'];
                 $balance -= $entry['amount'];
@@ -173,7 +183,7 @@ class CustomerDebtPolicyService
                 continue;
             }
             $key = $entry['date'];
-            $buckets[$key] ??= ['date' => $entry['date'], 'amount' => 0];
+            $buckets[$key] ??= ['date' => $entry['date'], 'amount' => 0, 'is_bill' => true];
             $buckets[$key]['amount'] += $net;
         }
         uasort($buckets, fn ($a, $b) => $a['date'] <=> $b['date']);
@@ -189,9 +199,9 @@ class CustomerDebtPolicyService
         $balance = max(0, $balance);
         $oldest = $balance > 0 ? ($unpaid[0]['date'] ?? null) : null;
         $age = $oldest ? (int) CarbonImmutable::parse($oldest)->diffInDays($today) : 0;
-        $count = $balance > 0 ? count($unpaid) : 0;
+        $count = $balance > 0 ? count(array_filter($unpaid, fn ($bucket) => $bucket['is_bill'])) : 0;
         $dueDays = $policy['due_days'] ?? null;
-        $dueDate = $balance > 0 && $latestDelivery !== null && $dueDays !== null ? CarbonImmutable::parse($latestDelivery)->addDays((int) $dueDays)->toDateString() : null;
+        $dueDate = $balance > 0 && ($latestDelivery ?? $oldest) !== null && $dueDays !== null ? CarbonImmutable::parse($latestDelivery ?? $oldest)->addDays((int) $dueDays)->toDateString() : null;
         $lateDays = $dueDate !== null ? max(0, (int) CarbonImmutable::parse($dueDate)->diffInDays($today, false)) : 0;
         $orderLimit = $policy['allowed_orders'] ?? null;
         $creditLimit = $policy['credit_limit'] ?? null;

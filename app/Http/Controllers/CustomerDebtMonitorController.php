@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\CustomerDebtBalanceService;
 use App\Services\CustomerDebtPolicyService;
 use App\Services\CustomerDebtSheetService;
 use Illuminate\Http\Request;
@@ -15,40 +16,12 @@ class CustomerDebtMonitorController extends Controller
 {
     public function index(Request $request, CustomerDebtSheetService $service)
     {
-        $data = $request->validate(['from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d', 'tab' => 'nullable|in:orders,all', 'sort' => 'nullable|in:overdue_days', 'direction' => 'nullable|in:asc,desc', 'search' => 'nullable|string|max:150', 'sale' => ['nullable', 'string', 'regex:/^(user:[0-9]+|sheet:[a-f0-9]{16}|unassigned)$/'], 'alert' => 'nullable|in:overdue,remind,medium,high,very_high', 'customer' => 'nullable|string|size:64', 'system_customer' => 'nullable|integer|min:1', 'window' => 'nullable|in:recent,all,custom', 'report_from' => 'nullable|required_with:report_to|date_format:Y-m-d', 'report_to' => 'nullable|required_with:report_from|date_format:Y-m-d|after_or_equal:report_from', 'purchase_page' => 'nullable|integer|min:1', 'payment_page' => 'nullable|integer|min:1', 'detail_page' => 'nullable|integer|min:1', 'debt_page' => 'nullable|integer|min:1', 'issue_page' => 'nullable|integer|min:1']);
+        $data = $request->validate(['from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d', 'tab' => 'nullable|in:orders,all', 'sort' => 'nullable|in:overdue_days', 'direction' => 'nullable|in:asc,desc', 'search' => 'nullable|string|max:150', 'sale' => ['nullable', 'string', 'regex:/^(user:[0-9]+|sheet:[a-f0-9]{16}|unassigned)$/'], 'alert' => 'nullable|in:overdue,remind,medium,high,very_high', 'customer' => 'nullable|string|size:64', 'system_customer' => 'nullable|integer|min:1', 'window' => 'nullable|in:recent,all,custom', 'report_from' => 'nullable|required_with:report_to|date_format:Y-m-d', 'report_to' => 'nullable|required_with:report_from|date_format:Y-m-d|after_or_equal:report_from', 'purchase_page' => 'nullable|integer|min:1', 'payment_page' => 'nullable|integer|min:1', 'adjustment_page' => 'nullable|integer|min:1', 'detail_page' => 'nullable|integer|min:1', 'debt_page' => 'nullable|integer|min:1', 'issue_page' => 'nullable|integer|min:1']);
         $from = $data['from'] ?? now()->toDateString();
         $to = $data['to'] ?? now()->toDateString();
         Validator::make(['from' => $from, 'to' => $to], ['to' => 'after_or_equal:from'])->validate();
-        ['canLoad' => $canLoad, 'customers' => $customers, 'allowedIds' => $allowedIds, 'snapshot' => $snapshot, 'groups' => $groups] = $this->resolveGroups($request, $service);
+        ['canLoad' => $canLoad,'customers' => $customers,'allowedIds' => $allowedIds,'snapshot' => $snapshot,'groups' => $groups,'customerDebts' => $customerDebts,'canAdjust' => $canAdjust,'policyService' => $policyService,'policies' => $policies] = $this->debtContext($request, $service);
         $byId = $customers->keyBy('id');
-        $policyService = app(CustomerDebtPolicyService::class);
-        $policies = $policyService->policies();
-        $customerDebts = [];
-        foreach ($groups as $group) {
-            if (! $group['customer_id']) {
-                continue;
-            }
-            $id = $group['customer_id'];
-            $customerDebts[$id] ??= ['name' => $byId[$id]->name, 'code' => $byId[$id]->customer_code, 'customer_id' => $id, 'sales' => 0, 'gifts' => 0, 'payments' => 0, 'balance' => 0, 'last_purchase_date' => null, 'last_payment_date' => null, 'sale_key' => $group['sale_key'], 'sale_label' => $group['sale_label'], 'sale_origin' => $group['sale_origin'], 'entries' => []];
-            foreach (['sales', 'gifts', 'payments', 'balance'] as $field) {
-                $customerDebts[$id][$field] += $group[$field];
-            }
-            foreach (['last_purchase_date', 'last_payment_date'] as $field) {
-                $customerDebts[$id][$field] = max($customerDebts[$id][$field] ?? '', $group[$field] ?? '') ?: null;
-            }
-            $customerDebts[$id]['entries'] = array_merge($customerDebts[$id]['entries'], $group['entries']);
-        }
-        foreach ($customerDebts as &$debt) {
-            $debt['policy'] = $policyService->effective($debt, $policies);
-            $debt['alerts'] = $policyService->evaluate($debt['entries'], $debt['policy']);
-        }
-        unset($debt);
-        foreach ($groups as &$group) {
-            $aggregate = $group['customer_id'] ? $customerDebts[$group['customer_id']] : null;
-            $group['policy'] = $aggregate['policy'] ?? $policyService->effective($group, $policies);
-            $group['alerts'] = $aggregate['alerts'] ?? $policyService->evaluate($group['entries'], $group['policy']);
-        }
-        unset($group);
         $orders = Order::query()->with('customer:id,name,customer_code')
             ->whereDate('delivery_date', '>=', $from)->whereDate('delivery_date', '<=', $to)
             ->when(! $canLoad, fn ($q) => $q->whereIn('customer_id', $allowedIds))
@@ -91,7 +64,11 @@ class CustomerDebtMonitorController extends Controller
         $detailSales = $saleEntries->sum('amount');
         $detailPayments = $paymentEntries->sum('amount');
         $detailGifts = $saleEntries->sum('gift');
-        $closing = $opening + $detailSales - $detailGifts - $detailPayments;
+        $adjustmentEntries = collect($periodEntries)->where('type', 'adjustment')->values();
+        $detailAdjustments = $adjustmentEntries->sum('amount');
+        $closing = $opening + $detailSales - $detailGifts - $detailPayments + $detailAdjustments;
+        $adjustmentPage = (int) ($data['adjustment_page'] ?? 1);
+        $balanceAdjustments = new \Illuminate\Pagination\LengthAwarePaginator($adjustmentEntries->forPage($adjustmentPage, 50)->values(), $adjustmentEntries->count(), 50, $adjustmentPage, ['path' => $request->url(), 'pageName' => 'adjustment_page', 'query' => $request->except('adjustment_page'), 'fragment' => 'debt-detail']);
         $reportAlerts = $selected ? $policyService->evaluate($reportHistory, $selected['policy'], $reportTo) : null;
         $reportLastPurchase = collect($reportHistory)->where('type', 'sale')->where('amount', '>', 0)->max('date');
         $reportLastPayment = collect($reportHistory)->where('type', 'payment')->where('amount', '>', 0)->max('date');
@@ -152,7 +129,83 @@ class CustomerDebtMonitorController extends Controller
         $page = max(1, (int) $request->input('debt_page', 1));
         $debts = new \Illuminate\Pagination\LengthAwarePaginator($visible->forPage($page, 30)->values(), $visible->count(), 30, $page, ['path' => $request->url(), 'pageName' => 'debt_page', 'query' => $request->except('debt_page')]);
 
-        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions'));
+        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments'));
+    }
+
+    public function adjustBalance(Request $request, CustomerDebtSheetService $service, CustomerDebtBalanceService $balances)
+    {
+        abort_unless($balances->canAdjust($request->user()), 403);
+        $amount = preg_replace('/[\s\x{00a0}]/u', '', trim((string) $request->input('new_balance', '')));
+        if (preg_match('/^-?\d{1,3}(?:\.\d{3})+$/', $amount)) {
+            $amount = str_replace('.', '', $amount);
+        }
+        $request->merge(['new_balance' => $amount, 'reason' => trim((string) $request->input('reason', ''))]);
+        $data = $request->validate([
+            'source_key' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/',
+            'new_balance' => 'required|integer|between:-999999999999999,999999999999999',
+            'reason' => 'required|string|min:3|max:1000', 'request_id' => 'required|uuid',
+            'revision' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/',
+        ]);
+        $record = $balances->setActual($request->user(), $data, function () use ($request, $service, $data) {
+            $context = $this->debtContext($request, $service);
+            abort_unless($context['snapshot'], 422, 'Cần tải dữ liệu Sheet trước khi điều chỉnh công nợ.');
+            $group = $context['groups'][$data['source_key']] ?? null;
+            abort_unless($group, 404);
+
+            return $group['customer_id'] ? $context['customerDebts'][$group['customer_id']] : $group;
+        });
+        $request->session()->flash('success', 'Đã cập nhật số công nợ thực tế và lưu lịch sử điều chỉnh.');
+
+        return response()->json(['message' => 'Đã cập nhật công nợ.', 'adjustment_id' => $record->id, 'new_balance' => (int) $record->new_balance, 'delta' => (int) $record->delta]);
+    }
+
+    private function debtContext(Request $request, CustomerDebtSheetService $service): array
+    {
+        ['canLoad' => $canLoad, 'customers' => $customers, 'allowedIds' => $allowedIds, 'snapshot' => $snapshot, 'groups' => $groups] = $this->resolveGroups($request, $service);
+        $byId = $customers->keyBy('id');
+        $balanceService = app(CustomerDebtBalanceService::class);
+        $groups = $balanceService->apply($groups, $customers, $allowedIds, $canLoad);
+        $snapshotVersion = $balanceService->snapshotVersion($snapshot);
+        $canAdjust = $balanceService->canAdjust($request->user());
+        $policyService = app(CustomerDebtPolicyService::class);
+        $policies = $policyService->policies();
+        $customerDebts = [];
+        foreach ($groups as $group) {
+            if (! $group['customer_id']) {
+                continue;
+            }
+            $id = $group['customer_id'];
+            $customerDebts[$id] ??= ['name' => $byId[$id]->name, 'code' => $byId[$id]->customer_code, 'customer_id' => $id, 'sales' => 0, 'gifts' => 0, 'payments' => 0, 'balance' => 0, 'adjustment_total' => 0, 'sheet_balance' => 0, 'source_keys' => [], 'last_purchase_date' => null, 'last_payment_date' => null, 'sale_key' => $group['sale_key'], 'sale_label' => $group['sale_label'], 'sale_origin' => $group['sale_origin'], 'entries' => []];
+            foreach (['sales', 'gifts', 'payments', 'balance', 'adjustment_total', 'sheet_balance'] as $field) {
+                $customerDebts[$id][$field] += $group[$field];
+            }
+            foreach (['last_purchase_date', 'last_payment_date'] as $field) {
+                $customerDebts[$id][$field] = max($customerDebts[$id][$field] ?? '', $group[$field] ?? '') ?: null;
+            }
+            $customerDebts[$id]['source_keys'][] = $group['key'];
+            $customerDebts[$id]['entries'] = array_merge($customerDebts[$id]['entries'], $group['entries']);
+        }
+        foreach ($customerDebts as &$debt) {
+            $debt['balance_revision'] = $balanceService->revision($debt, $snapshotVersion);
+            $debt['policy'] = $policyService->effective($debt, $policies);
+            $debt['alerts'] = $policyService->evaluate($debt['entries'], $debt['policy']);
+        }
+        unset($debt);
+        foreach ($groups as &$group) {
+            $aggregate = $group['customer_id'] ? $customerDebts[$group['customer_id']] : null;
+            $group['policy'] = $aggregate['policy'] ?? $policyService->effective($group, $policies);
+            $group['alerts'] = $aggregate['alerts'] ?? $policyService->evaluate($group['entries'], $group['policy']);
+            $target = $aggregate ?? $group;
+            $group['balance_revision'] = $aggregate['balance_revision'] ?? $balanceService->revision($group, $snapshotVersion);
+            $group['display_balance'] = $target['balance'];
+            $group['display_adjustment_total'] = $target['adjustment_total'];
+            $group['balance_target_name'] = $target['name'];
+            $group['balance_is_aggregate'] = count($aggregate['source_keys'] ?? []) > 1;
+        }
+        unset($group);
+        $groups = collect($groups)->sortByDesc('display_balance')->all();
+
+        return compact('canLoad', 'customers', 'allowedIds', 'snapshot', 'groups', 'customerDebts', 'canAdjust', 'policyService', 'policies');
     }
 
     private function resolveGroups(Request $request, CustomerDebtSheetService $service): array

@@ -72,7 +72,7 @@
                     @endif
                 </td>
                     <td class="text-nowrap">{{ $debt['sale_label'] }}@if($debt['sale_origin'] === 'sheet')<div class="small text-muted">Theo Sheet</div>@endif</td>
-                    <td class="text-end">{{ number_format($debt['sales'], 0, ',', '.') }}</td><td class="text-end">{{ number_format($debt['gifts'], 0, ',', '.') }}</td><td class="text-end">{{ number_format($debt['payments'], 0, ',', '.') }}</td><td class="text-end {{ $debt['balance'] > 0 ? 'text-danger fw-bold' : '' }}">{{ number_format($debt['balance'], 0, ',', '.') }} đ</td>
+                    <td class="text-end">{{ number_format($debt['sales'], 0, ',', '.') }}</td><td class="text-end">{{ number_format($debt['gifts'], 0, ',', '.') }}</td><td class="text-end">{{ number_format($debt['payments'], 0, ',', '.') }}</td><td class="text-end {{ $debt['display_balance'] > 0 ? 'text-danger fw-bold' : '' }}">{{ number_format($debt['display_balance'], 0, ',', '.') }} đ @if($debt['balance_is_aggregate'])<div class="small text-muted fw-normal">Tổng khách</div>@endif @if($debt['display_adjustment_total'] != 0)<div class="small text-muted fw-normal" title="Chênh lệch điều chỉnh ngoài Sheet">ĐC {{ number_format($debt['display_adjustment_total'], 0, ',', '.') }} đ</div>@endif</td>
                     <td class="text-end debt-overdue-days {{ ($debt['alerts']['overdue_days'] ?? 0) > 0 ? 'text-danger fw-semibold' : 'text-muted' }}">{{ isset($debt['alerts']['overdue_days']) ? $debt['alerts']['overdue_days'].' ngày' : '—' }}</td>
                     <td class="text-nowrap">{{ $debt['last_purchase_date'] ? \Carbon\Carbon::parse($debt['last_purchase_date'])->format('d/m/Y') : 'Chưa có' }}</td>
                     <td class="text-nowrap">{{ $debt['last_payment_date'] ? \Carbon\Carbon::parse($debt['last_payment_date'])->format('d/m/Y') : 'Chưa có' }}</td>
@@ -84,12 +84,15 @@
                         @if(auth()->user()->isAdmin() && $debt['policy']['staff_edit_locked'])<form method="POST" action="{{ route('customer-debt.policy.unlock') }}">@csrf<input type="hidden" name="source_key" value="{{ $debt['key'] }}"><input type="hidden" name="policy_version" value="{{ $debt['policy']['edit_version'] }}"><button class="btn btn-link btn-sm" type="submit">Mở khóa 1 lần</button></form>@endif
                         </div>
                     </td>
-                    <td><a class="btn btn-sm btn-outline-primary" href="{{ request()->fullUrlWithQuery(['customer'=>$debt['key'],'system_customer'=>null,'window'=>$tab === 'orders' ? 'recent' : 'all','detail_page'=>null,'purchase_page'=>1,'payment_page'=>1,'report_from'=>null,'report_to'=>null]) }}#debt-detail">{{ $tab === 'orders' ? 'Xem nhanh' : 'Chi tiết' }}</a></td></tr>
+                    <td><a class="btn btn-sm btn-outline-primary" href="{{ request()->fullUrlWithQuery(['customer'=>$debt['key'],'system_customer'=>null,'window'=>$tab === 'orders' ? 'recent' : 'all','detail_page'=>null,'purchase_page'=>1,'payment_page'=>1,'report_from'=>null,'report_to'=>null]) }}#debt-detail">{{ $tab === 'orders' ? 'Xem nhanh' : 'Chi tiết' }}</a>@if($canAdjust)<div class="mt-2">@include('customer-debt.balance-button')</div>@endif</td></tr>
             @empty<tr><td colspan="11" class="text-center text-muted">Chưa có dữ liệu khách hàng phù hợp.</td></tr>@endforelse
             </tbody></table>
         </div><div class="card-body debt-list-footer">{{ $debts->links() }}</div></div></div>
         @endif
     </div>
+    @if($canAdjust)
+        @include('customer-debt.balance-adjustment-dialog')
+    @endif
     @if($selected)
         @include('customer-debt.detail-report')
     @endif
@@ -97,7 +100,7 @@
     <details id="debt-issues" class="card mt-3 debt-issues" @if(request()->filled('issue_page')) open @endif><summary class="card-header">Đối chiếu khoản thu · {{ $issueRows->total() }} khoản · {{ number_format($issueTotal, 0, ',', '.') }} đ</summary>
         <div class="card-body">Bổ sung tên / mã khách tại đúng dòng trong tab Dongtienhoatdong rồi tải lại. Hệ thống giữ nguyên nội dung nguồn để đối chiếu.</div>
         <div class="table-responsive"><table class="table"><thead><tr><th>Dòng nguồn</th><th>Ngày</th><th>Nội dung</th><th class="text-end">Tiền thu</th></tr></thead><tbody>
-        @foreach($issueRows as $issue)<tr><td><a href="https://docs.google.com/spreadsheets/d/{{ config('services.google_sheets.debt_spreadsheet_id') }}/edit#gid={{ config('services.google_sheets.debt_payment_sheet_id') }}&range=A{{ $issue['row'] }}:H{{ $issue['row'] }}" target="_blank" rel="noopener">{{ $issue['row'] }}</a></td><td>{{ $issue['date'] }}</td><td>{{ $issue['note'] }}</td><td class="text-end">{{ number_format($issue['amount'], 0, ',', '.') }} đ</td></tr>@endforeach
+        @foreach($issueRows as $issue)<tr><td><a href="https://docs.google.com/spreadsheets/d/{{ config('services.google_sheets.debt_spreadsheet_id') }}/edit?range=Dongtienhoatdong!A{{ $issue['row'] }}:H{{ $issue['row'] }}" target="_blank" rel="noopener">{{ $issue['row'] }}</a></td><td>{{ $issue['date'] }}</td><td>{{ $issue['note'] }}</td><td class="text-end">{{ number_format($issue['amount'], 0, ',', '.') }} đ</td></tr>@endforeach
         </tbody></table></div><div class="card-body">{{ $issueRows->links() }}</div>
     </details>
     @endif
