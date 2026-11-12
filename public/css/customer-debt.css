@@ -110,3 +110,64 @@
     .debt-report-filters > div { flex:1 1 40%; min-width:0; }
     .debt-report-columns { padding:0 12px 12px; }
 }
+/* Today orders: customer names lead, order metadata stays secondary. */
+.debt-orders-panel, .debt-customers-panel { border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; box-shadow:0 1px 3px #0f172a05; }
+.debt-orders-panel-header, .debt-customers-panel-header { background:#fff; padding:16px 18px; border-bottom:1px solid #e2e8f0; }
+.debt-orders-panel-header { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.debt-orders-panel-header strong, .debt-customers-panel-header > strong { font-size:14px; font-weight:650; }
+.debt-orders-panel-header > span { font-size:12px; color:#64748b; }
+.debt-orders-table { margin:0; table-layout:fixed; width:100%; font-size:12px; }
+.debt-orders-table th:first-child { width:42%; }
+.debt-orders-table th:nth-child(2) { width:22%; }
+.debt-orders-table th:nth-child(3) { width:36%; }
+.debt-orders-table thead th { padding:12px 16px; background:#f8fafc; color:#64748b; font-size:11px; font-weight:600; border-color:#e2e8f0; }
+.debt-orders-table tbody td { padding:16px; vertical-align:top; border-color:#edf1f5; background:#fff; white-space:normal; }
+.debt-orders-table tbody tr:hover td { background:#fbfdff; }
+.debt-order-customer { font-size:17px; font-weight:650; line-height:1.45; color:#0f172a; overflow-wrap:anywhere; text-transform:none; margin-bottom:5px; }
+.debt-order-customer-code { color:#94a3b8; font-size:11px; font-weight:400; margin-bottom:7px; }
+.debt-order-meta { display:flex; flex-direction:column; gap:3px; color:#64748b; font-size:12px; font-weight:400; line-height:1.6; text-transform:none; }
+.debt-meta-separator { color:#cbd5e1; margin:0 4px; }
+.debt-orders-table td.debt-order-value { font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.debt-order-alerts { line-height:1.55; }
+.debt-order-alerts .badge, .debt-customer-card-alerts .badge { font-size:10px; font-weight:550; border-radius:4px; padding:3px 6px; line-height:1.4; white-space:normal; text-align:left; }
+.debt-order-alerts .small { font-size:11px; }
+.debt-order-balance { font-size:12px; font-weight:600; margin-bottom:7px; }
+.debt-order-quick-link { display:inline-block; font-size:11px; font-weight:500; margin-top:8px; text-decoration:none; }
+.debt-orders-footer { padding:12px 16px; }
+.debt-orders-footer nav, .debt-orders-footer .pagination, .debt-orders-footer p { margin-bottom:0; }
+.debt-customers-panel-body { padding:16px; }
+.debt-customer-card { padding:17px; border:1px solid #e2e8f0; border-radius:9px; background:#fff; margin-bottom:14px; }
+.debt-customer-card:last-of-type { margin-bottom:0; }
+.debt-customer-card-header { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:12px; }
+.debt-customer-card-identity { min-width:0; flex:1; }
+.debt-customer-card-identity h3 { margin:0 0 5px; font-size:19px; font-weight:650; line-height:1.4; color:#0f172a; overflow-wrap:anywhere; text-transform:none; }
+.debt-customer-card-meta { color:#64748b; font-size:12px; font-weight:400; }
+.debt-customer-card-balance { text-align:right; flex-shrink:0; }
+.debt-customer-card-balance > span { display:block; font-size:11px; color:#64748b; margin-bottom:3px; }
+.debt-customer-card-balance > strong { display:block; font-size:19px; font-weight:650; font-variant-numeric:tabular-nums; }
+.debt-customer-card-alerts .small { color:#64748b; font-size:11px; }
+.debt-customer-card-metrics { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 18px; border:1px solid #edf1f5; border-radius:7px; background:#f8fafc; padding:12px; margin-top:12px; }
+.debt-customer-card-metrics > div { min-width:0; }
+.debt-customer-card-metrics span { display:block; font-size:11px; color:#64748b; margin-bottom:3px; }
+.debt-customer-card-metrics strong { display:block; font-size:13px; font-weight:550; color:#334155; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+.debt-customer-card-terms { padding-top:12px; margin-top:12px; border-top:1px solid #edf1f5; font-size:11px; color:#64748b; line-height:1.7; }
+.debt-customer-card-terms strong { font-weight:550; color:#475569; }
+.debt-customer-card-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.debt-customer-no-data { padding:10px 12px; border:1px solid #fde6bb; border-radius:7px; background:#fffbeb; color:#92400e; margin-bottom:10px; }
+.debt-customer-no-data strong { display:block; font-size:12px; font-weight:600; }
+.debt-customer-no-data span { display:block; font-size:11px; margin-top:3px; }
+@media (min-width:992px) and (max-width:1399.98px) {
+ .debt-orders-table tbody td, .debt-orders-table thead th { padding:12px 10px; }
+ .debt-order-customer { font-size:16px; }
+ .debt-orders-table td.debt-order-value { font-size:12px; }
+ .debt-customer-card-header { flex-wrap:wrap; }
+}
+@media (max-width:575.98px) {
+ .debt-orders-table { min-width:620px; }
+ .debt-customers-panel-body, .debt-customer-card { padding:12px; }
+ .debt-customer-card-header { flex-wrap:wrap; gap:8px; }
+ .debt-customer-card-identity { flex-basis:100%; }
+ .debt-customer-card-identity h3 { font-size:18px; }
+ .debt-customer-card-balance { text-align:left; }
+ .debt-customer-card-balance > strong { font-size:18px; }
+}

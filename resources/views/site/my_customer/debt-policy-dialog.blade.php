@@ -34,7 +34,7 @@
     const request = async (url, method, data) => {
         const response = await fetch(url, {method, credentials:'same-origin', headers:{'Accept':'application/json','Content-Type':'application/json','X-CSRF-TOKEN':csrf},body:JSON.stringify(data)});
         const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.errors ? Object.values(result.errors).flat().join(' ') : (result.message || 'Không cập nhật được. Vui lòng tải lại trang và thử lại.'));
+        if (!response.ok || !result.policy) throw new Error(result.errors ? Object.values(result.errors).flat().join(' ') : (result.message || 'Không cập nhật được. Vui lòng tải lại trang và thử lại.'));
         return result;
     };
     const paint = (card, policy, message) => {
@@ -66,7 +66,7 @@
             return;
         }
         button.disabled = true;
-        try {const result = await request(card.dataset.unlockUrl,'POST',{});paint(card,result.policy,result.message);}
+        try {const result = await request(card.dataset.unlockUrl,'POST',{policy_version:JSON.parse(card.dataset.policy).edit_version});paint(card,result.policy,result.message);}
         catch(error) {const status=card.querySelector('[data-debt-policy-message]');status.className='small text-danger';status.textContent=error.message;}
         finally {button.disabled=false;}
     });

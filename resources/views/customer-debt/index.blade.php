@@ -35,20 +35,28 @@
     </form>
     <div class="row g-3">
         @if($tab === 'orders')
-        <div class="col-lg-6"><div class="card"><div class="card-header">Đơn hàng theo ngày giao · {{ $orders->total() }} đơn</div><div class="table-responsive">
-            <table class="table table-hover"><thead><tr><th>Đơn / Ngày giao</th><th>Khách hàng</th><th class="text-end">Giá trị đơn</th><th>Cảnh báo</th></tr></thead><tbody>
+        <div class="col-xl-6"><div class="card debt-orders-panel"><div class="card-header debt-orders-panel-header"><strong>Đơn hàng theo ngày giao</strong><span>{{ $orders->total() }} đơn</span></div><div class="table-responsive">
+            <table class="table debt-orders-table"><thead><tr><th>Khách hàng / Đơn hàng</th><th class="text-end">Giá trị đơn</th><th>Công nợ & cảnh báo</th></tr></thead><tbody>
             @forelse($orders as $order)
                 @php($debt = $customerDebts[$order->customer_id] ?? null)
-                <tr><td>{{ $order->code }}<br><small>{{ $order->delivery_date?->format('d/m/Y') }} · {{ $order->status }}</small></td><td>{{ $order->customer?->name ?? $order->recipient_name }}<br><small>{{ $order->customer?->customer_code }}</small></td><td class="text-end">{{ number_format($order->total, 0, ',', '.') }} đ</td><td>
-                @if(!$snapshot || !$debt)<span class="badge bg-warning text-dark">Chưa có dữ liệu công nợ</span>
-                @elseif($debt['balance'] > 0)<span class="badge bg-danger">Còn nợ {{ number_format($debt['balance'], 0, ',', '.') }} đ</span>
-                @elseif($debt['balance'] < 0)<span class="badge bg-info text-dark">Khách trả trước</span>
-                @else<span class="badge bg-success">Đã cân đối</span>@endif
-                @if($debt)<div class="mt-2">@include('customer-debt.alerts', ['alert'=>$debt['alerts']])</div><br><a href="{{ request()->fullUrlWithQuery(['customer'=>null,'system_customer'=>$order->customer_id,'window'=>'recent','detail_page'=>null,'purchase_page'=>1,'payment_page'=>1,'report_from'=>null,'report_to'=>null]) }}#debt-detail">Xem nhanh 14 ngày</a>@endif
-                </td></tr>
-            @empty<tr><td colspan="4" class="text-center text-muted">Không có đơn trong khoảng ngày đã chọn.</td></tr>@endforelse
+                <tr>
+                    <td class="debt-order-identity">
+                        <div class="debt-order-customer">{{ $order->customer?->name ?? $order->recipient_name }}</div>
+                        @if($order->customer?->customer_code)<div class="debt-order-customer-code">Mã KH: {{ $order->customer->customer_code }}</div>@endif
+                        <div class="debt-order-meta"><span>Mã đơn: {{ $order->code }}</span><span>{{ $order->delivery_date?->format('d/m/Y') }} <span class="debt-meta-separator">·</span> {{ mb_strtolower((string) (\App\Models\Order::statusOptions()[$order->status] ?? $order->status ?? 'chưa cập nhật'), 'UTF-8') }}</span></div>
+                    </td>
+                    <td class="text-end debt-order-value">{{ number_format($order->total, 0, ',', '.') }} đ</td>
+                    <td class="debt-order-alerts">
+                        @if(!$snapshot || !$debt)<span class="badge bg-warning text-dark">Chưa có dữ liệu công nợ</span>
+                        @elseif($debt['balance'] > 0)<div class="debt-order-balance text-danger">Còn nợ {{ number_format($debt['balance'], 0, ',', '.') }} đ</div>
+                        @elseif($debt['balance'] < 0)<span class="badge bg-info text-dark">Khách trả trước</span>
+                        @else<span class="badge bg-success">Đã cân đối</span>@endif
+                        @if($debt)<div class="mt-1">@include('customer-debt.alerts', ['alert'=>$debt['alerts'], 'compact'=>true])</div><a class="debt-order-quick-link" href="{{ request()->fullUrlWithQuery(['customer'=>null,'system_customer'=>$order->customer_id,'window'=>'recent','detail_page'=>null,'purchase_page'=>1,'payment_page'=>1,'report_from'=>null,'report_to'=>null]) }}#debt-detail">Xem công nợ 14 ngày →</a>@endif
+                    </td>
+                </tr>
+            @empty<tr><td colspan="3" class="text-center text-muted py-4">Không có đơn trong khoảng ngày đã chọn.</td></tr>@endforelse
             </tbody></table>
-        </div><div class="card-body">{{ $orders->links() }}</div></div></div>
+        </div>@if($orders->hasPages())<div class="card-body debt-orders-footer">{{ $orders->links() }}</div>@endif</div></div>
         @endif
         @if($tab === 'orders')
             @include('customer-debt.order-customers')
@@ -69,11 +77,11 @@
                     <td class="text-nowrap">{{ $debt['last_purchase_date'] ? \Carbon\Carbon::parse($debt['last_purchase_date'])->format('d/m/Y') : 'Chưa có' }}</td>
                     <td class="text-nowrap">{{ $debt['last_payment_date'] ? \Carbon\Carbon::parse($debt['last_payment_date'])->format('d/m/Y') : 'Chưa có' }}</td>
                     <td class="debt-alert-cell">@include('customer-debt.alerts', ['alert'=>$debt['alerts'], 'compact'=>true])
-                        <div class="debt-policy-inline"><div class="debt-terms" title="Số Bill được phép nợ · Trần nợ · Hạn thanh toán từ ngày giao hàng">{{ $debt['policy']['allowed_orders'] }} Bill · {{ number_format($debt['policy']['credit_limit'], 0, ',', '.') }} đ · {{ $debt['policy']['due_days'] }} ngày</div>
+                        <div class="debt-policy-inline"><div class="debt-terms" title="Số Bill được phép nợ · Trần nợ · Hạn thanh toán từ ngày giao hàng gần nhất">{{ $debt['policy']['allowed_orders'] }} Bill · {{ number_format($debt['policy']['credit_limit'], 0, ',', '.') }} đ · {{ $debt['policy']['due_days'] }} ngày</div>
 
                         <button type="button" class="btn btn-link btn-sm debt-policy-button" data-key="{{ $debt['key'] }}" data-name="{{ $debt['system_customer']?->name ?? $debt['name'] }}" data-orders="{{ $debt['policy']['allowed_orders'] }}" data-limit="{{ $debt['policy']['credit_limit'] }}" data-days="{{ $debt['policy']['due_days'] }}" data-version="{{ $debt['policy']['edit_version'] }}" @disabled($debt['policy']['staff_edit_locked'] && !auth()->user()->isAdmin())>Sửa tiêu chí</button>
                         @if($debt['policy']['staff_edit_locked'])<span class="small text-muted">Đã khóa</span>@endif
-                        @if(auth()->user()->isAdmin() && $debt['policy']['staff_edit_locked'])<form method="POST" action="{{ route('customer-debt.policy.unlock') }}">@csrf<input type="hidden" name="source_key" value="{{ $debt['key'] }}"><button class="btn btn-link btn-sm" type="submit">Mở khóa 1 lần</button></form>@endif
+                        @if(auth()->user()->isAdmin() && $debt['policy']['staff_edit_locked'])<form method="POST" action="{{ route('customer-debt.policy.unlock') }}">@csrf<input type="hidden" name="source_key" value="{{ $debt['key'] }}"><input type="hidden" name="policy_version" value="{{ $debt['policy']['edit_version'] }}"><button class="btn btn-link btn-sm" type="submit">Mở khóa 1 lần</button></form>@endif
                         </div>
                     </td>
                     <td><a class="btn btn-sm btn-outline-primary" href="{{ request()->fullUrlWithQuery(['customer'=>$debt['key'],'system_customer'=>null,'window'=>$tab === 'orders' ? 'recent' : 'all','detail_page'=>null,'purchase_page'=>1,'payment_page'=>1,'report_from'=>null,'report_to'=>null]) }}#debt-detail">{{ $tab === 'orders' ? 'Xem nhanh' : 'Chi tiết' }}</a></td></tr>

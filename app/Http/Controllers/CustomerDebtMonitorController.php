@@ -253,11 +253,11 @@ class CustomerDebtMonitorController extends Controller
     public function unlockPolicy(Request $request, CustomerDebtSheetService $service)
     {
         abort_unless($request->user()->isAdmin(), 403);
-        $data = $request->validate(['source_key' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/']);
+        $data = $request->validate(['source_key' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/', 'policy_version' => 'required|integer|min:0']);
         $context = $this->resolveGroups($request, $service);
         $group = $context['groups'][$data['source_key']] ?? null;
         abort_unless($group, 404);
-        app(CustomerDebtPolicyService::class)->unlock($group, $request->user());
+        app(CustomerDebtPolicyService::class)->unlock($group, $request->user(), (int) $data['policy_version']);
 
         return back()->with('success', 'Đã mở khóa tiêu chí. Nhân viên được lưu thêm một lần rồi tự khóa lại.');
     }

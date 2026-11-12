@@ -30,7 +30,8 @@ class CustomerDebtPolicyController extends Controller
     {
         abort_unless($request->user()->isAdmin(), 403);
         $group = ['customer_id' => $customer->id];
-        $policies->unlock($group, $request->user());
+        $data = $request->validate(['policy_version' => 'required|integer|min:0']);
+        $policies->unlock($group, $request->user(), (int) $data['policy_version']);
 
         return response()->json(['message' => 'Đã mở khóa. Nhân viên được lưu thêm một lần rồi tự khóa lại.', 'policy' => $policies->effective($group, $policies->policies())]);
     }

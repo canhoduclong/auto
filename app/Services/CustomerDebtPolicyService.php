@@ -97,7 +97,7 @@ class CustomerDebtPolicyService
     public function save(array $group, array $data, int $userId, bool $isAdmin = false, ?int $expectedVersion = null, ?User $editingUser = null): void
     {
         $this->change($group, function ($key, $current, $lockedCustomer) use ($group, $data, $userId, $isAdmin, $expectedVersion, $editingUser) {
-            if ($editingUser) {
+            if ($editingUser && ! $editingUser->isAdmin()) {
                 abort_unless($lockedCustomer && $this->canEditCustomer($editingUser, $lockedCustomer), 403);
             }
             if (! $isAdmin && $this->isLocked($current)) {
@@ -119,12 +119,15 @@ class CustomerDebtPolicyService
         });
     }
 
-    public function unlock(array $group, User $actor): void
+    public function unlock(array $group, User $actor, ?int $expectedVersion = null): void
     {
         abort_unless($actor->isAdmin(), 403, 'Chỉ admin mới được mở khóa tiêu chí công nợ.');
-        $this->change($group, function ($key, $current) use ($group, $actor) {
+        $this->change($group, function ($key, $current) use ($group, $actor, $expectedVersion) {
             if (! $this->isLocked($current)) {
                 return;
+            }
+            if ($expectedVersion !== null && $expectedVersion !== (int) ($current['edit_version'] ?? 0)) {
+                throw ValidationException::withMessages(['policy_version' => 'Cấu hình đã thay đổi. Vui lòng tải lại trang trước khi mở khóa.']);
             }
             $next = array_replace($current, ['staff_edit_locked' => false, 'edit_version' => (int) ($current['edit_version'] ?? 0) + 1, 'unlocked_by' => $actor->id, 'unlocked_at' => now()->toIso8601String()]);
             Setting::set($key, json_encode($next, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));

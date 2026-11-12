@@ -657,8 +657,8 @@ class CustomerDebtMonitorTest extends TestCase
         $service = app(\App\Services\CustomerDebtPolicyService::class);
         $customer = \App\Models\Customer::findOrFail(1);
         for ($cycle = 0; $cycle < 2; $cycle++) {
-            $unlocked = $controller->unlock($this->request([], 'admin'), $customer, $service)->getData(true)['policy'];
-            $again = $controller->unlock($this->request([], 'admin'), $customer, $service)->getData(true)['policy'];
+            $unlocked = $controller->unlock($this->request(['policy_version' => $service->policies()['customer_1']['edit_version']], 'admin'), $customer, $service)->getData(true)['policy'];
+            $again = $controller->unlock($this->request(['policy_version' => $service->policies()['customer_1']['edit_version']], 'admin'), $customer, $service)->getData(true)['policy'];
             self::assertFalse($again['staff_edit_locked']);
             self::assertSame($unlocked['edit_version'], $again['edit_version']);
             $saved = $this->policyUpdate(['policy_version' => $again['edit_version']], 'leader')['policy'];
@@ -744,5 +744,35 @@ class CustomerDebtMonitorTest extends TestCase
         $request = $this->request(['allowed_orders' => 2, 'credit_limit' => 100000, 'due_days' => 7]);
         $this->expectException(HttpException::class);
         (new \App\Http\Controllers\CustomerDebtPolicyController)->update($request, $stale, app(\App\Services\CustomerDebtPolicyService::class));
+    }
+
+    public function test_admin_can_configure_unmatched_sheet_source_with_the_same_lock_rules(): void
+    {
+        $source = $this->service([$this->entry('UNMATCHED', 'Khách nguồn chưa ghép')]);
+        $key = array_key_first($source->summarize($source->snapshot()['entries']));
+        $controller = new CustomerDebtMonitorController;
+        $controller->updatePolicy($this->request(['source_key' => $key, 'due_days' => 5], 'admin'), $source);
+        $policies = app(\App\Services\CustomerDebtPolicyService::class);
+        self::assertTrue($policies->policies()['source_'.$key]['staff_edit_locked']);
+        $controller->unlockPolicy($this->request(['source_key' => $key, 'policy_version' => 1], 'admin'), $source);
+        self::assertFalse($policies->policies()['source_'.$key]['staff_edit_locked']);
+    }
+
+    public function test_stale_admin_unlock_cannot_reopen_a_slot_after_staff_have_used_it(): void
+    {
+        $this->policyUpdate();
+        $service = app(\App\Services\CustomerDebtPolicyService::class);
+        $controller = new \App\Http\Controllers\CustomerDebtPolicyController;
+        $customer = \App\Models\Customer::findOrFail(1);
+        $controller->unlock($this->request(['policy_version' => 1], 'admin'), $customer, $service);
+        $this->policyUpdate(['policy_version' => 2]);
+        try {
+            $controller->unlock($this->request(['policy_version' => 1], 'admin'), $customer, $service);
+            self::fail('Stale unlock reopened a new slot');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            self::assertArrayHasKey('policy_version', $e->errors());
+        }
+        self::assertTrue($service->policies()['customer_1']['staff_edit_locked']);
+        self::assertSame(3, $service->policies()['customer_1']['edit_version']);
     }
 }
