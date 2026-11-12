@@ -65,16 +65,26 @@ class CustomerDebtSheetService
 
     public function mapCustomer(string $sourceKey, int $customerId, int $userId): void
     {
-        Cache::lock('customer-debt-load', 60)->block(5, function () use ($sourceKey, $customerId, $userId) {
-            $groups = $this->summarize($this->snapshot()['entries'] ?? []);
-            if (! isset($groups[$sourceKey])) {
-                throw new RuntimeException('Khách nguồn không còn trong bản dữ liệu hiện tại. Vui lòng tải lại trang.');
-            }
-            Setting::set($this->mappingPrefix().$sourceKey, json_encode([
-                'customer_id' => $customerId, 'mapped_by' => $userId, 'mapped_at' => now()->toIso8601String(),
-                'source_name' => $groups[$sourceKey]['name'], 'source_code' => $groups[$sourceKey]['code'],
-            ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
-        });
+        Cache::lock('customer-debt-load', 60)->block(5, fn () => $this->mapCustomerWithinLock($sourceKey, $customerId, $userId));
+    }
+
+    /** Caller must hold customer-debt-load; allows customer creation and mapping in one transaction. */
+    public function mapCustomerWithinLock(string $sourceKey, int $customerId, int $userId): void
+    {
+        $groups = $this->summarize($this->snapshot()['entries'] ?? []);
+        if (! isset($groups[$sourceKey])) {
+            throw new RuntimeException('Khách nguồn không còn trong bản dữ liệu hiện tại. Vui lòng tải lại trang.');
+        }
+        $this->mapSourceGroupWithinLock($groups[$sourceKey], $customerId, $userId);
+    }
+
+    /** Trusted source group from a server-side import preview; caller holds customer-debt-load. */
+    public function mapSourceGroupWithinLock(array $group, int $customerId, int $userId): void
+    {
+        Setting::set($this->mappingPrefix().$group['key'], json_encode([
+            'customer_id' => $customerId, 'mapped_by' => $userId, 'mapped_at' => now()->toIso8601String(),
+            'source_name' => $group['name'], 'source_code' => $group['code'],
+        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     }
 
     public function unmapCustomer(string $sourceKey): void
@@ -112,7 +122,17 @@ class CustomerDebtSheetService
         return is_string($email) && filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : null;
     }
 
+    public function fetchSales(): array
+    {
+        return $this->fetchTabs(['nhatkybanhang'])[0];
+    }
+
     public function fetch(): array
+    {
+        return $this->fetchTabs(['nhatkybanhang', 'dongtienhoatdong']);
+    }
+
+    private function fetchTabs(array $names): array
     {
         $path = trim((string) config('services.google_sheets.credentials'));
         if (! $path) {
@@ -130,7 +150,7 @@ class CustomerDebtSheetService
             $titles[str_replace(' ', '', $this->normalize($title))] = $title;
         }
         $result = [];
-        foreach (['nhatkybanhang', 'dongtienhoatdong'] as $name) {
+        foreach ($names as $name) {
             if (! isset($titles[$name])) {
                 throw new RuntimeException('Không tìm thấy tab '.$name.'.');
             }

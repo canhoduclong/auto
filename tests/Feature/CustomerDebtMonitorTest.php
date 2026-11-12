@@ -30,12 +30,45 @@ class CustomerDebtMonitorTest extends TestCase
             $t->string('short_name')->nullable();
         });
         $this->tables[] = 'users';
+        Schema::create('roles', function (Blueprint $t) {
+            $t->temporary();
+            $t->id();
+            $t->string('name');
+        });
+        Schema::create('role_user', function (Blueprint $t) {
+            $t->temporary();
+            $t->unsignedBigInteger('role_id');
+            $t->unsignedBigInteger('user_id');
+        });
+        $this->tables[] = 'roles';
+        $this->tables[] = 'role_user';
+        Schema::create('permissions', function (Blueprint $t) {
+            $t->temporary();
+            $t->id();
+            $t->string('name');
+        });
+        Schema::create('permission_role', function (Blueprint $t) {
+            $t->temporary();
+            $t->unsignedBigInteger('role_id');
+            $t->unsignedBigInteger('permission_id');
+        });
+        $this->tables[] = 'permissions';
+        $this->tables[] = 'permission_role';
+        DB::table('roles')->insert(['id' => 1, 'name' => 'sale']);
+        DB::table('role_user')->insert([['role_id' => 1, 'user_id' => 7], ['role_id' => 1, 'user_id' => 8]]);
         DB::table('users')->insert([['id' => 7, 'name' => 'Nguyễn Văn Huy', 'short_name' => 'Huy'], ['id' => 8, 'name' => 'Trần Văn Hà', 'short_name' => 'Hà']]);
         Schema::create('customers', function (Blueprint $t) {
             $t->temporary();
             $t->id();
             $t->string('name');
-            $t->string('customer_code');
+            $t->string('customer_code')->nullable();
+            $t->string('name_normalized')->nullable()->unique();
+            $t->unsignedBigInteger('user_id')->nullable();
+            $t->string('address')->nullable();
+            $t->string('delivery_time')->nullable();
+            $t->timestamp('free_from_date')->nullable();
+            $t->unsignedInteger('current_cycle_no')->default(1);
+            $t->timestamps();
             $t->string('phone')->nullable();
             $t->unsignedBigInteger('assigned_to')->nullable();
             $t->unsignedBigInteger('current_owner_sale_id')->nullable();
@@ -307,6 +340,229 @@ class CustomerDebtMonitorTest extends TestCase
         $this->markRecovery($service, $key, 'difficult');
         $this->expectException(\Illuminate\Validation\ValidationException::class);
         (new CustomerDebtMonitorController)->updateRecovery($this->request(['source_key' => $key, 'recovery_status' => 'normal', 'recovery_version' => $before], 'admin'), $service, new \App\Services\CustomerDebtRecoveryService);
+    }
+
+    private function quickCreate(CustomerDebtSheetService $service, array $overrides = []): void
+    {
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $priorities = $this->createMock(\App\Services\CustomerPriorityService::class);
+        $priorities->expects(self::once())->method('ensureLifecycle');
+        \Illuminate\Support\Facades\Event::fake(['eloquent.created: App\Models\Customer']);
+        (new CustomerDebtMonitorController)->createCustomer($this->request($overrides + ['source_key' => $key, 'name' => 'Khách hàng mới', 'customer_code' => 'NEW01', 'phone' => '0901234567', 'delivery_time' => '07:30'], 'admin'), $service, $priorities);
+    }
+
+    public function test_quick_creation_creates_and_maps_customer_without_changing_debt(): void
+    {
+        $service = $this->service([$this->entry('NEW01', 'Khách hàng mới')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $this->quickCreate($service);
+        $customer = DB::table('customers')->where('customer_code', 'NEW01')->first();
+        self::assertNotNull($customer);
+        self::assertSame('khách hàng mới', $customer->name_normalized);
+        self::assertSame('free', $customer->customer_status);
+        self::assertSame('07:30', $customer->delivery_time);
+        self::assertSame($customer->id, $service->mappings()[$key]['customer_id']);
+        $data = (new CustomerDebtMonitorController)->index($this->request(['tab' => 'all'], 'admin'), $service)->getData();
+        self::assertSame(1000, $data['customerDebts'][$customer->id]['balance']);
+    }
+
+    public function test_quick_creation_assigns_selected_sale_through_the_existing_lifecycle(): void
+    {
+        $service = $this->service([$this->entry('NEW01', 'Khách mới')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        \Illuminate\Support\Facades\Event::fake(['eloquent.created: App\Models\Customer']);
+        $priorities = $this->createMock(\App\Services\CustomerPriorityService::class);
+        $priorities->expects(self::once())->method('attachSale')->with(self::callback(fn ($customer) => (int) $customer->assigned_to === 8), 8, 1, 'created')->willReturn(new \App\Models\CustomerPriority);
+        (new CustomerDebtMonitorController)->createCustomer($this->request(['source_key' => $key, 'name' => 'Khách mới', 'customer_code' => 'NEW01', 'delivery_time' => '07:30', 'sale_id' => 8], 'admin'), $service, $priorities);
+        $customer = DB::table('customers')->where('customer_code', 'NEW01')->first();
+        self::assertEquals(8, $customer->current_owner_sale_id);
+        self::assertSame('active', $customer->customer_status);
+    }
+
+    public function test_quick_creation_rolls_back_if_customer_lifecycle_fails(): void
+    {
+        $service = $this->service([$this->entry('NEW01', 'Khách mới')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        \Illuminate\Support\Facades\Event::fake(['eloquent.created: App\Models\Customer']);
+        $priorities = $this->createMock(\App\Services\CustomerPriorityService::class);
+        $priorities->method('ensureLifecycle')->willThrowException(new \RuntimeException('Simulated failure'));
+        try {
+            (new CustomerDebtMonitorController)->createCustomer($this->request(['source_key' => $key, 'name' => 'Khách mới', 'delivery_time' => '07:30'], 'admin'), $service, $priorities);
+            self::fail('Failure not propagated');
+        } catch (\RuntimeException $e) {
+            self::assertSame('Simulated failure', $e->getMessage());
+        }
+        self::assertSame(2, DB::table('customers')->count());
+        self::assertSame([], $service->mappings());
+    }
+
+    public function test_quick_creation_rejects_duplicate_customers_and_does_not_map_source(): void
+    {
+        DB::table('customers')->where('id', 1)->update(['name_normalized' => \App\Models\Customer::normalizeName('Chị Bình')]);
+        $service = $this->service([$this->entry('NEW01', 'Nguồn khác')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        try {
+            (new CustomerDebtMonitorController)->createCustomer($this->request(['source_key' => $key, 'name' => 'Chị Bình', 'delivery_time' => '07:30'], 'admin'), $service, $this->createMock(\App\Services\CustomerPriorityService::class));
+            self::fail('Duplicate was accepted');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            self::assertArrayHasKey('name', $e->errors());
+        }
+        self::assertSame(2, DB::table('customers')->count());
+        self::assertSame([], $service->mappings());
+    }
+
+    public function test_quick_creation_rejects_source_that_has_already_been_mapped(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        (new CustomerDebtMonitorController)->createCustomer($this->request(['source_key' => $key, 'name' => 'Tên mới', 'delivery_time' => '07:30'], 'admin'), $service, $this->createMock(\App\Services\CustomerPriorityService::class));
+    }
+
+    public function test_sales_cannot_create_unmatched_source_customers(): void
+    {
+        $this->expectException(HttpException::class);
+        (new CustomerDebtMonitorController)->createCustomer($this->request(), $this->service([]), $this->createMock(\App\Services\CustomerPriorityService::class));
+    }
+
+    public function test_quick_creation_validates_sale_assignment(): void
+    {
+        $service = $this->service([$this->entry('NEW01', 'Khách hàng mới')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        (new CustomerDebtMonitorController)->createCustomer($this->request(['source_key' => $key, 'name' => 'Tên mới', 'delivery_time' => '07:30', 'sale_id' => 999], 'admin'), $service, $this->createMock(\App\Services\CustomerPriorityService::class));
+    }
+
+    private function sheetCustomerImporter(array $values): \App\Services\GoogleSheetCustomerImportService
+    {
+        $sheets = new class($values) extends CustomerDebtSheetService
+        {
+            public function __construct(private array $values) {}
+
+            public function fetchSales(): array
+            {
+                return $this->values;
+            }
+        };
+
+        return new \App\Services\GoogleSheetCustomerImportService($sheets, $this->createMock(\App\Services\CustomerPriorityService::class));
+    }
+
+    private function customerSheetValues(array $rows): array
+    {
+        return array_merge([['Ngày', 'Mã KH', 'Khách hàng', 'NVKD', 'Tổng tiền']], array_map(fn ($row) => array_merge(['12/11/2026'], $row), $rows));
+    }
+
+    public function test_google_customer_preview_groups_sales_and_detects_conflicting_matches_without_writes(): void
+    {
+        $importer = $this->sheetCustomerImporter($this->customerSheetValues([
+            ['NEW01', 'Khách mới', 'Huy', '1000'], ['NEW01', 'Khách mới', 'Huy', '2000'],
+            ['KH02', 'Chị Bình', '', '1000'], ['CRM01', 'Tên nguồn khác', '', '1000'],
+        ]));
+        $actor = $this->user('admin');
+        $token = $importer->load($actor);
+        $rows = $importer->plan($importer->snapshot($token, $actor));
+        self::assertCount(3, $rows);
+        self::assertSame(1, collect($rows)->where('status', 'conflict')->count());
+        self::assertSame(1, collect($rows)->where('status', 'create')->count());
+        self::assertSame(1, collect($rows)->where('status', 'link')->count());
+        self::assertSame(7, collect($rows)->firstWhere('code', 'NEW01')['sale_id']);
+        self::assertSame(2, DB::table('customers')->count());
+        self::assertSame([], (new CustomerDebtSheetService)->mappings());
+    }
+
+    public function test_google_customer_import_links_and_creates_once_without_overwriting_existing_data(): void
+    {
+        \Illuminate\Support\Facades\Event::fake(['eloquent.created: App\Models\Customer']);
+        $importer = $this->sheetCustomerImporter($this->customerSheetValues([
+            ['CRM01', 'Alias khác tên', '', '1000'], ['NEW01', 'Khách mới', '', '1000'],
+        ]));
+        $actor = $this->user('admin');
+        $token = $importer->load($actor);
+        $counts = $importer->commit($token, $actor, true);
+        self::assertSame(['created' => 1, 'linked' => 1, 'skipped' => 0, 'errors' => 0], $counts);
+        self::assertSame(3, DB::table('customers')->count());
+        self::assertSame('Chị Bình', DB::table('customers')->where('id', 1)->value('name'));
+        self::assertCount(2, (new CustomerDebtSheetService)->mappings());
+        $again = $importer->commit($token, $actor, true);
+        self::assertSame(0, $again['created']);
+        self::assertSame(0, $again['linked']);
+        self::assertSame(3, DB::table('customers')->count());
+        self::assertCount(2, collect($importer->plan($importer->snapshot($token, $actor)))->where('status', 'imported'));
+    }
+
+    public function test_google_customer_manual_link_resolves_ambiguous_source_aliases(): void
+    {
+        $importer = $this->sheetCustomerImporter($this->customerSheetValues([
+            ['OLD01', 'Tên trùng', '', '1000'], ['OLD02', 'Tên trùng', '', '1000'],
+        ]));
+        $actor = $this->user('admin');
+        $token = $importer->load($actor);
+        $snapshot = $importer->snapshot($token, $actor);
+        self::assertCount(2, collect($importer->plan($snapshot))->where('status', 'conflict'));
+        foreach (array_keys($snapshot['groups']) as $key) {
+            $importer->decide($token, $actor, ['source_key' => $key, 'action' => 'link', 'customer_id' => 1]);
+        }
+        $counts = $importer->commit($token, $actor, true);
+        self::assertSame(2, $counts['linked']);
+        self::assertSame(0, $counts['created']);
+        self::assertSame(2, DB::table('customers')->count());
+    }
+
+    public function test_google_customer_import_respects_skip_and_create_permission(): void
+    {
+        $importer = $this->sheetCustomerImporter($this->customerSheetValues([['NEW01', 'Khách mới', '', '1000'], ['CRM01', 'Chị Bình', '', '1000']]));
+        $actor = $this->user('admin');
+        $token = $importer->load($actor);
+        $snapshot = $importer->snapshot($token, $actor);
+        $key = collect($snapshot['groups'])->firstWhere('code', 'CRM01')['key'];
+        $importer->decide($token, $actor, ['source_key' => $key, 'action' => 'skip']);
+        $counts = $importer->commit($token, $actor, false);
+        self::assertSame(0, $counts['created']);
+        self::assertSame(2, $counts['skipped']);
+        self::assertSame(2, DB::table('customers')->count());
+    }
+
+    public function test_google_customer_preview_is_scoped_to_the_loading_user(): void
+    {
+        $importer = $this->sheetCustomerImporter($this->customerSheetValues([['NEW01', 'Khách mới', '', '1000']]));
+        $actor = $this->user('admin');
+        $token = $importer->load($actor);
+        $other = $this->user('admin');
+        $other->id = 8;
+        $this->expectException(HttpException::class);
+        $importer->snapshot($token, $other);
+    }
+
+    public function test_google_customer_import_rechecks_customers_added_since_preview(): void
+    {
+        $importer = $this->sheetCustomerImporter($this->customerSheetValues([['NEW01', 'Khách mới', '', '1000']]));
+        $actor = $this->user('admin');
+        $token = $importer->load($actor);
+        DB::table('customers')->insert(['id' => 3, 'name' => 'Khách mới', 'name_normalized' => \App\Models\Customer::normalizeName('Khách mới'), 'customer_code' => 'NEW01']);
+        $counts = $importer->commit($token, $actor, true);
+        self::assertSame(0, $counts['created']);
+        self::assertSame(1, $counts['linked']);
+        self::assertSame(3, DB::table('customers')->count());
+    }
+
+    public function test_google_customer_import_processes_in_batches_and_resumes_without_duplicates(): void
+    {
+        \Illuminate\Support\Facades\Event::fake(['eloquent.created: App\Models\Customer']);
+        $importer = $this->sheetCustomerImporter($this->customerSheetValues([['NEW01', 'Khách mới A', '', '1000'], ['NEW02', 'Khách mới B', '', '1000']]));
+        $actor = $this->user('admin');
+        $token = $importer->load($actor);
+        self::assertSame(1, $importer->commit($token, $actor, true, 1)['created']);
+        self::assertSame(3, DB::table('customers')->count());
+        self::assertSame(1, $importer->commit($token, $actor, true, 1)['created']);
+        self::assertSame(4, DB::table('customers')->count());
+        self::assertSame(0, $importer->commit($token, $actor, true, 1)['created']);
+    }
+
+    public function test_google_customer_import_endpoint_enforces_import_permission(): void
+    {
+        $this->expectException(HttpException::class);
+        (new \App\Http\Controllers\GoogleSheetCustomerImportController)->index($this->request(), $this->sheetCustomerImporter([]), new CustomerDebtSheetService);
     }
 
     public function test_sales_can_only_see_their_customers_and_unique_name_fallback(): void

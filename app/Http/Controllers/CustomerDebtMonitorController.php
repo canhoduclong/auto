@@ -137,8 +137,69 @@ class CustomerDebtMonitorController extends Controller
         $debts = new \Illuminate\Pagination\LengthAwarePaginator($visible->forPage($page, 30)->values(), $visible->count(), 30, $page, ['path' => $request->url(), 'pageName' => 'debt_page', 'query' => $request->except('debt_page')]);
 
         $connectionEmail = $canLoad ? $service->connectionEmail() : null;
+        $canCreateQuickCustomer = $canLoad && \Illuminate\Support\Facades\Gate::forUser($request->user())->allows('create', Customer::class);
+        $quickCustomerSales = $canCreateQuickCustomer ? $this->quickCustomerSales() : collect();
 
-        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail'));
+        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail', 'canCreateQuickCustomer', 'quickCustomerSales'));
+    }
+
+    private function quickCustomerSales()
+    {
+        return User::query()->whereHas('roles', fn ($q) => $q->whereIn('name', ['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']))->orderBy('name')->get(['id', 'name', 'short_name']);
+    }
+
+    public function createCustomer(Request $request, CustomerDebtSheetService $service, \App\Services\CustomerPriorityService $priorities)
+    {
+        abort_unless($request->user()->hasRole(['admin', 'account', 'accountant', 'accounting', 'director', 'ceo']), 403);
+        abort_unless(\Illuminate\Support\Facades\Gate::forUser($request->user())->allows('create', Customer::class), 403);
+        $request->merge([
+            'name' => trim((string) $request->input('name')),
+            'customer_code' => mb_strtoupper(trim((string) $request->input('customer_code'))),
+            'phone' => trim((string) $request->input('phone')),
+        ]);
+        $data = $request->validate([
+            'source_key' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/',
+            'name' => 'required|string|max:255', 'customer_code' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|max:30', 'address' => 'nullable|string|max:255',
+            'delivery_time' => 'required|date_format:H:i',
+            'sale_id' => ['nullable', 'integer', Rule::in($this->quickCustomerSales()->pluck('id')->all())],
+        ]);
+        \Illuminate\Support\Facades\Cache::lock('customer-debt-load', 60)->block(5, function () use ($request, $service, $priorities, $data) {
+            \Illuminate\Support\Facades\DB::transaction(function () use ($request, $service, $priorities, $data) {
+                $context = $this->resolveGroups($request, $service);
+                $group = $context['groups'][$data['source_key']] ?? null;
+                abort_unless($group, 404);
+                if ($group['customer_id']) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['source_key' => 'Khách nguồn đã được ghép. Vui lòng tải lại danh sách.']);
+                }
+                $duplicate = Customer::withTrashed()->where(function ($q) use ($data) {
+                    $q->where('name_normalized', Customer::normalizeName($data['name']));
+                    if (!empty($data['customer_code'])) $q->orWhereRaw('UPPER(TRIM(customer_code)) = ?', [$data['customer_code']]);
+                    if (!empty($data['phone'])) $q->orWhere('phone', $data['phone']);
+                })->first();
+                if ($duplicate) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['name' => 'Khách đã tồn tại: '.$duplicate->name.($duplicate->trashed() ? '. Khách đã bị xóa, cần khôi phục trước khi ghép.' : '. Hãy dùng “Chọn khách để ghép”.')]);
+                }
+                $saleId = !empty($data['sale_id']) ? (int) $data['sale_id'] : null;
+                $customer = Customer::create([
+                    'name' => $data['name'], 'customer_code' => $data['customer_code'] ?: null,
+                    'phone' => $data['phone'] ?: null, 'address' => $data['address'] ?? null,
+                    'delivery_time' => $data['delivery_time'], 'user_id' => $request->user()->id,
+                    'assigned_to' => $saleId, 'current_owner_sale_id' => $saleId,
+                    'assigned_at' => $saleId ? now() : null, 'customer_status' => $saleId ? 'active' : 'free',
+                    'free_from_date' => $saleId ? null : now(), 'current_cycle_no' => 1,
+                ]);
+                if (!empty($data['address'])) {
+                    $customer->addresses()->create(['note' => $data['address'], 'is_default' => 1]);
+                }
+                if ($saleId) $priorities->attachSale($customer, $saleId, 1, 'created');
+                else $priorities->ensureLifecycle($customer);
+                $service->mapCustomerWithinLock($data['source_key'], $customer->id, $request->user()->id);
+                app(CustomerDebtPolicyService::class)->promoteSource($data['source_key'], $customer->id);
+            });
+        });
+        $request->session()->flash('success', 'Đã tạo khách hàng và ghép dữ liệu công nợ.');
+        return response()->json(['message' => 'Đã tạo khách hàng và ghép dữ liệu công nợ.']);
     }
 
     public function updateRecovery(Request $request, CustomerDebtSheetService $service, \App\Services\CustomerDebtRecoveryService $recovery)

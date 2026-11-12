@@ -72,6 +72,7 @@
             @forelse($debts as $debt)
                 <tr><td>{{ $debt['name'] }} @if($debt['recovery']['status'] !== 'normal')<div><span class="badge {{ $debt['recovery']['status'] === 'unrecoverable' ? 'bg-danger' : 'bg-warning text-dark' }}" title="{{ $debt['recovery']['note'] }}">{{ $debt['recovery']['label'] }}</span></div>@endif<br><small>{{ $debt['code'] ?: 'Chưa có mã KH' }}</small>@if($debt['customer_id'] && $debt['matched_by'] === 'name')<br><small class="text-muted">Ghép theo tên duy nhất</small>@endif @if(!$debt['customer_id'])<br><span class="badge bg-warning text-dark">Chưa ghép được khách hệ thống</span>@endif @if($debt['ambiguous'])<br><span class="badge bg-danger">Trùng tên, cần kiểm tra mã</span>@endif
                     @if($debt['system_customer'])<div class="small text-success mt-1" title="{{ $debt['system_customer']->customer_code }} · {{ $debt['system_customer']->name }}">Khách hệ thống: {{ $debt['system_customer']->customer_code }} · {{ $debt['system_customer']->name }}@if($debt['matched_by'] === 'manual') (ghép thủ công)@endif</div>@endif
+                    @if($canCreateQuickCustomer && !$debt['customer_id'])<button type="button" class="btn btn-sm btn-outline-success mt-2 debt-create-customer-button" data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}" data-code="{{ $debt['code'] }}" data-sale="{{ str_starts_with($debt['sale_key'], 'user:') ? substr($debt['sale_key'], 5) : '' }}">Tạo khách hàng nhanh</button>@endif
                     @if($canLoad && (!$debt['customer_id'] || $debt['manual_mapping']))
                         <button type="button" class="btn btn-sm btn-outline-primary mt-2 debt-map-button" data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}" data-code="{{ $debt['code'] }}" data-customer="{{ $debt['customer_id'] }}">{{ $debt['customer_id'] ? 'Đổi ghép' : 'Chọn khách để ghép' }}</button>
                         @if($debt['manual_mapping'])<form method="POST" action="{{ route('customer-debt.mapping.destroy') }}" class="d-inline">@csrf @method('DELETE')<input type="hidden" name="source_key" value="{{ $debt['key'] }}"><button class="btn btn-sm btn-link mt-2">Bỏ ghép thủ công</button></form>@endif
@@ -97,6 +98,7 @@
         @endif
     </div>
     @if($tab === 'all') @include('customer-debt.recovery-dialog') @endif
+    @if($tab === 'all' && $canCreateQuickCustomer) @include('customer-debt.create-customer-dialog') @endif
     @if($canAdjust)
         @include('customer-debt.balance-adjustment-dialog')
     @endif

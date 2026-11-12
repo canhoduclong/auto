@@ -29,6 +29,9 @@
         <div class="alert alert-success">{{ $success }}</div>
     @endif
 
+    @can('import', \App\Models\Customer::class)
+    <div class="card text-import-card mb-4"><div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3"><div><h5 class="mb-1">Nhập từ Google Sheet gốc</h5><div class="small text-muted">Cùng nguồn với Import Đơn. Xem trước, ghép khách hiện tại hoặc tạo khách mới.</div></div><a class="btn btn-primary" href="{{ route('customers.sheet-import.index') }}">Import từ Google Sheet</a></div></div>
+    @endcan
     <div class="card text-import-card mb-4">
         <div class="card-header py-3">
             <h5 class="mb-1">Nhập bằng văn bản</h5>

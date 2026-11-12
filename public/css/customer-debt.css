@@ -203,3 +203,6 @@
 
 #debt-recovery-filter, #debt-recovery-status { display: block !important; }
 #debt-recovery-filter + .nice-select, #debt-recovery-status + .nice-select { display: none !important; }
+
+#debt-create-sale { display: block !important; }
+#debt-create-sale + .nice-select { display: none !important; }

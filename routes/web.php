@@ -1058,6 +1058,11 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 
     // Ví dụ: khi sau này bạn thêm Customer
     Route::get('customers/export', [CustomerController::class, 'export'])->name('customers.export')->middleware('permission');
+    Route::get('customers/import-google-sheet', [\App\Http\Controllers\GoogleSheetCustomerImportController::class, 'index'])->name('customers.sheet-import.index');
+    Route::post('customers/import-google-sheet/load', [\App\Http\Controllers\GoogleSheetCustomerImportController::class, 'load'])->middleware('throttle:6,1')->name('customers.sheet-import.load');
+    Route::get('customers/import-google-sheet/customers', [\App\Http\Controllers\GoogleSheetCustomerImportController::class, 'customers'])->name('customers.sheet-import.customers');
+    Route::post('customers/import-google-sheet/decisions', [\App\Http\Controllers\GoogleSheetCustomerImportController::class, 'decide'])->name('customers.sheet-import.decide');
+    Route::post('customers/import-google-sheet/commit', [\App\Http\Controllers\GoogleSheetCustomerImportController::class, 'commit'])->name('customers.sheet-import.commit');
     Route::get('customers/import', [CustomerController::class, 'importForm'])->name('customers.import.form')->middleware('permission');
     Route::post('customers/import', [CustomerController::class, 'import'])->name('customers.import')->middleware('permission');
     Route::post('customers/{customer}/assign-sale', [CustomerController::class, 'assignSale'])->name('customers.assign-sale')->middleware('permission');
@@ -1418,6 +1423,7 @@ Route::middleware('auth')->group(function () {
 
 // Sales debt monitoring: sheet-derived balances are separate from order accounting.
 Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,manager,manager_sale,account,accountant,accounting,director,ceo'])->group(function () {
+    Route::post('/customer-debt/customers', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'createCustomer'])->name('customer-debt.customers.store');
     Route::patch('/customer-debt/recovery', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'updateRecovery'])->name('customer-debt.recovery');
     Route::post('/customer-debt/balance-adjustments', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'adjustBalance'])->name('customer-debt.balance-adjustments');
     Route::get('/customer-debt', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'index'])->name('customer-debt.index');
