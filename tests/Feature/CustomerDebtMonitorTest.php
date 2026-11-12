@@ -252,6 +252,63 @@ class CustomerDebtMonitorTest extends TestCase
         (new CustomerDebtMonitorController)->adjustBalance($this->request(['source_key' => str_repeat('a', 64), 'new_balance' => 0, 'revision' => str_repeat('a', 64), 'request_id' => (string) \Illuminate\Support\Str::uuid(), 'reason' => ' '], 'admin'), $this->service([]), new \App\Services\CustomerDebtBalanceService);
     }
 
+    private function markRecovery(CustomerDebtSheetService $service, string $key, string $status, string $role = 'admin'): void
+    {
+        $controller = new CustomerDebtMonitorController;
+        $data = $controller->index($this->request(['tab' => 'all', 'recovery' => 'all'], $role), $service)->getData();
+        $controller->updateRecovery($this->request(['source_key' => $key, 'recovery_status' => $status, 'recovery_note' => 'Khách ngưng hoạt động', 'recovery_version' => $data['groups'][$key]['recovery']['version']], $role), $service, new \App\Services\CustomerDebtRecoveryService);
+    }
+
+    public function test_flagged_recovery_is_hidden_by_default_and_can_be_filtered_or_restored(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình'), $this->entry('KH02', 'Anh Hải')]);
+        $key = array_key_first($service->summarize([$this->entry('CRM01', 'Chị Bình')]));
+        $this->markRecovery($service, $key, 'difficult');
+        $controller = new CustomerDebtMonitorController;
+        $default = $controller->index($this->request(['tab' => 'all'], 'admin'), $service)->getData();
+        self::assertSame(1, $default['debts']->total());
+        self::assertSame(1000, $default['customerDebts'][1]['balance']);
+        self::assertSame(2, $controller->index($this->request(['tab' => 'all', 'recovery' => 'all'], 'admin'), $service)->getData()['debts']->total());
+        self::assertSame(1, $controller->index($this->request(['tab' => 'all', 'recovery' => 'difficult'], 'admin'), $service)->getData()['debts']->total());
+        $this->markRecovery($service, $key, 'unrecoverable');
+        self::assertSame(1, $controller->index($this->request(['tab' => 'all', 'recovery' => 'unrecoverable'], 'admin'), $service)->getData()['debts']->total());
+        $this->markRecovery($service, $key, 'normal');
+        self::assertSame(2, $controller->index($this->request(['tab' => 'all'], 'admin'), $service)->getData()['debts']->total());
+        self::assertSame(3, DB::table('settings')->where('key', 'like', 'customer_debt_recovery_audit_%')->count());
+    }
+
+    public function test_recovery_status_follows_source_mapping_and_covers_customer_aliases(): void
+    {
+        $service = $this->service([$this->entry('OLD1', 'Nguồn A'), $this->entry('OLD2', 'Nguồn B')]);
+        $keys = array_keys($service->summarize($service->snapshot()['entries']));
+        $this->markRecovery($service, $keys[0], 'unrecoverable');
+        foreach ($keys as $key) {
+            $service->mapCustomer($key, 1, 7);
+        }
+        $controller = new CustomerDebtMonitorController;
+        self::assertSame(0, $controller->index($this->request(['tab' => 'all'], 'admin'), $service)->getData()['debts']->total());
+        $this->markRecovery($service, $keys[1], 'normal');
+        self::assertSame(2, $controller->index($this->request(['tab' => 'all'], 'admin'), $service)->getData()['debts']->total());
+    }
+
+    public function test_sales_cannot_mark_another_customers_recovery(): void
+    {
+        $service = $this->service([$this->entry('KH02', 'Anh Hải')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $this->expectException(HttpException::class);
+        (new CustomerDebtMonitorController)->updateRecovery($this->request(['source_key' => $key, 'recovery_status' => 'difficult', 'recovery_version' => str_repeat('a', 64)]), $service, new \App\Services\CustomerDebtRecoveryService);
+    }
+
+    public function test_recovery_updates_reject_a_stale_form(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $before = (new CustomerDebtMonitorController)->index($this->request([], 'admin'), $service)->getData()['groups'][$key]['recovery']['version'];
+        $this->markRecovery($service, $key, 'difficult');
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        (new CustomerDebtMonitorController)->updateRecovery($this->request(['source_key' => $key, 'recovery_status' => 'normal', 'recovery_version' => $before], 'admin'), $service, new \App\Services\CustomerDebtRecoveryService);
+    }
+
     public function test_sales_can_only_see_their_customers_and_unique_name_fallback(): void
     {
         $view = (new CustomerDebtMonitorController)->index($this->request(), $this->service([$this->entry('OLD01', 'Chị Bình'), $this->entry('KH02', 'Anh Hải')]));

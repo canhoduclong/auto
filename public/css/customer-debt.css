@@ -200,3 +200,6 @@
 .debt-connection-account { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
 .debt-connection-account input { flex: 1 1 260px; min-width: 0; max-width: 520px; }
 .debt-connection-account button { white-space: nowrap; }
+
+#debt-recovery-filter, #debt-recovery-status { display: block !important; }
+#debt-recovery-filter + .nice-select, #debt-recovery-status + .nice-select { display: none !important; }

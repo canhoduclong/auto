@@ -16,7 +16,7 @@ class CustomerDebtMonitorController extends Controller
 {
     public function index(Request $request, CustomerDebtSheetService $service)
     {
-        $data = $request->validate(['from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d', 'tab' => 'nullable|in:orders,all', 'sort' => 'nullable|in:overdue_days', 'direction' => 'nullable|in:asc,desc', 'search' => 'nullable|string|max:150', 'sale' => ['nullable', 'string', 'regex:/^(user:[0-9]+|sheet:[a-f0-9]{16}|unassigned)$/'], 'alert' => 'nullable|in:overdue,remind,medium,high,very_high', 'customer' => 'nullable|string|size:64', 'system_customer' => 'nullable|integer|min:1', 'window' => 'nullable|in:recent,all,custom', 'report_from' => 'nullable|required_with:report_to|date_format:Y-m-d', 'report_to' => 'nullable|required_with:report_from|date_format:Y-m-d|after_or_equal:report_from', 'purchase_page' => 'nullable|integer|min:1', 'payment_page' => 'nullable|integer|min:1', 'adjustment_page' => 'nullable|integer|min:1', 'detail_page' => 'nullable|integer|min:1', 'debt_page' => 'nullable|integer|min:1', 'issue_page' => 'nullable|integer|min:1']);
+        $data = $request->validate(['from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d', 'tab' => 'nullable|in:orders,all', 'sort' => 'nullable|in:overdue_days', 'direction' => 'nullable|in:asc,desc', 'search' => 'nullable|string|max:150', 'sale' => ['nullable', 'string', 'regex:/^(user:[0-9]+|sheet:[a-f0-9]{16}|unassigned)$/'], 'recovery' => 'nullable|in:normal,difficult,unrecoverable,flagged,all', 'alert' => 'nullable|in:overdue,remind,medium,high,very_high', 'customer' => 'nullable|string|size:64', 'system_customer' => 'nullable|integer|min:1', 'window' => 'nullable|in:recent,all,custom', 'report_from' => 'nullable|required_with:report_to|date_format:Y-m-d', 'report_to' => 'nullable|required_with:report_from|date_format:Y-m-d|after_or_equal:report_from', 'purchase_page' => 'nullable|integer|min:1', 'payment_page' => 'nullable|integer|min:1', 'adjustment_page' => 'nullable|integer|min:1', 'detail_page' => 'nullable|integer|min:1', 'debt_page' => 'nullable|integer|min:1', 'issue_page' => 'nullable|integer|min:1']);
         $from = $data['from'] ?? now()->toDateString();
         $to = $data['to'] ?? now()->toDateString();
         Validator::make(['from' => $from, 'to' => $to], ['to' => 'after_or_equal:from'])->validate();
@@ -95,7 +95,14 @@ class CustomerDebtMonitorController extends Controller
             });
         }
         $saleOptions = $rows->map(fn ($row) => ['key' => $row['sale_key'], 'label' => $row['sale_label']])->unique('key')->sortBy('label')->values();
-        $visible = $rows->filter(function ($g) use ($data, $service) {
+        $visible = $rows->filter(function ($g) use ($data, $service, $tab) {
+            if ($tab === 'all') {
+                $recoveryFilter = $data['recovery'] ?? 'normal';
+                $status = $g['recovery']['status'];
+                if ($recoveryFilter === 'flagged' ? $status === 'normal' : ($recoveryFilter !== 'all' && $status !== $recoveryFilter)) {
+                    return false;
+                }
+            }
             if (! empty($data['sale']) && $g['sale_key'] !== $data['sale']) {
                 return false;
             }
@@ -132,6 +139,24 @@ class CustomerDebtMonitorController extends Controller
         $connectionEmail = $canLoad ? $service->connectionEmail() : null;
 
         return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail'));
+    }
+
+    public function updateRecovery(Request $request, CustomerDebtSheetService $service, \App\Services\CustomerDebtRecoveryService $recovery)
+    {
+        $data = $request->validate([
+            'source_key' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/',
+            'recovery_status' => ['required', Rule::in(array_keys(\App\Services\CustomerDebtRecoveryService::LABELS))],
+            'recovery_note' => 'nullable|string|max:1000',
+            'recovery_version' => 'required|string|size:64',
+        ]);
+        \Illuminate\Support\Facades\Cache::lock('customer-debt-load', 60)->block(5, function () use ($request, $service, $recovery, $data) {
+            $context = $this->debtContext($request, $service);
+            $group = $context['groups'][$data['source_key']] ?? null;
+            abort_unless($group, 404);
+            $target = $group['customer_id'] ? $context['customerDebts'][$group['customer_id']] : $group;
+            $recovery->save($target, $data, $request->user());
+        });
+        return back()->with('success', 'Đã cập nhật trạng thái thu hồi. Danh sách mặc định ẩn khách khó thu hồi và không có khả năng thu hồi.');
     }
 
     public function adjustBalance(Request $request, CustomerDebtSheetService $service, CustomerDebtBalanceService $balances)
@@ -187,7 +212,10 @@ class CustomerDebtMonitorController extends Controller
             $customerDebts[$id]['source_keys'][] = $group['key'];
             $customerDebts[$id]['entries'] = array_merge($customerDebts[$id]['entries'], $group['entries']);
         }
+        $recoveryService = app(\App\Services\CustomerDebtRecoveryService::class);
+        $recoveryRecords = $recoveryService->records();
         foreach ($customerDebts as &$debt) {
+            $debt['recovery'] = $recoveryService->effective($debt, $recoveryRecords);
             $debt['balance_revision'] = $balanceService->revision($debt, $snapshotVersion);
             $debt['policy'] = $policyService->effective($debt, $policies);
             $debt['alerts'] = $policyService->evaluate($debt['entries'], $debt['policy']);
@@ -198,6 +226,7 @@ class CustomerDebtMonitorController extends Controller
             $group['policy'] = $aggregate['policy'] ?? $policyService->effective($group, $policies);
             $group['alerts'] = $aggregate['alerts'] ?? $policyService->evaluate($group['entries'], $group['policy']);
             $target = $aggregate ?? $group;
+            $group['recovery'] = $aggregate['recovery'] ?? $recoveryService->effective($group, $recoveryRecords);
             $group['balance_revision'] = $aggregate['balance_revision'] ?? $balanceService->revision($group, $snapshotVersion);
             $group['display_balance'] = $target['balance'];
             $group['display_adjustment_total'] = $target['adjustment_total'];

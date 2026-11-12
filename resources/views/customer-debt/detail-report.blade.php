@@ -4,7 +4,7 @@
         <a class="btn btn-light btn-sm" href="{{ request()->fullUrlWithQuery(['customer'=>null,'system_customer'=>null,'report_from'=>null,'report_to'=>null,'window'=>null,'purchase_page'=>null,'payment_page'=>null,'detail_page'=>null]) }}">Đóng chi tiết</a>
     </header>
     <form method="GET" action="{{ route('customer-debt.index') }}#debt-detail" class="debt-report-filters">
-        @foreach(['tab','from','to','customer','system_customer','search','sale','alert','sort','direction','debt_page'] as $queryKey)
+        @foreach(['tab','from','to','customer','system_customer','search','sale','alert','recovery','sort','direction','debt_page'] as $queryKey)
             @if(request()->filled($queryKey))<input type="hidden" name="{{ $queryKey }}" value="{{ request($queryKey) }}">@endif
         @endforeach
         <input type="hidden" name="window" value="custom">
