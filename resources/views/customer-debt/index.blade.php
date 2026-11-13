@@ -107,9 +107,9 @@
     @endif
     @if($canLoad && $issueRows->total())
     <details id="debt-issues" class="card mt-3 debt-issues" @if(request()->filled('issue_page')) open @endif><summary class="card-header">Đối chiếu khoản thu · {{ $issueRows->total() }} khoản · {{ number_format($issueTotal, 0, ',', '.') }} đ</summary>
-        <div class="card-body">Bổ sung tên / mã khách tại đúng dòng trong tab Dongtienhoatdong rồi tải lại. Hệ thống giữ nguyên nội dung nguồn để đối chiếu.</div>
+        <div class="card-body">Bổ sung tên / mã khách tại đúng dòng trong tab nguồn tương ứng rồi tải lại. Hệ thống giữ nguyên nội dung nguồn để đối chiếu.</div>
         <div class="table-responsive"><table class="table"><thead><tr><th>Dòng nguồn</th><th>Ngày</th><th>Nội dung</th><th class="text-end">Tiền thu</th></tr></thead><tbody>
-        @foreach($issueRows as $issue)<tr><td><a href="https://docs.google.com/spreadsheets/d/{{ config('services.google_sheets.debt_spreadsheet_id') }}/edit?range=Dongtienhoatdong!A{{ $issue['row'] }}:H{{ $issue['row'] }}" target="_blank" rel="noopener">{{ $issue['row'] }}</a></td><td>{{ $issue['date'] }}</td><td>{{ $issue['note'] }}</td><td class="text-end">{{ number_format($issue['amount'], 0, ',', '.') }} đ</td></tr>@endforeach
+        @foreach($issueRows as $issue)<tr><td><a href="https://docs.google.com/spreadsheets/d/{{ config('services.google_sheets.debt_spreadsheet_id') }}/edit?range={{ $issue['source_sheet'] ?? 'Dongtienhoatdong' }}!A{{ $issue['row'] }}:H{{ $issue['row'] }}" target="_blank" rel="noopener">{{ $issue['source_sheet'] ?? 'Dongtienhoatdong' }} · {{ $issue['row'] }}</a></td><td>{{ $issue['date'] }}</td><td>{{ $issue['note'] }}</td><td class="text-end">{{ number_format($issue['amount'], 0, ',', '.') }} đ</td></tr>@endforeach
         </tbody></table></div><div class="card-body">{{ $issueRows->links() }}</div>
     </details>
     @endif

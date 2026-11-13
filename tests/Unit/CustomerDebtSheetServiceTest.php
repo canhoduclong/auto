@@ -29,6 +29,64 @@ class CustomerDebtSheetServiceTest extends TestCase
         self::assertSame(1000000, array_values($groups)[0]['balance']);
     }
 
+    public function test_bank_tab_uses_code_as_receipt_category_not_customer_code(): void
+    {
+        $issues = [];
+        $entries = (new CustomerDebtSheetService)->parse([
+            ['NKC TKCN'], ['Ngày tháng', 'Tháng', 'Code', 'Tên KH', 'NVKD', 'Nội Dung', 'Thu', 'Chi'],
+            ['08/11/2026', '11', 'TTBH', 'A Mát', 'Duệ', 'Thu tiền vịt', '60.000.000', ''],
+            ['09/11/2026', '11', 'CPK', '', '', 'Phí', '', '4.700'],
+            ['09/11/2026', '11', 'TUTM', 'HA', '', 'Chuyển nội bộ', '2.000.000', ''],
+            ['09/11/2026', '11', 'TTBH', '', '', 'Chưa rõ khách', '1.000.000', ''],
+        ], 'payment', $issues, 'TKCNMBBDUE');
+        self::assertCount(1, $entries);
+        self::assertSame('', $entries[0]['code']);
+        self::assertSame('TKCNMBBDUE', $entries[0]['source_sheet']);
+        self::assertSame(60000000, $entries[0]['amount']);
+        self::assertCount(1, $issues);
+        self::assertSame('TKCNMBBDUE', $issues[0]['source_sheet']);
+        self::assertSame(6, $issues[0]['row']);
+    }
+
+    public function test_both_cash_flow_schemas_match_the_same_customer_and_keep_receipts_from_each_account(): void
+    {
+        $service = new CustomerDebtSheetService;
+        $issues = [];
+        $sales = $service->parse([['Ngày', 'Mã KH', 'Khách hàng', 'Tổng tiền'], ['13/11/2026', '0964', 'A Mát', '100.000.000']], 'sale');
+        $cashFlow = $service->parse([
+            ['Ngày tháng', 'Loại', 'Tên KH/NCC', 'Thu', 'Chi'],
+            ['13/11/2026', 'TTBH', 'A Mát', '10.000.000', ''],
+            ['13/11/2026', 'TUTM', 'A Mát', '5.000.000', ''],
+        ], 'payment', $issues, 'Dongtienhoatdong');
+        $bank = $service->parse([
+            ['Ngày tháng', 'Code', 'Tên KH', 'Thu', 'Chi'],
+            ['13/11/2026', 'TTBH', ' a   mát ', '60.000.000', ''],
+            ['13/11/2026', 'CPK', 'A Mát', '', '4.700'],
+        ], 'payment', $issues, 'TKCNMBBDUE');
+        $groups = $service->summarize(array_merge($sales, $cashFlow, $bank));
+        self::assertCount(1, $groups);
+        $customer = array_values($groups)[0];
+        self::assertSame('0964', $customer['code']);
+        self::assertSame(70000000, $customer['payments']);
+        self::assertSame(30000000, $customer['balance']);
+        self::assertSame('', $bank[0]['code']);
+        self::assertCount(2, array_filter($customer['entries'], fn ($entry) => $entry['type'] === 'payment'));
+    }
+
+    public function test_code_header_outside_the_bank_tab_is_not_assumed_to_be_transaction_category(): void
+    {
+        $issues = [];
+        $entries = (new CustomerDebtSheetService)->parse([['Ngày', 'Code', 'Khách hàng', 'Tiền thu'], ['13/11/2026', 'KH01', 'Chị Bình', '1000']], 'payment', $issues, 'Dongtienhoatdong');
+        self::assertCount(1, $entries);
+        self::assertSame(1000, $entries[0]['amount']);
+    }
+
+    public function test_bank_tab_with_no_customer_receipts_is_a_valid_empty_source(): void
+    {
+        $issues = [];
+        self::assertSame([], (new CustomerDebtSheetService)->parse([['Ngày tháng', 'Code', 'Tên KH', 'Thu', 'Chi'], ['09/11/2026', 'CPK', '', '', '4700']], 'payment', $issues, 'TKCNMBBDUE'));
+    }
+
     public function test_duplicate_names_with_different_codes_never_merge(): void
     {
         $s = new CustomerDebtSheetService;
@@ -80,6 +138,24 @@ class CustomerDebtSheetServiceTest extends TestCase
             [$sales, $payments] = $s->workbook($path);
             $groups = $s->summarize(array_merge($s->parse($sales, 'sale'), $s->parse($payments, 'payment')));
             self::assertSame(1000000, array_values($groups)[0]['balance']);
+        } finally {
+            unlink($path);
+            $book->disconnectWorksheets();
+        }
+    }
+
+    public function test_workbook_preserves_the_additional_bank_payment_tab(): void
+    {
+        $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet;
+        $book->getActiveSheet()->setTitle('nhatkybanhang')->fromArray([['Ngày', 'Khách hàng', 'Tổng tiền'], ['13/11/2026', 'Chị Bình', 1000]]);
+        $book->createSheet()->setTitle('Dongtienhoatdong')->fromArray([['Ngày', 'Khách hàng', 'Tiền thu'], ['13/11/2026', 'Chị Bình', 200]]);
+        $book->createSheet()->setTitle('TKCNMBBDUE')->fromArray([['Ngày tháng', 'Code', 'Tên KH', 'Thu'], ['13/11/2026', 'TTBH', 'Chị Bình', 300]]);
+        $path = tempnam(sys_get_temp_dir(), 'debt-bank-');
+        try {
+            (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save($path);
+            $tabs = (new CustomerDebtSheetService)->workbook($path);
+            self::assertCount(3, $tabs);
+            self::assertSame('TTBH', $tabs[2][1][1]);
         } finally {
             unlink($path);
             $book->disconnectWorksheets();

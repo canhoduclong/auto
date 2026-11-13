@@ -42,6 +42,7 @@ return [
     ],
 
     'google_sheets' => [
+        'debt_bank_payment_sheet_id' => 612096373,
         'debt_payment_sheet_id' => (int) env('GOOGLE_SHEETS_DEBT_PAYMENT_SHEET_ID', 241453650),
         // Use the same original workbook as /admin/import-orders.
         'debt_spreadsheet_id' => \App\Services\GoogleSheetOrderImportService::SPREADSHEET,

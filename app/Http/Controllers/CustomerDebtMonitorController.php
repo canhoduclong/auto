@@ -174,13 +174,17 @@ class CustomerDebtMonitorController extends Controller
                 }
                 $duplicate = Customer::withTrashed()->where(function ($q) use ($data) {
                     $q->where('name_normalized', Customer::normalizeName($data['name']));
-                    if (!empty($data['customer_code'])) $q->orWhereRaw('UPPER(TRIM(customer_code)) = ?', [$data['customer_code']]);
-                    if (!empty($data['phone'])) $q->orWhere('phone', $data['phone']);
+                    if (! empty($data['customer_code'])) {
+                        $q->orWhereRaw('UPPER(TRIM(customer_code)) = ?', [$data['customer_code']]);
+                    }
+                    if (! empty($data['phone'])) {
+                        $q->orWhere('phone', $data['phone']);
+                    }
                 })->first();
                 if ($duplicate) {
                     throw \Illuminate\Validation\ValidationException::withMessages(['name' => 'Khách đã tồn tại: '.$duplicate->name.($duplicate->trashed() ? '. Khách đã bị xóa, cần khôi phục trước khi ghép.' : '. Hãy dùng “Chọn khách để ghép”.')]);
                 }
-                $saleId = !empty($data['sale_id']) ? (int) $data['sale_id'] : null;
+                $saleId = ! empty($data['sale_id']) ? (int) $data['sale_id'] : null;
                 $customer = Customer::create([
                     'name' => $data['name'], 'customer_code' => $data['customer_code'] ?: null,
                     'phone' => $data['phone'] ?: null, 'address' => $data['address'] ?? null,
@@ -189,16 +193,20 @@ class CustomerDebtMonitorController extends Controller
                     'assigned_at' => $saleId ? now() : null, 'customer_status' => $saleId ? 'active' : 'free',
                     'free_from_date' => $saleId ? null : now(), 'current_cycle_no' => 1,
                 ]);
-                if (!empty($data['address'])) {
+                if (! empty($data['address'])) {
                     $customer->addresses()->create(['note' => $data['address'], 'is_default' => 1]);
                 }
-                if ($saleId) $priorities->attachSale($customer, $saleId, 1, 'created');
-                else $priorities->ensureLifecycle($customer);
+                if ($saleId) {
+                    $priorities->attachSale($customer, $saleId, 1, 'created');
+                } else {
+                    $priorities->ensureLifecycle($customer);
+                }
                 $service->mapCustomerWithinLock($data['source_key'], $customer->id, $request->user()->id);
                 app(CustomerDebtPolicyService::class)->promoteSource($data['source_key'], $customer->id);
             });
         });
         $request->session()->flash('success', 'Đã tạo khách hàng và ghép dữ liệu công nợ.');
+
         return response()->json(['message' => 'Đã tạo khách hàng và ghép dữ liệu công nợ.']);
     }
 
@@ -217,6 +225,7 @@ class CustomerDebtMonitorController extends Controller
             $target = $group['customer_id'] ? $context['customerDebts'][$group['customer_id']] : $group;
             $recovery->save($target, $data, $request->user());
         });
+
         return back()->with('success', 'Đã cập nhật trạng thái thu hồi. Danh sách mặc định ẩn khách khó thu hồi và không có khả năng thu hồi.');
     }
 
@@ -455,21 +464,22 @@ class CustomerDebtMonitorController extends Controller
     public function load(Request $request, CustomerDebtSheetService $service)
     {
         abort_unless($request->user()->hasRole(['admin', 'account', 'accountant', 'accounting', 'director', 'ceo']), 403);
-        $data = $request->validate(['source' => 'required|in:google,paste,excel', 'sales_text' => 'required_if:source,paste|nullable|string|max:15000000', 'payments_text' => 'required_if:source,paste|nullable|string|max:15000000', 'workbook' => 'required_if:source,excel|nullable|file|mimes:xlsx|max:20480']);
+        $data = $request->validate(['source' => 'required|in:google,paste,excel', 'sales_text' => 'required_if:source,paste|nullable|string|max:15000000', 'payments_text' => 'required_if:source,paste|nullable|string|max:15000000', 'bank_payments_text' => 'nullable|string|max:15000000', 'workbook' => 'required_if:source,excel|nullable|file|mimes:xlsx|max:20480']);
         try {
-            [$sales, $payments] = match ($data['source']) {
+            $tabs = match ($data['source']) {
                 'google' => $service->fetch(),
                 'excel' => $service->workbook($request->file('workbook')->getRealPath()),
-                default => [$service->textValues($data['sales_text']), $service->textValues($data['payments_text'])],
+                default => [$service->textValues($data['sales_text']), $service->textValues($data['payments_text']), $request->filled('bank_payments_text') ? $service->textValues($data['bank_payments_text']) : null],
             };
-            $service->save($sales, $payments, $request->user()->id, $data['source']);
+            [$sales, $payments] = $tabs;
+            $service->save($sales, $payments, $request->user()->id, $data['source'], $tabs[2] ?? null);
         } catch (\Throwable $e) {
             report($e);
-            $message = $e instanceof \Google\Service\Exception ? 'Không đọc được Google Sheet. Kiểm tra quyền đọc của tài khoản dịch vụ và hai tab nguồn.' : ($e instanceof \RuntimeException ? $e->getMessage() : 'Không tải được dữ liệu. Vui lòng kiểm tra nguồn và thử lại.');
+            $message = $e instanceof \Google\Service\Exception ? 'Không đọc được Google Sheet. Kiểm tra quyền đọc của tài khoản dịch vụ và các tab nguồn.' : ($e instanceof \RuntimeException ? $e->getMessage() : 'Không tải được dữ liệu. Vui lòng kiểm tra nguồn và thử lại.');
 
             return back()->with('error', $message);
         }
 
-        return back()->with('success', 'Đã cập nhật bán hàng, thanh toán và tính lại công nợ từ cả hai tab. Liên kết khách và tiêu chí cảnh báo được giữ nguyên; không cộng trùng lần tải trước.');
+        return back()->with('success', 'Đã cập nhật bán hàng, thanh toán và tính lại công nợ từ các tab nguồn. Liên kết khách và tiêu chí cảnh báo được giữ nguyên; không cộng trùng lần tải trước.');
     }
 }

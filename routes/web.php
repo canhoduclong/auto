@@ -1423,6 +1423,7 @@ Route::middleware('auth')->group(function () {
 
 // Sales debt monitoring: sheet-derived balances are separate from order accounting.
 Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,manager,manager_sale,account,accountant,accounting,director,ceo'])->group(function () {
+    Route::patch('/customer-debt/report/recovery', [\App\Http\Controllers\CustomerDebtReportController::class, 'updateRecovery'])->middleware('role:admin')->name('customer-debt.report.recovery');
     Route::get('/customer-debt/report', [\App\Http\Controllers\CustomerDebtReportController::class, 'index'])->middleware('role:admin')->name('customer-debt.report');
     Route::get('/customer-debt/report/history', [\App\Http\Controllers\CustomerDebtReportController::class, 'history'])->middleware('role:admin')->name('customer-debt.report.history');
     Route::post('/customer-debt/report/reminders', [\App\Http\Controllers\CustomerDebtReportController::class, 'remind'])->middleware('role:admin')->name('customer-debt.report.remind');

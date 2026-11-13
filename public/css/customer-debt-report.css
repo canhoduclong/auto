@@ -37,3 +37,5 @@
 .collection-table thead th:last-child { right:0; z-index:3; background:#f6f8fc; }
 .collection-tools:has(.collection-more[open]) { z-index:4; }
 .collection-filters .debt-filter-field:first-child { flex-basis:185px; }
+
+.collection-source-toggle .btn { white-space:nowrap; }

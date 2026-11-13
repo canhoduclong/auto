@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Order;
 use App\Services\CustomerDebtReportService;
 use App\Services\CustomerDebtSheetService;
 use App\Services\DebtCollectionService;
@@ -19,23 +18,28 @@ class CustomerDebtReportController extends Controller
         abort_unless($request->user()->isAdmin(), 403);
     }
 
-    private function context(Request $request, CustomerDebtSheetService $sheets): array
+    private function sourceData(Request $request, CustomerDebtSheetService $sheets, ?CustomerDebtReportService $report = null): array
     {
-        return app(CustomerDebtMonitorController::class)->debtContext($request, $sheets);
+        if ($request->input('report_source', 'sheet') === 'system') {
+            return [app(\App\Services\SystemCustomerDebtReportService::class)->rows(), ['source' => 'system', 'loaded_at' => now()->toIso8601String()]];
+        }
+        $context = app(CustomerDebtMonitorController::class)->debtContext($request, $sheets);
+
+        return [($report ?? app(CustomerDebtReportService::class))->rows($context), $context['snapshot']];
     }
 
     public function index(Request $request, CustomerDebtSheetService $sheets, CustomerDebtReportService $report, DebtCollectionService $collections)
     {
         $this->authorizeAdmin($request);
-        $data = $request->validate(['scope' => 'nullable|in:all,orders', 'from' => 'nullable|required_if:scope,orders|date_format:Y-m-d', 'to' => 'nullable|required_if:scope,orders|date_format:Y-m-d|after_or_equal:from', 'search' => 'nullable|string|max:150', 'sale' => 'nullable|string|max:100', 'balance' => 'nullable|in:debt,all,settled,credit', 'recovery' => 'nullable|in:normal,difficult,unrecoverable,all', 'status' => ['nullable', Rule::in(array_merge(array_keys(DebtCollectionService::STATUSES), ['all', 'follow_up_due']))], 'per_page' => 'nullable|in:20,30,50,100', 'page' => 'nullable|integer|min:1', 'sort' => 'nullable|in:balance,days_without_purchase,days_without_payment', 'direction' => 'nullable|in:asc,desc']);
-        $context = $this->context($request, $sheets);
-        $rows = $report->rows($context);
-        $records = $collections->records();
+        $data = $request->validate(['report_source' => 'nullable|in:sheet,system', 'scope' => 'nullable|in:all,orders', 'from' => 'nullable|required_if:scope,orders|date_format:Y-m-d', 'to' => 'nullable|required_if:scope,orders|date_format:Y-m-d|after_or_equal:from', 'search' => 'nullable|string|max:150', 'sale' => 'nullable|string|max:100', 'balance' => 'nullable|in:debt,all,settled,credit', 'recovery' => 'nullable|in:normal,difficult,unrecoverable,all', 'status' => ['nullable', Rule::in(array_merge(array_keys(DebtCollectionService::STATUSES), ['all', 'follow_up_due']))], 'per_page' => 'nullable|in:20,30,50,100', 'page' => 'nullable|integer|min:1', 'sort' => 'nullable|in:balance,days_without_purchase,days_without_payment', 'direction' => 'nullable|in:asc,desc']);
+        [$rows, $snapshot] = $this->sourceData($request, $sheets, $report);
+        $reportSource = $request->input('report_source') ?: 'sheet';
+        $records = $collections->records($reportSource);
         $sales = $rows->map(fn ($r) => ['key' => $r['sale_key'], 'label' => $r['sale_label']])->unique('key')->sortBy('label')->values();
-        $orderIds = ($data['scope'] ?? 'all') === 'orders' ? Order::query()->whereNotNull('customer_id')->whereDate('delivery_date', '>=', $data['from'])->whereDate('delivery_date', '<=', $data['to'])->distinct()->pluck('customer_id')->all() : [];
         $rows = $rows->map(fn ($row) => $row + ['collection' => $collections->evaluate($row, $records)]);
-        $visible = $rows->filter(function ($row) use ($data, $sheets, $orderIds) {
-            if (($data['scope'] ?? 'all') === 'orders' && ! in_array($row['customer_id'], $orderIds) && ! collect($row['entries'])->contains(fn ($e) => $e['type'] === 'sale' && $e['date'] >= $data['from'] && $e['date'] <= $data['to'])) {
+        $visible = $rows->filter(function ($row) use ($data, $sheets) {
+            // Use the same positive Sheet purchases as the last-purchase date / days column.
+            if (($data['scope'] ?? 'all') === 'orders' && ! collect($row['entries'])->contains(fn ($e) => $e['type'] === 'sale' && $e['amount'] > 0 && $e['date'] >= $data['from'] && $e['date'] <= $data['to'])) {
                 return false;
             }
             $balance = $data['balance'] ?? 'debt';
@@ -71,25 +75,24 @@ class CustomerDebtReportController extends Controller
         $page = (int) ($data['page'] ?? 1);
         $rows = new \Illuminate\Pagination\LengthAwarePaginator($visible->forPage($page, $perPage)->values(), $visible->count(), $perPage, $page, ['path' => $request->url(), 'query' => $request->except('page')]);
 
-        return view('customer-debt.report', ['rows' => $rows, 'sales' => $sales, 'summary' => $summary, 'snapshot' => $context['snapshot'], 'canAdjust' => true]);
+        return view('customer-debt.report', ['rows' => $rows, 'sales' => $sales, 'summary' => $summary, 'snapshot' => $snapshot, 'canAdjust' => $reportSource === 'sheet', 'reportSource' => $reportSource]);
     }
 
     private function resolveRow(Request $request, CustomerDebtSheetService $sheets): array
     {
-        $context = $this->context($request, $sheets);
-        $rows = app(CustomerDebtReportService::class)->rows($context);
+        [$rows, $snapshot] = $this->sourceData($request, $sheets);
         $row = $request->filled('customer_id') ? $rows->firstWhere('customer_id', (int) $request->input('customer_id')) : $rows->first(fn ($r) => in_array($request->input('source_key'), $r['source_keys'], true));
         abort_unless($row, 404);
         if ($request->filled('source_key') && ! in_array($request->input('source_key'), $row['source_keys'], true)) {
             throw ValidationException::withMessages(['customer' => 'Ghép khách đã thay đổi. Vui lòng tải lại trang.']);
         }
 
-        return [$row, $context['snapshot']];
+        return [$row, $snapshot];
     }
 
     private function targetRules(): array
     {
-        return ['source_key' => 'nullable|required_without:customer_id|string|size:64|regex:/^[a-f0-9]{64}$/', 'customer_id' => 'nullable|required_without:source_key|integer|min:1'];
+        return ['report_source' => 'nullable|in:sheet,system', 'source_key' => 'nullable|required_without:customer_id|string|size:64|regex:/^[a-f0-9]{64}$/', 'customer_id' => 'nullable|required_without:source_key|integer|min:1'];
     }
 
     private function normalizeMoney(Request $request, string $field): void
@@ -123,12 +126,24 @@ class CustomerDebtReportController extends Controller
         $this->authorizeAdmin($request);
         $request->validate($this->targetRules() + ['history_page' => 'nullable|integer|min:1']);
         [$row,$snapshot] = $this->resolveRow($request, $sheets);
-        $evaluation = $collections->evaluate($row, $collections->records());
+        $evaluation = $collections->evaluate($row, $collections->records($row['report_source']));
         $page = (int) $request->input('history_page', 1);
         $all = collect($evaluation['logs']);
         $logs = new \Illuminate\Pagination\LengthAwarePaginator($all->forPage($page, 10)->values(), $all->count(), 10, $page, ['path' => $request->url(), 'pageName' => 'history_page', 'query' => $request->except('history_page')]);
 
         return response()->json(['html' => view('customer-debt.report-history-content', compact('row', 'snapshot', 'evaluation', 'logs'))->render()])->header('Cache-Control', 'no-store');
+    }
+
+    public function updateRecovery(Request $request, CustomerDebtSheetService $sheets, \App\Services\CustomerDebtRecoveryService $recovery)
+    {
+        $this->authorizeAdmin($request);
+        $data = $request->validate($this->targetRules() + ['recovery_status' => ['required', Rule::in(array_keys(\App\Services\CustomerDebtRecoveryService::LABELS))], 'recovery_note' => 'nullable|string|max:1000', 'recovery_version' => 'required|string|size:64']);
+        Cache::lock('customer-debt-load', 60)->block(5, function () use ($request, $sheets, $recovery, $data) {
+            [$row] = $this->resolveRow($request, $sheets);
+            $recovery->save($row, $data, $request->user());
+        });
+
+        return back()->with('success', 'Đã cập nhật khả năng thu hồi.');
     }
 
     public function respond(Request $request, CustomerDebtSheetService $sheets, DebtCollectionService $collections)
@@ -139,9 +154,9 @@ class CustomerDebtReportController extends Controller
         $data = $request->validate($this->targetRules() + ['request_id' => 'required|uuid', 'reminder_id' => 'required|integer|min:1', 'type' => 'required|in:response,payment_verified', 'note' => 'required|string|min:3|max:3000', 'promised_amount' => 'nullable|integer|min:1|max:999999999999999', 'promised_date' => 'nullable|date_format:Y-m-d|after_or_equal:today', 'receipt_token' => 'nullable|required_if:type,payment_verified|string|size:64|regex:/^[a-f0-9]{64}$/']);
         $id = Cache::lock('customer-debt-load', 60)->block(5, function () use ($request, $sheets, $collections, $data) {
             return DB::transaction(function () use ($request, $sheets, $collections, $data) {
-                [$row] = $this->resolveRow($request,$sheets);
+                [$row] = $this->resolveRow($request, $sheets);
 
-                return $collections->respond($row,$data,$request->user());
+                return $collections->respond($row, $data, $request->user());
             });
         });
 

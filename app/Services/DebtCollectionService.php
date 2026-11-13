@@ -13,14 +13,18 @@ class DebtCollectionService
 
     public const CHANNELS = ['phone' => 'Điện thoại', 'zalo' => 'Zalo', 'email' => 'Email', 'in_person' => 'Trực tiếp', 'other' => 'Khác'];
 
-    public function namespace(): string
+    public function namespace(string $source = 'sheet'): string
     {
+        if ($source === 'system') {
+            return 'system-orders';
+        }
+
         return (string) config('services.google_sheets.debt_identity_spreadsheet_id', config('services.google_sheets.debt_spreadsheet_id'));
     }
 
-    public function records(): array
+    public function records(string $source = 'sheet'): array
     {
-        $reminders = DB::table('debt_collection_reminders')->where('spreadsheet_id', $this->namespace())->orderBy('reminded_at')->orderBy('id')->get();
+        $reminders = DB::table('debt_collection_reminders')->where('spreadsheet_id', $this->namespace($source))->orderBy('reminded_at')->orderBy('id')->get();
         $events = $reminders->isEmpty() ? collect() : DB::table('debt_collection_events')->whereIn('reminder_id', $reminders->pluck('id'))->orderBy('id')->get();
 
         return ['reminders' => $reminders, 'events' => $events];
@@ -28,16 +32,27 @@ class DebtCollectionService
 
     public function receipts(array $row): array
     {
-        $entries = collect($row['entries'])->where('type', 'payment')->filter(fn ($e) => $e['amount'] != 0 && $e['date'] <= now()->toDateString())->sortBy(fn ($e) => [$e['date'], $e['row']])->values();
+        $entries = collect($row['entries'])->whereIn('type', ['payment', 'payment_summary'])->filter(fn ($e) => $e['amount'] != 0 && $e['date'] <= now()->toDateString())->sortBy(fn ($e) => [$e['date'], $e['row']])->values();
         $counts = [];
         $receipts = [];
         foreach ($entries as $entry) {
             $identity = mb_strtoupper(trim((string) ($entry['code'] ?? ''))) ?: mb_strtolower(trim((string) ($entry['name'] ?? '')));
-            $fingerprint = hash('sha256', json_encode([$entry['date'], $identity, (int) $entry['amount'], trim($entry['note'] ?? '')], JSON_THROW_ON_ERROR));
+            $source = $row['report_source'] ?? 'sheet';
+            $origin = $entry['source_sheet'] ?? 'Dongtienhoatdong';
+            $parts = [$entry['date'], $identity, (int) $entry['amount'], trim($entry['note'] ?? '')];
+            // Keep legacy cash-flow tokens stable so old reminder baselines remain valid.
+            if ($origin !== 'Dongtienhoatdong') {
+                $parts[] = $origin;
+            }
+            if (isset($entry['transaction_id'])) {
+                $parts[] = $entry['transaction_id'];
+            }
+            $fingerprint = hash('sha256', json_encode($parts, JSON_THROW_ON_ERROR));
             $occurrence = ($counts[$fingerprint] ?? 0) + 1;
             $counts[$fingerprint] = $occurrence;
-            $token = hash('sha256', $this->namespace().'|'.$fingerprint.'|'.$occurrence);
-            $receipts[$token] = ['token' => $token, 'slot' => hash('sha256', $identity.'|'.$entry['row']), 'date' => $entry['date'], 'amount' => (int) $entry['amount'], 'note' => $entry['note'] ?? '', 'row' => $entry['row']];
+            $token = hash('sha256', $this->namespace($source).'|'.$fingerprint.'|'.$occurrence);
+            $slot = isset($entry['transaction_id']) ? 'system-tx:'.$entry['transaction_id'] : ($origin === 'Dongtienhoatdong' ? $identity.'|'.$entry['row'] : $origin.'|'.$identity.'|'.$entry['row']);
+            $receipts[$token] = ['token' => $token, 'slot' => hash('sha256', $slot), 'date' => $entry['date'], 'amount' => (int) $entry['amount'], 'note' => $entry['note'] ?? '', 'row' => $entry['row'], 'source_sheet' => $origin, 'occurred_at' => $entry['occurred_at'] ?? null, 'summary_only' => $entry['type'] === 'payment_summary'];
         }
 
         return $receipts;
@@ -45,6 +60,9 @@ class DebtCollectionService
 
     public function belongs(object $reminder, array $row): bool
     {
+        if (($reminder->spreadsheet_id ?? $this->namespace()) !== $this->namespace($row['report_source'] ?? 'sheet')) {
+            return false;
+        }
         if ($reminder->customer_id) {
             return (int) $reminder->customer_id === (int) ($row['customer_id'] ?? 0);
         }
@@ -66,10 +84,13 @@ class DebtCollectionService
             $promiseAmount = $ownEvents->whereNotNull('promised_amount')->last()?->promised_amount;
             $promiseDate = $ownEvents->whereNotNull('promised_date')->last()?->promised_date;
             $baseline = collect(json_decode($reminder->baseline_receipts, true) ?? []);
-            $logs[$reminder->id] = ['record' => $reminder, 'events' => $ownEvents, 'target' => (int) ($promiseAmount ?? $reminder->target_amount), 'deadline' => $promiseDate ?? $reminder->promised_date, 'baseline_tokens' => $baseline->pluck('token')->flip()->all(), 'baseline_slots' => $baseline->pluck('slot')->flip()->all(), 'receipts' => [], 'pending' => []];
+            $logs[$reminder->id] = ['record' => $reminder, 'events' => $ownEvents, 'target' => (int) ($promiseAmount ?? $reminder->target_amount), 'deadline' => $promiseDate ?? $reminder->promised_date, 'baseline_tokens' => $baseline->pluck('token')->flip()->all(), 'baseline_slots' => $baseline->pluck('slot')->flip()->all(), 'has_summary' => $baseline->contains(fn ($receipt) => ! empty($receipt['summary_only'])), 'receipts' => [], 'pending' => []];
         }
         $verified = $events->where('type', 'payment_verified')->keyBy('receipt_token');
         foreach ($receipts as $token => $receipt) {
+            if ($receipt['summary_only']) {
+                continue;
+            }
             $confirmation = $verified[$token] ?? null;
             if ($confirmation && isset($logs[$confirmation->reminder_id])) {
                 $logs[$confirmation->reminder_id]['receipts'][] = $receipt + ['verified' => true];
@@ -79,11 +100,11 @@ class DebtCollectionService
             foreach (array_reverse(array_keys($logs)) as $id) {
                 $log = $logs[$id];
                 $day = CarbonImmutable::parse($log['record']->reminded_at)->toDateString();
-                if ($receipt['date'] < $day || isset($log['baseline_tokens'][$token])) {
+                if ($receipt['date'] < $day || ($receipt['occurred_at'] && $receipt['occurred_at'] <= $log['record']->reminded_at) || isset($log['baseline_tokens'][$token])) {
                     continue;
                 }
-                if ($receipt['date'] === $day || isset($log['baseline_slots'][$receipt['slot']])) {
-                    $logs[$id]['pending'][] = $receipt + ['reason' => $receipt['date'] === $day ? 'Cùng ngày nhắc; cần xác nhận thu sau khi nhắc.' : 'Dòng thu đã thay đổi; cần đối chiếu.'];
+                if (($receipt['date'] === $day && ! $receipt['occurred_at']) || isset($log['baseline_slots'][$receipt['slot']]) || $log['has_summary']) {
+                    $logs[$id]['pending'][] = $receipt + ['reason' => $log['has_summary'] ? 'Số đã thu lúc nhắc có khoản tổng hợp chưa có phiếu; cần đối chiếu khoản thu mới.' : ($receipt['date'] === $day ? 'Cùng ngày nhắc; cần xác nhận thu sau khi nhắc.' : 'Dòng thu đã thay đổi; cần đối chiếu.')];
                 } else {
                     $logs[$id]['receipts'][] = $receipt + ['verified' => false];
                 }
@@ -112,7 +133,7 @@ class DebtCollectionService
             $log['label'] = self::STATUSES[$status];
             $log['attainment'] = min(100, max(0, round($paid * 100 / max(1, $log['target']), 1)));
             $log['follow_up_due'] = $log['record']->follow_up_date && $log['record']->follow_up_date <= now()->toDateString() && ! in_array($status, ['met', 'met_on_time', 'met_late'], true);
-            unset($log['baseline_tokens'],$log['baseline_slots']);
+            unset($log['baseline_tokens'],$log['baseline_slots'],$log['has_summary']);
         }
         unset($log);
         $latest = $logs ? $logs[array_key_last($logs)] : null;
@@ -124,7 +145,7 @@ class DebtCollectionService
     {
         $existing = DB::table('debt_collection_reminders')->where('request_id', $data['request_id'])->first();
         if ($existing) {
-            if ($existing->spreadsheet_id !== $this->namespace() || ! $this->belongs($existing, $row) || (int) $existing->created_by !== (int) $actor->id || (int) $existing->target_amount !== (int) $data['target_amount'] || $existing->note !== $data['note'] || $existing->channel !== $data['channel'] || $existing->promised_date !== ($data['promised_date'] ?? null) || $existing->follow_up_date !== ($data['follow_up_date'] ?? null)) {
+            if ($existing->spreadsheet_id !== $this->namespace($row['report_source'] ?? 'sheet') || ! $this->belongs($existing, $row) || (int) $existing->created_by !== (int) $actor->id || (int) $existing->target_amount !== (int) $data['target_amount'] || $existing->note !== $data['note'] || $existing->channel !== $data['channel'] || $existing->promised_date !== ($data['promised_date'] ?? null) || $existing->follow_up_date !== ($data['follow_up_date'] ?? null)) {
                 throw ValidationException::withMessages(['request_id' => 'Yêu cầu đã được dùng. Tải lại trang trước khi ghi nhận.']);
             }
 
@@ -138,7 +159,7 @@ class DebtCollectionService
         }
 
         return DB::table('debt_collection_reminders')->insertGetId([
-            'request_id' => $data['request_id'], 'spreadsheet_id' => $this->namespace(), 'customer_id' => $row['customer_id'] ?? null, 'source_key' => $row['key'] ?? null, 'source_keys' => json_encode($row['source_keys'] ?? [$row['key']]), 'customer_name' => $row['name'],
+            'request_id' => $data['request_id'], 'spreadsheet_id' => $this->namespace($row['report_source'] ?? 'sheet'), 'customer_id' => $row['customer_id'] ?? null, 'source_key' => $row['key'] ?? null, 'source_keys' => json_encode($row['source_keys'] ?? [$row['key']]), 'customer_name' => $row['name'],
             'reminded_at' => now(), 'balance_at_reminder' => $row['balance'], 'target_amount' => $data['target_amount'], 'promised_date' => $data['promised_date'] ?? null, 'follow_up_date' => $data['follow_up_date'] ?? null, 'channel' => $data['channel'], 'note' => $data['note'],
             'baseline_receipts' => json_encode(array_values($this->receipts($row)), JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), 'snapshot_loaded_at' => $snapshot['loaded_at'] ?? null, 'created_by' => $actor->id, 'actor_name' => $actor->name ?: 'Admin #'.$actor->id, 'created_at' => now(), 'updated_at' => now(),
         ]);
@@ -146,7 +167,7 @@ class DebtCollectionService
 
     public function respond(array $row, array $data, User $actor): int
     {
-        $records = $this->records();
+        $records = $this->records($row['report_source'] ?? 'sheet');
         $evaluation = $this->evaluate($row, $records);
         $log = collect($evaluation['logs'])->first(fn ($log) => (int) $log['record']->id === (int) $data['reminder_id']);
         abort_unless($log, 404);

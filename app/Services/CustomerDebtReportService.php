@@ -44,6 +44,7 @@ class CustomerDebtReportService
         $today = CarbonImmutable::today();
         foreach ($rows as $identity => &$row) {
             $row['identity'] = $identity;
+            $row['report_source'] = 'sheet';
             foreach (['last_purchase_date' => 'days_without_purchase', 'last_payment_date' => 'days_without_payment'] as $field => $days) {
                 $row[$days] = $row[$field] ? max(0, (int) CarbonImmutable::parse($row[$field])->diffInDays($today)) : null;
             }

@@ -15,7 +15,7 @@
     const remind=document.getElementById('collection-remind-dialog'),remindForm=remind.querySelector('form'),remindSave=remindForm.querySelector('[type=submit]'),remindClose=remind.querySelector('[data-collection-close]'),remindError=remind.querySelector('[role=alert]');
     document.querySelectorAll('.collection-remind').forEach(button=>button.addEventListener('click',()=>{
         remindForm.reset();remindError.hidden=true;
-        remindForm.elements.source_key.value=button.dataset.key;remindForm.elements.customer_id.value=button.dataset.customer;remindForm.elements.request_id.value=button.dataset.requestId;
+        remindForm.elements.report_source.value=button.dataset.reportSource||'sheet';remindForm.elements.source_key.value=button.dataset.key;remindForm.elements.customer_id.value=button.dataset.customer;remindForm.elements.request_id.value=button.dataset.requestId;
         remindForm.elements.target_amount.value=money(Number(button.dataset.balance));remindForm.elements.target_amount.setCustomValidity('');
         remind.querySelector('[data-collection-name]').textContent=button.dataset.name;remind.showModal();
     }));
@@ -38,7 +38,7 @@
         catch(failure){if(failure.name!=='AbortError'&&current===sequence){historyContent.textContent='';historyError.textContent=failure.message;historyError.hidden=false;}}
     };
     document.querySelectorAll('.collection-history').forEach(button=>button.addEventListener('click',()=>{
-        const url=new URL(history.dataset.url,window.location.origin);if(button.dataset.key)url.searchParams.set('source_key',button.dataset.key);if(button.dataset.customer)url.searchParams.set('customer_id',button.dataset.customer);
+        const url=new URL(history.dataset.url,window.location.origin);url.searchParams.set('report_source',button.dataset.reportSource||history.dataset.reportSource||'sheet');if(button.dataset.key)url.searchParams.set('source_key',button.dataset.key);if(button.dataset.customer)url.searchParams.set('customer_id',button.dataset.customer);
         historyDirty=false;history.querySelector('[data-history-name]').textContent=button.dataset.name;history.showModal();loadHistory(url.toString());
     }));
     historyClose.addEventListener('click',()=>history.close());history.addEventListener('cancel',event=>{if(historyBusy)event.preventDefault();});

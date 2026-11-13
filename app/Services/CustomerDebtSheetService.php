@@ -22,12 +22,15 @@ class CustomerDebtSheetService
         return $disk->exists(self::FILE) ? json_decode($disk->get(self::FILE), true, 512, JSON_THROW_ON_ERROR) : null;
     }
 
-    public function save(array $sales, array $payments, ?int $userId, string $source): void
+    public function save(array $sales, array $payments, ?int $userId, string $source, ?array $bankPayments = null): void
     {
         // Both tabs are validated before replacing the complete snapshot, avoiding double imports.
         $issues = [];
-        $entries = array_merge($this->parse($sales, 'sale', $issues), $this->parse($payments, 'payment', $issues));
-        $data = ['entries' => $entries, 'gift_note_count' => count(array_filter($entries, fn ($entry) => ($entry['gift_note'] ?? '') !== '')), 'issues' => $issues, 'spreadsheet_id' => config('services.google_sheets.debt_spreadsheet_id'), 'loaded_at' => now()->toIso8601String(), 'loaded_by' => $userId, 'source' => $source];
+        $entries = array_merge($this->parse($sales, 'sale', $issues), $this->parse($payments, 'payment', $issues, 'Dongtienhoatdong'));
+        if ($bankPayments !== null) {
+            $entries = array_merge($entries, $this->parse($bankPayments, 'payment', $issues, 'TKCNMBBDUE'));
+        }
+        $data = ['entries' => $entries, 'gift_note_count' => count(array_filter($entries, fn ($entry) => ($entry['gift_note'] ?? '') !== '')), 'issues' => $issues, 'spreadsheet_id' => config('services.google_sheets.debt_spreadsheet_id'), 'loaded_at' => now()->toIso8601String(), 'loaded_by' => $userId, 'source' => $source, 'payment_tabs' => $bankPayments === null ? ['Dongtienhoatdong'] : ['Dongtienhoatdong', 'TKCNMBBDUE']];
         Cache::lock('customer-debt-load', 60)->block(5, function () use ($data) {
             $disk = Storage::disk('local');
             $temporary = 'customer-debt/'.Str::uuid().'.json';
@@ -131,7 +134,7 @@ class CustomerDebtSheetService
 
     public function fetch(): array
     {
-        return $this->fetchTabs(['nhatkybanhang', 'dongtienhoatdong']);
+        return $this->fetchTabs(['nhatkybanhang', 'dongtienhoatdong', 'tkcnmbbdue']);
     }
 
     private function fetchTabs(array $names): array
@@ -171,7 +174,7 @@ class CustomerDebtSheetService
             $tabs = [];
             foreach ($book->getWorksheetIterator() as $sheet) {
                 $name = str_replace(' ', '', $this->normalize($sheet->getTitle()));
-                if (in_array($name, ['nhatkybanhang', 'dongtienhoatdong'], true)) {
+                if (in_array($name, ['nhatkybanhang', 'dongtienhoatdong', 'tkcnmbbdue'], true)) {
                     $tabs[$name] = $sheet->toArray('', true, true, false);
                 }
             }
@@ -179,7 +182,7 @@ class CustomerDebtSheetService
                 throw new RuntimeException('File Excel phải có hai tab nhatkybanhang và Dongtienhoatdong.');
             }
 
-            return [$tabs['nhatkybanhang'], $tabs['dongtienhoatdong']];
+            return isset($tabs['tkcnmbbdue']) ? [$tabs['nhatkybanhang'], $tabs['dongtienhoatdong'], $tabs['tkcnmbbdue']] : [$tabs['nhatkybanhang'], $tabs['dongtienhoatdong']];
         } finally {
             $book->disconnectWorksheets();
         }
@@ -195,7 +198,7 @@ class CustomerDebtSheetService
         return \App\Models\Customer::normalizeName($value);
     }
 
-    public function parse(array $values, string $type, ?array &$issues = null): array
+    public function parse(array $values, string $type, ?array &$issues = null, ?string $sourceSheet = null): array
     {
         $aliases = [
             'date' => ['ngay', 'ngay thang', 'ngay giao dich', 'date'],
@@ -206,7 +209,7 @@ class CustomerDebtSheetService
             'address' => ['dia chi', 'address'],
             'amount' => $type === 'sale' ? ['tong tien', 'thanh tien', 'amount'] : ['tien thu', 'so tien thu', 'thu'],
             'gift' => ['tang', 'tien tang'],
-            'category' => ['loai'],
+            'category' => $sourceSheet === 'TKCNMBBDUE' ? ['loai', 'code'] : ['loai'],
             'direction' => ['loai giao dich', 'thu chi', 'thu/chi'],
             'generic_amount' => ['so tien', 'amount'],
             'note' => ['noi dung', 'dien giai', 'ghi chu', 'san pham', 'dvt'],
@@ -264,7 +267,7 @@ class CustomerDebtSheetService
                 // Operating cash flow also includes expenses and non-customer receipts. Never inherit a previous payer.
                 unset($carry['name'], $carry['code']);
                 if (($row['name'] ?? '') === '' && ($row['code'] ?? '') === '') {
-                    $issues[] = ['type' => 'payment', 'row' => $index + 1, 'date' => $row['date'] ?? '', 'amount' => $this->money($amount), 'note' => $row['note'] ?? '', 'reason' => 'Khoản thu TTBH chưa có tên / mã khách hàng'];
+                    $issues[] = ['type' => 'payment', 'row' => $index + 1, 'date' => $row['date'] ?? '', 'amount' => $this->money($amount), 'note' => $row['note'] ?? '', 'reason' => 'Khoản thu TTBH chưa có tên / mã khách hàng', 'source_sheet' => $sourceSheet ?? 'Dongtienhoatdong'];
 
                     continue;
                 }
@@ -311,12 +314,12 @@ class CustomerDebtSheetService
             if ($giftNote !== '') {
                 $note = ($note !== '' ? $note.' · ' : '').'Ghi chú cột Tặng: '.$giftNote;
             }
-            $entries[] = ['date' => $date, 'code' => $row['code'], 'name' => $row['name'], 'type' => $type, 'sale_name' => $row['sale_name'] ?? '', 'phone' => $row['phone'] ?? '', 'address' => $row['address'] ?? '', 'amount' => $this->money($amount), 'gift' => $giftAmount, 'gift_note' => $giftNote, 'note' => $note, 'row' => $index + 1];
+            $entries[] = ['date' => $date, 'code' => $row['code'], 'name' => $row['name'], 'type' => $type, 'sale_name' => $row['sale_name'] ?? '', 'phone' => $row['phone'] ?? '', 'address' => $row['address'] ?? '', 'amount' => $this->money($amount), 'gift' => $giftAmount, 'gift_note' => $giftNote, 'note' => $note, 'row' => $index + 1, 'source_sheet' => $sourceSheet ?? ($type === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong')];
         }
         if (! $headers) {
             throw new RuntimeException('Không nhận diện tiêu đề tab '.($type === 'sale' ? 'nhatkybanhang (Ngày, Mã KH, Khách hàng, Tổng tiền).' : 'Dongtienhoatdong (Ngày, Mã KH, Khách hàng, Tiền thu hoặc Số tiền và Thu/Chi).'));
         }
-        if (! $entries) {
+        if (! $entries && $sourceSheet !== 'TKCNMBBDUE') {
             throw new RuntimeException('Tab '.($type === 'sale' ? 'lấy hàng' : 'thanh toán').' không có giao dịch hợp lệ; dữ liệu cũ được giữ lại.');
         }
 

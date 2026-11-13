@@ -791,6 +791,48 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertNull($data['rows']->first()['days_without_payment']);
     }
 
+    public function test_debt_report_order_filter_excludes_old_sheet_buyers_even_with_recent_system_orders(): void
+    {
+        $this->collectionClock('2026-11-13 10:00:00');
+        DB::table('orders')->update(['delivery_date' => '2026-11-13']);
+        $entries = [
+            array_replace($this->entry('CRM01', 'Chị Bình'), ['date' => '2025-03-08']),
+            array_replace($this->entry('KH02', 'Anh Hải'), ['date' => '2026-11-12']),
+        ];
+        $controller = new \App\Http\Controllers\CustomerDebtReportController;
+        $report = new \App\Services\CustomerDebtReportService;
+        $collections = new \App\Services\DebtCollectionService;
+        $data = $controller->index($this->request(['scope' => 'orders', 'from' => '2026-11-01', 'to' => '2026-11-13'], 'admin'), $this->service($entries), $report, $collections)->getData();
+        self::assertSame(1, $data['rows']->total());
+        self::assertSame(2, $data['rows']->first()['customer_id']);
+        $all = $controller->index($this->request(['scope' => 'all'], 'admin'), $this->service($entries), $report, $collections)->getData();
+        self::assertSame(2, $all['rows']->total());
+        self::assertSame(615, $all['rows']->firstWhere('customer_id', 1)['days_without_purchase']);
+    }
+
+    public function test_debt_report_order_filter_ignores_zero_value_sales(): void
+    {
+        $this->collectionClock('2026-11-13 10:00:00');
+        $entries = [
+            array_replace($this->entry('OLD01', 'Khách nguồn cũ'), ['date' => '2025-03-08']),
+            array_replace($this->entry('OLD01', 'Khách nguồn cũ', 2), ['date' => '2026-11-12', 'amount' => 0]),
+        ];
+        $data = (new \App\Http\Controllers\CustomerDebtReportController)->index($this->request(['scope' => 'orders', 'from' => '2026-11-01', 'to' => '2026-11-13'], 'admin'), $this->service($entries), new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        self::assertSame(0, $data['rows']->total());
+    }
+
+    public function test_debt_report_order_filter_matches_any_positive_purchase_in_the_selected_period(): void
+    {
+        $this->collectionClock('2026-11-13 10:00:00');
+        $entries = [
+            array_replace($this->entry('OLD01', 'Khách nguồn'), ['date' => '2026-11-05']),
+            array_replace($this->entry('OLD01', 'Khách nguồn', 2), ['date' => '2026-11-20']),
+        ];
+        $data = (new \App\Http\Controllers\CustomerDebtReportController)->index($this->request(['scope' => 'orders', 'from' => '2026-11-01', 'to' => '2026-11-13'], 'admin'), $this->service($entries), new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        self::assertSame(1, $data['rows']->total());
+        self::assertSame(2000, $data['rows']->first()['balance']);
+    }
+
     public function test_debt_report_all_balance_includes_system_customers_without_sheet_data(): void
     {
         $data = (new \App\Http\Controllers\CustomerDebtReportController)->index($this->request(['balance' => 'all'], 'admin'), $this->service([$this->entry('CRM01', 'Chị Bình')]), new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
@@ -973,6 +1015,210 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(0, $data['rows']->total());
         $data = $controller->index($this->request(['search' => 'Khách nguồn 20', 'recovery' => 'all'], 'admin'), $sheets, $report, $collection)->getData();
         self::assertSame(1, $data['rows']->total());
+    }
+
+    private function systemAccountingFixture(): void
+    {
+        Schema::table('orders', function (Blueprint $t) {
+            $t->string('code')->nullable();
+            $t->string('status')->default('completed');
+            $t->bigInteger('amount_paid')->default(0);
+            $t->bigInteger('collected_amount')->default(0);
+        });
+        Schema::create('accounting_reconciliations', function (Blueprint $t) {
+            $t->temporary();
+            $t->id();
+            $t->unsignedBigInteger('order_id');
+            $t->string('status');
+            $t->bigInteger('recognized_revenue');
+            $t->bigInteger('paid_amount')->default(0);
+            $t->timestamp('confirmed_at')->nullable();
+        });
+        $this->tables[] = 'accounting_reconciliations';
+        Schema::create('transactions', function (Blueprint $t) {
+            $t->temporary();
+            $t->id();
+            $t->unsignedBigInteger('order_id')->nullable();
+            $t->unsignedBigInteger('customer_id')->nullable();
+            $t->string('type');
+            $t->bigInteger('amount');
+            $t->string('status')->nullable();
+            $t->timestamp('approved_at')->nullable();
+            $t->text('note')->nullable();
+            $t->timestamps();
+        });
+        $this->tables[] = 'transactions';
+        DB::table('orders')->where('id', 1)->update(['delivery_date' => '2026-11-13', 'created_at' => '2026-11-01 08:00:00', 'code' => 'SYS01']);
+        DB::table('accounting_reconciliations')->insert(['order_id' => 1, 'status' => 'confirmed', 'recognized_revenue' => 1000, 'paid_amount' => 0, 'confirmed_at' => '2026-11-13 08:00:00']);
+    }
+
+    public function test_system_report_uses_system_orders_instead_of_sheet_purchases(): void
+    {
+        $this->collectionClock('2026-11-13 12:00:00');
+        $this->systemAccountingFixture();
+        $sheets = $this->service([array_replace($this->entry('CRM01', 'Chị Bình'), ['date' => '2025-03-08', 'amount' => 9000])]);
+        $controller = new \App\Http\Controllers\CustomerDebtReportController;
+        $report = new \App\Services\CustomerDebtReportService;
+        $collections = new \App\Services\DebtCollectionService;
+        $data = $controller->index($this->request(['report_source' => 'system', 'scope' => 'orders', 'from' => '2026-11-01', 'to' => '2026-11-13'], 'admin'), $sheets, $report, $collections)->getData();
+        self::assertSame('system', $data['reportSource']);
+        self::assertSame(1, $data['rows']->total());
+        self::assertSame(1000, $data['rows']->first()['sales']);
+        self::assertSame(0, $data['rows']->first()['days_without_purchase']);
+        $data = $controller->index($this->request(['report_source' => 'sheet', 'scope' => 'orders', 'from' => '2026-11-01', 'to' => '2026-11-13'], 'admin'), $sheets, $report, $collections)->getData();
+        self::assertSame(0, $data['rows']->total());
+    }
+
+    public function test_system_report_ignores_unconfirmed_orders_and_unapproved_payments(): void
+    {
+        $this->collectionClock('2026-11-13 12:00:00');
+        $this->systemAccountingFixture();
+        DB::table('accounting_reconciliations')->insert(['order_id' => 2, 'status' => 'pending', 'recognized_revenue' => 9000, 'paid_amount' => 0]);
+        DB::table('transactions')->insert([
+            ['order_id' => 1, 'customer_id' => 1, 'type' => 'payment', 'amount' => 100, 'status' => 'approved', 'created_at' => '2026-11-13 09:00:00'],
+            ['order_id' => 1, 'customer_id' => 1, 'type' => 'payment', 'amount' => 500, 'status' => 'pending_approval', 'created_at' => '2026-11-13 09:00:00'],
+            ['order_id' => 1, 'customer_id' => 1, 'type' => 'refund', 'amount' => 20, 'status' => 'approved', 'created_at' => '2026-11-13 10:00:00'],
+            ['order_id' => null, 'customer_id' => 1, 'type' => 'customer_debt_adjustment', 'amount' => 50, 'status' => 'approved', 'created_at' => '2026-11-13 10:00:00'],
+            ['order_id' => 1, 'customer_id' => 1, 'type' => 'return_credit', 'amount' => 300, 'status' => 'approved', 'created_at' => '2026-11-13 10:00:00'],
+        ]);
+        $rows = (new \App\Services\SystemCustomerDebtReportService)->rows();
+        $row = $rows->firstWhere('customer_id', 1);
+        self::assertSame(1000, $row['sales']);
+        self::assertSame(80, $row['payments']);
+        self::assertSame(970, $row['balance']);
+        self::assertSame(0, $rows->firstWhere('customer_id', 2)['sales']);
+    }
+
+    public function test_system_report_does_not_double_add_cash_totals_and_payment_transactions(): void
+    {
+        $this->collectionClock('2026-11-13 12:00:00');
+        $this->systemAccountingFixture();
+        DB::table('orders')->where('id', 1)->update(['amount_paid' => 300, 'collected_amount' => 200]);
+        DB::table('accounting_reconciliations')->where('order_id', 1)->update(['paid_amount' => 250]);
+        DB::table('transactions')->insert(['order_id' => 1, 'customer_id' => 1, 'type' => 'payment', 'amount' => 300, 'status' => 'approved', 'created_at' => '2026-11-13 09:00:00']);
+        $row = (new \App\Services\SystemCustomerDebtReportService)->rows()->firstWhere('customer_id', 1);
+        self::assertSame(300, $row['payments']);
+        self::assertSame(700, $row['balance']);
+        self::assertFalse($row['payment_date_unknown']);
+        DB::table('transactions')->update(['amount' => 100]);
+        $row = (new \App\Services\SystemCustomerDebtReportService)->rows()->firstWhere('customer_id', 1);
+        self::assertSame(300, $row['payments']);
+        self::assertTrue($row['payment_date_unknown']);
+        self::assertNull($row['days_without_payment']);
+    }
+
+    public function test_collection_histories_are_isolated_by_source_and_system_receipts_use_exact_time(): void
+    {
+        $this->collectionClock('2026-11-13 10:00:00');
+        $this->systemAccountingFixture();
+        $collections = new \App\Services\DebtCollectionService;
+        $actor = $this->user('admin');
+        $row = (new \App\Services\SystemCustomerDebtReportService)->rows()->firstWhere('customer_id', 1);
+        $collections->remind($row, ['loaded_at' => now()->toIso8601String()], $this->reminderData(['target_amount' => 100]), $actor);
+        $collections->remind($this->collectionRow(), ['loaded_at' => now()->toIso8601String()], $this->reminderData(['target_amount' => 100]), $actor);
+        self::assertCount(1, $collections->records('system')['reminders']);
+        self::assertCount(1, $collections->records('sheet')['reminders']);
+        $this->collectionClock('2026-11-13 12:00:00');
+        DB::table('transactions')->insert(['order_id' => 1, 'customer_id' => 1, 'type' => 'payment', 'amount' => 100, 'status' => 'approved', 'created_at' => '2026-11-13 11:00:00']);
+        $row = (new \App\Services\SystemCustomerDebtReportService)->rows()->firstWhere('customer_id', 1);
+        $outcome = $collections->evaluate($row, $collections->records('system'));
+        self::assertSame(100, $outcome['latest']['paid']);
+        self::assertSame('met', $outcome['status']);
+        self::assertCount(0, $collections->evaluate($row, $collections->records('sheet'))['logs']);
+    }
+
+    public function test_unitemized_system_cash_does_not_automatically_score_as_new_collection(): void
+    {
+        $this->collectionClock('2026-11-13 10:00:00');
+        $this->systemAccountingFixture();
+        DB::table('orders')->where('id', 1)->update(['collected_amount' => 200]);
+        $collections = new \App\Services\DebtCollectionService;
+        $row = (new \App\Services\SystemCustomerDebtReportService)->rows()->firstWhere('customer_id', 1);
+        $collections->remind($row, ['loaded_at' => now()->toIso8601String()], $this->reminderData(['target_amount' => 100]), $this->user('admin'));
+        $this->collectionClock('2026-11-13 12:00:00');
+        DB::table('orders')->where('id', 1)->update(['collected_amount' => 300]);
+        $row = (new \App\Services\SystemCustomerDebtReportService)->rows()->firstWhere('customer_id', 1);
+        self::assertSame(300, $row['payments']);
+        self::assertSame(0, $collections->evaluate($row, $collections->records('system'))['latest']['paid']);
+    }
+
+    public function test_sheet_refresh_combines_two_payment_tabs_without_accumulating_reloads(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $service = new CustomerDebtSheetService;
+        $sales = [['Ngày', 'Mã KH', 'Khách hàng', 'Tổng tiền'], ['13/11/2026', 'CRM01', 'Chị Bình', '1000']];
+        $payments = [['Ngày', 'Mã KH', 'Khách hàng', 'Tiền thu'], ['13/11/2026', 'CRM01', 'Chị Bình', '200']];
+        $bank = [['Ngày tháng', 'Code', 'Tên KH', 'Thu', 'Chi'], ['13/11/2026', 'TTBH', 'Chị Bình', '300', '']];
+        $service->save($sales, $payments, 7, 'google', $bank);
+        $snapshot = $service->snapshot();
+        $groups = $service->summarize($snapshot['entries']);
+        self::assertSame(500, array_values($groups)[0]['balance']);
+        self::assertSame(['Dongtienhoatdong', 'TKCNMBBDUE'], $snapshot['payment_tabs']);
+        $service->save($sales, $payments, 7, 'google', $bank);
+        self::assertCount(3, $service->snapshot()['entries']);
+        self::assertSame(500, array_values($service->summarize($service->snapshot()['entries']))[0]['payments']);
+        $snapshot = $service->snapshot();
+        try {
+            $service->save($sales, $payments, 7, 'google', [['Sai tiêu đề']]);
+            self::fail('Bad bank data accepted');
+        } catch (\RuntimeException) {
+            self::assertSame($snapshot, $service->snapshot());
+        }
+    }
+
+    public function test_payment_tokens_distinguish_bank_tabs_and_preserve_existing_cash_flow_baselines(): void
+    {
+        $collections = new \App\Services\DebtCollectionService;
+        $row = $this->collectionRow([['date' => now()->toDateString(), 'amount' => 200]]);
+        $original = array_keys($collections->receipts($row));
+        $row['entries'][1]['source_sheet'] = 'Dongtienhoatdong';
+        self::assertSame($original, array_keys($collections->receipts($row)));
+        $row['entries'][] = array_replace($row['entries'][1], ['source_sheet' => 'TKCNMBBDUE']);
+        $receipts = $collections->receipts($row);
+        self::assertCount(2, $receipts);
+        self::assertSame(400, collect($receipts)->sum('amount'));
+    }
+
+    public function test_google_refresh_endpoint_passes_both_payment_tabs_to_snapshot_save(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $tabs = [
+            [['Ngày', 'Mã KH', 'Khách hàng', 'Tổng tiền'], ['13/11/2026', 'CRM01', 'Chị Bình', '1000']],
+            [['Ngày', 'Khách hàng', 'Tiền thu'], ['13/11/2026', 'Chị Bình', '200']],
+            [['Ngày tháng', 'Code', 'Tên KH', 'Thu', 'Chi'], ['13/11/2026', 'TTBH', 'Chị Bình', '300', '']],
+        ];
+        $service = new class($tabs) extends CustomerDebtSheetService
+        {
+            public function __construct(private array $tabs) {}
+
+            public function fetch(): array
+            {
+                return $this->tabs;
+            }
+        };
+        (new CustomerDebtMonitorController)->load($this->request(['source' => 'google'], 'admin'), $service);
+        self::assertSame(500, array_values($service->summarize($service->snapshot()['entries']))[0]['payments']);
+        self::assertContains('TKCNMBBDUE', $service->snapshot()['payment_tabs']);
+    }
+
+    public function test_system_report_recovery_tool_updates_customer_without_sheet_source_key(): void
+    {
+        $this->collectionClock('2026-11-13 12:00:00');
+        $this->systemAccountingFixture();
+        $row = (new \App\Services\SystemCustomerDebtReportService)->rows()->firstWhere('customer_id', 1);
+        (new \App\Http\Controllers\CustomerDebtReportController)->updateRecovery($this->request(['report_source' => 'system', 'customer_id' => 1, 'source_key' => $row['key'], 'recovery_status' => 'difficult', 'recovery_note' => 'Cần nhắc nhiều lần', 'recovery_version' => $row['recovery']['version']], 'admin'), $this->service([]), new \App\Services\CustomerDebtRecoveryService);
+        self::assertSame('difficult', (new \App\Services\SystemCustomerDebtReportService)->rows()->firstWhere('customer_id', 1)['recovery']['status']);
+    }
+
+    public function test_system_response_endpoint_rejects_a_sheet_reminder_id(): void
+    {
+        $this->collectionClock('2026-11-13 12:00:00');
+        $this->systemAccountingFixture();
+        $collections = new \App\Services\DebtCollectionService;
+        $id = $collections->remind($this->collectionRow(), ['loaded_at' => now()->toIso8601String()], $this->reminderData(), $this->user('admin'));
+        $row = (new \App\Services\SystemCustomerDebtReportService)->rows()->firstWhere('customer_id', 1);
+        $this->expectException(HttpException::class);
+        (new \App\Http\Controllers\CustomerDebtReportController)->respond($this->request(['report_source' => 'system', 'customer_id' => 1, 'source_key' => $row['key'], 'request_id' => (string) \Illuminate\Support\Str::uuid(), 'reminder_id' => $id, 'type' => 'response', 'note' => 'Phản hồi thuộc nguồn khác'], 'admin'), $this->service([]), $collections);
     }
 
     public function test_sales_can_only_see_their_customers_and_unique_name_fallback(): void
