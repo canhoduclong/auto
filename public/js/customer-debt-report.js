@@ -55,7 +55,7 @@
                 const text=value=>rich?escape(value):String(value);
                 const bold=value=>rich?`<strong>${escape(value)}</strong>`:String(value);
                 const total=targets.reduce((sum,box)=>sum+Number(box.dataset.balance),0);
-                const lines=[`💣💣💣 ${bold(title)} 💣💣💣`,
+                const lines=[`💰💰💰 ${bold(title)} 💰💰💰`, '',
                     `💬 ${bold('Doanh số là thành tích – Thu tiền là kết quả!')}`,
                     'Anh em cùng chủ động theo sát công nợ để hoa hồng về đúng hẹn nhé!',
                     `📌 ${bold('Danh sách khách hàng cần theo dõi và thu hồi công nợ:')}`, ''];
