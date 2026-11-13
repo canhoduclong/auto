@@ -1221,6 +1221,118 @@ class CustomerDebtMonitorTest extends TestCase
         (new \App\Http\Controllers\CustomerDebtReportController)->respond($this->request(['report_source' => 'system', 'customer_id' => 1, 'source_key' => $row['key'], 'request_id' => (string) \Illuminate\Support\Str::uuid(), 'reminder_id' => $id, 'type' => 'response', 'note' => 'Phản hồi thuộc nguồn khác'], 'admin'), $this->service([]), $collections);
     }
 
+    private function paymentTables(int $amount = 200, string $date = '13/11/2026'): array
+    {
+        return [[['Ngày', 'Mã KH', 'Khách hàng', 'NVKD', 'Tổng tiền'], ['13/11/2026', 'CRM01', 'Chị Bình', 'Huy', 1000]], [['Ngày', 'Mã KH', 'Tên KH/NCC', 'NVKD', 'Tiền thu'], [$date, 'CRM01', 'Chị Bình', 'Huy', $amount]]];
+    }
+
+    public function test_every_payment_refresh_retains_a_committed_change_list_and_unchanged_refresh_has_no_new_rows(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $service = new CustomerDebtSheetService;
+        [$sales,$payments] = $this->paymentTables();
+        $service->save($sales, $payments, 7, 'google');
+        $first = $service->snapshot();
+        $firstId = $first['payment_syncs'][0]['id'];
+        self::assertSame(1, $first['payment_syncs'][0]['new_count']);
+        $service->save($sales, $payments, 7, 'google');
+        $second = $service->snapshot();
+        self::assertCount(2, $second['payment_syncs']);
+        self::assertSame(0, $second['payment_syncs'][0]['new_count']);
+        self::assertCount(0, $service->paymentBatch($second['payment_syncs'][0]['id'])['changes']);
+        self::assertCount(1, $service->paymentBatch($firstId)['changes']);
+        self::assertSame(200, $service->paymentBatch($firstId)['changes'][0]['after']['amount']);
+        [$sales,$payments] = $this->paymentTables(300);
+        $service->save($sales, $payments, 7, 'google');
+        $latest = $service->snapshot()['payment_syncs'][0];
+        self::assertSame(1, $latest['updated_count']);
+        self::assertSame(100, $latest['delta']);
+        self::assertCount(1, $service->paymentBatch($firstId)['changes']);
+    }
+
+    public function test_payment_page_filters_by_sale_customer_dates_and_sums_all_pages(): void
+    {
+        $this->collectionClock('2026-11-13 12:00:00');
+        $entries = [$this->entry('CRM01', 'Chị Bình')];
+        for ($i = 1; $i <= 25; $i++) {
+            $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', $i), ['type' => 'payment', 'amount' => 100, 'date' => '2026-11-13', 'sale_name' => 'Huy', 'source_sheet' => 'Dongtienhoatdong']);
+        }
+        $entries[] = array_replace($this->entry('KH02', 'Anh Hải', 100), ['type' => 'payment', 'amount' => 500, 'date' => '2026-11-13', 'sale_name' => 'Hà', 'source_sheet' => 'TKCNMBBDUE']);
+        $data = (new \App\Http\Controllers\CustomerPaymentController)->index($this->request(['sale' => 'user:7', 'customer_id' => 1, 'from' => '2026-11-13', 'to' => '2026-11-13', 'per_page' => 20], 'admin'), $this->service($entries), new \App\Services\CustomerPaymentReportService)->getData();
+        self::assertSame(25, $data['rows']->total());
+        self::assertCount(20, $data['rows']);
+        self::assertSame(2500, $data['summary']['amount']);
+        self::assertSame(2500, $data['summary']['today']);
+        self::assertTrue($data['rows']->every(fn ($row) => $row['customer_id'] === 1 && $row['sale_key'] === 'user:7'));
+    }
+
+    public function test_new_payment_badge_depends_on_today_not_the_import_date(): void
+    {
+        $this->collectionClock('2026-11-13 12:00:00');
+        $entries = [];
+        foreach (['2026-11-12', '2026-11-13', '2026-11-14'] as $i => $date) {
+            $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', $i + 1), ['type' => 'payment', 'date' => $date, 'amount' => 100, 'first_seen_at' => '2026-11-13T10:00:00+07:00']);
+        }
+        $data = (new \App\Http\Controllers\CustomerPaymentController)->index($this->request(['recent' => 'today'], 'admin'), $this->service($entries), new \App\Services\CustomerPaymentReportService)->getData();
+        self::assertSame(1, $data['rows']->total());
+        self::assertSame('2026-11-13', $data['rows']->first()['date']);
+        self::assertSame(100, $data['summary']['amount']);
+    }
+
+    public function test_unknown_payer_remains_in_payment_list_with_a_separate_unallocated_total(): void
+    {
+        $this->collectionClock('2026-11-13 12:00:00');
+        $service = new class extends CustomerDebtSheetService
+        {
+            public function snapshot(): ?array
+            {
+                return ['entries' => [], 'issues' => [['type' => 'payment', 'date' => '13/11/2026', 'amount' => 500, 'row' => 3, 'note' => 'Chưa rõ người trả', 'sale_name' => 'Huy', 'source_sheet' => 'TKCNMBBDUE']]];
+            }
+        };
+        $data = (new \App\Http\Controllers\CustomerPaymentController)->index($this->request(['sale' => 'user:7', 'unidentified' => '1'], 'admin'), $service, new \App\Services\CustomerPaymentReportService)->getData();
+        self::assertSame(1, $data['rows']->total());
+        self::assertNull($data['rows']->first()['customer_id']);
+        self::assertTrue($data['rows']->first()['unidentified']);
+        self::assertSame(500, $data['summary']['unidentified']);
+        self::assertTrue($data['rows']->first()['is_recent']);
+    }
+
+    public function test_payment_page_preserves_ambiguous_customer_mapping(): void
+    {
+        $entries = [$this->entry('OLD1', 'Chị Bình'), $this->entry('OLD2', 'Chị Bình'), array_replace($this->entry('', 'Chị Bình', 3), ['type' => 'payment', 'amount' => 100])];
+        $data = (new \App\Http\Controllers\CustomerPaymentController)->index($this->request([], 'admin'), $this->service($entries), new \App\Services\CustomerPaymentReportService)->getData();
+        self::assertSame(1, $data['rows']->total());
+        self::assertNull($data['rows']->first()['customer_id']);
+    }
+
+    public function test_sales_cannot_read_all_payment_records_or_refresh_them(): void
+    {
+        $this->expectException(HttpException::class);
+        (new \App\Http\Controllers\CustomerPaymentController)->index($this->request(), $this->service([]), new \App\Services\CustomerPaymentReportService);
+    }
+
+    public function test_payment_refresh_endpoint_opens_the_new_receipt_list_for_its_batch(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $tabs = $this->paymentTables();
+        $service = new class($tabs) extends CustomerDebtSheetService
+        {
+            public function __construct(private array $tabs) {}
+
+            public function fetch(): array
+            {
+                return $this->tabs;
+            }
+        };
+        $response = (new \App\Http\Controllers\CustomerPaymentController)->refresh($this->request([], 'admin'), $service);
+        $id = $service->snapshot()['payment_syncs'][0]['id'];
+        self::assertStringContainsString('batch='.$id, $response->getTargetUrl());
+        self::assertStringContainsString('change=new', $response->getTargetUrl());
+        $data = (new \App\Http\Controllers\CustomerPaymentController)->index($this->request(['batch' => $id, 'change' => 'new'], 'admin'), $service, new \App\Services\CustomerPaymentReportService)->getData();
+        self::assertSame(1, $data['rows']->total());
+        self::assertSame(1, $data['rows']->first()['customer_id']);
+    }
+
     public function test_sales_can_only_see_their_customers_and_unique_name_fallback(): void
     {
         $view = (new CustomerDebtMonitorController)->index($this->request(), $this->service([$this->entry('OLD01', 'Chị Bình'), $this->entry('KH02', 'Anh Hải')]));

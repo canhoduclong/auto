@@ -13,6 +13,7 @@
     @foreach(['success'=>'success','error'=>'danger'] as $key=>$color)
     @if(session($key))<div class="alert alert-{{ $color }} py-2">{{ session($key) }}</div>@endif
     @endforeach
+    @if(session('payment_update_id'))<div class="small mb-3"><a href="{{ route('customer-debt.payments',['batch'=>session('payment_update_id'),'change'=>'all']) }}">Xem danh sách thanh toán của lần cập nhật vừa xong →</a></div>@endif
     @if($errors->any())<div class="alert alert-danger py-2">{{ $errors->first() }}</div>@endif
     @if($reportSource === 'sheet' && $snapshot && !in_array('TKCNMBBDUE', $snapshot['payment_tabs'] ?? [], true))<div class="small text-muted mb-2">Bản đang hiển thị chưa gồm TKCNMBBDUE. Bấm <strong>Cập nhật Google Sheet</strong> để lấy đủ hai nguồn thanh toán.</div>@endif
     <form method="GET" class="debt-filters collection-filters"><input type="hidden" name="report_source" value="{{ $reportSource }}">

@@ -22,7 +22,7 @@ class CustomerDebtSheetService
         return $disk->exists(self::FILE) ? json_decode($disk->get(self::FILE), true, 512, JSON_THROW_ON_ERROR) : null;
     }
 
-    public function save(array $sales, array $payments, ?int $userId, string $source, ?array $bankPayments = null): void
+    public function save(array $sales, array $payments, ?int $userId, string $source, ?array $bankPayments = null): array
     {
         // Both tabs are validated before replacing the complete snapshot, avoiding double imports.
         $issues = [];
@@ -31,17 +31,78 @@ class CustomerDebtSheetService
             $entries = array_merge($entries, $this->parse($bankPayments, 'payment', $issues, 'TKCNMBBDUE'));
         }
         $data = ['entries' => $entries, 'gift_note_count' => count(array_filter($entries, fn ($entry) => ($entry['gift_note'] ?? '') !== '')), 'issues' => $issues, 'spreadsheet_id' => config('services.google_sheets.debt_spreadsheet_id'), 'loaded_at' => now()->toIso8601String(), 'loaded_by' => $userId, 'source' => $source, 'payment_tabs' => $bankPayments === null ? ['Dongtienhoatdong'] : ['Dongtienhoatdong', 'TKCNMBBDUE']];
-        Cache::lock('customer-debt-load', 60)->block(5, function () use ($data) {
+
+        return Cache::lock('customer-debt-load', 60)->block(5, function () use ($data) {
             $disk = Storage::disk('local');
+            $previous = $this->snapshot() ?? [];
+            $previous = $this->withPaymentGroupKeys($previous);
+            $data = $this->withPaymentGroupKeys($data);
+            $batchId = (string) Str::uuid();
+            $tracked = app(CustomerPaymentSyncService::class)->track($previous, $data, $batchId, $data['loaded_at']);
+            $data = $tracked['snapshot'];
+            $data['payment_syncs'] = array_merge([$tracked['batch']['summary']], $previous['payment_syncs'] ?? []);
+            $folder = 'customer-debt/payment-updates';
+            if (! is_dir($disk->path($folder))) {
+                $disk->makeDirectory($folder);
+                chmod($disk->path($folder), 02770);
+            }
+            $archive = $folder.'/'.$batchId.'.json';
+            $archiveTemporary = $folder.'/'.Str::uuid().'.tmp';
             $temporary = 'customer-debt/'.Str::uuid().'.json';
-            if (! $disk->put($temporary, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR))) {
-                throw new RuntimeException('Không lưu được bản dữ liệu công nợ mới.');
+            try {
+                if (! $disk->put($archiveTemporary, json_encode($tracked['batch'], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR))) {
+                    throw new RuntimeException('Không lưu được nhật ký thanh toán.');
+                }
+                chmod($disk->path($archiveTemporary), 0660);
+                if (! rename($disk->path($archiveTemporary), $disk->path($archive))) {
+                    throw new RuntimeException('Không lưu được nhật ký thanh toán.');
+                }
+                if (! $disk->put($temporary, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR))) {
+                    throw new RuntimeException('Không lưu được bản dữ liệu công nợ mới.');
+                }
+                chmod($disk->path($temporary), 0660);
+                // The snapshot is the commit marker: only referenced archives are visible to users.
+                if (! rename($disk->path($temporary), $disk->path(self::FILE))) {
+                    throw new RuntimeException('Không lưu được dữ liệu công nợ.');
+                }
+            } catch (\Throwable $e) {
+                $disk->delete([$archiveTemporary, $archive, $temporary]);
+                throw $e;
             }
-            chmod($disk->path($temporary), 0660);
-            if (! rename($disk->path($temporary), $disk->path(self::FILE))) {
-                throw new RuntimeException('Không lưu được dữ liệu công nợ.');
-            }
+
+            return $tracked['batch']['summary'];
         });
+    }
+
+    private function withPaymentGroupKeys(array $data): array
+    {
+        $keys = [];
+        foreach ($this->summarize($data['entries'] ?? []) as $group) {
+            foreach ($group['entries'] as $entry) {
+                if ($entry['type'] === 'payment') {
+                    $keys[($entry['source_sheet'] ?? 'Dongtienhoatdong').'|'.$entry['row']] = ['key' => $group['key'], 'code' => $group['code']];
+                }
+            }
+        }
+        foreach ($data['entries'] ?? [] as $index => $entry) {
+            if ($entry['type'] === 'payment') {
+                $source = $keys[($entry['source_sheet'] ?? 'Dongtienhoatdong').'|'.$entry['row']] ?? [];
+                $data['entries'][$index]['customer_source_key'] = $source['key'] ?? null;
+                $data['entries'][$index]['customer_source_code'] = $source['code'] ?? '';
+            }
+        }
+
+        return $data;
+    }
+
+    public function paymentBatch(string $id, ?array $snapshot = null): array
+    {
+        $snapshot ??= $this->snapshot();
+        abort_unless(collect($snapshot['payment_syncs'] ?? [])->contains('id', $id), 404);
+        $path = 'customer-debt/payment-updates/'.$id.'.json';
+        abort_unless(Storage::disk('local')->exists($path), 404);
+
+        return json_decode(Storage::disk('local')->get($path), true, 512, JSON_THROW_ON_ERROR);
     }
 
     private function mappingPrefix(): string
@@ -239,6 +300,9 @@ class CustomerDebtSheetService
             foreach ($headers as $field => $column) {
                 $row[$field] = trim((string) ($cells[$column] ?? ''));
             }
+            if (($row['date'] ?? '') !== '') {
+                $carry['date'] = $row['date'];
+            }
             if (in_array($this->normalize($row['name'] ?? ''), ['tong', 'tong cong', 'tong tien', 'cong', 'cong tien', 'total', 'grand total'], true)) {
                 $carry = [];
 
@@ -267,7 +331,7 @@ class CustomerDebtSheetService
                 // Operating cash flow also includes expenses and non-customer receipts. Never inherit a previous payer.
                 unset($carry['name'], $carry['code']);
                 if (($row['name'] ?? '') === '' && ($row['code'] ?? '') === '') {
-                    $issues[] = ['type' => 'payment', 'row' => $index + 1, 'date' => $row['date'] ?? '', 'amount' => $this->money($amount), 'note' => $row['note'] ?? '', 'reason' => 'Khoản thu TTBH chưa có tên / mã khách hàng', 'source_sheet' => $sourceSheet ?? 'Dongtienhoatdong'];
+                    $issues[] = ['type' => 'payment', 'row' => $index + 1, 'date' => ($row['date'] ?? '') !== '' ? $row['date'] : ($carry['date'] ?? ''), 'amount' => $this->money($amount), 'note' => $row['note'] ?? '', 'reason' => 'Khoản thu TTBH chưa có tên / mã khách hàng', 'source_sheet' => $sourceSheet ?? 'Dongtienhoatdong', 'sale_name' => $row['sale_name'] ?? ''];
 
                     continue;
                 }

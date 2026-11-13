@@ -472,7 +472,7 @@ class CustomerDebtMonitorController extends Controller
                 default => [$service->textValues($data['sales_text']), $service->textValues($data['payments_text']), $request->filled('bank_payments_text') ? $service->textValues($data['bank_payments_text']) : null],
             };
             [$sales, $payments] = $tabs;
-            $service->save($sales, $payments, $request->user()->id, $data['source'], $tabs[2] ?? null);
+            $paymentUpdate = $service->save($sales, $payments, $request->user()->id, $data['source'], $tabs[2] ?? null);
         } catch (\Throwable $e) {
             report($e);
             $message = $e instanceof \Google\Service\Exception ? 'Không đọc được Google Sheet. Kiểm tra quyền đọc của tài khoản dịch vụ và các tab nguồn.' : ($e instanceof \RuntimeException ? $e->getMessage() : 'Không tải được dữ liệu. Vui lòng kiểm tra nguồn và thử lại.');
@@ -480,6 +480,6 @@ class CustomerDebtMonitorController extends Controller
             return back()->with('error', $message);
         }
 
-        return back()->with('success', 'Đã cập nhật bán hàng, thanh toán và tính lại công nợ từ các tab nguồn. Liên kết khách và tiêu chí cảnh báo được giữ nguyên; không cộng trùng lần tải trước.');
+        return back()->with('success', 'Đã cập nhật bán hàng, thanh toán và tính lại công nợ từ các tab nguồn. Liên kết khách và tiêu chí cảnh báo được giữ nguyên; không cộng trùng lần tải trước.')->with('payment_update_id', $paymentUpdate['id']);
     }
 }

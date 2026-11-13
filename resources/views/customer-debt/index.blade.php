@@ -18,6 +18,7 @@
     @if($canLoad && session('error') && str_contains((string) session('error'), 'Google Sheet'))
         @include('customer-debt.connection-info')
     @endif
+    @if(session('payment_update_id'))<div class="small mb-3"><a href="{{ route('customer-debt.payments',['batch'=>session('payment_update_id'),'change'=>'all']) }}">Xem danh sách thanh toán của lần cập nhật vừa xong →</a></div>@endif
     @if($errors->any())<div class="alert alert-danger py-2">{{ $errors->first() }}</div>@endif
     @if(!$snapshot)<div class="alert alert-warning py-2">Chưa có dữ liệu Google Sheet để xác định công nợ.</div>@endif
     <nav class="nav debt-tabs">
