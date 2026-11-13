@@ -765,6 +765,44 @@ class CustomerDebtMonitorTest extends TestCase
         return $overrides + ['request_id' => (string) \Illuminate\Support\Str::uuid(), 'target_amount' => 1000, 'channel' => 'phone', 'note' => 'Đã gọi điện nhắc thanh toán', 'promised_date' => null, 'follow_up_date' => null];
     }
 
+    public function test_report_summary_separates_lifetime_and_period_totals_before_pagination(): void
+    {
+        $this->collectionClock('2026-11-13 12:00:00');
+        $entries = [];
+        for ($i = 1; $i <= 25; $i++) {
+            $entries[] = array_replace($this->entry('STAT'.$i, 'Khách thống kê '.$i, 1), ['date' => '2026-10-01']);
+            $entries[] = array_replace($this->entry('STAT'.$i, 'Khách thống kê '.$i, 2), ['date' => '2026-11-13', 'amount' => 200, 'gift' => 20]);
+            $entries[] = array_replace($this->entry('STAT'.$i, 'Khách thống kê '.$i, 3), ['date' => '2026-11-01', 'type' => 'payment', 'amount' => 500]);
+        }
+        $entries[] = array_replace($this->entry('OTHER', 'Khách không mua trong kỳ'), ['date' => '2026-10-01', 'amount' => 9000]);
+        $data = (new \App\Http\Controllers\CustomerDebtReportController)->index($this->request(['scope' => 'orders', 'from' => '2026-10-26', 'to' => '2026-11-13', 'per_page' => 20, 'page' => 2], 'admin'), $this->service($entries), new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        self::assertCount(5, $data['rows']);
+        self::assertSame(25, $data['summary']['customers']);
+        self::assertSame(30000, $data['summary']['sales']);
+        self::assertSame(17000, $data['summary']['balance']);
+        self::assertSame(5000, $data['period']['sales']);
+        self::assertSame(500, $data['period']['gifts']);
+        self::assertSame(12500, $data['period']['payments']);
+        self::assertSame(-8000, $data['period']['increase']);
+        self::assertSame('2026-10-26', $data['period']['from']);
+        self::assertSame('2026-11-13', $data['period']['to']);
+    }
+
+    public function test_report_period_payment_dates_are_inclusive_and_independent_of_purchase_scope(): void
+    {
+        $this->collectionClock('2026-11-13 12:00:00');
+        $entries = [array_replace($this->entry('CRM01', 'Chị Bình'), ['date' => '2026-10-01', 'amount' => 1000])];
+        foreach (['2026-10-25' => 10, '2026-10-26' => 20, '2026-11-13' => 30, '2026-11-14' => 40] as $date => $amount) {
+            $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', $amount), ['type' => 'payment', 'date' => $date, 'amount' => $amount]);
+        }
+        $data = (new \App\Http\Controllers\CustomerDebtReportController)->index($this->request(['scope' => 'all', 'from' => '2026-10-26', 'to' => '2026-11-13'], 'admin'), $this->service($entries), new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        self::assertSame(1, $data['summary']['customers']);
+        self::assertSame(1000, $data['summary']['sales']);
+        self::assertSame(0, $data['period']['sales']);
+        self::assertSame(50, $data['period']['payments']);
+        self::assertSame(-50, $data['period']['increase']);
+    }
+
     public function test_debt_report_is_admin_only_and_deduplicates_linked_sources(): void
     {
         $service = $this->service([$this->entry('CRM01', 'Chị Bình'), $this->entry('OLD02', 'Tên nguồn khác')]);

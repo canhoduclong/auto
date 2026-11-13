@@ -67,7 +67,20 @@ class CustomerDebtReportController extends Controller
 
             return $search === '' || str_contains($sheets->normalize($row['search_text']), $search);
         });
-        $summary = ['customers' => $visible->count(), 'balance' => $visible->where('balance', '>', 0)->sum('balance'), 'gifts' => $visible->where('data_available', true)->sum('gifts'), 'payments' => $visible->where('data_available', true)->sum('payments'), 'received' => $visible->sum(fn ($r) => $r['collection']['received_total'])];
+        $periodEntries = $visible->flatMap(fn ($row) => $row['entries']);
+        $periodFrom = $data['from'] ?? min(now()->toDateString(), $periodEntries->min('date') ?? now()->toDateString());
+        $periodTo = $data['to'] ?? now()->toDateString();
+        $inPeriod = $periodEntries->filter(fn ($entry) => $entry['date'] >= $periodFrom && $entry['date'] <= $periodTo);
+        $periodSales = $inPeriod->where('type', 'sale')->sum('amount');
+        $periodGifts = $inPeriod->where('type', 'sale')->sum('gift');
+        // Cumulative order payments have no reliable receipt date; never assign them to a period.
+        $periodPayments = $inPeriod->where('type', 'payment')->sum('amount');
+        $periodAdjustments = $inPeriod->where('type', 'adjustment')->sum('amount');
+        $period = ['from' => $periodFrom, 'to' => $periodTo, 'sales' => $periodSales, 'gifts' => $periodGifts,
+            'payments' => $periodPayments, 'adjustments' => $periodAdjustments,
+            'increase' => $periodSales - $periodGifts - $periodPayments + $periodAdjustments,
+            'undated_payments' => $periodEntries->where('type', 'payment_summary')->sum('amount')];
+        $summary = ['customers' => $visible->count(), 'sales' => $visible->where('data_available', true)->sum('sales'), 'balance' => $visible->where('balance', '>', 0)->sum('balance'), 'gifts' => $visible->where('data_available', true)->sum('gifts'), 'payments' => $visible->where('data_available', true)->sum('payments'), 'received' => $visible->sum(fn ($r) => $r['collection']['received_total'])];
         $sort = $data['sort'] ?? 'balance';
         $direction = ($data['direction'] ?? 'desc') === 'asc' ? 1 : -1;
         $visible = $visible->sort(fn ($a, $b) => ($a[$sort] === null || $b[$sort] === null ? (($a[$sort] === null ? 1 : 0) <=> ($b[$sort] === null ? 1 : 0)) : ($a[$sort] <=> $b[$sort]) * $direction) ?: strcmp($a['name'], $b['name']));
@@ -75,7 +88,7 @@ class CustomerDebtReportController extends Controller
         $page = (int) ($data['page'] ?? 1);
         $rows = new \Illuminate\Pagination\LengthAwarePaginator($visible->forPage($page, $perPage)->values(), $visible->count(), $perPage, $page, ['path' => $request->url(), 'query' => $request->except('page')]);
 
-        return view('customer-debt.report', ['rows' => $rows, 'sales' => $sales, 'summary' => $summary, 'snapshot' => $snapshot, 'canAdjust' => $reportSource === 'sheet', 'reportSource' => $reportSource]);
+        return view('customer-debt.report', ['rows' => $rows, 'sales' => $sales, 'summary' => $summary, 'period' => $period, 'snapshot' => $snapshot, 'canAdjust' => $reportSource === 'sheet', 'reportSource' => $reportSource]);
     }
 
     private function resolveRow(Request $request, CustomerDebtSheetService $sheets): array
