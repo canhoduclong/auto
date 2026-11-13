@@ -25,6 +25,62 @@
         if(!response.ok)throw new Error(Object.values(result.errors||{}).flat()[0]||result.message||'Không lưu được dữ liệu.');
         return result;
     };
+    const bulk=document.querySelector('[data-collection-bulk]');
+    if(bulk){
+        const boxes=[...document.querySelectorAll('[data-collection-select]:not(:disabled)')];
+        const all=document.querySelector('[data-collection-select-all]'),copy=bulk.querySelector('[data-bulk-copy]'),remindSelected=bulk.querySelector('[data-bulk-remind]'),status=bulk.querySelector('[data-bulk-status]');
+        let busy=false;
+        const selected=()=>boxes.filter(box=>box.checked);
+        const update=()=>{
+            const count=selected().length;
+            bulk.querySelector('[data-selection-count]').textContent=`Đã chọn ${count} khách`;
+            copy.disabled=busy||!count;remindSelected.disabled=busy||!count;
+            all.checked=boxes.length>0&&count===boxes.length;all.indeterminate=count>0&&count<boxes.length;all.disabled=busy||!boxes.length;
+            boxes.forEach(box=>box.disabled=busy);
+        };
+        const line=box=>{
+            const d=box.dataset;
+            const purchase=d.purchase?`Mua ngày ${d.purchase}${d.purchaseDays!==''?` (${d.purchaseDays} ngày)`:''}`:'Chưa có ngày mua';
+            const payment=d.paymentDays!==''?`Chưa thanh toán ${d.paymentDays} ngày`:'Chưa có ngày thanh toán';
+            return `${d.name} - cập nhật công nợ: ${money(Number(d.balance))} đ, ${purchase}, ${payment}`;
+        };
+        boxes.forEach(box=>box.addEventListener('change',update));
+        all.addEventListener('change',()=>{boxes.forEach(box=>box.checked=all.checked);update();});
+        copy.addEventListener('click',async()=>{
+            const content=`💣💣💣 Nhắc công nợ ngày ${bulk.dataset.date} 💣💣💣\n\n${selected().map((box,index)=>`${index+1}. ${line(box)}`).join('\n')}`;
+            try{
+                if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(content);
+                else {
+                    const area=document.createElement('textarea');area.value=content;area.style.position='fixed';area.style.opacity='0';document.body.appendChild(area);area.select();
+                    const copied=document.execCommand('copy');area.remove();if(!copied)throw new Error();
+                }
+                status.textContent='Đã chép nội dung của các khách đã chọn.';
+            }catch(_){status.textContent='Không chép được. Vui lòng cho phép trình duyệt truy cập bộ nhớ tạm và thử lại.';}
+        });
+        remindSelected.addEventListener('click',async()=>{
+            const targets=selected();if(busy||!targets.length)return;
+            busy=true;update();let success=0;const failures=[];
+            for(const box of targets){
+                status.textContent=`Đang ghi nhận ${success+failures.length+1}/${targets.length} khách…`;
+                const data=new FormData();
+                data.set('_token',document.querySelector('meta[name="csrf-token"]').content);
+                data.set('report_source',bulk.dataset.source);data.set('source_key',box.dataset.key);data.set('customer_id',box.dataset.customer);
+                data.set('request_id',box.dataset.requestId);data.set('target_amount',box.dataset.balance);data.set('channel','zalo');
+                data.set('note',`Nhắc công nợ ngày ${bulk.dataset.date}: ${line(box)}`);
+                try{
+                    await send(bulk.dataset.url,data);success++;
+                    box.closest('tr').classList.add('collection-reminded-today');
+                    const cell=box.closest('tr').querySelector('.collection-status');
+                    let badge=cell.querySelector('[data-bulk-reminded-date]');
+                    if(!badge){badge=document.createElement('div');badge.dataset.bulkRemindedDate='';cell.appendChild(badge);}
+                    badge.textContent=`Đã nhắc ngày ${bulk.dataset.date}`;
+                }catch(error){failures.push(`${box.dataset.name}: ${error.message}`);}
+            }
+            busy=false;update();
+            status.textContent=`Đã ghi nhận ${success}/${targets.length} khách.${failures.length?' Chưa ghi nhận: '+failures.join('; '):''}`;
+        });
+        update();
+    }
     const remind=document.getElementById('collection-remind-dialog'),remindForm=remind.querySelector('form'),remindSave=remindForm.querySelector('[type=submit]'),remindClose=remind.querySelector('[data-collection-close]'),remindError=remind.querySelector('[role=alert]');
     document.querySelectorAll('.collection-remind').forEach(button=>button.addEventListener('click',()=>{
         remindForm.reset();remindError.hidden=true;

@@ -47,3 +47,8 @@
 .collection-priority{display:flex;flex-wrap:wrap;align-items:center;gap:2px;margin-top:4px}.collection-star,.collection-star-clear{border:0;background:transparent;padding:0 2px;font-size:19px;color:#cbd5e1;line-height:1.4;cursor:pointer}.collection-star.is-active{color:#d99500}.collection-star:hover,.collection-star:focus-visible{color:#b77900}.collection-star-clear{font-size:16px;color:#64748b;margin-left:5px}.collection-star:focus-visible,.collection-star-clear:focus-visible{outline:2px solid #2563eb;border-radius:3px}.collection-priority-error{flex-basis:100%;font-size:10px;color:#b91c1c}
 
 .collection-priority-menu { padding:6px 8px; border-bottom:1px solid #e2e8f0; margin-bottom:6px; }
+
+.collection-bulk-actions { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:8px; margin:0 0 10px; font-size:12px; }
+.collection-table .collection-reminded-today > td,
+.collection-table .collection-reminded-today > td a,
+.collection-table .collection-reminded-today > td strong { color:#6b21a8!important; font-weight:700; }
