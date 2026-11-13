@@ -38,7 +38,7 @@
             <footer>{{ $purchases->links() }}</footer>
         </article>
         <article class="debt-report-ledger">
-            <header><h3>Thanh toán</h3><span>{{ number_format($payments->total(), 0, ',', '.') }} khoản</span></header>
+            <header><h3>Thanh toán <small class="text-muted">· Mới nhất trước</small></h3><span>{{ number_format($payments->total(), 0, ',', '.') }} khoản</span></header>
             <div class="debt-report-scroll" tabindex="0" aria-label="Chi tiết thanh toán">
                 <table class="table"><thead><tr><th>Ngày thanh toán</th><th>Nội dung</th><th class="text-end">Số tiền</th></tr></thead><tbody>
                 @forelse($payments as $entry)
@@ -46,7 +46,7 @@
                 @empty<tr><td colspan="3" class="text-center text-muted py-4">Không có khoản thanh toán trong kỳ.</td></tr>@endforelse
                 </tbody><tfoot><tr><th colspan="2">Tổng trong kỳ</th><th class="text-end">{{ number_format($detailPayments, 0, ',', '.') }} đ</th></tr></tfoot></table>
             </div>
-            <footer>{{ $payments->links() }}</footer>
+            <footer><div class="small text-muted mb-2">Đang xem {{ $payments->firstItem() ?? 0 }}–{{ $payments->lastItem() ?? 0 }} / {{ number_format($payments->total(), 0, ',', '.') }} khoản thanh toán</div>{{ $payments->links() }}</footer>
         </article>
     </div>
     @if($balanceAdjustments->total())

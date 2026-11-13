@@ -60,7 +60,8 @@ class CustomerDebtMonitorController extends Controller
             }
         }
         $saleEntries = collect($periodEntries)->where('type', 'sale')->values();
-        $paymentEntries = collect($periodEntries)->where('type', 'payment')->values();
+        $paymentEntries = collect($periodEntries)->where('type', 'payment')
+            ->sort(fn ($a, $b) => strcmp($b['date'], $a['date']) ?: strcmp($a['source_sheet'] ?? 'Dongtienhoatdong', $b['source_sheet'] ?? 'Dongtienhoatdong') ?: ($b['row'] <=> $a['row']))->values();
         $detailSales = $saleEntries->sum('amount');
         $detailPayments = $paymentEntries->sum('amount');
         $detailGifts = $saleEntries->sum('gift');

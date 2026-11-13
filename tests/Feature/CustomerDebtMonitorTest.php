@@ -1873,6 +1873,32 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertStringContainsString('purchase_page=2', $data['payments']->url(2));
     }
 
+    public function test_detail_payments_show_latest_first_across_all_five_tabs_without_losing_history(): void
+    {
+        $this->collectionClock('2026-11-13 12:00:00');
+        $entries = [$this->entry('CRM01', 'Chị Bình')];
+        for ($i = 1; $i <= 101; $i++) {
+            $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', $i), ['type' => 'payment', 'date' => '2025-01-01', 'amount' => 1, 'source_sheet' => 'Dongtienhoatdong']);
+        }
+        foreach (CustomerDebtSheetService::PAYMENT_TABS as $i => $tab) {
+            $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', 200 + $i), ['type' => 'payment', 'date' => sprintf('2026-11-%02d', 5 + $i), 'amount' => 100, 'source_sheet' => $tab]);
+        }
+        $service = $this->service($entries);
+        $key = array_key_first($service->summarize($entries));
+        $params = ['customer' => $key, 'window' => 'all', 'tab' => 'all'];
+        $first = (new CustomerDebtMonitorController)->index($this->request($params, 'admin'), $service)->getData();
+        self::assertSame('2026-11-09', $first['reportLastPayment']);
+        self::assertSame($first['reportLastPayment'], $first['payments']->first()['date']);
+        self::assertSame('TKCTVPB', $first['payments']->first()['source_sheet']);
+        self::assertCount(5, $first['payments']->take(5)->pluck('source_sheet')->unique());
+        self::assertSame(106, $first['payments']->total());
+        self::assertSame(601, $first['detailPayments']);
+        $last = (new CustomerDebtMonitorController)->index($this->request($params + ['payment_page' => 2], 'admin'), $service)->getData();
+        self::assertCount(6, $last['payments']);
+        self::assertSame(601, $last['detailPayments']);
+        self::assertSame(106, $first['payments']->concat($last['payments'])->unique(fn ($e) => $e['source_sheet'].'|'.$e['row'])->count());
+    }
+
     public function test_detail_report_rejects_reversed_date_range(): void
     {
         $this->expectException(\Illuminate\Validation\ValidationException::class);
