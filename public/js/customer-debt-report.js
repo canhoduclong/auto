@@ -39,10 +39,11 @@
             boxes.forEach(box=>box.disabled=busy);
         };
         const daysLabel=value=>value===''?'Chưa rõ':Number(value)===0?'Hôm nay':Number(value)===1?'Hôm qua':`${value} ngày`;
+        const debtDaysLabel=value=>value===''?'Chưa rõ':`${value} ngày`;
         const line=box=>{
             const d=box.dataset;
             const purchase=d.purchase?`${d.purchase} (${daysLabel(d.purchaseDays)})`:'Chưa có ngày mua';
-            return `${d.name}: ${money(Number(d.balance))}đ | Nợ ${daysLabel(d.paymentDays)} | Đơn mới: ${purchase}`;
+            return `${d.name}: ${money(Number(d.balance))}đ --- Nợ: ${debtDaysLabel(d.paymentDays)} --- Đơn mới: ${purchase}`;
         };
         boxes.forEach(box=>box.addEventListener('change',update));
         all.addEventListener('change',()=>{boxes.forEach(box=>box.checked=all.checked);update();});
@@ -62,7 +63,7 @@
                 targets.forEach((box,index)=>{
                     const d=box.dataset;
                     const purchase=d.purchase?`${d.purchase} (${daysLabel(d.purchaseDays)})`:'Chưa có ngày mua';
-                    lines.push(`${index+1}. ${bold(d.name)}: ${bold(money(Number(d.balance))+'đ')} | Nợ ${bold(daysLabel(d.paymentDays))} | Đơn mới: ${text(purchase)}`);
+                    lines.push(`${index+1}. ${bold(d.name)}: ${bold(money(Number(d.balance))+'đ')} --- Nợ: ${bold(debtDaysLabel(d.paymentDays))} --- Đơn mới: ${text(purchase)}`);
                 });
                 lines.push('',`💰 TỔNG CÔNG NỢ: ${bold(money(total)+'đ')}`);
                 if(range){
