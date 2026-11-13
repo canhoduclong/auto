@@ -1263,6 +1263,7 @@ class CustomerDebtMonitorTest extends TestCase
         $data = (new CustomerDebtMonitorController)->index($this->request(['customer' => $key, 'window' => 'all'], 'admin'), $service)->getData();
         self::assertSame(1000, $data['detailSales']);
         self::assertSame(700, $data['detailPayments']);
+        self::assertSame(500, $data['detailSalesPayments']);
         self::assertSame(150, $data['detailGifts']);
         self::assertSame(150, $data['closing']);
         self::assertSame(3, $data['payments']->total());
@@ -1905,6 +1906,31 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame('2026-11-05', $data['reportLastPayment']);
         self::assertSame(0, $data['reportAlerts']['overdue_days']);
         self::assertSame('high', $data['reportAlerts']['risk']);
+    }
+
+    public function test_customer_statement_keeps_full_period_entries_and_matches_detail_totals(): void
+    {
+        $this->collectionClock('2026-11-13 12:00:00');
+        $entries = [array_replace($this->entry('CRM01', 'Chị Bình'), ['date' => '2026-10-01'])];
+        for ($i = 1; $i <= 105; $i++) {
+            $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', $i + 1), ['date' => '2026-11-13']);
+        }
+        $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', 200), ['type' => 'payment', 'date' => '2026-11-12', 'amount' => 500]);
+        $service = $this->service($entries);
+        $key = array_key_first($service->summarize($entries));
+        $params = ['customer' => $key, 'report_from' => '2026-11-10', 'report_to' => '2026-11-13', 'purchase_page' => 2];
+        $controller = new CustomerDebtMonitorController;
+        $detail = $controller->index($this->request($params, 'admin'), $service)->getData();
+        $view = $controller->index($this->request($params + ['presentation' => 'customer'], 'admin'), $service);
+        self::assertSame('customer-debt.customer-statement', $view->name());
+        $statement = $view->getData();
+        self::assertCount(105, $statement['saleEntries']);
+        self::assertCount(1, $statement['paymentEntries']);
+        self::assertSame(1000, $statement['opening']);
+        self::assertSame(105500, $statement['closing']);
+        self::assertSame($detail['closing'], $statement['closing']);
+        self::assertSame($detail['detailPayments'], $statement['detailPayments']);
+        self::assertSame(1, $statement['statementCustomer']->id);
     }
 
     public function test_purchase_and_payment_pagination_are_independent(): void

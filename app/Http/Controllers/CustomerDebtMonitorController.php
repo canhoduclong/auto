@@ -16,7 +16,7 @@ class CustomerDebtMonitorController extends Controller
 {
     public function index(Request $request, CustomerDebtSheetService $service)
     {
-        $data = $request->validate(['from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d', 'tab' => 'nullable|in:orders,all', 'sort' => 'nullable|in:overdue_days', 'direction' => 'nullable|in:asc,desc', 'search' => 'nullable|string|max:150', 'sale' => ['nullable', 'string', 'regex:/^(user:[0-9]+|sheet:[a-f0-9]{16}|unassigned)$/'], 'recovery' => 'nullable|in:normal,difficult,unrecoverable,flagged,all', 'alert' => 'nullable|in:overdue,remind,medium,high,very_high', 'customer' => 'nullable|string|size:64', 'system_customer' => 'nullable|integer|min:1', 'window' => 'nullable|in:recent,all,custom', 'report_from' => 'nullable|required_with:report_to|date_format:Y-m-d', 'report_to' => 'nullable|required_with:report_from|date_format:Y-m-d|after_or_equal:report_from', 'purchase_page' => 'nullable|integer|min:1', 'payment_page' => 'nullable|integer|min:1', 'adjustment_page' => 'nullable|integer|min:1', 'detail_page' => 'nullable|integer|min:1', 'debt_page' => 'nullable|integer|min:1', 'issue_page' => 'nullable|integer|min:1']);
+        $data = $request->validate(['presentation' => 'nullable|in:customer', 'from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d', 'tab' => 'nullable|in:orders,all', 'sort' => 'nullable|in:overdue_days', 'direction' => 'nullable|in:asc,desc', 'search' => 'nullable|string|max:150', 'sale' => ['nullable', 'string', 'regex:/^(user:[0-9]+|sheet:[a-f0-9]{16}|unassigned)$/'], 'recovery' => 'nullable|in:normal,difficult,unrecoverable,flagged,all', 'alert' => 'nullable|in:overdue,remind,medium,high,very_high', 'customer' => 'nullable|string|size:64', 'system_customer' => 'nullable|integer|min:1', 'window' => 'nullable|in:recent,all,custom', 'report_from' => 'nullable|required_with:report_to|date_format:Y-m-d', 'report_to' => 'nullable|required_with:report_from|date_format:Y-m-d|after_or_equal:report_from', 'purchase_page' => 'nullable|integer|min:1', 'payment_page' => 'nullable|integer|min:1', 'adjustment_page' => 'nullable|integer|min:1', 'detail_page' => 'nullable|integer|min:1', 'debt_page' => 'nullable|integer|min:1', 'issue_page' => 'nullable|integer|min:1']);
         $from = $data['from'] ?? now()->toDateString();
         $to = $data['to'] ?? now()->toDateString();
         Validator::make(['from' => $from, 'to' => $to], ['to' => 'after_or_equal:from'])->validate();
@@ -59,11 +59,13 @@ class CustomerDebtMonitorController extends Controller
                 $periodEntries[] = $entry;
             }
         }
-        $saleEntries = collect($periodEntries)->where('type', 'sale')->values();
+        $saleEntries = collect($periodEntries)->where('type', 'sale')
+            ->sort(fn ($a, $b) => strcmp($b['date'], $a['date']) ?: ($b['row'] <=> $a['row']))->values();
         $paymentEntries = collect($periodEntries)->where('type', 'payment')
             ->sort(fn ($a, $b) => strcmp($b['date'], $a['date']) ?: strcmp($a['source_sheet'] ?? 'Dongtienhoatdong', $b['source_sheet'] ?? 'Dongtienhoatdong') ?: ($b['row'] <=> $a['row']))->values();
         $detailSales = $saleEntries->sum('amount');
         $detailPayments = $paymentEntries->sum('amount');
+        $detailSalesPayments = $paymentEntries->where('source_sheet', 'nhatkybanhang')->sum('amount');
         $detailGifts = $saleEntries->sum('gift');
         $adjustmentEntries = collect($periodEntries)->where('type', 'adjustment')->values();
         $detailAdjustments = $adjustmentEntries->sum('amount');
@@ -141,7 +143,14 @@ class CustomerDebtMonitorController extends Controller
         $canCreateQuickCustomer = $canLoad && \Illuminate\Support\Facades\Gate::forUser($request->user())->allows('create', Customer::class);
         $quickCustomerSales = $canCreateQuickCustomer ? $this->quickCustomerSales() : collect();
 
-        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail', 'canCreateQuickCustomer', 'quickCustomerSales'));
+        if (($data['presentation'] ?? null) === 'customer') {
+            abort_unless($selected, 404);
+            $statementCustomer = $selected['customer_id'] ? $byId->get($selected['customer_id']) : null;
+
+            return view('customer-debt.customer-statement', compact('selected', 'statementCustomer', 'snapshot', 'reportFrom', 'reportTo', 'opening', 'closing', 'detailSales', 'detailGifts', 'detailPayments', 'detailAdjustments', 'reportLastPurchase', 'reportLastPayment', 'saleEntries', 'paymentEntries'));
+        }
+
+        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'detailSalesPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail', 'canCreateQuickCustomer', 'quickCustomerSales'));
     }
 
     private function quickCustomerSales()
@@ -313,7 +322,7 @@ class CustomerDebtMonitorController extends Controller
     private function resolveGroups(Request $request, CustomerDebtSheetService $service): array
     {
         $canLoad = $request->user()->hasRole(['admin', 'account', 'accountant', 'accounting', 'director', 'ceo']);
-        $customers = Customer::query()->with(['currentOwner:id,name,short_name', 'assignedTo:id,name,short_name'])->get(['id', 'name', 'customer_code', 'current_owner_sale_id', 'assigned_to']);
+        $customers = Customer::query()->with(['currentOwner:id,name,short_name', 'assignedTo:id,name,short_name'])->get(['id', 'name', 'customer_code', 'current_owner_sale_id', 'assigned_to', 'phone', 'address']);
         $allowedIds = $canLoad ? $customers->pluck('id') : Customer::query()->managedBySale($request->user()->id)->pluck('id');
         $snapshot = $service->snapshot();
         $groups = $service->summarize($snapshot['entries'] ?? []);
