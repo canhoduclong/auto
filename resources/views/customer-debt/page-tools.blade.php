@@ -4,7 +4,7 @@
     @if($canLoad) @include('customer-debt.connection-info') @endif
     <h6>Thông tin dữ liệu</h6>
     @if($snapshot && ($snapshot['spreadsheet_id'] ?? null) !== config('services.google_sheets.debt_spreadsheet_id'))<p class="text-warning">Bản dữ liệu đang hiển thị được tải trước khi đổi nguồn. Cập nhật Google Sheet để lấy dữ liệu từ file gốc.</p>@endif
-    <p>Công nợ = Doanh thu − Tặng − Đã thanh toán + Điều chỉnh; không có số dư đầu kỳ. Số liệu tổng hợp từ nhatkybanhang và 5 tab thanh toán {{ implode(', ', \App\Services\CustomerDebtSheetService::PAYMENT_TABS) }}, không cộng thêm giá trị đơn trong hệ thống.</p>
+    <p>Công nợ = Doanh thu − Tặng − Đã thanh toán + Điều chỉnh; không có số dư đầu kỳ. Số liệu tổng hợp từ nhatkybanhang và 5 tab thanh toán {{ implode(', ', \App\Services\CustomerDebtSheetService::PAYMENT_TABS) }}, cộng thêm cột Thanh toán của nhatkybanhang; cột Tặng chỉ giảm số phải thu một lần, không tính là tiền thu. Không cộng thêm giá trị đơn trong hệ thống.</p>
     <p>So khớp thanh toán: Code (các tab tài khoản ngân hàng) = Loại; Tên KH = Tên KH/NCC. Chỉ lấy khoản Thu thuộc TTBH; Code không phải mã khách hàng.</p>
     <p>Điều chỉnh công nợ lưu riêng, không phải khoản thanh toán. Khi tải lại Sheet, chênh lệch điều chỉnh vẫn được cộng vào số dư; các phát sinh mới tiếp tục tăng / giảm công nợ.</p>
     @if(!empty($snapshot['gift_note_count']))<p>{{ $snapshot['gift_note_count'] }} ô Tặng chứa ghi chú được giữ trong chi tiết, không tính thành tiền.</p>@endif

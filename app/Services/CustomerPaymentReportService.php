@@ -19,7 +19,7 @@ class CustomerPaymentReportService
         $bySlot = [];
         foreach ($groups as $group) {
             foreach ($group['entries'] as $entry) {
-                if ($entry['type'] === 'payment') {
+                if (in_array($entry['type'], ['sale', 'payment'], true)) {
                     $bySlot[($entry['source_sheet'] ?? 'Dongtienhoatdong').'|'.$entry['row']] = $group;
                 }
             }
@@ -78,7 +78,7 @@ class CustomerPaymentReportService
             }
             $date = $entry['date'] ?? null;
             $removed = ($entry['change_kind'] ?? null) === 'removed';
-            $row = array_replace($entry, ['source_key' => $sourceKey ?? ($group['key'] ?? null), 'customer_id' => $target?->id, 'customer_name' => $target?->name ?? ($entry['name'] ?: 'Chưa xác định khách'), 'customer_code' => $target?->customer_code ?: (($entry['code'] ?? '') ?: ($group['code'] ?? ($entry['customer_source_code'] ?? ''))), 'sale_key' => $saleKey, 'sale_label' => $saleLabel, 'is_recent' => ! $removed && (int) $entry['amount'] > 0 && $date === now()->toDateString(), 'removed' => $removed, 'unidentified' => empty($entry['name']) && empty($entry['code'])]);
+            $row = array_replace($entry, ['source_key' => $sourceKey ?? ($group['key'] ?? null), 'customer_id' => $target?->id, 'customer_name' => $target?->name ?? ($entry['name'] ?: 'Chưa xác định khách'), 'customer_code' => $target?->customer_code ?: (($entry['code'] ?? '') ?: ($group['code'] ?? ($entry['customer_source_code'] ?? ''))), 'sale_key' => $saleKey, 'sale_label' => $saleLabel, 'is_recent' => ($entry['type'] ?? 'payment') === 'payment' && ! $removed && (int) $entry['amount'] > 0 && $date === now()->toDateString(), 'removed' => $removed, 'unidentified' => empty($entry['name']) && empty($entry['code'])]);
             $row['debt_key'] = $group['key'] ?? ($target ? collect($groups)->firstWhere('customer_id', $target->id)['key'] ?? null : null);
             $row['search_text'] = app(CustomerDebtSheetService::class)->normalize($row['customer_name'].' '.$row['customer_code'].' '.($entry['name'] ?? '').' '.($entry['code'] ?? '').' '.($entry['note'] ?? '').' '.($group['code'] ?? ($entry['customer_source_code'] ?? '')));
             $rows[] = $row;

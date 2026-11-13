@@ -67,7 +67,7 @@ class CustomerDebtReportController extends Controller
 
             return $search === '' || str_contains($sheets->normalize($row['search_text']), $search);
         });
-        $summary = ['customers' => $visible->count(), 'balance' => $visible->where('balance', '>', 0)->sum('balance'), 'payments' => $visible->where('data_available', true)->sum('payments'), 'received' => $visible->sum(fn ($r) => $r['collection']['received_total'])];
+        $summary = ['customers' => $visible->count(), 'balance' => $visible->where('balance', '>', 0)->sum('balance'), 'gifts' => $visible->where('data_available', true)->sum('gifts'), 'payments' => $visible->where('data_available', true)->sum('payments'), 'received' => $visible->sum(fn ($r) => $r['collection']['received_total'])];
         $sort = $data['sort'] ?? 'balance';
         $direction = ($data['direction'] ?? 'desc') === 'asc' ? 1 : -1;
         $visible = $visible->sort(fn ($a, $b) => ($a[$sort] === null || $b[$sort] === null ? (($a[$sort] === null ? 1 : 0) <=> ($b[$sort] === null ? 1 : 0)) : ($a[$sort] <=> $b[$sort]) * $direction) ?: strcmp($a['name'], $b['name']));

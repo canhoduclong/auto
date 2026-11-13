@@ -15,7 +15,9 @@ class CustomerDebtSheetService
 {
     public const PAYMENT_TABS = ['Dongtienhoatdong', 'TKCNMBBDUE', 'TKCTVCB', 'TKCTBIDV', 'TKCTVPB'];
 
-    public const PAYMENT_SHEET_IDS = ['Dongtienhoatdong' => 241453650, 'TKCNMBBDUE' => 612096373, 'TKCTVCB' => 940352522, 'TKCTBIDV' => 1358852522, 'TKCTVPB' => 46388864];
+    public const SETTLEMENT_TABS = ['nhatkybanhang', ...self::PAYMENT_TABS];
+
+    public const PAYMENT_SHEET_IDS = ['nhatkybanhang' => 438108508, 'Dongtienhoatdong' => 241453650, 'TKCNMBBDUE' => 612096373, 'TKCTVCB' => 940352522, 'TKCTBIDV' => 1358852522, 'TKCTVPB' => 46388864];
 
     private const FILE = 'customer-debt/snapshot.json';
 
@@ -30,8 +32,15 @@ class CustomerDebtSheetService
     {
         // Validate every supplied tab before atomically replacing the complete snapshot.
         $issues = [];
-        $entries = array_merge($this->parse($sales, 'sale', $issues), $this->parse($payments, 'payment', $issues, 'Dongtienhoatdong'));
-        $paymentTabs = ['Dongtienhoatdong'];
+        $saleEntries = $this->parse($sales, 'sale', $issues);
+        $entries = $saleEntries;
+        foreach ($saleEntries as $sale) {
+            if (($sale['inline_payment'] ?? 0) != 0) {
+                $entries[] = array_replace($sale, ['type' => 'payment', 'amount' => $sale['inline_payment'], 'gift' => 0, 'gift_note' => '', 'note' => 'Thanh toán tại bán hàng'.($sale['note'] !== '' ? ' · '.$sale['note'] : '')]);
+            }
+        }
+        $entries = array_merge($entries, $this->parse($payments, 'payment', $issues, 'Dongtienhoatdong'));
+        $paymentTabs = ['nhatkybanhang', 'Dongtienhoatdong'];
         $bankTabs = $bankPayments === null ? [] : ['TKCNMBBDUE' => $bankPayments];
         foreach ($additionalPayments as $tab => $values) {
             if (! in_array($tab, array_slice(self::PAYMENT_TABS, 2), true) || ! is_array($values)) {
@@ -105,13 +114,13 @@ class CustomerDebtSheetService
         $keys = [];
         foreach ($this->summarize($data['entries'] ?? []) as $group) {
             foreach ($group['entries'] as $entry) {
-                if ($entry['type'] === 'payment') {
+                if (in_array($entry['type'], ['sale', 'payment'], true)) {
                     $keys[($entry['source_sheet'] ?? 'Dongtienhoatdong').'|'.$entry['row']] = ['key' => $group['key'], 'code' => $group['code']];
                 }
             }
         }
         foreach ($data['entries'] ?? [] as $index => $entry) {
-            if ($entry['type'] === 'payment') {
+            if (in_array($entry['type'], ['sale', 'payment'], true)) {
                 $source = $keys[($entry['source_sheet'] ?? 'Dongtienhoatdong').'|'.$entry['row']] ?? [];
                 $data['entries'][$index]['customer_source_key'] = $source['key'] ?? null;
                 $data['entries'][$index]['customer_source_code'] = $source['code'] ?? '';
@@ -303,6 +312,7 @@ class CustomerDebtSheetService
             'address' => ['dia chi', 'address'],
             'amount' => $type === 'sale' ? ['tong tien', 'thanh tien', 'amount'] : ['tien thu', 'so tien thu', 'thu'],
             'gift' => ['tang', 'tien tang'],
+            'inline_payment' => $type === 'sale' ? ['thanh toan', 'da thanh toan'] : [],
             'category' => in_array($sourceSheet, array_slice(self::PAYMENT_TABS, 1), true) ? ['loai', 'code'] : ['loai'],
             'direction' => ['loai giao dich', 'thu chi', 'thu/chi'],
             'generic_amount' => ['so tien', 'amount'],
@@ -358,7 +368,11 @@ class CustomerDebtSheetService
             }
             $amount = $row['amount'] ?? $row['generic_amount'] ?? '';
             if ($amount === '' || $amount === '-') {
-                continue;
+                if ($type === 'sale' && (trim($row['inline_payment'] ?? '') !== '' || trim($row['gift'] ?? '') !== '')) {
+                    $amount = '0';
+                } else {
+                    continue;
+                }
             }
             if ($type === 'payment') {
                 // Operating cash flow also includes expenses and non-customer receipts. Never inherit a previous payer.
@@ -411,12 +425,12 @@ class CustomerDebtSheetService
             if ($giftNote !== '') {
                 $note = ($note !== '' ? $note.' · ' : '').'Ghi chú cột Tặng: '.$giftNote;
             }
-            $entries[] = ['date' => $date, 'code' => $row['code'], 'name' => $row['name'], 'type' => $type, 'sale_name' => $row['sale_name'] ?? '', 'phone' => $row['phone'] ?? '', 'address' => $row['address'] ?? '', 'amount' => $this->money($amount), 'gift' => $giftAmount, 'gift_note' => $giftNote, 'note' => $note, 'row' => $index + 1, 'source_sheet' => $sourceSheet ?? ($type === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong')];
+            $entries[] = ['date' => $date, 'code' => $row['code'], 'name' => $row['name'], 'type' => $type, 'sale_name' => $row['sale_name'] ?? '', 'phone' => $row['phone'] ?? '', 'address' => $row['address'] ?? '', 'amount' => $this->money($amount), 'gift' => $giftAmount, 'gift_note' => $giftNote, 'inline_payment' => $type === 'sale' && ! in_array(trim($row['inline_payment'] ?? ''), ['', '-'], true) ? $this->money($row['inline_payment']) : 0, 'note' => $note, 'row' => $index + 1, 'source_sheet' => $sourceSheet ?? ($type === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong')];
         }
         if (! $headers) {
             throw new RuntimeException('Không nhận diện tiêu đề tab '.($type === 'sale' ? 'nhatkybanhang (Ngày, Mã KH, Khách hàng, Tổng tiền).' : 'Dongtienhoatdong (Ngày, Mã KH, Khách hàng, Tiền thu hoặc Số tiền và Thu/Chi).'));
         }
-        if (! $entries && $sourceSheet !== 'TKCNMBBDUE') {
+        if (! $entries && ! in_array($sourceSheet, array_slice(self::PAYMENT_TABS, 1), true)) {
             throw new RuntimeException('Tab '.($type === 'sale' ? 'lấy hàng' : 'thanh toán').' không có giao dịch hợp lệ; dữ liệu cũ được giữ lại.');
         }
 

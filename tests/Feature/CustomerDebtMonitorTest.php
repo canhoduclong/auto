@@ -1153,7 +1153,7 @@ class CustomerDebtMonitorTest extends TestCase
         $snapshot = $service->snapshot();
         $groups = $service->summarize($snapshot['entries']);
         self::assertSame(500, array_values($groups)[0]['balance']);
-        self::assertSame(['Dongtienhoatdong', 'TKCNMBBDUE'], $snapshot['payment_tabs']);
+        self::assertSame(['nhatkybanhang', 'Dongtienhoatdong', 'TKCNMBBDUE'], $snapshot['payment_tabs']);
         $service->save($sales, $payments, 7, 'google', $bank);
         self::assertCount(3, $service->snapshot()['entries']);
         self::assertSame(500, array_values($service->summarize($service->snapshot()['entries']))[0]['payments']);
@@ -1224,7 +1224,7 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(9, $first['new_count']);
         (new \App\Http\Controllers\CustomerPaymentController)->refresh($this->request([], 'admin'), $service);
         self::assertSame(0, $service->snapshot()['payment_syncs'][0]['new_count']);
-        self::assertSame(CustomerDebtSheetService::PAYMENT_TABS, $service->snapshot()['payment_tabs']);
+        self::assertSame(CustomerDebtSheetService::SETTLEMENT_TABS, $service->snapshot()['payment_tabs']);
         $monitor = (new CustomerDebtMonitorController)->index($this->request(['tab' => 'all'], 'admin'), $service)->getData();
         self::assertSame(500, $monitor['customerDebts'][1]['payments']);
         self::assertSame(500, $monitor['customerDebts'][1]['balance']);
@@ -1245,6 +1245,61 @@ class CustomerDebtMonitorTest extends TestCase
             self::fail('Malformed fifth payment tab replaced the snapshot');
         } catch (\RuntimeException) {
             self::assertSame($snapshot, $service->snapshot());
+        }
+    }
+
+    public function test_inline_sales_payments_and_gifts_reconcile_without_double_counting_and_are_audited_separately(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $this->collectionClock('2026-11-13 12:00:00');
+        $service = new CustomerDebtSheetService;
+        $sales = [['Ngày', 'Mã KH', 'Khách hàng', 'Tổng tiền', 'Thanh toán', 'Tặng'],
+            ['13/11/2026', 'CRM01', 'Chị Bình', '1000', '200', '100'],
+            ['', '', '', '', '300', '50']];
+        $cash = [['Ngày', 'Mã KH', 'Khách hàng', 'Tiền thu'], ['13/11/2026', 'CRM01', 'Chị Bình', '200']];
+        $service->save($sales, $cash, 7, 'google');
+        $snapshot = $service->snapshot();
+        $key = array_key_first($service->summarize($snapshot['entries']));
+        $data = (new CustomerDebtMonitorController)->index($this->request(['customer' => $key, 'window' => 'all'], 'admin'), $service)->getData();
+        self::assertSame(1000, $data['detailSales']);
+        self::assertSame(700, $data['detailPayments']);
+        self::assertSame(150, $data['detailGifts']);
+        self::assertSame(150, $data['closing']);
+        self::assertSame(3, $data['payments']->total());
+        $page = (new \App\Http\Controllers\CustomerPaymentController)->index($this->request(['customer_id' => 1], 'admin'), $service, new \App\Services\CustomerPaymentReportService)->getData();
+        self::assertSame(700, $page['summary']['amount']);
+        self::assertSame(150, $page['summary']['gifts']);
+        self::assertSame(700, $page['summary']['today']);
+        self::assertFalse($page['rows']->where('type', 'gift')->contains(fn ($r) => $r['is_recent']));
+        $report = (new \App\Http\Controllers\CustomerDebtReportController)->index($this->request(['report_source' => 'sheet'], 'admin'), $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        self::assertSame(700, $report['rows']->first()['payments']);
+        self::assertSame(150, $report['rows']->first()['balance']);
+        $again = $service->save($sales, $cash, 7, 'google');
+        self::assertSame(0, $again['new_count']);
+        self::assertSame(0, $again['updated_count']);
+        $sales[1][5] = '120';
+        $giftEdit = $service->save($sales, $cash, 7, 'google');
+        self::assertSame(1, $giftEdit['updated_count']);
+        self::assertSame(0, $giftEdit['delta']);
+        self::assertSame(20, $giftEdit['gift_delta']);
+        $sales[1][4] = '250';
+        $cashEdit = $service->save($sales, $cash, 7, 'google');
+        self::assertSame(1, $cashEdit['updated_count']);
+        self::assertSame(50, $cashEdit['delta']);
+        self::assertSame(0, $cashEdit['gift_delta']);
+        $sales[1][5] = '';
+        $giftRemoved = $service->save($sales, $cash, 7, 'google');
+        self::assertSame(1, $giftRemoved['removed_count']);
+        self::assertSame(-120, $giftRemoved['gift_delta']);
+        self::assertSame(0, $giftRemoved['delta']);
+        self::assertSame(750, array_values($service->summarize($service->snapshot()['entries']))[0]['payments']);
+        $saved = $service->snapshot();
+        $sales[1][4] = 'không hợp lệ';
+        try {
+            $service->save($sales, $cash, 7, 'google');
+            self::fail('Malformed inline payment replaced the financial snapshot');
+        } catch (\RuntimeException) {
+            self::assertSame($saved, $service->snapshot());
         }
     }
 
