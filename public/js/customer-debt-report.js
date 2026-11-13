@@ -4,6 +4,19 @@
     scope.addEventListener('change',toggleDates);toggleDates();
     document.querySelectorAll('[data-report-sheet-refresh]').forEach(form=>form.addEventListener('submit',()=>{const button=form.querySelector('button');button.disabled=true;button.textContent='Đang cập nhật…';}));
     document.addEventListener('click',event=>document.querySelectorAll('.collection-more[open]').forEach(menu=>{if(!menu.contains(event.target)||event.target.closest('button,a'))menu.open=false;}));
+    document.querySelectorAll('[data-collection-priority]').forEach(form=>form.addEventListener('submit',async event=>{
+        event.preventDefault();
+        if(!event.submitter || form.dataset.saving==='1')return;
+        const data=new FormData(form);data.set('stars',event.submitter.value);
+        const status=form.querySelector('[role=status]');status.textContent='Đang lưu…';form.dataset.saving='1';
+        const buttons=[...form.querySelectorAll('button')];buttons.forEach(button=>button.disabled=true);
+        try{
+            const response=await fetch(form.action,{method:'POST',body:data,headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'}});
+            let result;try{result=await response.json();}catch(_){throw new Error('Không lưu được. Vui lòng tải lại trang và thử lại.');}
+            if(!response.ok)throw new Error(Object.values(result.errors||{}).flat()[0]||result.message||'Không lưu được mức ưu tiên.');
+            const url=new URL(window.location.href);url.searchParams.set('page','1');url.hash='';window.location.assign(url);
+        }catch(error){status.textContent=error.message;form.dataset.saving='0';buttons.forEach(button=>button.disabled=false);}
+    }));
     const money=value=>new Intl.NumberFormat('vi-VN').format(value);
     const parse=value=>{const text=value.trim().replace(/\s/g,'');if(!/^(?:\d+|\d{1,3}(?:\.\d{3})+)$/.test(text))return NaN;const number=Number(text.replace(/\./g,''));return Number.isSafeInteger(number)&&number>0&&number<=999999999999999?number:NaN;};
     const send=async(url,data)=>{

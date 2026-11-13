@@ -31,12 +31,14 @@ class CustomerDebtReportController extends Controller
     public function index(Request $request, CustomerDebtSheetService $sheets, CustomerDebtReportService $report, DebtCollectionService $collections)
     {
         $this->authorizeAdmin($request);
-        $data = $request->validate(['report_source' => 'nullable|in:sheet,system', 'scope' => 'nullable|in:all,orders', 'from' => 'nullable|required_if:scope,orders|date_format:Y-m-d', 'to' => 'nullable|required_if:scope,orders|date_format:Y-m-d|after_or_equal:from', 'search' => 'nullable|string|max:150', 'sale' => 'nullable|string|max:100', 'balance' => 'nullable|in:debt,all,settled,credit', 'recovery' => 'nullable|in:normal,difficult,unrecoverable,all', 'status' => ['nullable', Rule::in(array_merge(array_keys(DebtCollectionService::STATUSES), ['all', 'follow_up_due']))], 'per_page' => 'nullable|in:20,30,50,100', 'page' => 'nullable|integer|min:1', 'sort' => 'nullable|in:balance,days_without_purchase,days_without_payment', 'direction' => 'nullable|in:asc,desc']);
+        $data = $request->validate(['report_source' => 'nullable|in:sheet,system', 'scope' => 'nullable|in:all,orders', 'from' => 'nullable|required_if:scope,orders|date_format:Y-m-d', 'to' => 'nullable|required_if:scope,orders|date_format:Y-m-d|after_or_equal:from', 'search' => 'nullable|string|max:150', 'sale' => 'nullable|string|max:100', 'balance' => 'nullable|in:debt,all,settled,credit', 'recovery' => 'nullable|in:normal,difficult,unrecoverable,all', 'status' => ['nullable', Rule::in(array_merge(array_keys(DebtCollectionService::STATUSES), ['all', 'follow_up_due']))], 'per_page' => 'nullable|in:20,30,50,100', 'page' => 'nullable|integer|min:1', 'sort' => 'nullable|in:balance,period_increase,days_without_purchase,days_without_payment', 'direction' => 'nullable|in:asc,desc']);
         [$rows, $snapshot] = $this->sourceData($request, $sheets, $report);
         $reportSource = $request->input('report_source') ?: 'sheet';
         $records = $collections->records($reportSource);
+        $priorities = app(\App\Services\CustomerDebtPriorityService::class);
+        $priorityRecords = $priorities->records();
         $sales = $rows->map(fn ($r) => ['key' => $r['sale_key'], 'label' => $r['sale_label']])->unique('key')->sortBy('label')->values();
-        $rows = $rows->map(fn ($row) => $row + ['collection' => $collections->evaluate($row, $records)]);
+        $rows = $rows->map(fn ($row) => $row + ['collection' => $collections->evaluate($row, $records), 'priority' => $priorities->effective($row, $priorityRecords)]);
         $visible = $rows->filter(function ($row) use ($data, $sheets) {
             // Use the same positive Sheet purchases as the last-purchase date / days column.
             if (($data['scope'] ?? 'all') === 'orders' && ! collect($row['entries'])->contains(fn ($e) => $e['type'] === 'sale' && $e['amount'] > 0 && $e['date'] >= $data['from'] && $e['date'] <= $data['to'])) {
@@ -70,6 +72,15 @@ class CustomerDebtReportController extends Controller
         $periodEntries = $visible->flatMap(fn ($row) => $row['entries']);
         $periodFrom = $data['from'] ?? min(now()->toDateString(), $periodEntries->min('date') ?? now()->toDateString());
         $periodTo = $data['to'] ?? now()->toDateString();
+        $hasPeriodFilter = ! empty($data['from']) && ! empty($data['to']);
+        $visible = $visible->map(function ($row) use ($periodFrom, $periodTo) {
+            $entries = collect($row['entries'])->filter(fn ($entry) => $entry['date'] >= $periodFrom && $entry['date'] <= $periodTo);
+            $row['period_increase'] = $row['data_available'] ? $entries->where('type', 'sale')->sum('amount')
+                - $entries->where('type', 'sale')->sum('gift') - $entries->where('type', 'payment')->sum('amount')
+                + $entries->where('type', 'adjustment')->sum('amount') : null;
+
+            return $row;
+        });
         $inPeriod = $periodEntries->filter(fn ($entry) => $entry['date'] >= $periodFrom && $entry['date'] <= $periodTo);
         $periodSales = $inPeriod->where('type', 'sale')->sum('amount');
         $periodGifts = $inPeriod->where('type', 'sale')->sum('gift');
@@ -83,12 +94,26 @@ class CustomerDebtReportController extends Controller
         $summary = ['customers' => $visible->count(), 'sales' => $visible->where('data_available', true)->sum('sales'), 'balance' => $visible->where('balance', '>', 0)->sum('balance'), 'gifts' => $visible->where('data_available', true)->sum('gifts'), 'payments' => $visible->where('data_available', true)->sum('payments'), 'received' => $visible->sum(fn ($r) => $r['collection']['received_total'])];
         $sort = $data['sort'] ?? 'balance';
         $direction = ($data['direction'] ?? 'desc') === 'asc' ? 1 : -1;
-        $visible = $visible->sort(fn ($a, $b) => ($a[$sort] === null || $b[$sort] === null ? (($a[$sort] === null ? 1 : 0) <=> ($b[$sort] === null ? 1 : 0)) : ($a[$sort] <=> $b[$sort]) * $direction) ?: strcmp($a['name'], $b['name']));
+        $visible = $visible->sort(fn ($a, $b) => ($b['priority']['stars'] <=> $a['priority']['stars']) ?: ($a[$sort] === null || $b[$sort] === null ? (($a[$sort] === null ? 1 : 0) <=> ($b[$sort] === null ? 1 : 0)) : ($a[$sort] <=> $b[$sort]) * $direction) ?: strcmp($a['name'], $b['name']));
         $perPage = (int) ($data['per_page'] ?? 30);
         $page = (int) ($data['page'] ?? 1);
         $rows = new \Illuminate\Pagination\LengthAwarePaginator($visible->forPage($page, $perPage)->values(), $visible->count(), $perPage, $page, ['path' => $request->url(), 'query' => $request->except('page')]);
 
-        return view('customer-debt.report', ['rows' => $rows, 'sales' => $sales, 'summary' => $summary, 'period' => $period, 'snapshot' => $snapshot, 'canAdjust' => $reportSource === 'sheet', 'reportSource' => $reportSource]);
+        return view('customer-debt.report', ['rows' => $rows, 'sales' => $sales, 'summary' => $summary, 'period' => $period, 'hasPeriodFilter' => $hasPeriodFilter, 'snapshot' => $snapshot, 'canAdjust' => $reportSource === 'sheet', 'reportSource' => $reportSource]);
+    }
+
+    public function updatePriority(Request $request, CustomerDebtSheetService $sheets, \App\Services\CustomerDebtPriorityService $priorities)
+    {
+        $this->authorizeAdmin($request);
+        $data = $request->validate($this->targetRules() + ['stars' => 'required|integer|min:0|max:5', 'priority_version' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/']);
+        Cache::lock('customer-debt-load', 60)->block(5, function () use ($request, $sheets, $priorities, $data) {
+            DB::transaction(function () use ($request, $sheets, $priorities, $data) {
+                [$row] = $this->resolveRow($request, $sheets);
+                $priorities->save($row, (int) $data['stars'], $data['priority_version'], $request->user());
+            });
+        });
+
+        return $request->expectsJson() ? response()->json(['message' => 'Đã lưu mức ưu tiên theo dõi.']) : back()->with('success', 'Đã lưu mức ưu tiên theo dõi.');
     }
 
     private function resolveRow(Request $request, CustomerDebtSheetService $sheets): array

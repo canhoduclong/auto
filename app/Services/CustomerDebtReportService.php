@@ -43,6 +43,7 @@ class CustomerDebtReportService
         }
         $today = CarbonImmutable::today();
         foreach ($rows as $identity => &$row) {
+            $row['policy'] = $row['policy'] ?? $context['policyService']->effective($row, $context['policies']);
             $row['identity'] = $identity;
             $row['report_source'] = 'sheet';
             foreach (['last_purchase_date' => 'days_without_purchase', 'last_payment_date' => 'days_without_payment'] as $field => $days) {

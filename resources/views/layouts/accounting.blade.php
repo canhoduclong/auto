@@ -455,6 +455,7 @@ body.acc-sidebar-collapsed .acc-task-group>summary{justify-content:center;paddin
 
             <div class="nav-section">Công nợ</div>
             <a href="{{ route('customer-debt.index') }}" class="{{ request()->routeIs('customer-debt.index') ? 'active' : '' }}"><i class="bi bi-wallet2"></i> Công nợ & cảnh báo đơn</a>
+            <a href="{{ route('customer-debt.negotiation') }}" class="{{ request()->routeIs('customer-debt.negotiation') ? 'active' : '' }}"><i class="bi bi-sliders"></i> Đàm phán công nợ</a>
             <a href="{{ route('customer-debt.payments') }}" class="{{ request()->routeIs('customer-debt.payments*') ? 'active' : '' }}"><i class="bi bi-cash-coin"></i> Thanh toán</a>
             <a href="{{ route('accounting.customer-debts') }}" class="{{ request()->routeIs('accounting.customer-debts*') ? 'active' : '' }}">
                 <i class="bi bi-people"></i> Công nợ khách hàng

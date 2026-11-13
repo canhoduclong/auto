@@ -65,10 +65,10 @@ use App\Http\Controllers\TeamController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\TruckStationController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\Warehouse\AssignmentReviewController;
 use App\Http\Controllers\WarehouseController;
 use App\Http\Controllers\WarehouseDashboardController;
 use App\Http\Controllers\WarehouseStocktakeController;
-use App\Http\Controllers\Warehouse\AssignmentReviewController;
 
 // Public mobile update files. These routes are also a fallback when Nginx does
 // not serve public/app-update directly.
@@ -142,7 +142,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/incoming-returns/{orderReturn}/confirm', [ReceivingController::class, 'confirmReturn'])->name('incoming-returns.confirm');
         Route::get('/order-changes', [OrderChangeRequestController::class, 'index'])->name('order-changes');
         Route::get('/inventory', [InventoryController::class, 'index'])->name('inventory');
-    });
+});
 
     // Role switching
     Route::post('/switch-role/{role}', [RoleSwitchController::class, 'switch'])->name('role.switch');
@@ -237,12 +237,12 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/department-notifications/read-all', [AdminNotificationController::class, 'markAllAsRead'])->name('department-notifications.read_all');
         Route::get('/department-notifications/{notificationId}', [AdminNotificationController::class, 'show'])->name('department-notifications.show');
         Route::post('/department-notifications/{notificationId}/read', [AdminNotificationController::class, 'markAsRead'])->name('department-notifications.read');
-    });
+});
 
     Route::middleware('role:admin,warehouse,account,accountant,accounting')->group(function () {
         Route::get('/admin/imported-sales-orders', [\App\Http\Controllers\ImportedSalesOrderCompletionController::class, 'index'])->name('admin.imported-sales-orders.index');
         Route::put('/admin/imported-sales-orders/{order}', [\App\Http\Controllers\ImportedSalesOrderCompletionController::class, 'update'])->name('admin.imported-sales-orders.update');
-    });
+});
 
     Route::prefix('leader')->name('leader.')->middleware('role:leader,leader_sale,sale_manager,admin')->group(function () {
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'leaderIndex'])->name('finance-requests.index');
@@ -251,7 +251,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/requests/{transaction}/edit', [DepartmentFinanceRequestController::class, 'leaderEdit'])->name('finance-requests.edit');
         Route::put('/requests/{transaction}', [DepartmentFinanceRequestController::class, 'leaderUpdate'])->name('finance-requests.update');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'leaderPrint'])->name('finance-requests.print');
-    });
+});
 
     Route::prefix('manager')->name('manager.')->middleware('role:manager,manager_sale,admin')->group(function () {
         Route::get('/requests', [DepartmentFinanceRequestController::class, 'managerIndex'])->name('finance-requests.index');
@@ -262,7 +262,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::put('/requests/{transaction}', [DepartmentFinanceRequestController::class, 'managerUpdate'])->name('finance-requests.update');
         Route::delete('/requests/{transaction}', [DepartmentFinanceRequestController::class, 'managerDestroy'])->name('finance-requests.destroy');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'managerPrint'])->name('finance-requests.print');
-    });
+});
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:account,accountant,accounting,admin')->group(function () {
         Route::get('/tax-settings/products', [\App\Http\Controllers\ProductTaxSettingController::class, 'index'])->name('tax-settings.products');
@@ -382,7 +382,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::put('/requests/{transaction}', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeUpdate'])->defaults('finance_source', 'accounting')->name('finance-requests.update');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'accountingStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'accountingPrint'])->name('finance-requests.print');
-    });
+});
 
     Route::prefix('admin/accounting')->name('admin.accounting.')->middleware('role:admin')->group(function () {
         Route::get('/finance-requests', [DepartmentFinanceRequestController::class, 'adminIndex'])->name('finance-requests.index');
@@ -418,7 +418,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::put('/accounts/{account}', [\App\Http\Controllers\AccountController::class, 'update'])->name('accounts.update');
         Route::post('/accounts/{account}/deposit', [\App\Http\Controllers\AccountController::class, 'deposit'])->name('accounts.deposit');
         Route::post('/accounts/{account}/withdraw', [\App\Http\Controllers\AccountController::class, 'withdraw'])->name('accounts.withdraw');
-    });
+});
 
     // ─── Warehouse module ───────────────────────────────────────────────────
     Route::prefix('warehouse')->name('warehouse.')->middleware('role:warehouse,admin')->group(function () {
@@ -529,7 +529,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/requests', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'warehouseStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'warehousePrint'])->name('finance-requests.print');
         Route::get('/reports', [WarehouseDashboardController::class, 'reports'])->name('reports');
-    });
+});
 
     Route::prefix('procurement')->name('procurement.')->middleware('role:procurement_manager,admin')->group(function () {
         Route::get('/suppliers', [\App\Http\Controllers\ProcurementSupplierController::class, 'index'])->name('suppliers.index');
@@ -563,7 +563,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::put('/requests/{transaction}', [\App\Http\Controllers\DepartmentFinanceRequestController::class, 'employeeUpdate'])->defaults('finance_source', 'procurement')->name('finance-requests.update');
         Route::post('/requests', [DepartmentFinanceRequestController::class, 'procurementStore'])->name('finance-requests.store');
         Route::get('/requests/{transaction}/print', [DepartmentFinanceRequestController::class, 'procurementPrint'])->name('finance-requests.print');
-    });
+});
 
     // ─── Shipper module ─────────────────────────────────────────────────────
     Route::prefix('shipper')->name('shipper.')->middleware('role:shipper,manager_shipper,admin')->group(function () {
@@ -627,7 +627,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
             Route::get('/route-planning', [ShipperDashboardController::class, 'routePlanning'])->name('route-planning');
             Route::get('/team-report', [ShipperDashboardController::class, 'teamReport'])->name('team-report');
             Route::get('/shipping-fee-report', [ShipperDashboardController::class, 'shippingFeeReport'])->name('shipping-fee-report');
-        });
+});
 
         // Shipper delivery schedule routes
         Route::get('/delivery-schedules', [ShipperDashboardController::class, 'deliverySchedules'])->name('delivery-schedules');
@@ -635,7 +635,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/delivery-schedules/{order}/move-down', [ShipperDashboardController::class, 'moveOwnScheduleDown'])->name('delivery-schedules.move-down');
         Route::post('/delivery-schedule/{schedule}/confirm', [ShipperDashboardController::class, 'confirmDeliverySchedule'])->name('confirm-delivery-schedule');
         Route::post('/delivery-schedule/{schedule}/reject', [ShipperDashboardController::class, 'rejectDeliverySchedule'])->name('reject-delivery-schedule');
-    });
+});
 
     // ─── CEO module ────────────────────────────────────────────────────────
     Route::prefix('director')->name('director.')->middleware('role:director,Director,admin')->group(function () {
@@ -688,7 +688,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/profile', [\App\Http\Controllers\CeoPageController::class, 'update'])->name('profile.update');
         Route::get('/change-password', [\App\Http\Controllers\CeoChangePasswordController::class, 'show'])->name('password.change');
         Route::post('/change-password', [\App\Http\Controllers\CeoChangePasswordController::class, 'update'])->name('password.update');
-    });
+});
 
     Route::prefix('ceo')->name('ceo.')->middleware('role:ceo,admin')->group(function () {
         Route::get('/sales-tax-policy', [\App\Http\Controllers\CeoSalesTaxPolicyController::class, 'edit'])->name('sales-tax-policy.edit');
@@ -761,7 +761,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         // Đổi mật khẩu CEO
         Route::get('/change-password', [\App\Http\Controllers\CeoChangePasswordController::class, 'show'])->name('password.change');
         Route::post('/change-password', [\App\Http\Controllers\CeoChangePasswordController::class, 'update'])->name('password.update');
-    });
+});
     Route::get('reports/revenue', [RevenueReportController::class, 'index'])
         ->name('reports.revenue')
         ->middleware('permission');
@@ -831,7 +831,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('admin/notifications/read-all', [AdminNotificationController::class, 'markAllAsRead'])->name('admin.notifications.read_all');
         Route::get('admin/notifications/{notificationId}', [AdminNotificationController::class, 'show'])->name('admin.notifications.show');
         Route::post('admin/notifications/{notificationId}/read', [AdminNotificationController::class, 'markAsRead'])->name('admin.notifications.read');
-    });
+});
     Route::get('admin/events', [AdminEventController::class, 'index'])->name('admin.events.index');
     Route::get('admin/organization-units', [OrganizationUnitController::class, 'index'])->name('admin.organization-units.index')->middleware('role:admin');
     Route::patch('admin/order-fee-types/{orderFeeType}/toggle', [\App\Http\Controllers\Admin\OrderFeeTypeController::class, 'toggle'])->name('admin.order-fee-types.toggle')->middleware('role:admin');
@@ -857,7 +857,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::post('/load', [\App\Http\Controllers\Admin\GoogleSheetOrderImportController::class, 'load'])->name('load');
         Route::post('/review', [\App\Http\Controllers\Admin\GoogleSheetOrderImportController::class, 'review'])->name('review');
         Route::post('/', [\App\Http\Controllers\Admin\GoogleSheetOrderImportController::class, 'store'])->name('store');
-    });
+});
     Route::prefix('admin/order-templates')->name('admin.order-templates.')->middleware('role:admin')->group(function () {
         Route::get('/', [\App\Http\Controllers\Admin\OrderTemplateController::class, 'index'])->name('index');
         Route::post('/copy-to-sale', [\App\Http\Controllers\Admin\OrderTemplateController::class, 'copyToSale'])->name('copy-to-sale');
@@ -865,7 +865,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::put('/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'adminTemplateUpdate'])->name('update');
         Route::put('/{draft}/automation', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'adminTemplateAutomation'])->name('automation');
         Route::delete('/{draft}', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'adminTemplateDestroy'])->name('destroy');
-    });
+});
     Route::get('admin/text-order-import', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'index'])->name('admin.text-order-import.index')->middleware('role:admin');
     Route::get('admin/text-order-import/export-daily', [\App\Http\Controllers\Admin\TextOrderImportController::class, 'exportDailyOrders'])->name('admin.text-order-import.export-daily')->middleware('role:admin');
     Route::get('admin/order-activity', [\App\Http\Controllers\Admin\OrderActivityController::class, 'index'])->name('admin.order-activity.index')->middleware('role:admin');
@@ -891,7 +891,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::delete('/{id}', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'destroy'])->name('.destroy');
         Route::post('/{transfer}/orders/{order}/detach', [\App\Http\Controllers\Warehouse\OrderTransferController::class, 'detachWaitingTransfer'])->name('.orders.detach');
         Route::post('/{transfer}/reassign', [\App\Http\Controllers\AdminTransportController::class, 'reassignGroup'])->name('.reassign');
-    });
+});
     Route::post('admin/warehouse-dispatch-slips/{dispatchSlip}/reassign', [\App\Http\Controllers\AdminTransportController::class, 'reassignSlip'])
         ->middleware('role:admin')->name('admin.warehouse-dispatch-slips.reassign');
     Route::prefix('admin/warehouse-dispatch-slips')->name('admin.warehouse-dispatch-slips.')->middleware('role:admin')->group(function () {
@@ -907,7 +907,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::delete('/{dispatchSlip}', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'destroy'])->name('destroy');
         Route::get('/{dispatchSlip}/print-export', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'printExport'])->name('print-export');
         Route::get('/{dispatchSlip}/print-import', [\App\Http\Controllers\Warehouse\WarehouseDispatchSlipController::class, 'printImport'])->name('print-import');
-    });
+});
 
     // Quản lý đơn hàng
     Route::get('orders/list-ajax', [OrderController::class, 'listAjax'])->name('orders.list-ajax');
@@ -920,7 +920,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::middleware('role:admin,sale,leader,leader_sale,sale_manager,manager,manager_sale')->group(function () {
         Route::post('/special-warehouse-pickup/options', [\App\Http\Controllers\SpecialWarehousePickupController::class, 'options'])->name('special-pickup.options');
         Route::post('/special-warehouse-pickup', [\App\Http\Controllers\SpecialWarehousePickupController::class, 'store'])->name('special-pickup.store');
-    });
+});
     Route::get('/orders/ajax-customer-search', [OrderController::class, 'ajaxCustomerSearch'])->name('orders.ajax_customer_search');
     Route::get('/orders/ajax-variant-search', [OrderController::class, 'ajaxVariantSearch'])->name('orders.ajax_variant_search');
     Route::post('/orders/product-variants/{variant}/preference', [OrderController::class, 'updateVariantPreference'])->name('orders.variant_preference');
@@ -1185,7 +1185,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::put('truck-routes/{truckRoute}/stops/{stop}', [\App\Http\Controllers\Admin\TruckRouteController::class, 'updateStop'])->name('truck-routes.stops.update');
         Route::delete('truck-routes/{truckRoute}/stops/{stop}', [\App\Http\Controllers\Admin\TruckRouteController::class, 'destroyStop'])->name('truck-routes.stops.destroy');
         Route::resource('truck-routes', \App\Http\Controllers\Admin\TruckRouteController::class);
-    });
+});
 
     Route::get('profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('profile', [ProfileController::class, 'update'])->name('profile.update');
@@ -1423,10 +1423,12 @@ Route::middleware('auth')->group(function () {
 
 // Sales debt monitoring: sheet-derived balances are separate from order accounting.
 Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,manager,manager_sale,account,accountant,accounting,director,ceo'])->group(function () {
+    Route::get('/customer-debt/negotiation', [\App\Http\Controllers\CustomerDebtNegotiationController::class, 'index'])->name('customer-debt.negotiation');
     Route::get('/customer-debt/payments', [\App\Http\Controllers\CustomerPaymentController::class, 'index'])->name('customer-debt.payments');
     Route::post('/customer-debt/payments/refresh', [\App\Http\Controllers\CustomerPaymentController::class, 'refresh'])->middleware('throttle:6,1')->name('customer-debt.payments.refresh');
     Route::get('/customer-debt/payments/updates', [\App\Http\Controllers\CustomerPaymentController::class, 'updates'])->name('customer-debt.payments.updates');
     Route::patch('/customer-debt/report/recovery', [\App\Http\Controllers\CustomerDebtReportController::class, 'updateRecovery'])->middleware('role:admin')->name('customer-debt.report.recovery');
+    Route::post('/customer-debt/report/priority', [\App\Http\Controllers\CustomerDebtReportController::class, 'updatePriority'])->middleware('role:admin')->name('customer-debt.report.priority');
     Route::get('/customer-debt/report', [\App\Http\Controllers\CustomerDebtReportController::class, 'index'])->middleware('role:admin')->name('customer-debt.report');
     Route::get('/customer-debt/report/history', [\App\Http\Controllers\CustomerDebtReportController::class, 'history'])->middleware('role:admin')->name('customer-debt.report.history');
     Route::post('/customer-debt/report/reminders', [\App\Http\Controllers\CustomerDebtReportController::class, 'remind'])->middleware('role:admin')->name('customer-debt.report.remind');

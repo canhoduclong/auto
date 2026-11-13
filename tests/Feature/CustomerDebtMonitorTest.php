@@ -784,6 +784,8 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(500, $data['period']['gifts']);
         self::assertSame(12500, $data['period']['payments']);
         self::assertSame(-8000, $data['period']['increase']);
+        self::assertTrue($data['hasPeriodFilter']);
+        self::assertTrue($data['rows']->every(fn ($row) => $row['period_increase'] === -320));
         self::assertSame('2026-10-26', $data['period']['from']);
         self::assertSame('2026-11-13', $data['period']['to']);
     }
@@ -801,6 +803,131 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(0, $data['period']['sales']);
         self::assertSame(50, $data['period']['payments']);
         self::assertSame(-50, $data['period']['increase']);
+        self::assertSame(-50, $data['rows']->first()['period_increase']);
+    }
+
+    public function test_negotiation_deduplicates_aliases_and_includes_customer_without_sheet_history(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình'), $this->entry('OLD02', 'Tên nguồn khác')]);
+        foreach (array_keys($service->summarize($service->snapshot()['entries'])) as $key) {
+            $service->mapCustomer($key, 1, 7);
+        }
+        $policies = new \App\Services\CustomerDebtPolicyService;
+        $policies->save(['customer_id' => 1], ['allowed_orders' => 2, 'credit_limit' => 10000, 'due_days' => 7], 7, true, 0);
+        $policies->save(['customer_id' => 2], ['allowed_orders' => 1, 'credit_limit' => 5000, 'due_days' => 14], 7, true, 0);
+        $data = (new \App\Http\Controllers\CustomerDebtNegotiationController)->index($this->request([], 'admin'), $service, new \App\Services\CustomerDebtReportService)->getData();
+        self::assertSame(2, $data['rows']->total());
+        self::assertSame(15000, $data['summary']['max_debt']);
+        self::assertSame(2, $data['summary']['configured']);
+        self::assertSame(2, $data['rows']->firstWhere('customer_id', 1)['policy']['allowed_orders']);
+        self::assertSame(7, $data['rows']->firstWhere('customer_id', 1)['policy']['due_days']);
+        self::assertSame(5000, $data['rows']->firstWhere('customer_id', 2)['max_debt']);
+        self::assertFalse($data['rows']->firstWhere('customer_id', 2)['data_available']);
+    }
+
+    public function test_negotiation_totals_cover_all_pages_and_filters_apply_before_summing(): void
+    {
+        $entries = [];
+        for ($i = 1; $i <= 25; $i++) {
+            $entries[] = $this->entry('TERM'.$i, 'Khách đàm phán '.$i);
+        }
+        $service = $this->service($entries);
+        $groups = $service->summarize($entries);
+        $group = reset($groups);
+        (new \App\Services\CustomerDebtPolicyService)->save($group, ['allowed_orders' => 3, 'credit_limit' => 12345, 'due_days' => 10], 7, true, 0);
+        $controller = new \App\Http\Controllers\CustomerDebtNegotiationController;
+        $data = $controller->index($this->request(['per_page' => 20, 'page' => 2], 'admin'), $service, new \App\Services\CustomerDebtReportService)->getData();
+        self::assertSame(27, $data['summary']['customers']);
+        self::assertCount(7, $data['rows']);
+        self::assertSame(12345, $data['summary']['max_debt']);
+        $configured = $controller->index($this->request(['terms' => 'configured'], 'admin'), $service, new \App\Services\CustomerDebtReportService)->getData();
+        self::assertSame(1, $configured['rows']->total());
+        self::assertSame(12345, $configured['summary']['max_debt']);
+        $defaults = $controller->index($this->request(['terms' => 'default'], 'admin'), $service, new \App\Services\CustomerDebtReportService)->getData();
+        self::assertSame(26, $defaults['rows']->total());
+        self::assertSame(0, $defaults['summary']['max_debt']);
+        self::assertTrue($defaults['rows']->every(fn ($r) => $r['policy']['allowed_orders'] === 0 && $r['policy']['due_days'] === 1));
+    }
+
+    public function test_debt_report_displays_agreed_ceiling_and_days_for_customers_without_source_rows(): void
+    {
+        (new \App\Services\CustomerDebtPolicyService)->save(['customer_id' => 1], ['allowed_orders' => 2, 'credit_limit' => 100000000, 'due_days' => 4], 7, true, 0);
+        $controller = new \App\Http\Controllers\CustomerDebtReportController;
+        $data = $controller->index($this->request(['balance' => 'all'], 'admin'), $this->service([]), new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        self::assertSame(100000000, $data['rows']->firstWhere('customer_id', 1)['policy']['credit_limit']);
+        self::assertSame(4, $data['rows']->firstWhere('customer_id', 1)['policy']['due_days']);
+        self::assertSame(0, $data['rows']->firstWhere('customer_id', 2)['policy']['credit_limit']);
+        self::assertSame(1, $data['rows']->firstWhere('customer_id', 2)['policy']['due_days']);
+        self::assertNull($data['rows']->firstWhere('customer_id', 1)['period_increase']);
+        self::assertFalse($data['hasPeriodFilter']);
+    }
+
+    public function test_sales_cannot_view_global_negotiated_limits(): void
+    {
+        $this->expectException(HttpException::class);
+        (new \App\Http\Controllers\CustomerDebtNegotiationController)->index($this->request(), $this->service([]), new \App\Services\CustomerDebtReportService);
+    }
+
+    public function test_priority_stars_persist_and_sort_before_selected_report_column(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình'), array_replace($this->entry('KH02', 'Anh Hải'), ['amount' => 2000])]);
+        $controller = new \App\Http\Controllers\CustomerDebtReportController;
+        $priorities = new \App\Services\CustomerDebtPriorityService;
+        $report = fn () => $controller->index($this->request(['sort' => 'balance', 'direction' => 'asc'], 'admin'), $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        $initial = $report();
+        $version = $initial['rows']->firstWhere('customer_id', 2)['priority']['version'];
+        $controller->updatePriority($this->request(['customer_id' => 2, 'stars' => 5, 'priority_version' => $version], 'admin'), $service, $priorities);
+        $starred = $report();
+        self::assertSame(2, $starred['rows']->first()['customer_id']);
+        self::assertSame(5, $starred['rows']->first()['priority']['stars']);
+        $controller->updatePriority($this->request(['customer_id' => 2, 'stars' => 0, 'priority_version' => $starred['rows']->first()['priority']['version']], 'admin'), $service, $priorities);
+        self::assertSame(1, $report()['rows']->first()['customer_id']);
+        self::assertSame(0, $report()['rows']->firstWhere('customer_id', 2)['priority']['stars']);
+    }
+
+    public function test_source_priority_moves_a_later_page_customer_to_top_and_survives_mapping(): void
+    {
+        $entries = [];
+        for ($i = 1; $i <= 25; $i++) {
+            $entries[] = $this->entry('PIN'.$i, 'Khách ưu tiên '.$i);
+        }
+        $service = $this->service($entries);
+        $group = array_values($service->summarize($entries))[24];
+        $priorities = new \App\Services\CustomerDebtPriorityService;
+        $priorities->save($group, 4, $priorities->effective($group, [])['version'], $this->user('admin'));
+        $controller = new \App\Http\Controllers\CustomerDebtReportController;
+        $data = $controller->index($this->request(['per_page' => 20], 'admin'), $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        self::assertSame($group['key'], $data['rows']->first()['key']);
+        self::assertSame(4, $data['rows']->first()['priority']['stars']);
+        self::assertCount(20, $data['rows']);
+        $service->mapCustomer($group['key'], 1, 7);
+        $mapped = $controller->index($this->request([], 'admin'), $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        self::assertSame(1, $mapped['rows']->first()['customer_id']);
+        self::assertSame(4, $mapped['rows']->first()['priority']['stars']);
+        $row = $mapped['rows']->first();
+        $controller->updatePriority($this->request(['customer_id' => 1, 'stars' => 0, 'priority_version' => $row['priority']['version']], 'admin'), $service, $priorities);
+        $cleared = $controller->index($this->request([], 'admin'), $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        self::assertSame(0, $cleared['rows']->firstWhere('customer_id', 1)['priority']['stars']);
+    }
+
+    public function test_priority_rejects_stale_changes_and_leaves_the_latest_value(): void
+    {
+        $priorities = new \App\Services\CustomerDebtPriorityService;
+        $row = ['customer_id' => 1, 'source_keys' => []];
+        $version = $priorities->effective($row, [])['version'];
+        $priorities->save($row, 3, $version, $this->user('admin'));
+        try {
+            $priorities->save($row, 1, $version, $this->user('admin'));
+            self::fail('Stale priority overwrote latest value');
+        } catch (\Illuminate\Validation\ValidationException) {
+            self::assertSame(3, $priorities->effective($row, $priorities->records())['stars']);
+        }
+    }
+
+    public function test_sales_cannot_change_report_follow_up_priority(): void
+    {
+        $this->expectException(HttpException::class);
+        (new \App\Http\Controllers\CustomerDebtReportController)->updatePriority($this->request(['customer_id' => 1, 'stars' => 5, 'priority_version' => str_repeat('0', 64)]), $this->service([]), new \App\Services\CustomerDebtPriorityService);
     }
 
     public function test_debt_report_is_admin_only_and_deduplicates_linked_sources(): void
