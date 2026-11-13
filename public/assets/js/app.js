@@ -68,6 +68,17 @@ const App = function () {
         // Config
         if (sidebarMainElement) {
 
+            // Keep the user's menu width when navigating or reloading.
+            const storageKey = 'mainSidebarCollapsed';
+            try {
+                const saved = localStorage.getItem(storageKey);
+                if (saved !== null) {
+                    sidebarMainElement.classList.toggle(resizeClass, saved === '1');
+                }
+            } catch (_) {
+                // Menu controls still work when browser storage is unavailable.
+            }
+
             // Define variables
             const unfoldDelay = 150;
             let timerStart,
@@ -78,6 +89,9 @@ const App = function () {
                 toggler.addEventListener('click', function(e) {
                     e.preventDefault();
                     sidebarMainElement.classList.toggle(resizeClass);
+                    try {
+                        localStorage.setItem(storageKey, sidebarMainElement.classList.contains(resizeClass) ? '1' : '0');
+                    } catch (_) {}
                     !sidebarMainElement.classList.contains(resizeClass) && sidebarMainElement.classList.remove(unfoldClass);
                 });                
             });
