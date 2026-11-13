@@ -39,6 +39,11 @@
             visibility: visible;
         }
 
+        /* Allow wide page content to shrink within the space beside the sidebar. */
+        .page-content > .content-wrapper { min-width: 0; }
+        .content-wrapper > .navbar { flex-shrink: 0; min-width: 0; }
+        .content-wrapper > .content-inner { min-height: 0; }
+
         @media (max-width: 991.98px) {
             .sidebar.sidebar-main {
                 position: fixed;
@@ -143,7 +148,6 @@
 		<div class="sidebar sidebar-dark sidebar-main sidebar-expand-lg">
              @include('layouts.sidebar')
         </div>
-        <div class="mobile-drawer-overlay d-lg-none js-mobile-drawer-overlay"></div>
         <div class="content-wrapper">
             <div class="navbar navbar-expand-lg navbar-static shadow app-mobile-admin-header">
 				<div class="container-fluid">
@@ -381,6 +385,8 @@
         </div>
        
         
+
+        <div class="mobile-drawer-overlay d-lg-none js-mobile-drawer-overlay"></div>
 
         {{-- Plugins thường dùng của Limitless (tùy gói bạn có) --}}
         {{-- <script src="{{ asset('assets/js/plugins/forms/styling/uniform.min.js') }}"></script> --}}

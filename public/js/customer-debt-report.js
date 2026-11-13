@@ -42,33 +42,47 @@
         const line=box=>{
             const d=box.dataset;
             const purchase=d.purchase?`${d.purchase} (${daysLabel(d.purchaseDays)})`:'Chưa có ngày mua';
-            return `**${d.name}**: **${money(Number(d.balance))}đ** | Nợ **${daysLabel(d.paymentDays)}** | Đơn mới: **${purchase}**`;
+            return `${d.name}: ${money(Number(d.balance))}đ | Nợ ${daysLabel(d.paymentDays)} | Đơn mới: ${purchase}`;
         };
         boxes.forEach(box=>box.addEventListener('change',update));
         all.addEventListener('change',()=>{boxes.forEach(box=>box.checked=all.checked);update();});
         copy.addEventListener('click',async()=>{
             const targets=selected();
-            const range=bulk.dataset.from&&bulk.dataset.to?`${bulk.dataset.from} - ${bulk.dataset.to}`:'';
-            const title=range?`Nhắc công nợ từ ngày ${bulk.dataset.from} - đến ngày: ${bulk.dataset.to}`:`Nhắc công nợ ngày ${bulk.dataset.date}`;
-            const total=targets.reduce((sum,box)=>sum+Number(box.dataset.balance),0);
-            const summary=[`💰 **TỔNG CÔNG NỢ: ${money(total)}đ**`];
-            if(range){
-                const available=targets.filter(box=>box.dataset.periodIncrease!=='');
-                const increase=available.reduce((sum,box)=>sum+Number(box.dataset.periodIncrease),0);
-                summary.push(`💰 **CÔNG NỢ PHÁT SINH (${range}): ${available.length?money(increase)+'đ':'Chưa có dữ liệu'}**`);
-                const top=available.filter(box=>Number(box.dataset.periodIncrease)>0).sort((a,b)=>Number(b.dataset.periodIncrease)-Number(a.dataset.periodIncrease)).slice(0,3);
-                if(top.length)summary.push('    * Khách phát sinh nhiều:',...top.map(box=>`    🔥 **${box.dataset.name}: ${money(Number(box.dataset.periodIncrease))} đ**`));
-            }
-            const content=`💣💣💣 ${title} 💣💣💣\n\n${targets.map((box,index)=>`${index+1}. ${line(box)}`).join('\n')}\n\n${summary.join('\n')}\n\n🎯 CÔNG NỢ CHƯA VỀ – HOA HỒNG CÒN XA! 🦆💸`;
-
+            const range=bulk.dataset.from&&bulk.dataset.to?`${bulk.dataset.from} – ${bulk.dataset.to}`:'';
+            const title=`NHẮC CÔNG NỢ | ${range||bulk.dataset.date}`;
+            const escape=value=>String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            const buildContent=rich=>{
+                const text=value=>rich?escape(value):String(value);
+                const bold=value=>rich?`<strong>${escape(value)}</strong>`:String(value);
+                const total=targets.reduce((sum,box)=>sum+Number(box.dataset.balance),0);
+                const lines=[`💣💣💣 ${bold(title)} 💣💣💣`,
+                    `💬 ${bold('Doanh số là thành tích – Thu tiền là kết quả!')}`,
+                    'Anh em cùng chủ động theo sát công nợ để hoa hồng về đúng hẹn nhé!',
+                    `📌 ${bold('Danh sách khách hàng cần theo dõi và thu hồi công nợ:')}`, ''];
+                targets.forEach((box,index)=>{
+                    const d=box.dataset;
+                    const purchase=d.purchase?`${d.purchase} (${daysLabel(d.purchaseDays)})`:'Chưa có ngày mua';
+                    lines.push(`${index+1}. ${bold(d.name)}: ${bold(money(Number(d.balance))+'đ')} | Nợ ${bold(daysLabel(d.paymentDays))} | Đơn mới: ${text(purchase)}`);
+                });
+                lines.push('',`💰 TỔNG CÔNG NỢ: ${bold(money(total)+'đ')}`);
+                if(range){
+                    const available=targets.filter(box=>box.dataset.periodIncrease!=='');
+                    const increase=available.reduce((sum,box)=>sum+Number(box.dataset.periodIncrease),0);
+                    lines.push(`💰 CÔNG NỢ PHÁT SINH (${text(range)}): ${bold(available.length?money(increase)+'đ':'Chưa có dữ liệu')}`);
+                    const top=available.filter(box=>Number(box.dataset.periodIncrease)>0).sort((a,b)=>Number(b.dataset.periodIncrease)-Number(a.dataset.periodIncrease)).slice(0,3);
+                    if(top.length)lines.push('    • Khách phát sinh nhiều:',...top.map(box=>`    🔥 ${bold(box.dataset.name)}: ${bold(money(Number(box.dataset.periodIncrease))+' đ')}`));
+                }
+                lines.push('','🎯 CÔNG NỢ CHƯA VỀ – HOA HỒNG CÒN XA! 🦆💸');
+                return lines.join(rich?'<br>':'\n');
+            };
+            const content=buildContent(false);
             try{
                 if(navigator.clipboard&&window.isSecureContext){
-                    // Include rich text for paste targets that preserve bold formatting.
                     if(typeof ClipboardItem!=='undefined'&&navigator.clipboard.write){
-                        const escape=text=>text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                        const html=escape(content).replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
-                        try{await navigator.clipboard.write([new ClipboardItem({'text/plain':new Blob([content],{type:'text/plain'}),'text/html':new Blob([html],{type:'text/html'})})]);}
-                        catch(_){await navigator.clipboard.writeText(content);}
+                        try{await navigator.clipboard.write([new ClipboardItem({
+                            'text/plain':new Blob([content],{type:'text/plain'}),
+                            'text/html':new Blob([buildContent(true)],{type:'text/html'})
+                        })]);}catch(_){await navigator.clipboard.writeText(content);}
                     }else await navigator.clipboard.writeText(content);
                 }
                 else {

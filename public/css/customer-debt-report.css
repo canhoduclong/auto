@@ -52,3 +52,19 @@
 .collection-table .collection-reminded-today > td,
 .collection-table .collection-reminded-today > td a,
 .collection-table .collection-reminded-today > td strong { color:#6b21a8!important; font-weight:700; }
+
+/* Reserve flexible space for customer names and collection history. */
+.collection-report-table { width:100%; table-layout:auto; }
+.collection-report-table > :not(caption) > * > * { padding-left:7px; padding-right:7px; }
+.collection-report-table .collection-select-column,
+.collection-report-table .collection-compact { width:1%; white-space:nowrap; text-align:center; }
+.collection-report-table .collection-select-column { padding-left:9px; padding-right:9px; }
+.collection-report-table .collection-negotiation { width:1%; min-width:90px; max-width:120px; white-space:normal; }
+.collection-report-table .collection-negotiation strong { white-space:nowrap; }
+.collection-report-table .collection-days { width:1%; min-width:68px; max-width:90px; white-space:normal; }
+.collection-report-table .collection-days .debt-sort-link { white-space:normal; }
+.collection-report-table .collection-name { width:24%; min-width:240px; max-width:360px; white-space:normal; overflow-wrap:anywhere; }
+.collection-report-table .collection-status { width:20%; min-width:230px; max-width:340px; white-space:normal; overflow-wrap:anywhere; }
+.collection-report-table .collection-status .badge { max-width:100%; white-space:normal; text-align:left; line-height:1.4; }
+.collection-report-table .collection-tools,
+.collection-report-table .collection-tools-heading { width:1%; min-width:160px; }
