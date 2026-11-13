@@ -1166,6 +1166,34 @@ class CustomerDebtMonitorTest extends TestCase
         }
     }
 
+    public function test_debt_report_and_payment_list_reconcile_both_tabs_after_each_refresh(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $this->collectionClock('2026-11-13 12:00:00');
+        $service = new CustomerDebtSheetService;
+        $sales = [['Ngày', 'Mã KH', 'Khách hàng', 'Tổng tiền'], ['13/11/2026', 'CRM01', 'Chị Bình', '1000']];
+        $cash = [['Ngày', 'Mã KH', 'Khách hàng', 'Tiền thu'], ['12/11/2026', 'CRM01', 'Chị Bình', '200']];
+        $bank = [['Ngày tháng', 'Code', 'Tên KH', 'Thu', 'Chi'], ['13/11/2026', 'TTBH', 'Chị Bình', '300', ''], ['13/11/2026', 'TTBH', '', '50', '']];
+        foreach ([300, 400, 400] as $bankAmount) {
+            $bank[1][3] = (string) $bankAmount;
+            $service->save($sales, $cash, 7, 'google', $bank);
+            $report = (new \App\Http\Controllers\CustomerDebtReportController)->index(
+                $this->request(['report_source' => 'sheet', 'scope' => 'orders', 'from' => '2026-11-13', 'to' => '2026-11-13'], 'admin'),
+                $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService
+            )->getData();
+            $payments = (new \App\Http\Controllers\CustomerPaymentController)->index(
+                $this->request(['customer_id' => 1], 'admin'), $service, new \App\Services\CustomerPaymentReportService
+            )->getData();
+            self::assertSame(200 + $bankAmount, $report['rows']->first()['payments']);
+            self::assertSame($payments['summary']['amount'], $report['rows']->first()['payments']);
+            self::assertSame($payments['summary']['amount'], $report['summary']['payments']);
+            self::assertSame(800 - $bankAmount, $report['rows']->first()['balance']);
+            self::assertSame('2026-11-13', $report['rows']->first()['last_payment_date']);
+            self::assertSame(2, $payments['rows']->total());
+            self::assertSame($payments['snapshot']['loaded_at'], $report['snapshot']['loaded_at']);
+        }
+    }
+
     public function test_payment_tokens_distinguish_bank_tabs_and_preserve_existing_cash_flow_baselines(): void
     {
         $collections = new \App\Services\DebtCollectionService;
