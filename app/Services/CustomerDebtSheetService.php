@@ -13,6 +13,10 @@ use RuntimeException;
 
 class CustomerDebtSheetService
 {
+    public const PAYMENT_TABS = ['Dongtienhoatdong', 'TKCNMBBDUE', 'TKCTVCB', 'TKCTBIDV', 'TKCTVPB'];
+
+    public const PAYMENT_SHEET_IDS = ['Dongtienhoatdong' => 241453650, 'TKCNMBBDUE' => 612096373, 'TKCTVCB' => 940352522, 'TKCTBIDV' => 1358852522, 'TKCTVPB' => 46388864];
+
     private const FILE = 'customer-debt/snapshot.json';
 
     public function snapshot(): ?array
@@ -22,15 +26,24 @@ class CustomerDebtSheetService
         return $disk->exists(self::FILE) ? json_decode($disk->get(self::FILE), true, 512, JSON_THROW_ON_ERROR) : null;
     }
 
-    public function save(array $sales, array $payments, ?int $userId, string $source, ?array $bankPayments = null): array
+    public function save(array $sales, array $payments, ?int $userId, string $source, ?array $bankPayments = null, array $additionalPayments = []): array
     {
-        // Both tabs are validated before replacing the complete snapshot, avoiding double imports.
+        // Validate every supplied tab before atomically replacing the complete snapshot.
         $issues = [];
         $entries = array_merge($this->parse($sales, 'sale', $issues), $this->parse($payments, 'payment', $issues, 'Dongtienhoatdong'));
-        if ($bankPayments !== null) {
-            $entries = array_merge($entries, $this->parse($bankPayments, 'payment', $issues, 'TKCNMBBDUE'));
+        $paymentTabs = ['Dongtienhoatdong'];
+        $bankTabs = $bankPayments === null ? [] : ['TKCNMBBDUE' => $bankPayments];
+        foreach ($additionalPayments as $tab => $values) {
+            if (! in_array($tab, array_slice(self::PAYMENT_TABS, 2), true) || ! is_array($values)) {
+                throw new RuntimeException('Tab thanh toán không hợp lệ: '.$tab);
+            }
+            $bankTabs[$tab] = $values;
         }
-        $data = ['entries' => $entries, 'gift_note_count' => count(array_filter($entries, fn ($entry) => ($entry['gift_note'] ?? '') !== '')), 'issues' => $issues, 'spreadsheet_id' => config('services.google_sheets.debt_spreadsheet_id'), 'loaded_at' => now()->toIso8601String(), 'loaded_by' => $userId, 'source' => $source, 'payment_tabs' => $bankPayments === null ? ['Dongtienhoatdong'] : ['Dongtienhoatdong', 'TKCNMBBDUE']];
+        foreach ($bankTabs as $tab => $values) {
+            $entries = array_merge($entries, $this->parse($values, 'payment', $issues, $tab));
+            $paymentTabs[] = $tab;
+        }
+        $data = ['entries' => $entries, 'gift_note_count' => count(array_filter($entries, fn ($entry) => ($entry['gift_note'] ?? '') !== '')), 'issues' => $issues, 'spreadsheet_id' => config('services.google_sheets.debt_spreadsheet_id'), 'loaded_at' => now()->toIso8601String(), 'loaded_by' => $userId, 'source' => $source, 'payment_tabs' => $paymentTabs];
 
         return Cache::lock('customer-debt-load', 60)->block(5, function () use ($data) {
             $disk = Storage::disk('local');
@@ -72,6 +85,19 @@ class CustomerDebtSheetService
 
             return $tracked['batch']['summary'];
         });
+    }
+
+    /** Positional tabs from fetch/workbook: sales, then PAYMENT_TABS in order. */
+    public function saveTabs(array $tabs, ?int $userId, string $source): array
+    {
+        $additional = [];
+        foreach (array_slice(self::PAYMENT_TABS, 2, null, true) as $index => $tab) {
+            if (isset($tabs[$index + 1])) {
+                $additional[$tab] = $tabs[$index + 1];
+            }
+        }
+
+        return $this->save($tabs[0], $tabs[1], $userId, $source, $tabs[2] ?? null, $additional);
     }
 
     private function withPaymentGroupKeys(array $data): array
@@ -195,7 +221,7 @@ class CustomerDebtSheetService
 
     public function fetch(): array
     {
-        return $this->fetchTabs(['nhatkybanhang', 'dongtienhoatdong', 'tkcnmbbdue']);
+        return $this->fetchTabs(array_merge(['nhatkybanhang'], array_map('strtolower', self::PAYMENT_TABS)));
     }
 
     private function fetchTabs(array $names): array
@@ -235,7 +261,7 @@ class CustomerDebtSheetService
             $tabs = [];
             foreach ($book->getWorksheetIterator() as $sheet) {
                 $name = str_replace(' ', '', $this->normalize($sheet->getTitle()));
-                if (in_array($name, ['nhatkybanhang', 'dongtienhoatdong', 'tkcnmbbdue'], true)) {
+                if (in_array($name, array_merge(['nhatkybanhang'], array_map('strtolower', self::PAYMENT_TABS)), true)) {
                     $tabs[$name] = $sheet->toArray('', true, true, false);
                 }
             }
@@ -243,7 +269,14 @@ class CustomerDebtSheetService
                 throw new RuntimeException('File Excel phải có hai tab nhatkybanhang và Dongtienhoatdong.');
             }
 
-            return isset($tabs['tkcnmbbdue']) ? [$tabs['nhatkybanhang'], $tabs['dongtienhoatdong'], $tabs['tkcnmbbdue']] : [$tabs['nhatkybanhang'], $tabs['dongtienhoatdong']];
+            $result = [$tabs['nhatkybanhang'], $tabs['dongtienhoatdong']];
+            foreach (array_slice(self::PAYMENT_TABS, 1, null, true) as $index => $tab) {
+                if (isset($tabs[strtolower($tab)])) {
+                    $result[$index + 1] = $tabs[strtolower($tab)];
+                }
+            }
+
+            return $result;
         } finally {
             $book->disconnectWorksheets();
         }
@@ -270,7 +303,7 @@ class CustomerDebtSheetService
             'address' => ['dia chi', 'address'],
             'amount' => $type === 'sale' ? ['tong tien', 'thanh tien', 'amount'] : ['tien thu', 'so tien thu', 'thu'],
             'gift' => ['tang', 'tien tang'],
-            'category' => $sourceSheet === 'TKCNMBBDUE' ? ['loai', 'code'] : ['loai'],
+            'category' => in_array($sourceSheet, array_slice(self::PAYMENT_TABS, 1), true) ? ['loai', 'code'] : ['loai'],
             'direction' => ['loai giao dich', 'thu chi', 'thu/chi'],
             'generic_amount' => ['so tien', 'amount'],
             'note' => ['noi dung', 'dien giai', 'ghi chu', 'san pham', 'dvt'],

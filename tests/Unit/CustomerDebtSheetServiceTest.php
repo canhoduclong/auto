@@ -162,6 +162,27 @@ class CustomerDebtSheetServiceTest extends TestCase
         }
     }
 
+    public function test_workbook_keeps_all_five_payment_tabs_even_when_bank_tabs_are_out_of_order(): void
+    {
+        $book = new \PhpOffice\PhpSpreadsheet\Spreadsheet;
+        $book->getActiveSheet()->setTitle('nhatkybanhang')->fromArray([['Ngày', 'Khách hàng', 'Tổng tiền'], ['13/11/2026', 'Chị Bình', 1000]]);
+        foreach (array_reverse(CustomerDebtSheetService::PAYMENT_TABS) as $tab) {
+            $book->createSheet()->setTitle($tab)->fromArray([['Ngày tháng', 'Code', 'Tên KH', 'Thu'], ['13/11/2026', 'TTBH', $tab, 100]]);
+        }
+        $path = tempnam(sys_get_temp_dir(), 'debt-five-');
+        try {
+            (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save($path);
+            $tabs = (new CustomerDebtSheetService)->workbook($path);
+            self::assertCount(6, $tabs);
+            foreach (CustomerDebtSheetService::PAYMENT_TABS as $i => $tab) {
+                self::assertSame($tab, $tabs[$i + 1][1][2]);
+            }
+        } finally {
+            unlink($path);
+            $book->disconnectWorksheets();
+        }
+    }
+
     public function test_real_sales_headers_use_first_customer_and_date_columns(): void
     {
         $s = new CustomerDebtSheetService;

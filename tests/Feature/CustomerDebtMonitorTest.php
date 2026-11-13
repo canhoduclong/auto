@@ -1194,6 +1194,60 @@ class CustomerDebtMonitorTest extends TestCase
         }
     }
 
+    public function test_all_five_payment_tabs_reconcile_on_all_three_pages_and_repeat_refresh(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $this->collectionClock('2026-11-13 12:00:00');
+        $tabs = [
+            [['Ngày', 'Mã KH', 'Khách hàng', 'Tổng tiền'], ['13/11/2026', 'CRM01', 'Chị Bình', '1000']],
+            [['Ngày', 'Mã KH', 'Khách hàng', 'Tiền thu'], ['12/11/2026', 'CRM01', 'Chị Bình', '100']],
+        ];
+        foreach (array_slice(CustomerDebtSheetService::PAYMENT_TABS, 1) as $tab) {
+            $tabs[] = [['Ngày tháng', 'Code', 'Tên KH', 'Thu', 'Chi'],
+                ['13/11/2026', 'TTBH', 'Chị Bình', '100', ''],
+                ['13/11/2026', 'TTM', 'Chị Bình', '9000', ''],
+                ['13/11/2026', 'CPK', '', '', '10'],
+                ['13/11/2026', 'TTBH', '', '50', '']];
+        }
+        $service = new class($tabs) extends CustomerDebtSheetService
+        {
+            public function __construct(private array $tabs) {}
+
+            public function fetch(): array
+            {
+                return $this->tabs;
+            }
+        };
+        // Both update entry points must persist the same complete snapshot.
+        (new CustomerDebtMonitorController)->load($this->request(['source' => 'google'], 'admin'), $service);
+        $first = $service->snapshot()['payment_syncs'][0];
+        self::assertSame(9, $first['new_count']);
+        (new \App\Http\Controllers\CustomerPaymentController)->refresh($this->request([], 'admin'), $service);
+        self::assertSame(0, $service->snapshot()['payment_syncs'][0]['new_count']);
+        self::assertSame(CustomerDebtSheetService::PAYMENT_TABS, $service->snapshot()['payment_tabs']);
+        $monitor = (new CustomerDebtMonitorController)->index($this->request(['tab' => 'all'], 'admin'), $service)->getData();
+        self::assertSame(500, $monitor['customerDebts'][1]['payments']);
+        self::assertSame(500, $monitor['customerDebts'][1]['balance']);
+        $report = (new \App\Http\Controllers\CustomerDebtReportController)->index($this->request(['report_source' => 'sheet'], 'admin'), $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        self::assertSame(500, $report['rows']->first()['payments']);
+        $payments = (new \App\Http\Controllers\CustomerPaymentController)->index($this->request(['customer_id' => 1], 'admin'), $service, new \App\Services\CustomerPaymentReportService)->getData();
+        self::assertSame(500, $payments['summary']['amount']);
+        self::assertSame(5, $payments['rows']->total());
+        foreach (CustomerDebtSheetService::PAYMENT_TABS as $tab) {
+            $filtered = (new \App\Http\Controllers\CustomerPaymentController)->index($this->request(['customer_id' => 1, 'tab' => $tab], 'admin'), $service, new \App\Services\CustomerPaymentReportService)->getData();
+            self::assertSame(100, $filtered['summary']['amount']);
+            self::assertSame($tab, $filtered['rows']->first()['source_sheet']);
+        }
+        $snapshot = $service->snapshot();
+        $tabs[5] = [['Sai tiêu đề']];
+        try {
+            $service->saveTabs($tabs, 7, 'google');
+            self::fail('Malformed fifth payment tab replaced the snapshot');
+        } catch (\RuntimeException) {
+            self::assertSame($snapshot, $service->snapshot());
+        }
+    }
+
     public function test_payment_tokens_distinguish_bank_tabs_and_preserve_existing_cash_flow_baselines(): void
     {
         $collections = new \App\Services\DebtCollectionService;

@@ -17,7 +17,7 @@ class CustomerPaymentController extends Controller
     public function index(Request $request, CustomerDebtSheetService $sheets, CustomerPaymentReportService $report)
     {
         $this->authorizeFinance($request);
-        $data = $request->validate(['batch' => 'nullable|uuid', 'change' => 'nullable|in:all,new,updated,removed', 'sale' => 'nullable|string|max:100', 'search' => 'nullable|string|max:150', 'customer_id' => 'nullable|integer|min:1', 'customer_source_key' => 'nullable|string|size:64|regex:/^[a-f0-9]{64}$/', 'from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d', 'tab' => 'nullable|in:all,Dongtienhoatdong,TKCNMBBDUE', 'recent' => 'nullable|in:all,today', 'unidentified' => 'nullable|in:0,1', 'page' => 'nullable|integer|min:1', 'per_page' => 'nullable|in:20,30,50,100']);
+        $data = $request->validate(['batch' => 'nullable|uuid', 'change' => 'nullable|in:all,new,updated,removed', 'sale' => 'nullable|string|max:100', 'search' => 'nullable|string|max:150', 'customer_id' => 'nullable|integer|min:1', 'customer_source_key' => 'nullable|string|size:64|regex:/^[a-f0-9]{64}$/', 'from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d', 'tab' => 'nullable|in:all,'.implode(',', CustomerDebtSheetService::PAYMENT_TABS), 'recent' => 'nullable|in:all,today', 'unidentified' => 'nullable|in:0,1', 'page' => 'nullable|integer|min:1', 'per_page' => 'nullable|in:20,30,50,100']);
         if (! empty($data['from']) && ! empty($data['to'])) {
             $request->validate(['to' => 'after_or_equal:from']);
         }
@@ -74,7 +74,7 @@ class CustomerPaymentController extends Controller
         $this->authorizeFinance($request);
         try {
             $tabs = $sheets->fetch();
-            $summary = $sheets->save($tabs[0], $tabs[1], $request->user()->id, 'google', $tabs[2] ?? null);
+            $summary = $sheets->saveTabs($tabs, $request->user()->id, 'google');
         } catch (\Throwable $e) {
             report($e);
 
