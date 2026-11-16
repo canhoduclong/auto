@@ -275,6 +275,7 @@ class UserController extends Controller
         ];
 
         $usageFrom = now()->subDays(6)->startOfDay();
+        $activitySummary = app(\App\Services\UserActivitySummaryService::class)->forUser($user, $usageFrom);
         $usagePoints = Schema::hasTable('user_presence_logs')
             ? UserPresenceLog::query()
                 ->where('user_id', $user->id)
@@ -283,30 +284,17 @@ class UserController extends Controller
                 ->map(fn (UserPresenceLog $log) => [
                     'at' => $log->observed_at,
                     'source' => $log->source === 'mobile' ? 'Mobile' : 'Web',
-                    'reason' => $log->reason ?: 'Hoạt động hệ thống',
+                    'reason' => 'Truy cập '.($log->source === 'mobile' ? 'ứng dụng' : 'website'),
                     'ip' => $log->ip_address,
                 ])
             : collect();
 
-        // Backfill the seven-day chart with existing audited actions.
-        if (Schema::hasTable('admin_events')) {
-            $historicalPoints = AdminEvent::query()
-                ->where('actor_id', $user->id)
-                ->where('created_at', '>=', $usageFrom)
-                ->get(['created_at', 'title', 'action', 'url', 'metadata'])
-                ->map(fn (AdminEvent $event) => [
-                    'at' => $event->created_at,
-                    'source' => match (data_get($event->metadata, 'source')) {
-                        'api' => 'API/Mobile',
-                        'mobile' => 'Mobile',
-                        'system' => 'Hệ thống',
-                        default => 'Web',
-                    },
-                    'reason' => $event->title ?: $event->action,
-                    'ip' => data_get($event->metadata, 'ip_address'),
-                ]);
-            $usagePoints = $usagePoints->concat($historicalPoints);
-        }
+        $usagePoints = $usagePoints->concat($activitySummary['actions']->map(fn (array $item) => [
+            'at' => $item['at'], 'source' => $item['source'],
+            'reason' => $item['label'].($item['order_code'] ? ' · '.$item['order_code'] : '')
+                .($item['customer'] ? ' · '.$item['customer'] : ''),
+            'ip' => $item['ip'],
+        ]));
 
         $usageGrid = [];
         foreach (range(0, 6) as $dayOffset) {
@@ -342,7 +330,7 @@ class UserController extends Controller
             'active_hours' => $usagePoints->groupBy(fn (array $point) => $point['at']->format('Y-m-d-H'))->count(),
         ];
 
-        return view('users.show', compact('user', 'activities', 'presence', 'usageGrid', 'usageSummary'));
+        return view('users.show', compact('user', 'activities', 'presence', 'usageGrid', 'usageSummary', 'activitySummary'));
     }
 
     public function edit(User $user, UserWorkspaceService $workspaceService)

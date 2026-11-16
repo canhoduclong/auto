@@ -149,7 +149,7 @@
                 </li>
                 <li class="nav-item">
                     <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-login">
-                        <i class="ph ph-sign-in me-1"></i>Lịch sử đăng nhập 7 ngày
+                        <i class="ph ph-sign-in me-1"></i>Đăng nhập & công việc 7 ngày
                     </button>
                 </li>
             </ul>
@@ -252,6 +252,38 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
+
+                        <div class="p-3 border-bottom">
+                            <h6 class="fw-bold mb-1">Tổng hợp công việc trong 7 ngày</h6>
+                            <p class="small text-muted mb-3">Các thao tác đã ghi nhận của {{ $user->name }} · Tách riêng đăng nhập và truy cập ứng dụng.</p>
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                @foreach($activitySummary['labels'] as $key=>$label)
+                                <span class="badge bg-light text-dark border p-2">{{ $label }}: <strong>{{ $activitySummary['counts'][$key] }}</strong></span>
+                                @endforeach
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-3" aria-label="Tổng hợp thao tác theo ngày">
+                                    <thead class="table-light"><tr><th>Ngày</th>@foreach($activitySummary['labels'] as $label)<th class="text-center">{{ $label }}</th>@endforeach<th class="text-center">Tổng thao tác</th></tr></thead>
+                                    <tbody>@foreach($activitySummary['days'] as $day)<tr><td class="text-nowrap">{{ $day['date']->format('d/m/Y') }}</td>@foreach($activitySummary['labels'] as $key=>$label)<td class="text-center">{{ $day['counts'][$key] ?: '—' }}</td>@endforeach<td class="text-center fw-bold">{{ $day['total'] }}</td></tr>@endforeach</tbody>
+                                </table>
+                            </div>
+                            <h6 class="fw-bold mb-2">Chi tiết user đã làm gì</h6>
+                            @forelse(collect($activitySummary['days'])->filter(fn($day)=>$day['total'] > 0) as $day)
+                            <details class="border rounded p-2 mb-2" @if($loop->first) open @endif>
+                                <summary class="fw-semibold small">{{ $day['date']->format('d/m/Y') }} · {{ $day['total'] }} thao tác</summary>
+                                <div class="table-responsive mt-2"><table class="table table-sm align-middle mb-0">
+                                    <thead><tr><th>Giờ</th><th>Công việc</th><th>Đơn / Khách hàng</th><th>Nguồn / IP</th></tr></thead>
+                                    <tbody>@foreach($day['items'] as $item)<tr>
+                                        <td class="small text-nowrap">{{ $item['at']->format('H:i:s') }}</td>
+                                        <td class="small"><strong>{{ $item['label'] }}</strong>@if($item['note'])<div class="text-muted">{{ Str::limit($item['note'], 180) }}</div>@endif</td>
+                                        <td class="small">@if($item['order_id'])<a href="{{ route('orders.show',$item['order_id']) }}">{{ $item['order_code'] }}</a>@else — @endif @if($item['customer'])<div>{{ $item['customer'] }}</div>@endif</td>
+                                        <td class="small">{{ $item['source'] }}@if($item['ip'])<div class="text-muted font-monospace">{{ $item['ip'] }}</div>@endif</td>
+                                    </tr>@endforeach</tbody>
+                                </table></div>
+                                @if($day['remaining'])<div class="small text-muted mt-2">Hiển thị 100 thao tác gần nhất trong ngày; {{ $day['remaining'] }} thao tác còn lại đã được tính trong tổng hợp.</div>@endif
+                            </details>
+                            @empty<div class="small text-muted">Chưa có thao tác công việc được ghi nhận trong 7 ngày.</div>@endforelse
                         </div>
 
                         <div class="p-3 border-bottom">

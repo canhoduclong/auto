@@ -42,17 +42,19 @@
     </section>
     @if($period['undated_payments']!=0)<div class="small text-muted mb-2">Có {{ number_format($period['undated_payments'],0,',','.') }} đ thanh toán tổng hợp chưa rõ ngày thu; đã tính vào số dư tổng, chưa đưa vào thanh toán trong kỳ.</div>@endif
 
-    <nav class="collection-recovery-tabs" aria-label="Theo dõi khả năng thu hồi công nợ">
-        @foreach(['all'=>'Tất cả','normal'=>'Đang theo dõi','difficult'=>'Khó thu hồi','unrecoverable'=>'Không có khả năng thu hồi'] as $value=>$label)
-        <a class="collection-recovery-tab {{ request('recovery','normal') === $value ? 'is-active' : '' }}" href="{{ request()->fullUrlWithQuery(['recovery'=>$value,'page'=>1]) }}" @if(request('recovery','normal') === $value) aria-current="page" @endif>{{ $label }}</a>
-        @endforeach
-    </nav>
+    <div class="collection-report-toolbar">
+        <nav class="collection-recovery-tabs" aria-label="Theo dõi khả năng thu hồi công nợ">
+            @foreach(['all'=>'Tất cả','normal'=>'Đang theo dõi','difficult'=>'Khó thu hồi','unrecoverable'=>'Không có khả năng thu hồi'] as $value=>$label)
+            <a class="collection-recovery-tab {{ request('recovery','normal') === $value ? 'is-active' : '' }}" href="{{ request()->fullUrlWithQuery(['recovery'=>$value,'page'=>1]) }}" @if(request('recovery','normal') === $value) aria-current="page" @endif>{{ $label }}</a>
+            @endforeach
+        </nav>
 
-    <div class="collection-bulk-actions" data-collection-bulk data-from="{{ $hasPeriodFilter ? \Carbon\Carbon::parse($period['from'])->format('d/m') : '' }}" data-to="{{ $hasPeriodFilter ? \Carbon\Carbon::parse($period['to'])->format('d/m') : '' }}" data-date="{{ now()->format('d/m') }}" data-today="{{ now()->toDateString() }}" data-url="{{ route('customer-debt.report.remind') }}" data-source="{{ $reportSource }}">
-        <span data-selection-count>Đã chọn 0 khách</span>
-        <button type="button" class="btn btn-primary btn-sm" data-bulk-remind disabled>Nhắc nhở</button>
-        <button type="button" class="btn btn-light btn-sm" data-bulk-copy disabled>Chép nội dung</button>
-        <span role="status" data-bulk-status></span>
+        <div class="collection-bulk-actions" data-collection-bulk data-from="{{ $hasPeriodFilter ? \Carbon\Carbon::parse($period['from'])->format('d/m') : '' }}" data-to="{{ $hasPeriodFilter ? \Carbon\Carbon::parse($period['to'])->format('d/m') : '' }}" data-date="{{ now()->format('d/m') }}" data-today="{{ now()->toDateString() }}" data-url="{{ route('customer-debt.report.remind') }}" data-source="{{ $reportSource }}">
+            <span data-selection-count>Đã chọn 0 khách</span>
+            <button type="button" class="btn btn-primary btn-sm" data-bulk-remind disabled>Nhắc nhở</button>
+            <button type="button" class="btn btn-light btn-sm" data-bulk-copy disabled>Chép nội dung</button>
+            <span role="status" data-bulk-status></span>
+        </div>
     </div>
     <div class="small text-muted mb-2">Ưu tiên theo dõi: 5 sao → 1 sao → chưa đánh dấu. Trong cùng mức sao, áp dụng sắp xếp cột đang chọn.</div>
     <div class="card"><div class="table-responsive collection-table-scroll"><table class="table table-hover collection-table collection-report-table"><thead><tr><th class="collection-select-column"><input type="checkbox" data-collection-select-all aria-label="Chọn tất cả khách trên trang này"></th><th class="collection-compact">STT</th><th class="collection-compact">Mã KH</th><th class="collection-name">Tên khách hàng</th><th class="collection-negotiation">Chốt Công nợ</th><th class="collection-compact">sale</th><th class="text-end">Doanh thu</th><th class="text-end">Tặng</th><th class="text-end">Thanh toán</th>

@@ -68,6 +68,8 @@ class AuthApiController extends BaseApiController
             'expires_at' => now()->addDays(30),
         ]);
 
+        app(\App\Services\UserActivitySummaryService::class)->recordLogin($user, $request, 'api', $token->id);
+
         return $this->ok([
             'token' => $plainToken,
             'token_type' => 'Bearer',
@@ -161,6 +163,8 @@ class AuthApiController extends BaseApiController
             'last_used_at' => now(),
             'expires_at' => now()->addDays(30),
         ]);
+
+        app(\App\Services\UserActivitySummaryService::class)->recordLogin($user, $request, 'api', $token->id);
 
         return $this->ok([
             'token' => $plainToken,

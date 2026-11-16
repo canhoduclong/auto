@@ -35,6 +35,12 @@ class AppServiceProvider extends ServiceProvider
     {
         Paginator::useBootstrap();
 
+        \Illuminate\Support\Facades\Event::listen(\Illuminate\Auth\Events\Login::class, function ($event): void {
+            if ($event->user instanceof \App\Models\User) {
+                app(\App\Services\UserActivitySummaryService::class)->recordLogin($event->user, request(), 'web');
+            }
+        });
+
         View::composer(['layouts.admin', 'layouts.admin-accounting'], function (): void {
             abort_unless(auth()->user()?->isAdmin(), 403, 'Giao diện quản trị chỉ dành cho Admin.');
         });

@@ -74,3 +74,9 @@
 .collection-recovery-tab:hover { border-color:#1688ff; color:#0879e5; text-decoration:none; }
 .collection-recovery-tab.is-active { background:#1688ff; border-color:#1688ff; color:#fff; font-weight:600; }
 .collection-recovery-tab:focus-visible { outline:2px solid #1688ff; outline-offset:3px; }
+
+.collection-report-toolbar { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px 20px; margin-bottom:12px; }
+.collection-report-toolbar .collection-recovery-tabs { margin:0; }
+.collection-report-toolbar .collection-bulk-actions { margin:0 0 0 auto; min-width:0; }
+.collection-report-toolbar [data-bulk-status] { overflow-wrap:anywhere; }
+@media(max-width:767px) { .collection-report-toolbar .collection-bulk-actions { width:100%; margin-left:0; justify-content:flex-start; } }
