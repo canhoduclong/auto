@@ -16,6 +16,7 @@ class UserActivitySummaryService
         'login' => 'Đăng nhập', 'confirmed' => 'Xác nhận đơn / lộ trình',
         'pickup' => 'Lấy hàng', 'shipping' => 'Bắt đầu giao',
         'delivered' => 'Đã giao hàng', 'completed' => 'Hoàn tất đơn',
+        'rejected' => 'Từ chối', 'cancelled' => 'Hủy đơn', 'edited' => 'Chỉnh sửa đơn',
         'other' => 'Thao tác khác',
     ];
 
@@ -45,7 +46,7 @@ class UserActivitySummaryService
             return ['at' => $h->created_at, 'category' => $category, 'label' => $label,
                 'order_id' => $h->order_id, 'order_code' => $h->order?->code ?: '#'.$h->order_id,
                 'customer' => $h->order?->customer?->name, 'source' => $this->source($h->source),
-                'action' => $h->action, 'status' => $h->status_after, 'ip' => $h->ip_address, 'note' => $h->note, 'origin' => 'history'];
+                'history_id' => $h->id, 'action' => $h->action, 'status' => $h->status_after, 'ip' => $h->ip_address, 'note' => $h->note, 'origin' => 'history'];
         });
         // The observer and order history often describe the same status transition.
         $historyByOrder = $actions->groupBy('order_id');
@@ -60,12 +61,22 @@ class UserActivitySummaryService
             [$category, $label] = $this->describe($event->action, $isOrder ? $status : null);
             if (in_array($event->event_type, ['auth', 'login', 'session'], true) && in_array($event->action, ['login', 'logged_in', 'authenticated'], true)) {
                 [$category, $label] = ['login', $event->title ?: 'Đăng nhập'];
+            } elseif ($isOrder && $status === null && in_array($event->action, ['updated', 'status_changed', 'update'], true)) {
+                [$category, $label] = ['edited', 'Chỉnh sửa đơn hàng'];
             } elseif (! $isOrder || $category === 'other') {
                 [$category, $label] = ['other', $event->title ?: 'Thao tác hệ thống'];
             }
-            if ($orderId && ($historyByOrder[$orderId] ?? collect())->contains(fn ($h) => abs($h['at']->timestamp - $event->created_at->timestamp) <= 5
-                && (($category !== 'other' && ($h['category'] === $category || ($status !== null && $h['status'] === $status)))
-                    || ($event->action === 'created' && $h['action'] === 'create_order')))) {
+            $matchingHistory = $orderId ? ($historyByOrder[$orderId] ?? collect())->first(fn ($h) => abs($h['at']->timestamp - $event->created_at->timestamp) <= 5
+                && (($category !== 'other' && $category !== 'edited' && ($h['category'] === $category || ($status !== null && $h['status'] === $status)))
+                    || ($event->action === 'created' && $h['action'] === 'create_order'))) : null;
+            if ($matchingHistory) {
+                $index = $actions->search(fn ($item) => ($item['history_id'] ?? null) === $matchingHistory['history_id']);
+                if ($index !== false && $event->message) {
+                    $item = $actions[$index];
+                    $item['note'] = trim(($item['note'] ?? '')."\n".$event->message);
+                    $actions->put($index, $item);
+                }
+
                 continue;
             }
             $actions->push(['at' => $event->created_at, 'category' => $category, 'label' => $label,
@@ -110,6 +121,13 @@ class UserActivitySummaryService
     public function describe(string $action, ?string $status = null): array
     {
         $explicit = [
+            'cancel_order' => ['cancelled', 'Hủy đơn hàng'],
+            'auto_cancel_overdue' => ['cancelled', 'Hủy đơn hàng'],
+            'reject_order' => ['rejected', 'Từ chối đơn hàng'],
+            'shipper_rejected' => ['rejected', 'Từ chối đơn hàng'],
+            'shipper_reject' => ['rejected', 'Từ chối đơn hàng'],
+            'updated' => ['edited', 'Chỉnh sửa đơn hàng'],
+            'update_order' => ['edited', 'Chỉnh sửa đơn hàng'],
             'approve_order' => ['confirmed', 'Duyệt đơn hàng'],
             'shipper_accepted' => ['confirmed', 'Xác nhận nhận đơn'],
             'schedule_confirmed' => ['confirmed', 'Xác nhận lộ trình giao hàng'],
@@ -126,7 +144,7 @@ class UserActivitySummaryService
             'undo_complete_delivery' => ['other', 'Hoàn tác hoàn tất đơn'],
             'shipper_acceptance_rolled_back' => ['other', 'Hủy xác nhận nhận đơn'],
             'schedule_revoked' => ['other', 'Thu hồi xác nhận lộ trình'],
-            'schedule_rejected' => ['other', 'Từ chối lộ trình'],
+            'schedule_rejected' => ['rejected', 'Từ chối lộ trình'],
             'update_delivery_time' => ['other', 'Cập nhật giờ giao hàng'],
             'shipper_refund_request' => ['other', 'Yêu cầu hoàn trả'],
             'return_request' => ['other', 'Yêu cầu trả hàng'],
@@ -147,7 +165,8 @@ class UserActivitySummaryService
                 'delivered' => ['delivered', 'Xác nhận đã giao hàng'],
                 'completed' => ['completed', 'Hoàn tất đơn hàng'],
                 'returning', 'returned', 'returned_completed' => ['other', 'Cập nhật trả hàng'],
-                'cancelled' => ['other', 'Hủy đơn hàng'],
+                'cancelled' => ['cancelled', 'Hủy đơn hàng'],
+                'rejected' => ['rejected', 'Từ chối đơn hàng'],
                 default => ['other', 'Cập nhật trạng thái đơn hàng'],
             };
         }

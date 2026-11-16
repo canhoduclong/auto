@@ -138,7 +138,8 @@ class UserActivitySummaryTest extends TestCase
         $summary = $this->summary();
         self::assertSame(1, $summary['counts']['delivered']);
         self::assertSame(0, $summary['counts']['completed']);
-        self::assertSame(2, $summary['counts']['other']);
+        self::assertSame(1, $summary['counts']['other']);
+        self::assertSame(1, $summary['counts']['edited']);
     }
 
     public function test_create_order_history_and_observer_are_one_business_action(): void
@@ -146,6 +147,69 @@ class UserActivitySummaryTest extends TestCase
         DB::table('order_histories')->insert(['user_id' => 7, 'order_id' => 1, 'action' => 'create_order', 'created_at' => now()]);
         DB::table('admin_events')->insert(['actor_id' => 7, 'event_type' => 'order', 'action' => 'created', 'subject_id' => 1, 'title' => 'Tạo đơn hàng', 'created_at' => now()]);
         self::assertSame(1, $this->summary()['total']);
+    }
+
+    public function test_activity_presenter_shows_specific_actions_and_keeps_complete_changes_and_reason(): void
+    {
+        $presenter = new \App\Services\OrderActivityPresenter;
+        $event = new \App\Models\AdminEvent(['event_type' => 'order', 'action' => 'status_changed', 'title' => 'Cập nhật đơn',
+            'message' => str_repeat('Nội dung chi tiết. ', 20),
+            'metadata' => ['order_id' => 1, 'customer_name' => 'Khách A', 'changes' => ['status' => 'cancelled']]]);
+        $detail = $presenter->present($event);
+        self::assertSame('Hủy đơn hàng', $detail['action']);
+        self::assertSame($event->message, $detail['message']);
+        $history = new \App\Models\OrderHistory(['action' => 'schedule_rejected', 'note' => 'Không đủ thời gian giao']);
+        $detail = $presenter->present($event, $history);
+        self::assertSame('Từ chối lộ trình', $detail['action']);
+        self::assertSame('Không đủ thời gian giao', $detail['note']);
+        $event->action = 'updated';
+        $event->metadata = ['changes' => ['delivery_time' => '08:00'], 'change_details' => [
+            ['field' => 'delivery_time', 'label' => 'Giờ giao', 'before' => '07:30', 'after' => '08:00'],
+        ]];
+        $detail = $presenter->present($event);
+        self::assertSame('Chỉnh sửa đơn hàng', $detail['action']);
+        self::assertSame('07:30', $detail['changes'][0]['before']);
+        self::assertSame('08:00', $detail['changes'][0]['after']);
+    }
+
+    public function test_order_observer_saves_real_before_and_after_values_and_skips_noop_changes(): void
+    {
+        $journal = $this->createMock(\App\Services\GoogleSheetsJournalSyncScheduler::class);
+        $sheet = $this->createMock(\App\Services\GoogleSheetsOrderSyncScheduler::class);
+        $warehouse = $this->createMock(\App\Services\WarehouseSaleChangeService::class);
+        $this->app->instance(\App\Services\WarehouseSaleChangeService::class, $warehouse);
+        \Illuminate\Support\Facades\Auth::setUser($this->user());
+        $observer = new \App\Observers\OrderObserver($journal, $sheet);
+        $order = new \App\Models\Order;
+        $order->setRawAttributes(['id' => 1, 'code' => 'DH001', 'status' => 'delivered', 'total' => 1000, 'shipper_note' => 'Cũ'], true);
+        $order->setRelation('customer', null);
+        $order->setRelation('user', null);
+        $order->status = 'completed';
+        $order->total = 2000;
+        $order->shipper_note = 'Mới';
+        $order->syncChanges();
+        $observer->updated($order);
+        $event = \App\Models\AdminEvent::first();
+        self::assertSame('status_changed', $event->action);
+        self::assertStringContainsString('Hoàn tất', $event->title);
+        self::assertSame('delivered', $event->metadata['changes_before']['status']);
+        self::assertSame('completed', $event->metadata['changes']['status']);
+        $total = collect($event->metadata['change_details'])->firstWhere('field', 'total');
+        self::assertSame('1.000đ', $total['before']);
+        self::assertSame('2.000đ', $total['after']);
+        $order->syncOriginal();
+        $observer->updated($order);
+        self::assertSame(1, \App\Models\AdminEvent::count());
+    }
+
+    public function test_recent_activity_includes_refusal_reason_when_only_order_history_recorded_it(): void
+    {
+        DB::table('order_histories')->insert(['user_id' => 7, 'order_id' => 1, 'action' => 'schedule_rejected', 'note' => 'Không thể giao đúng giờ', 'created_at' => now()]);
+        $rows = (new \App\Services\OrderActivityPresenter)->recentForUser($this->user());
+        self::assertCount(1, $rows);
+        self::assertSame('Từ chối lộ trình', $rows->first()->activity_detail['action']);
+        self::assertSame('Không thể giao đúng giờ', $rows->first()->activity_detail['note']);
+        self::assertSame('Từ chối lộ trình · Khách A', $rows->first()->activity_detail['title']);
     }
 
     public function test_web_login_event_records_a_durable_login_for_the_authenticated_user(): void

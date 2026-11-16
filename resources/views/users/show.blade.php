@@ -177,6 +177,9 @@
                                     </thead>
                                     <tbody>
                                     @foreach($activities as $event)
+                                        @php
+                                            $detail = $event->activity_detail;
+                                        @endphp
                                         <tr>
                                             <td class="small text-muted" title="{{ $event->created_at->format('d/m/Y H:i:s') }}">
                                                 {{ $event->created_at->format('d/m/Y H:i') }}
@@ -184,7 +187,7 @@
                                             </td>
                                             <td>
                                                 <span class="badge rounded-pill bg-light text-dark border" style="font-size:.7rem;">
-                                                    {{ $event->event_type }}
+                                                    {{ $detail['type'] }}
                                                 </span>
                                             </td>
                                             <td>
@@ -194,14 +197,22 @@
                                                     @elseif(in_array($event->action, ['delete','destroy'])) bg-danger bg-opacity-10 text-danger
                                                     @else bg-secondary bg-opacity-10 text-secondary @endif"
                                                     style="font-size:.7rem;">
-                                                    {{ $event->action }}
+                                                    {{ $detail['action'] }}
                                                 </span>
                                             </td>
                                             <td class="small">
-                                                <div class="fw-semibold">{{ $event->title }}</div>
-                                                @if($event->message)
-                                                    <div class="text-muted">{{ Str::limit($event->message, 100) }}</div>
+                                                <div class="fw-semibold">{{ $detail['title'] }}</div>
+                                                @if($detail['message'])
+                                                    <div class="text-muted" style="white-space:pre-line;overflow-wrap:anywhere;">{{ $detail['message'] }}</div>
                                                 @endif
+                                                @if($detail['changes'])
+                                                    <ul class="mt-2 mb-1 ps-3">
+                                                        @foreach($detail['changes'] as $change)
+                                                        <li><strong>{{ $change['label'] }}:</strong> <span class="text-muted">{{ $change['before'] }}</span> → <strong>{{ $change['after'] }}</strong></li>
+                                                        @endforeach
+                                                    </ul>
+                                                @endif
+                                                @if($detail['note'])<div class="mt-1"><strong>Ghi chú / lý do:</strong> {{ $detail['note'] }}</div>@endif
                                                 @if($event->url)
                                                     <a href="{{ $event->url }}" class="text-muted" style="font-size:.7rem;" target="_blank">
                                                         <i class="ph ph-link me-1"></i>{{ Str::limit($event->url, 60) }}
@@ -276,7 +287,7 @@
                                     <thead><tr><th>Giờ</th><th>Công việc</th><th>Đơn / Khách hàng</th><th>Nguồn / IP</th></tr></thead>
                                     <tbody>@foreach($day['items'] as $item)<tr>
                                         <td class="small text-nowrap">{{ $item['at']->format('H:i:s') }}</td>
-                                        <td class="small"><strong>{{ $item['label'] }}</strong>@if($item['note'])<div class="text-muted">{{ Str::limit($item['note'], 180) }}</div>@endif</td>
+                                        <td class="small"><strong>{{ $item['label'] }}</strong>@if($item['note'])<div class="text-muted">{{ $item['note'] }}</div>@endif</td>
                                         <td class="small">@if($item['order_id'])<a href="{{ route('orders.show',$item['order_id']) }}">{{ $item['order_code'] }}</a>@else — @endif @if($item['customer'])<div>{{ $item['customer'] }}</div>@endif</td>
                                         <td class="small">{{ $item['source'] }}@if($item['ip'])<div class="text-muted font-monospace">{{ $item['ip'] }}</div>@endif</td>
                                     </tr>@endforeach</tbody>

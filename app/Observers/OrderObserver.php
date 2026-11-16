@@ -2,8 +2,8 @@
 
 namespace App\Observers;
 
-use App\Models\Order;
 use App\Models\Customer;
+use App\Models\Order;
 use App\Models\User;
 use App\Services\AdminActivityService;
 use App\Services\GoogleSheetsJournalSyncScheduler;
@@ -46,30 +46,42 @@ class OrderObserver
     {
         app(\App\Services\WarehouseSaleChangeService::class)->recordOrderChanges($order);
 
-        $action = $order->wasChanged('status') ? 'status_changed' : 'updated';
+        $changes = $this->meaningfulChanges($order);
+        $action = array_key_exists('status', $changes) ? 'status_changed' : 'updated';
         $order->loadMissing(['customer:id,name', 'user:id,name,short_name']);
         $customerName = trim((string) ($order->customer?->name ?: $order->recipient_name ?: 'Chưa xác định'));
         $saleName = trim((string) ($order->user?->short_name ?: $order->user?->name ?: 'Chưa phân công'));
-        $changes = $this->meaningfulChanges($order);
         $changeSummary = $this->changeSummary($order, $changes);
 
-        AdminActivityService::record(
-            'order',
-            $action,
-            $order,
-            'Cập nhật đơn · '.$customerName,
-            'Đơn '.($order->code ?: ('#'.$order->id)).' của '.$customerName
-                .' · Sale: '.$saleName.'. Thay đổi: '.$changeSummary.'.',
-            [
-                'order_id' => $order->id,
-                'order_code' => $order->code,
-                'customer_name' => $customerName,
-                'sale_name' => $saleName,
-                'changes' => $changes,
-                'change_summary' => $changeSummary,
-            ],
-            route('orders.show', $order)
-        );
+        $changeDetails = [];
+        foreach ($changes as $field => $value) {
+            $changeDetails[] = ['field' => $field, 'label' => $this->fieldLabel($field),
+                'before' => $this->formatValue($field, $order->getRawOriginal($field)),
+                'after' => $this->formatValue($field, $value)];
+        }
+        [, $activityLabel] = app(\App\Services\UserActivitySummaryService::class)->describe($action, $changes['status'] ?? null);
+        if ($changes !== []) {
+            AdminActivityService::record(
+                'order',
+                $action,
+                $order,
+                $activityLabel.' · '.$customerName,
+                'Đơn '.($order->code ?: ('#'.$order->id)).' của '.$customerName
+                    .' · Sale: '.$saleName.'. Thay đổi: '.$changeSummary.'.',
+                [
+                    'order_id' => $order->id,
+                    'order_code' => $order->code,
+                    'customer_name' => $customerName,
+                    'sale_name' => $saleName,
+                    'changes' => $changes,
+                    'changes_before' => array_intersect_key($order->getRawOriginal(), $changes),
+                    'change_details' => $changeDetails,
+                    'change_summary' => $changeSummary,
+                ],
+                route('orders.show', $order)
+            );
+
+        }
 
         $this->journalSync->scheduleDates([
             $order->created_at,
@@ -90,6 +102,7 @@ class OrderObserver
     {
         return collect($order->getChanges())
             ->except(['updated_at'])
+            ->reject(fn ($value, $field) => $order->originalIsEquivalent($field))
             ->all();
     }
 
@@ -110,10 +123,7 @@ class OrderObserver
             })
             ->values();
 
-        $visible = $summaries->take(6)->implode('; ');
-        $remaining = $summaries->count() - 6;
-
-        return $remaining > 0 ? $visible.'; và '.$remaining.' thay đổi khác' : $visible;
+        return $summaries->implode('; ');
     }
 
     private function fieldLabel(string $field): string
@@ -174,6 +184,7 @@ class OrderObserver
 
         if ($field === 'warehouse_allowed_sizes') {
             $sizes = is_array($value) ? $value : (json_decode((string) $value, true) ?? []);
+
             return $sizes ? implode(', ', $sizes) : 'Đúng size đặt hàng';
         }
 

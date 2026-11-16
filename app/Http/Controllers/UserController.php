@@ -219,12 +219,7 @@ class UserController extends Controller
     {
         $user->load('roles', 'team', 'warehouse', 'department');
 
-        $activities = Schema::hasTable('admin_events')
-            ? AdminEvent::where('actor_id', $user->id)
-                ->orderByDesc('created_at')
-                ->limit(50)
-                ->get()
-            : collect();
+        $activities = app(\App\Services\OrderActivityPresenter::class)->recentForUser($user);
 
         $webSessions = Schema::hasTable('sessions')
             ? DB::table('sessions')
