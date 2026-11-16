@@ -193,6 +193,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('/api/suppliers/{supplier}/products/{product}/price-history', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'priceHistory'])->name('api.suppliers.products.price-history');
     Route::post('/api/supplier-prices', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'store'])->name('api.supplier-prices.store');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::post('/my-customer-debt/refresh', [\App\Http\Controllers\MyCustomerDebtController::class, 'refresh'])
+        ->name('pages.my_customer_debt.refresh')
+        ->middleware(['role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin', 'throttle:2,1']);
     Route::post('/my-customer-debt/priority', [\App\Http\Controllers\MyCustomerDebtController::class, 'updatePriority'])
         ->name('pages.my_customer_debt.priority')
         ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');

@@ -1247,6 +1247,43 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(3, $priorities->effective($row, $priorities->personalRecords($this->user('sale')))['stars']);
     }
 
+    public function test_sale_refresh_uses_configured_google_source_and_returns_no_global_financial_data(): void
+    {
+        $sheets = $this->createMock(CustomerDebtSheetService::class);
+        $tabs = [[], [], [], [], [], []];
+        $sheets->expects(self::once())->method('fetch')->willReturn($tabs);
+        $sheets->expects(self::once())->method('saveTabs')->with($tabs, 7, 'google')->willReturn(['id' => 'PRIVATE_BATCH_ID', 'amount' => 999999]);
+        $request = $this->request(['source' => 'paste', 'sales_text' => 'UNTRUSTED', 'customer_id' => 2]);
+        $request->headers->set('Accept', 'application/json');
+        $response = (new \App\Http\Controllers\MyCustomerDebtController)->refresh($request, $sheets);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame(['message' => 'Đã cập nhật dữ liệu từ Google Sheet.'], $response->getData(true));
+    }
+
+    public function test_sale_refresh_failure_keeps_existing_data_and_hides_internal_error_details(): void
+    {
+        $sheets = $this->createMock(CustomerDebtSheetService::class);
+        $sheets->expects(self::once())->method('fetch')->willThrowException(new \RuntimeException('PRIVATE_SOURCE_DETAIL'));
+        $sheets->expects(self::never())->method('saveTabs');
+        $request = $this->request(); $request->headers->set('Accept', 'application/json');
+        $response = (new \App\Http\Controllers\MyCustomerDebtController)->refresh($request, $sheets);
+        self::assertSame(503, $response->getStatusCode());
+        self::assertStringNotContainsString('PRIVATE_SOURCE_DETAIL', $response->getContent());
+    }
+
+    public function test_sale_refresh_route_is_protected_and_other_roles_cannot_trigger_sync(): void
+    {
+        $route = $this->app['router']->getRoutes()->getByName('pages.my_customer_debt.refresh');
+        self::assertSame(['POST'], $route->methods());
+        self::assertContains('auth', $route->gatherMiddleware());
+        self::assertContains('web', $route->gatherMiddleware());
+        self::assertContains('throttle:2,1', $route->gatherMiddleware());
+        $sheets = $this->createMock(CustomerDebtSheetService::class);
+        $sheets->expects(self::never())->method('fetch');
+        $this->expectException(HttpException::class);
+        (new \App\Http\Controllers\MyCustomerDebtController)->refresh($this->request([], 'shipper'), $sheets);
+    }
+
     public function test_report_summary_separates_lifetime_and_period_totals_before_pagination(): void
     {
         $this->collectionClock('2026-11-13 12:00:00');

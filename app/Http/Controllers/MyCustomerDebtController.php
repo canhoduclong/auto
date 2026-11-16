@@ -105,6 +105,26 @@ class MyCustomerDebtController extends Controller
         return view('site.my_customer_debt', array_replace($data, compact('debts', 'summary', 'customerOptions', 'periodFrom', 'periodTo', 'settings')));
     }
 
+    public function refresh(Request $request, CustomerDebtSheetService $sheets)
+    {
+        abort_unless($request->user() && ($request->user()->isAdmin() || $request->user()->isSalesFlowRole()), 403);
+        try {
+            Cache::lock('customer-debt-refresh', 180)->block(3, function () use ($request, $sheets) {
+                // Always use the configured, read-only Google source; never accept pasted data from a sale.
+                $tabs = $sheets->fetch();
+                $sheets->saveTabs($tabs, $request->user()->id, 'google');
+            });
+        } catch (\Throwable $e) {
+            report($e);
+            $message = 'Chưa cập nhật được Google Sheet. Dữ liệu đã lưu vẫn được giữ; vui lòng thử lại sau.';
+
+            return $request->expectsJson() ? response()->json(['message' => $message], 503) : redirect()->route('pages.my_customer_debt')->with('error', $message);
+        }
+        $message = 'Đã cập nhật dữ liệu từ Google Sheet.';
+
+        return $request->expectsJson() ? response()->json(['message' => $message]) : redirect()->route('pages.my_customer_debt')->with('success', $message);
+    }
+
     public function updatePriority(Request $request, CustomerDebtSheetService $sheets, CustomerDebtMonitorController $monitor, CustomerDebtPriorityService $priorities)
     {
         abort_unless($request->user() && ($request->user()->isAdmin() || $request->user()->isSalesFlowRole()), 403);

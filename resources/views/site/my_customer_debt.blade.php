@@ -6,6 +6,7 @@
         <div><h1>Công nợ khách hàng</h1><div class="debt-updated">@if($snapshot)Cập nhật {{ \Carbon\Carbon::parse($snapshot['loaded_at'])->format('d/m/Y H:i') }}@else Chưa có dữ liệu công nợ @endif</div></div>
         <a href="{{ route('pages.my_dashboard') }}" class="btn btn-light">Về bảng điều khiển</a>
     </header>
+    @foreach(['success'=>'success','error'=>'danger'] as $key=>$color)@if(session($key))<div class="alert alert-{{ $color }} py-2">{{ session($key) }}</div>@endif @endforeach
     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
     @if(!$snapshot)<div class="alert alert-info">Chưa có dữ liệu công nợ. Vui lòng liên hệ kế toán cập nhật dữ liệu.</div>@endif
     <form method="GET" action="{{ route('pages.my_customer_debt') }}" class="debt-filters sale-debt-filters">
@@ -30,6 +31,10 @@
             <a class="btn btn-sm {{ $quickActive ? 'btn-primary' : 'btn-light' }}" href="{{ request()->fullUrlWithQuery(['range'=>null,'from'=>$quickFrom,'to'=>$quickTo,'page'=>1,'customer'=>null,'system_customer'=>null,'report_from'=>null,'report_to'=>null,'purchase_page'=>null,'payment_page'=>null]) }}" @if($quickActive) aria-current="page" @endif>{{ $label }}</a>
         @endforeach
         <a class="btn btn-sm {{ !request('from') && !request('to') ? 'btn-primary' : 'btn-light' }}" href="{{ request()->fullUrlWithQuery(['range'=>'all','from'=>null,'to'=>null,'page'=>1,'customer'=>null,'system_customer'=>null,'report_from'=>null,'report_to'=>null,'purchase_page'=>null,'payment_page'=>null]) }}">Toàn bộ</a>
+        <form method="POST" action="{{ route('pages.my_customer_debt.refresh') }}" class="sale-debt-refresh" data-sale-debt-refresh>
+            @csrf<button type="submit" class="btn btn-sm btn-outline-primary" title="Cập nhật dữ liệu mới từ Google Sheet"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> <span>Cập nhật Google Sheet</span></button>
+            <span role="status" class="small text-danger"></span>
+        </form>
     </nav>
     <section class="sale-debt-summary" aria-label="Tổng hợp công nợ">
         <div class="sale-debt-summary-caption"><strong>Tổng hợp công nợ</strong><span>{{ $summary['customers'] }} khách · Tất cả các trang</span></div>
@@ -117,6 +122,12 @@
 .sale-debt-shortcuts .btn { padding:7px 11px; font-weight:500; border:1px solid transparent; }
 .sale-debt-shortcuts .btn-light { background:#f4f6f9; color:#526278; }
 .sale-debt-shortcuts .btn-light:hover { border-color:#cbd5e1; background:#eef2f6; }
+.sale-debt-refresh { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 0 6px; }
+.sale-debt-refresh .btn { display:inline-flex; align-items:center; gap:6px; }
+.sale-debt-refresh .bi { font-size:15px; }
+.sale-debt-refresh.is-loading .bi { animation:sale-debt-spin 1s linear infinite; }
+@keyframes sale-debt-spin { to { transform:rotate(360deg); } }
+@media(prefers-reduced-motion:reduce) { .sale-debt-refresh.is-loading .bi { animation:none; } }
 .sale-debt-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:0 0 12px; }
 .sale-debt-summary-caption { grid-column:1/-1; display:flex; justify-content:space-between; align-items:center; gap:12px; margin-top:2px; }
 .sale-debt-summary-caption strong { font-size:14px; }
@@ -191,6 +202,20 @@
 @push('scripts')
 <script>
 (() => {
+    const refresh=document.querySelector('[data-sale-debt-refresh]');
+    if(refresh)refresh.addEventListener('submit',async event=>{
+        event.preventDefault();
+        const button=refresh.querySelector('button'),label=button.querySelector('span'),status=refresh.querySelector('[role=status]');
+        if(button.disabled)return;
+        button.disabled=true;label.textContent='Đang cập nhật…';status.textContent='';refresh.classList.add('is-loading');
+        try{
+            const response=await fetch(refresh.action,{method:'POST',body:new FormData(refresh),headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'}});
+            if(response.status===429)throw new Error('Vui lòng chờ một phút trước khi cập nhật lại.');
+            const result=await response.json();
+            if(!response.ok)throw new Error(result.message||'Không cập nhật được dữ liệu. Vui lòng thử lại.');
+            window.location.reload();
+        }catch(error){status.textContent=error.message;button.disabled=false;label.textContent='Cập nhật Google Sheet';refresh.classList.remove('is-loading');}
+    });
     const forms=[...document.querySelectorAll('[data-sale-debt-priority]')];
     let saving=false;
     forms.forEach(form=>form.addEventListener('submit',async event=>{
