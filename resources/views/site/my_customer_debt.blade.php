@@ -140,7 +140,7 @@
 .sale-debt-priority-hint { color:#8793a3; font-size:11px; margin:0 0 12px; }
 .sale-debt-priority-hint i { color:#d5a445; font-size:10px; margin-right:4px; }
 .sale-debt-table-card { border:1px solid #dce3ec!important; border-radius:10px; overflow:hidden; box-shadow:0 2px 6px rgba(15,23,42,.03); }
-.sale-debt-scroll { width:100%; max-width:100%; max-height:65vh; overflow:auto; }
+.sale-debt-scroll { width:100%; max-width:100%; overflow-x:auto; }
 .sale-debt-table { width:100%; min-width:1280px; table-layout:fixed; border-collapse:separate; border-spacing:0; margin:0; font-size:13px; }
 .sale-debt-table> :not(caption)>*>* { padding:9px 6px; border-color:#e9edf3; background:#fff; box-shadow:none; }
 .sale-debt-table thead th { vertical-align:middle!important; text-align:center!important; color:#526278; font-size:12px; font-weight:600; white-space:normal; line-height:1.5; border-bottom:1px solid #e0e6ee; }
