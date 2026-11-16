@@ -15,7 +15,16 @@ class CustomerDebtPriorityService
 
     public function records(): array
     {
-        $prefix = $this->prefix();
+        return $this->readRecords($this->prefix());
+    }
+
+    public function personalRecords(User $actor): array
+    {
+        return $this->readRecords($this->prefix().'sale_'.$actor->id.'_');
+    }
+
+    private function readRecords(string $prefix): array
+    {
         $records = [];
         foreach (Setting::query()->where('key', 'like', $prefix.'%')->get(['key', 'value']) as $setting) {
             if (str_starts_with($setting->key, $prefix)) {
@@ -38,6 +47,17 @@ class CustomerDebtPriorityService
         $stars = isset($records[$identity]) ? (int) $records[$identity]['stars'] : max(array_merge([0], array_map(fn ($record) => (int) ($record['stars'] ?? 0), $relevant)));
 
         return ['stars' => max(0, min(5, $stars)), 'version' => hash('sha256', json_encode($relevant))];
+    }
+
+    /** Caller rechecks customer ownership under customer-debt-load before writing. */
+    public function savePersonal(array $row, int $stars, string $version, User $actor): void
+    {
+        $before = $this->effective($row, $this->personalRecords($actor));
+        if (! hash_equals($before['version'], $version)) {
+            throw ValidationException::withMessages(['priority_version' => 'Mức ưu tiên đã thay đổi. Vui lòng tải lại trang trước khi lưu.']);
+        }
+        $identity = 'customer_'.$row['customer_id'];
+        Setting::set($this->prefix().'sale_'.$actor->id.'_'.$identity, json_encode(['stars' => $stars, 'updated_by' => $actor->id, 'updated_at' => now()->toIso8601String()], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     }
 
     /** Caller holds customer-debt-load while resolving the current customer mapping. */

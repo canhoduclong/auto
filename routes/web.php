@@ -193,6 +193,12 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::get('/api/suppliers/{supplier}/products/{product}/price-history', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'priceHistory'])->name('api.suppliers.products.price-history');
     Route::post('/api/supplier-prices', [\App\Http\Controllers\WarehouseSupplierPriceController::class, 'store'])->name('api.supplier-prices.store');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::post('/my-customer-debt/priority', [\App\Http\Controllers\MyCustomerDebtController::class, 'updatePriority'])
+        ->name('pages.my_customer_debt.priority')
+        ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
+    Route::get('/my-customer-debt', [\App\Http\Controllers\MyCustomerDebtController::class, 'index'])
+        ->name('pages.my_customer_debt')
+        ->middleware(['role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin', 'cache.headers:private;no_store;max_age=0']);
     Route::get('/my-dashboard', [MyDashboardController::class, 'index'])
         ->name('pages.my_dashboard')
         ->middleware('role:sale,leader,leader_sale,sale_manager,manager,manager_sale,admin');
@@ -1436,7 +1442,7 @@ Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,mana
     Route::post('/customer-debt/customers', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'createCustomer'])->name('customer-debt.customers.store');
     Route::patch('/customer-debt/recovery', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'updateRecovery'])->name('customer-debt.recovery');
     Route::post('/customer-debt/balance-adjustments', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'adjustBalance'])->name('customer-debt.balance-adjustments');
-    Route::get('/customer-debt', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'index'])->name('customer-debt.index');
+    Route::get('/customer-debt', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'index'])->middleware('cache.headers:private;no_store;max_age=0')->name('customer-debt.index');
     Route::patch('/customers/{customer}/debt-policy', [\App\Http\Controllers\CustomerDebtPolicyController::class, 'update'])->name('customers.debt-policy.update');
     Route::post('/customers/{customer}/debt-policy/unlock', [\App\Http\Controllers\CustomerDebtPolicyController::class, 'unlock'])->middleware('role:admin')->name('customers.debt-policy.unlock');
     Route::post('/customer-debt/policy/unlock', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'unlockPolicy'])->middleware('role:admin')->name('customer-debt.policy.unlock');
@@ -1478,7 +1484,7 @@ Route::get('/test-variant', function () {
 
 // Sales debt monitoring: sheet-derived balances are separate from order accounting.
 Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,manager,manager_sale,account,accountant,accounting,director,ceo'])->group(function () {
-    Route::get('/customer-debt', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'index'])->name('customer-debt.index');
+    Route::get('/customer-debt', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'index'])->middleware('cache.headers:private;no_store;max_age=0')->name('customer-debt.index');
     Route::patch('/customer-debt/policy', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'updatePolicy'])->name('customer-debt.policy');
     Route::get('/customer-debt/customers', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'customers'])->name('customer-debt.customers');
     Route::post('/customer-debt/mapping', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'map'])->name('customer-debt.mapping');

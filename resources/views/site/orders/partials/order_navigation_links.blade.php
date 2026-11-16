@@ -57,6 +57,13 @@
             'url' => route('pages.my_orders.monitoring', ['tab' => 'customers']),
         ],
         [
+            'key' => 'customer_debt',
+            'label' => 'Công nợ',
+            'icon' => 'bi-wallet2',
+            'url' => route('pages.my_customer_debt'),
+            'visible' => (auth()->user()?->isSalesFlowRole() ?? false) || (auth()->user()?->isAdmin() ?? false),
+        ],
+        [
             'key' => 'truck_stations',
             'label' => 'Nhà xe',
             'icon' => 'bi-truck',
@@ -81,7 +88,7 @@
 
 @foreach($orderNavigationItems as $orderNavigationItem)
     @continue(($orderNavigationItem['visible'] ?? true) === false)
-    @php $isOrderNavigationActive = $orderNavigationActiveTab === $orderNavigationItem['key'] || ($orderNavigationItem['key'] === 'truck_stations' && request()->routeIs('pages.my_truck_stations*')); @endphp
+    @php $isOrderNavigationActive = $orderNavigationActiveTab === $orderNavigationItem['key'] || ($orderNavigationItem['key'] === 'truck_stations' && request()->routeIs('pages.my_truck_stations*')) || ($orderNavigationItem['key'] === 'customer_debt' && request()->routeIs('pages.my_customer_debt')); @endphp
     <a
         class="{{ $orderNavigationLinkClass }}{{ $isOrderNavigationActive ? ' ' . $orderNavigationActiveClass : '' }}"
         href="{{ $orderNavigationItem['url'] }}"

@@ -327,7 +327,8 @@ class CustomerDebtMonitorController extends Controller
 
     private function resolveGroups(Request $request, CustomerDebtSheetService $service): array
     {
-        $canLoad = $request->user()->hasRole(['admin', 'account', 'accountant', 'accounting', 'director', 'ceo']);
+        $canLoad = ! $request->attributes->get('own_customer_debt', false)
+            && $request->user()->hasRole(['admin', 'account', 'accountant', 'accounting', 'director', 'ceo']);
         $customers = Customer::query()->with(['currentOwner:id,name,short_name', 'assignedTo:id,name,short_name'])->get(['id', 'name', 'customer_code', 'current_owner_sale_id', 'assigned_to', 'phone', 'address', 'company_name']);
         $allowedIds = $canLoad ? $customers->pluck('id') : Customer::query()->managedBySale($request->user()->id)->pluck('id');
         $snapshot = $service->snapshot();
@@ -346,6 +347,16 @@ class CustomerDebtMonitorController extends Controller
         foreach ($groups as $key => &$group) {
             $group['name_conflict'] = ($sourceNames[$service->customerName($group['name'])] ?? 0) > 1;
             $matches = $service->matchingCustomers($group, $customers);
+            if (! $canLoad && $matches->count() === 1) {
+                $candidate = $matches->first();
+                $sameCode = $group['code'] !== '' && $group['code'] === mb_strtoupper(trim((string) $candidate->customer_code));
+                $phone = $service->customerPhone($group['phone'] ?? '');
+                $samePhone = $phone !== '' && $phone === $service->customerPhone((string) $candidate->phone);
+                if (! $sameCode && ! $samePhone) {
+                    // A name alone is not sufficient evidence to disclose a ledger to a sale.
+                    $matches = collect();
+                }
+            }
             $group['matched_by'] = $matches->count() === 1 && $group['code'] !== '' && mb_strtoupper(trim((string) $matches->first()->customer_code)) === $group['code'] ? 'code' : 'name';
             $group['customer_id'] = $matches->count() === 1 ? $matches->first()->id : null;
             $group['manual_mapping'] = isset($mappings[$key]);
@@ -363,6 +374,16 @@ class CustomerDebtMonitorController extends Controller
             }
         }
         unset($group);
+
+        if (! $canLoad) {
+            $customers = $customers->whereIn('id', $allowedIds)->values();
+            if ($snapshot !== null) {
+                $snapshot['has_unidentified_payments'] = ! empty($snapshot['issues']);
+                $snapshot['entries'] = collect($groups)->flatMap(fn ($group) => $group['entries'])->values()->all();
+                $snapshot['issues'] = [];
+                unset($snapshot['payment_syncs'], $snapshot['loaded_by']);
+            }
+        }
 
         return compact('canLoad', 'customers', 'allowedIds', 'snapshot', 'groups');
     }

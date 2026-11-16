@@ -4,8 +4,8 @@
         <div class="d-flex flex-wrap gap-2"><a class="btn btn-primary btn-sm" target="_blank" rel="noopener" href="{{ request()->fullUrlWithQuery(['presentation'=>'customer','purchase_page'=>null,'payment_page'=>null,'detail_page'=>null]) }}">Bản gửi khách</a>
         <a class="btn btn-light btn-sm" href="{{ request()->fullUrlWithQuery(['customer'=>null,'system_customer'=>null,'report_from'=>null,'report_to'=>null,'window'=>null,'purchase_page'=>null,'payment_page'=>null,'detail_page'=>null]) }}">Đóng chi tiết</a></div>
     </header>
-    <form method="GET" action="{{ route('customer-debt.index') }}#debt-detail" class="debt-report-filters">
-        @foreach(['tab','from','to','customer','system_customer','search','sale','alert','recovery','sort','direction','debt_page'] as $queryKey)
+    <form method="GET" action="{{ $debtDetailAction ?? route('customer-debt.index') }}#debt-detail" class="debt-report-filters">
+        @foreach(['tab','from','to','customer','system_customer','search','sale','alert','recovery','sort','direction','debt_page','balance','per_page','scope','range'] as $queryKey)
             @if(request()->filled($queryKey))<input type="hidden" name="{{ $queryKey }}" value="{{ request($queryKey) }}">@endif
         @endforeach
         <input type="hidden" name="window" value="custom">
@@ -25,8 +25,8 @@
         <div class="debt-report-metric"><span>Rủi ro công nợ</span><strong class="debt-report-risk {{ in_array($reportAlerts['risk'], ['high','very_high']) ? 'text-danger' : '' }}">{{ ['medium'=>'Trung bình','high'=>'Cao','very_high'=>'Rất cao'][$reportAlerts['risk']] ?? ($reportAlerts['balance'] > 0 ? 'Dưới 15 ngày' : 'Không còn nợ') }}</strong><small>Tuổi nợ {{ $reportAlerts['age_days'] }} ngày</small></div>
     </div>
     <div class="debt-report-reconciliation"><span>Dư đầu kỳ <strong>{{ number_format($opening, 0, ',', '.') }} đ</strong></span>@if($detailAdjustments != 0)<span>Điều chỉnh trong kỳ <strong>{{ number_format($detailAdjustments, 0, ',', '.') }} đ</strong></span>@endif<span>{{ \Carbon\Carbon::parse($reportFrom)->format('d/m/Y') }} – {{ \Carbon\Carbon::parse($reportTo)->format('d/m/Y') }} · Phát sinh theo kỳ; số dư, ngày giao dịch gần nhất và rủi ro tính đến cuối kỳ.</span></div>
-    <div class="small text-muted px-3 pb-3">Nguồn <a href="https://docs.google.com/spreadsheets/d/{{ $snapshot['spreadsheet_id'] ?? config('services.google_sheets.debt_spreadsheet_id') }}/edit?gid=438108508" target="_blank" rel="noopener">nhatkybanhang</a> trong kỳ: Thanh toán <strong>{{ number_format($detailSalesPayments, 0, ',', '.') }} đ</strong> · Tặng <strong>{{ number_format($detailGifts, 0, ',', '.') }} đ</strong>. Tặng được trừ riêng khỏi số phải thu.</div>
-    @if(!empty($snapshot['issues']))<div class="small text-warning px-3 pb-3">Cần đối chiếu các khoản thu chưa xác định khách hàng để bảo đảm công nợ đầy đủ.</div>@endif
+    <div class="small text-muted px-3 pb-3">Nguồn @if($canLoad ?? false)<a href="https://docs.google.com/spreadsheets/d/{{ $snapshot['spreadsheet_id'] ?? config('services.google_sheets.debt_spreadsheet_id') }}/edit?gid=438108508" target="_blank" rel="noopener">nhatkybanhang</a>@else nhatkybanhang @endif trong kỳ: Thanh toán <strong>{{ number_format($detailSalesPayments, 0, ',', '.') }} đ</strong> · Tặng <strong>{{ number_format($detailGifts, 0, ',', '.') }} đ</strong>. Tặng được trừ riêng khỏi số phải thu.</div>
+    @if(!empty($snapshot['issues']) || !empty($snapshot['has_unidentified_payments']))<div class="small text-warning px-3 pb-3">Cần đối chiếu các khoản thu chưa xác định khách hàng để bảo đảm công nợ đầy đủ.</div>@endif
     <div class="debt-report-columns">
         <article class="debt-report-ledger">
             <header><h3>Mua hàng <small class="text-muted">· Mới nhất trước</small></h3><span>{{ number_format($purchases->total(), 0, ',', '.') }} dòng</span></header>

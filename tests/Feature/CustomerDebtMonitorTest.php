@@ -894,6 +894,359 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(1000, $context['customerDebts'][1]['balance']);
     }
 
+    public function test_sale_debt_table_excludes_unmapped_sources_even_when_the_sheet_names_the_sale(): void
+    {
+        $service = $this->service([
+            $this->entry('CRM01', 'Chị Bình'),
+            $this->entry('KH02', 'Anh Hải', 2),
+            $this->entry('NEW01', 'Khách nguồn của Huy', 3) + ['sale_name' => 'Huy'],
+            $this->entry('NEW02', 'Khách nguồn của Hà', 4) + ['sale_name' => 'Hà'],
+        ]);
+        $data = (new \App\Http\Controllers\MyCustomerDebtController)->index($this->request(), $service, new CustomerDebtMonitorController)->getData();
+        self::assertSame(1, $data['debts']->total());
+        self::assertSame(1000, $data['summary']['balance']);
+        self::assertSame(['Chị Bình'], $data['debts']->pluck('name')->sort()->values()->all());
+        self::assertCount(1, $data['customerOptions']);
+    }
+
+    public function test_sale_debt_date_filter_keeps_full_balance_and_selected_customer_reconciliation(): void
+    {
+        $entries = [
+            array_replace($this->entry('CRM01', 'Chị Bình', 1), ['date' => '2026-11-01', 'amount' => 1000]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 2), ['date' => '2026-11-12', 'amount' => 2000]),
+            array_replace($this->entry('', 'Chị Bình', 3), ['date' => '2026-11-13', 'type' => 'payment', 'amount' => 500]),
+        ];
+        $service = $this->service($entries);
+        $key = array_key_first($service->summarize($entries));
+        $data = (new \App\Http\Controllers\MyCustomerDebtController)->index($this->request([
+            'from' => '2026-11-10', 'to' => '2026-11-16', 'customer' => $key,
+            'report_from' => '2026-11-10', 'report_to' => '2026-11-16',
+        ]), $service, new CustomerDebtMonitorController)->getData();
+        self::assertSame(2500, $data['debts']->first()['balance']);
+        self::assertSame(1000, $data['opening']);
+        self::assertSame(2000, $data['detailSales']);
+        self::assertSame(500, $data['detailPayments']);
+        self::assertSame(2500, $data['closing']);
+        self::assertSame(1, $data['purchases']->total());
+    }
+
+    public function test_sale_cannot_open_another_sales_customer_on_the_new_debt_page(): void
+    {
+        $service = $this->service([$this->entry('KH02', 'Anh Hải')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $this->expectException(HttpException::class);
+        (new \App\Http\Controllers\MyCustomerDebtController)->index($this->request(['customer' => $key]), $service, new CustomerDebtMonitorController);
+    }
+
+    public function test_sale_cannot_open_another_sales_unmapped_source_via_customer_statement(): void
+    {
+        $service = $this->service([$this->entry('NEW02', 'Khách nguồn của Hà') + ['sale_name' => 'Hà']]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $this->expectException(HttpException::class);
+        (new \App\Http\Controllers\MyCustomerDebtController)->index($this->request(['customer' => $key, 'presentation' => 'customer']), $service, new CustomerDebtMonitorController);
+    }
+
+    public function test_personal_debt_is_scoped_even_when_user_has_both_sale_and_finance_roles(): void
+    {
+        $request = $this->request(['sale' => 'user:8', 'own_customer_debt' => false, 'report_source' => 'system']);
+        $user = $this->user('sale');
+        $user->setRelation('roles', collect([new Role(['name' => 'sale']), new Role(['name' => 'account'])]));
+        $request->setUserResolver(fn () => $user);
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình'), $this->entry('KH02', 'Anh Hải', 2)]);
+        $data = (new \App\Http\Controllers\MyCustomerDebtController)->index($request, $service, new CustomerDebtMonitorController)->getData();
+        self::assertFalse($data['canLoad']);
+        self::assertSame(['Chị Bình'], $data['debts']->pluck('name')->all());
+        self::assertSame(1000, $data['summary']['balance']);
+    }
+
+    public function test_ownership_transfer_revokes_old_sale_access_and_grants_current_owner_only(): void
+    {
+        DB::table('customers')->where('id', 1)->update(['current_owner_sale_id' => 8]);
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình') + ['sale_name' => 'Huy']]);
+        $controller = new \App\Http\Controllers\MyCustomerDebtController;
+        $old = $controller->index($this->request(), $service, new CustomerDebtMonitorController)->getData();
+        self::assertSame(0, $old['debts']->total());
+        $request = $this->request(); $owner = $this->user('sale'); $owner->id = 8;
+        $request->setUserResolver(fn () => $owner);
+        $current = $controller->index($request, $service, new CustomerDebtMonitorController)->getData();
+        self::assertSame(['Chị Bình'], $current['debts']->pluck('name')->all());
+    }
+
+    public function test_debt_endpoints_reject_foreign_ids_keys_printouts_and_legacy_links(): void
+    {
+        $entries = [$this->entry('CRM01', 'Chị Bình'), $this->entry('KH02', 'Anh Hải', 2)];
+        $service = $this->service($entries);
+        $groups = $service->summarize($entries);
+        $own = collect($groups)->firstWhere('code', 'CRM01')['key'];
+        $foreign = collect($groups)->firstWhere('code', 'KH02')['key'];
+        foreach ([['customer' => $foreign], ['system_customer' => 2], ['customer' => $own, 'system_customer' => 2],
+            ['customer' => $foreign, 'presentation' => 'customer'], ['system_customer' => 2, 'presentation' => 'customer'],
+            ['customer' => $foreign, 'sale' => 'user:8', 'balance' => 'all', 'recovery' => 'all']] as $query) {
+            foreach ([false, true] as $personal) {
+                try {
+                    $request = $this->request($query);
+                    $personal
+                        ? (new \App\Http\Controllers\MyCustomerDebtController)->index($request, $service, new CustomerDebtMonitorController)
+                        : (new CustomerDebtMonitorController)->index($request, $service);
+                    self::fail('Foreign customer was accessible: '.json_encode($query));
+                } catch (HttpException $e) {
+                    self::assertSame(404, $e->getStatusCode());
+                }
+            }
+        }
+    }
+
+    public function test_sale_receives_no_other_customer_models_source_rows_or_unidentified_payment_notes(): void
+    {
+        $service = new class([$this->entry('CRM01', 'Chị Bình'), $this->entry('KH02', 'Anh Hải', 2)]) extends CustomerDebtSheetService {
+            public function __construct(private array $entries) {}
+            public function snapshot(): ?array {
+                return ['entries' => $this->entries, 'issues' => [['amount' => 999, 'note' => 'PRIVATE_OTHER_CUSTOMER_PAYMENT']], 'payment_syncs' => [['count' => 999]], 'loaded_by' => 123];
+            }
+        };
+        $context = (new CustomerDebtMonitorController)->debtContext($this->request(), $service);
+        self::assertSame([1], $context['customers']->pluck('id')->all());
+        self::assertCount(1, $context['snapshot']['entries']);
+        self::assertSame([], $context['snapshot']['issues']);
+        self::assertArrayNotHasKey('payment_syncs', $context['snapshot']);
+        self::assertArrayNotHasKey('loaded_by', $context['snapshot']);
+        self::assertStringNotContainsString('PRIVATE_OTHER_CUSTOMER_PAYMENT', json_encode($context));
+        self::assertStringNotContainsString('Anh Hải', json_encode($context));
+    }
+
+    public function test_same_name_with_mismatched_code_is_not_evidence_of_owned_debt(): void
+    {
+        $service = $this->service([$this->entry('WRONGCODE', 'Chị Bình') + ['sale_name' => 'Huy']]);
+        $data = (new \App\Http\Controllers\MyCustomerDebtController)->index($this->request(), $service, new CustomerDebtMonitorController)->getData();
+        self::assertSame(0, $data['debts']->total());
+        self::assertCount(0, $data['customerOptions']);
+    }
+
+    public function test_matching_phone_can_verify_owned_customer_when_source_code_is_missing(): void
+    {
+        DB::table('customers')->where('id', 1)->update(['phone' => '0901234567']);
+        $service = $this->service([$this->entry('', 'Chị Bình') + ['phone' => '+84 901 234 567']]);
+        $data = (new \App\Http\Controllers\MyCustomerDebtController)->index($this->request(), $service, new CustomerDebtMonitorController)->getData();
+        self::assertSame(1, $data['debts']->total());
+    }
+
+    public function test_personal_debt_route_requires_authentication_sales_role_and_disables_response_caching(): void
+    {
+        $route = $this->app['router']->getRoutes()->getByName('pages.my_customer_debt');
+        self::assertContains('auth', $route->gatherMiddleware());
+        self::assertContains('cache.headers:private;no_store;max_age=0', $route->gatherMiddleware());
+        $response = (new \Illuminate\Http\Middleware\SetCacheHeaders)->handle($this->request(), fn () => new \Illuminate\Http\Response('personal ledger'), 'private;no_store;max_age=0');
+        self::assertTrue($response->headers->hasCacheControlDirective('private'));
+        self::assertTrue($response->headers->hasCacheControlDirective('no-store'));
+        $this->expectException(HttpException::class);
+        (new \App\Http\Controllers\MyCustomerDebtController)->index($this->request([], 'shipper'), $this->service([]), new CustomerDebtMonitorController);
+    }
+
+    public function test_ownership_transfer_invalidates_existing_customer_links_and_printouts_immediately(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $controller = new \App\Http\Controllers\MyCustomerDebtController;
+        self::assertSame(1000, $controller->index($this->request(['customer' => $key]), $service, new CustomerDebtMonitorController)->getData()['closing']);
+        DB::table('customers')->where('id', 1)->update(['current_owner_sale_id' => 8]);
+        foreach ([['customer' => $key], ['customer' => $key, 'presentation' => 'customer'], ['system_customer' => 1]] as $query) {
+            try {
+                $controller->index($this->request($query), $service, new CustomerDebtMonitorController);
+                self::fail('Former owner could still access reassigned customer');
+            } catch (HttpException $e) {
+                self::assertSame(404, $e->getStatusCode());
+            }
+        }
+    }
+
+    public function test_released_and_deleted_customers_are_not_visible_to_the_previous_sale(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình')]);
+        DB::table('customers')->where('id', 1)->update(['customer_status' => 'free']);
+        $controller = new \App\Http\Controllers\MyCustomerDebtController;
+        self::assertSame(0, $controller->index($this->request(), $service, new CustomerDebtMonitorController)->getData()['debts']->total());
+        DB::table('customers')->where('id', 1)->update(['customer_status' => 'managed', 'deleted_at' => now()]);
+        self::assertSame(0, $controller->index($this->request(), $service, new CustomerDebtMonitorController)->getData()['debts']->total());
+    }
+
+    public function test_leader_cannot_use_personal_debt_menu_to_browse_another_sales_customer(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình'), $this->entry('KH02', 'Anh Hải', 2)]);
+        $data = (new \App\Http\Controllers\MyCustomerDebtController)->index($this->request([], 'leader'), $service, new CustomerDebtMonitorController)->getData();
+        self::assertSame(['Chị Bình'], $data['debts']->pluck('name')->all());
+        self::assertSame(1000, $data['summary']['balance']);
+    }
+
+    public function test_sale_report_separates_lifetime_and_period_values_including_gifts_and_adjustments(): void
+    {
+        \Carbon\Carbon::setTestNow('2026-11-16 12:00:00');
+        \Carbon\CarbonImmutable::setTestNow('2026-11-16 12:00:00');
+        $entries = [
+            array_replace($this->entry('CRM01', 'Chị Bình', 1), ['date' => '2026-11-01', 'amount' => 1000]),
+            array_replace($this->entry('', 'Chị Bình', 2), ['date' => '2026-11-02', 'type' => 'payment', 'amount' => 100]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 3), ['date' => '2026-11-10', 'amount' => 2000, 'gift' => 100]),
+            array_replace($this->entry('', 'Chị Bình', 4), ['date' => '2026-11-16', 'type' => 'payment', 'amount' => 500]),
+            $this->entry('KH02', 'Anh Hải', 5),
+        ];
+        $service = $this->service($entries);
+        $key = collect($service->summarize($entries))->firstWhere('code', 'CRM01')['key'];
+        $this->adjust($service, $key, 2330);
+        $data = (new \App\Http\Controllers\MyCustomerDebtController)->index($this->request(['from' => '2026-11-10', 'to' => '2026-11-16']), $service, new CustomerDebtMonitorController)->getData();
+        $row = $data['debts']->first();
+        self::assertSame(3000, $row['sales']);
+        self::assertSame(600, $row['payments']);
+        self::assertSame(2330, $row['balance']);
+        self::assertSame(2000, $row['period_sales']);
+        self::assertSame(500, $row['period_payments']);
+        self::assertSame(100, $row['period_gifts']);
+        self::assertSame(30, $row['period_adjustments']);
+        self::assertSame(1430, $row['period_increase']);
+        self::assertSame(1430, $data['summary']['period_increase']);
+    }
+
+    public function test_sale_report_includes_payment_only_periods_unless_purchase_scope_selected(): void
+    {
+        $service = $this->service([
+            array_replace($this->entry('CRM01', 'Chị Bình', 1), ['date' => '2026-11-01', 'amount' => 1000]),
+            array_replace($this->entry('', 'Chị Bình', 2), ['date' => '2026-11-12', 'type' => 'payment', 'amount' => 300]),
+        ]);
+        $controller = new \App\Http\Controllers\MyCustomerDebtController;
+        $query = ['from' => '2026-11-10', 'to' => '2026-11-16'];
+        $all = $controller->index($this->request($query), $service, new CustomerDebtMonitorController)->getData();
+        self::assertSame(1, $all['debts']->total());
+        self::assertSame(0, $all['summary']['period_sales']);
+        self::assertSame(300, $all['summary']['period_payments']);
+        self::assertSame(-300, $all['summary']['period_increase']);
+        $purchases = $controller->index($this->request($query + ['scope' => 'orders']), $service, new CustomerDebtMonitorController)->getData();
+        self::assertSame(0, $purchases['debts']->total());
+    }
+
+    public function test_sale_report_search_pagination_and_branding_preserve_scoped_totals(): void
+    {
+        $entries = [];
+        for ($i = 10; $i < 35; $i++) {
+            $name = 'Khách Huy '.$i;
+            DB::table('customers')->insert(['id' => $i, 'name' => $name, 'customer_code' => 'OWN'.$i, 'assigned_to' => 7, 'current_owner_sale_id' => 7]);
+            $entries[] = $this->entry('OWN'.$i, $name, $i);
+        }
+        $entries[] = $this->entry('KH02', 'Anh Hải', 99);
+        DB::table('settings')->insert([
+            ['key' => 'brand_name', 'value' => 'Thương hiệu thử'], ['key' => 'logo', 'value' => '123'],
+            ['key' => 'slogan', 'value' => 'Khẩu hiệu thử'], ['key' => 'google_api_secret', 'value' => 'PRIVATE_SECRET'],
+        ]);
+        $data = (new \App\Http\Controllers\MyCustomerDebtController)->index($this->request([
+            'range' => 'all', 'search' => 'Khách Huy', 'per_page' => 20, 'page' => 2, 'sort' => 'period_sales', 'direction' => 'asc',
+        ]), $this->service($entries), new CustomerDebtMonitorController)->getData();
+        self::assertSame(25, $data['debts']->total());
+        self::assertCount(5, $data['debts']);
+        self::assertSame(25000, $data['summary']['sales']);
+        self::assertSame(25000, $data['summary']['balance']);
+        self::assertSame(25000, $data['summary']['period_sales']);
+        self::assertStringContainsString('per_page=20', $data['debts']->url(1));
+        self::assertStringContainsString('sort=period_sales', $data['debts']->url(1));
+        self::assertSame('Thương hiệu thử', $data['settings']['brand_name']->value);
+        self::assertSame('Khẩu hiệu thử', $data['settings']['slogan']->value);
+        self::assertSame('123', $data['settings']['logo']->value);
+        self::assertFalse($data['settings']->has('google_api_secret'));
+    }
+
+    public function test_sale_report_credit_filter_keeps_signed_table_totals(): void
+    {
+        $service = $this->service([
+            $this->entry('CRM01', 'Chị Bình', 1),
+            array_replace($this->entry('', 'Chị Bình', 2), ['type' => 'payment', 'amount' => 1300]),
+        ]);
+        $data = (new \App\Http\Controllers\MyCustomerDebtController)->index($this->request(['balance' => 'credit']), $service, new CustomerDebtMonitorController)->getData();
+        self::assertSame(-300, $data['debts']->first()['balance']);
+        self::assertSame(-300, $data['summary']['balance_net']);
+        self::assertSame(0, $data['summary']['balance']);
+    }
+
+    public function test_sale_report_defaults_to_yesterday_and_all_history_remains_available(): void
+    {
+        \Carbon\Carbon::setTestNow('2026-11-16 12:00:00');
+        \Carbon\CarbonImmutable::setTestNow('2026-11-16 12:00:00');
+        $service = $this->service([
+            array_replace($this->entry('CRM01', 'Chị Bình', 1), ['date' => '2026-11-15', 'amount' => 1000]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 2), ['date' => '2026-11-16', 'amount' => 2000]),
+        ]);
+        $controller = new \App\Http\Controllers\MyCustomerDebtController;
+        $request = $this->request();
+        $data = $controller->index($request, $service, new CustomerDebtMonitorController)->getData();
+        self::assertSame('2026-11-15', $data['periodFrom']);
+        self::assertSame('2026-11-15', $data['periodTo']);
+        self::assertSame('2026-11-15', $request->input('from'));
+        self::assertSame(1000, $data['summary']['period_sales']);
+        self::assertSame(3000, $data['summary']['sales']);
+        $all = $controller->index($this->request(['range' => 'all']), $service, new CustomerDebtMonitorController)->getData();
+        self::assertSame(3000, $all['summary']['period_sales']);
+        self::assertSame('2026-11-16', $all['periodTo']);
+    }
+
+    public function test_sale_stars_move_customer_from_later_page_to_top_and_can_be_cleared(): void
+    {
+        $entries = [];
+        for ($id = 10; $id < 32; $id++) {
+            DB::table('customers')->insert(['id' => $id, 'name' => 'Khách '.$id, 'customer_code' => 'OWN'.$id, 'assigned_to' => 7, 'current_owner_sale_id' => 7]);
+            $entries[] = array_replace($this->entry('OWN'.$id, 'Khách '.$id, $id), ['amount' => $id === 31 ? 1 : 1000]);
+        }
+        $service = $this->service($entries);
+        $controller = new \App\Http\Controllers\MyCustomerDebtController;
+        $priorities = new \App\Services\CustomerDebtPriorityService;
+        $load = fn ($query = []) => $controller->index($this->request($query + ['per_page' => 20]), $service, new CustomerDebtMonitorController)->getData();
+        $target = $load(['page' => 2])['debts']->firstWhere('customer_id', 31);
+        self::assertNotNull($target);
+        $controller->updatePriority($this->request(['customer_id' => 31, 'source_key' => $target['key'], 'stars' => 5, 'priority_version' => $target['priority']['version']]), $service, new CustomerDebtMonitorController, $priorities);
+        $updated = $load();
+        self::assertSame(31, $updated['debts']->first()['customer_id']);
+        self::assertSame(5, $updated['debts']->first()['priority']['stars']);
+        self::assertSame(0, $priorities->effective($target, $priorities->records())['stars']);
+        $otherSale = $this->user('sale'); $otherSale->id = 8;
+        self::assertSame(0, $priorities->effective($target, $priorities->personalRecords($otherSale))['stars']);
+        $controller->updatePriority($this->request(['customer_id' => 31, 'source_key' => $target['key'], 'stars' => 0, 'priority_version' => $updated['debts']->first()['priority']['version']]), $service, new CustomerDebtMonitorController, $priorities);
+        self::assertNotSame(31, $load()['debts']->first()['customer_id']);
+        self::assertSame(0, $load(['page' => 2])['debts']->firstWhere('customer_id', 31)['priority']['stars']);
+    }
+
+    public function test_sale_star_update_rejects_foreign_customer_and_rechecks_transferred_ownership(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình'), $this->entry('KH02', 'Anh Hải', 2)]);
+        $groups = $service->summarize($service->snapshot()['entries']);
+        $controller = new \App\Http\Controllers\MyCustomerDebtController;
+        $priorities = new \App\Services\CustomerDebtPriorityService;
+        $owned = $controller->index($this->request(), $service, new CustomerDebtMonitorController)->getData()['debts']->first();
+        $foreign = collect($groups)->firstWhere('code', 'KH02');
+        foreach ([['customer_id' => 2, 'source_key' => $foreign['key']], ['customer_id' => 2, 'source_key' => $owned['key']]] as $target) {
+            try {
+                $controller->updatePriority($this->request($target + ['stars' => 5, 'priority_version' => $owned['priority']['version']]), $service, new CustomerDebtMonitorController, $priorities);
+                self::fail('Foreign priority was modified');
+            } catch (HttpException $e) { self::assertSame(404, $e->getStatusCode()); }
+        }
+        DB::table('customers')->where('id', 1)->update(['current_owner_sale_id' => 8]);
+        try {
+            $controller->updatePriority($this->request(['customer_id' => 1, 'source_key' => $owned['key'], 'stars' => 5, 'priority_version' => $owned['priority']['version']]), $service, new CustomerDebtMonitorController, $priorities);
+            self::fail('Former owner modified priority');
+        } catch (HttpException $e) { self::assertSame(404, $e->getStatusCode()); }
+        self::assertSame([], $priorities->personalRecords($this->user('sale')));
+    }
+
+    public function test_sale_stars_reject_stale_updates_and_invalid_rating(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình')]);
+        $controller = new \App\Http\Controllers\MyCustomerDebtController;
+        $priorities = new \App\Services\CustomerDebtPriorityService;
+        $row = $controller->index($this->request(), $service, new CustomerDebtMonitorController)->getData()['debts']->first();
+        $target = ['customer_id' => 1, 'source_key' => $row['key'], 'priority_version' => $row['priority']['version']];
+        $controller->updatePriority($this->request($target + ['stars' => 3]), $service, new CustomerDebtMonitorController, $priorities);
+        foreach ([0, 6] as $stars) {
+            try {
+                $controller->updatePriority($this->request($target + ['stars' => $stars]), $service, new CustomerDebtMonitorController, $priorities);
+                self::fail('Invalid or stale stars accepted');
+            } catch (\Illuminate\Validation\ValidationException $e) { self::assertNotEmpty($e->errors()); }
+        }
+        self::assertSame(3, $priorities->effective($row, $priorities->personalRecords($this->user('sale')))['stars']);
+    }
+
     public function test_report_summary_separates_lifetime_and_period_totals_before_pagination(): void
     {
         $this->collectionClock('2026-11-13 12:00:00');
@@ -1765,13 +2118,13 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(1, $data['rows']->first()['customer_id']);
     }
 
-    public function test_sales_can_only_see_their_customers_and_unique_name_fallback(): void
+    public function test_sales_can_only_see_their_customers_with_verified_identity(): void
     {
-        $view = (new CustomerDebtMonitorController)->index($this->request(), $this->service([$this->entry('OLD01', 'Chị Bình'), $this->entry('KH02', 'Anh Hải')]));
+        $view = (new CustomerDebtMonitorController)->index($this->request(), $this->service([$this->entry('CRM01', 'Chị Bình'), $this->entry('KH02', 'Anh Hải')]));
         $data = $view->getData();
         self::assertCount(1, $data['groups']);
         self::assertSame(1, array_values($data['groups'])[0]['customer_id']);
-        self::assertSame('name', array_values($data['groups'])[0]['matched_by']);
+        self::assertSame('code', array_values($data['groups'])[0]['matched_by']);
         self::assertSame(1, $data['orders']->total());
     }
 
@@ -1954,7 +2307,7 @@ class CustomerDebtMonitorTest extends TestCase
 
     public function test_sale_can_quickly_update_terms_for_their_own_customer(): void
     {
-        $service = $this->service([$this->entry('OLD01', 'Chị Bình')]);
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình')]);
         $key = array_key_first($service->summarize($service->snapshot()['entries']));
         $controller = new CustomerDebtMonitorController;
         $controller->updatePolicy($this->request(['source_key' => $key, 'allowed_orders' => 1, 'credit_limit' => '10.000.000', 'due_days' => 7]), $service);
@@ -2124,7 +2477,7 @@ class CustomerDebtMonitorTest extends TestCase
 
     public function test_filtering_another_sale_does_not_expand_sales_customer_scope(): void
     {
-        $service = $this->service([$this->entry('OLD01', 'Chị Bình'), $this->entry('KH02', 'Anh Hải')]);
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình'), $this->entry('KH02', 'Anh Hải')]);
         $data = (new CustomerDebtMonitorController)->index($this->request(['tab' => 'all', 'sale' => 'user:8']), $service)->getData();
         self::assertSame(0, $data['debts']->total());
         self::assertSame(['user:7'], $data['saleOptions']->pluck('key')->all());
@@ -2155,7 +2508,7 @@ class CustomerDebtMonitorTest extends TestCase
 
     public function test_overdue_sort_keeps_customer_sale_filter_and_access_scope(): void
     {
-        $first = $this->entry('OLD01', 'Chị Bình');
+        $first = $this->entry('CRM01', 'Chị Bình');
         $first['date'] = now()->subDays(11)->toDateString();
         $other = $this->entry('KH02', 'Anh Hải');
         $other['date'] = now()->subDays(101)->toDateString();
@@ -2400,7 +2753,7 @@ class CustomerDebtMonitorTest extends TestCase
     public function test_card_lock_cannot_be_bypassed_on_the_sheet_page(): void
     {
         $this->policyUpdate();
-        $service = $this->service([$this->entry('OLD01', 'Chị Bình')]);
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình')]);
         $key = array_key_first($service->summarize($service->snapshot()['entries']));
         $this->expectException(\Illuminate\Validation\ValidationException::class);
         (new CustomerDebtMonitorController)->updatePolicy($this->request(['source_key' => $key, 'policy_version' => 1, 'allowed_orders' => 99]), $service);

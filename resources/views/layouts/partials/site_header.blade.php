@@ -446,6 +446,7 @@
                     @endif
                     <li class="pt-2 pb-1 text-muted small text-uppercase fw-semibold">Khách hàng &amp; Báo cáo</li>
                     <li><a href="{{ route('pages.my_customer') }}" class="d-block py-1"><i class="bi bi-people me-1"></i> {{ __('site.my_customers') }}</a></li>
+                    @if(Auth::user()->isSalesFlowRole())<li><a href="{{ route('pages.my_customer_debt') }}" class="d-block py-1"><i class="bi bi-wallet2 me-1"></i> Công nợ</a></li>@endif
                     <li><a href="{{ $offcanvasCanViewMonitoring ? route('pages.my_orders.monitoring', ['tab' => 'schedules']) : route('my_customer.schedules.index') }}" class="d-block py-1"><i class="bi bi-calendar2-check me-1"></i> Lịch lên đơn</a></li>
                     @if(Auth::user()->isSalesFlowRole())
                         <li><a href="{{ route('pages.my_truck_stations') }}" class="d-block py-1"><i class="bi bi-truck me-1"></i> Danh sách nhà xe</a></li>
@@ -709,6 +710,9 @@
                                         @if(Auth::user()->isSalesFlowRole())
                                         <a class="dropdown-item" href="{{ route('pages.my_customer') }}">
                                             <i class="bi bi-people"></i> {{ __('site.my_customers') }}
+                                        </a>
+                                        <a class="dropdown-item" href="{{ route('pages.my_customer_debt') }}">
+                                            <i class="bi bi-wallet2"></i> Công nợ
                                         </a>
                                         <a class="dropdown-item" href="{{ route('pages.my_orders.monitoring', ['tab' => 'schedules']) }}">
                                             <i class="bi bi-calendar2-check"></i> Lịch lên đơn
