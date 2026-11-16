@@ -44,7 +44,15 @@
             @if($row['changes'])<details class="small mt-2"><summary>{{ count($row['changes']) }} trường thay đổi</summary><dl class="mb-0 mt-1">@foreach($row['changes'] as $field=>$change)<dt>{{ \App\Services\GoogleSheetCustomerImportService::SYNC_FIELDS[$field] }}</dt><dd class="mb-1"><span class="text-muted">{{ $field === 'sale_id' ? ($sales->firstWhere('id',$change['before'])?->name ?? 'Chưa phân công') : ($change['before'] ?: 'Trống') }}</span> → <strong>{{ $field === 'sale_id' ? ($sales->firstWhere('id',$change['after'])?->name ?? $change['after']) : $change['after'] }}</strong></dd>@endforeach</dl></details>@endif
             @if($row['status'] === 'update' && !$row['can_update'])<div class="small text-danger">Chưa có quyền sửa khách này.</div>@endif
             @if(!empty($row['result']) && !$row['result']['ok'])<div class="small text-danger mt-1">{{ $row['result']['message'] }}</div>@endif</td>
-        <td>@if($row['status'] !== 'imported')<button type="button" class="btn btn-sm btn-outline-primary sheet-customer-choice" data-key="{{ $row['key'] }}" data-source-name="{{ $row['name'] }}" data-name="{{ $row['new_name'] }}" data-code="{{ $row['new_code'] }}" data-sale="{{ $row['sale_id'] }}" data-customer="{{ $row['target']?->id }}" data-target="{{ $row['target']?->name }}" data-status="{{ $row['status'] }}" data-phone="{{ $row['phone'] }}" data-address="{{ $row['address'] }}" data-revision="{{ $row['target_revision'] }}" data-sync-fields="{{ json_encode($row['sync_preferences']) }}" data-can-update="{{ $row['can_update'] ? '1' : '0' }}">Chọn ghép / tạo</button>@endif</td></tr>
+        <td>
+        @if($row['status'] === 'link' || ($row['status'] === 'create' && $canCreate) || ($row['status'] === 'update' && $row['can_update']))
+        <form method="POST" action="{{ route('customers.sheet-import.commit') }}" data-sheet-import-loading class="mb-2">
+            @csrf<input type="hidden" name="preview" value="{{ request('preview') }}"><input type="hidden" name="source_key" value="{{ $row['key'] }}">
+            @foreach(['page','search','status'] as $filter)<input type="hidden" name="{{ $filter }}" value="{{ request($filter) }}">@endforeach
+            <button class="btn btn-sm btn-primary">{{ $syncMode ? 'Áp dụng đồng bộ' : 'Áp dụng' }}</button>
+        </form>
+        @endif
+        @if($row['status'] !== 'imported')<button type="button" class="btn btn-sm btn-outline-primary sheet-customer-choice" data-key="{{ $row['key'] }}" data-source-name="{{ $row['name'] }}" data-name="{{ $row['new_name'] }}" data-code="{{ $row['new_code'] }}" data-sale="{{ $row['sale_id'] }}" data-customer="{{ $row['target']?->id }}" data-target="{{ $row['target']?->name }}" data-status="{{ $row['status'] }}" data-phone="{{ $row['phone'] }}" data-address="{{ $row['address'] }}" data-revision="{{ $row['target_revision'] }}" data-sync-fields="{{ json_encode($row['sync_preferences']) }}" data-can-update="{{ $row['can_update'] ? '1' : '0' }}">Chọn ghép / tạo</button>@endif</td></tr>
         @empty<tr><td colspan="5" class="text-center text-muted py-4">Không có khách phù hợp.</td></tr>@endforelse
         </tbody></table></div><div class="card-body">{{ $rows->links() }}</div>
     </div>

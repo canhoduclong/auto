@@ -246,16 +246,20 @@ class GoogleSheetCustomerImportService
         });
     }
 
-    public function commit(string $token, User $actor, bool $canCreate, int $limit = 25): array
+    public function commit(string $token, User $actor, bool $canCreate, int $limit = 25, ?string $sourceKey = null): array
     {
-        return Cache::lock('customer-sheet-preview:'.$token, 120)->block(5, function () use ($token, $actor, $canCreate, $limit) {
-            return Cache::lock('customer-debt-load', 120)->block(5, function () use ($token, $actor, $canCreate, $limit) {
+        return Cache::lock('customer-sheet-preview:'.$token, 120)->block(5, function () use ($token, $actor, $canCreate, $limit, $sourceKey) {
+            return Cache::lock('customer-debt-load', 120)->block(5, function () use ($token, $actor, $canCreate, $limit, $sourceKey) {
                 $snapshot = $this->snapshot($token, $actor);
                 $counts = ['created' => 0, 'linked' => 0, 'skipped' => 0, 'errors' => 0];
                 if (($snapshot['mode'] ?? 'import') === 'sync') {
                     $counts['updated'] = 0;
                 }
                 $rows = $this->plan($snapshot);
+                if ($sourceKey !== null) {
+                    abort_unless(isset($rows[$sourceKey]), 422, 'Khách không có trong bản xem trước.');
+                    $rows = [$sourceKey => $rows[$sourceKey]];
+                }
                 foreach ($rows as $key => $row) {
                     if ($limit <= $counts['created'] + $counts['linked'] + $counts['errors'] + ($counts['updated'] ?? 0)) {
                         break;

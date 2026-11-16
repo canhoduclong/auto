@@ -637,6 +637,26 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertCount(2, collect($importer->plan($importer->snapshot($next, $actor)))->where('status', 'unchanged'));
     }
 
+    public function test_google_customer_sync_applies_only_selected_source_and_retry_does_not_apply_others(): void
+    {
+        \Illuminate\Support\Facades\Event::fake(['eloquent.updated: App\Models\Customer']);
+        $importer = $this->sheetCustomerImporter($this->customerSheetValues([
+            ['CRM01', 'Chị Bình mới', '', '1000'], ['NEW01', 'Khách mới', '', '1000'],
+        ]));
+        $actor = $this->user('admin');
+        $token = $importer->load($actor, 'sync');
+        $key = collect($importer->plan($importer->snapshot($token, $actor)))->firstWhere('code', 'CRM01')['key'];
+        $counts = $importer->commit($token, $actor, true, 25, $key);
+        self::assertSame(1, $counts['updated']);
+        self::assertSame(0, $counts['created']);
+        self::assertSame('Chị Bình mới', DB::table('customers')->where('id', 1)->value('name'));
+        self::assertFalse(DB::table('customers')->where('customer_code', 'NEW01')->exists());
+        $again = $importer->commit($token, $actor, true, 25, $key);
+        self::assertSame(0, $again['updated']);
+        self::assertSame(0, $again['created']);
+        self::assertCount(1, collect($importer->plan($importer->snapshot($token, $actor)))->where('status', 'create'));
+    }
+
     public function test_google_customer_sync_keeps_latest_nonempty_contact_information(): void
     {
         \Illuminate\Support\Facades\Event::fake(['eloquent.updated: App\Models\Customer']);

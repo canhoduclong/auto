@@ -98,9 +98,9 @@ class GoogleSheetCustomerImportController extends Controller
     public function commit(Request $request, GoogleSheetCustomerImportService $service)
     {
         $this->authorizeImport($request);
-        $data = $request->validate(['preview' => 'required|uuid']);
+        $data = $request->validate(['preview' => 'required|uuid', 'source_key' => 'nullable|string|size:64|regex:/^[a-f0-9]{64}$/', 'page' => 'nullable|integer|min:1', 'search' => 'nullable|string|max:150', 'status' => 'nullable|in:all,link,create,update,unchanged,conflict,imported,skip,error']);
         $canCreate = Gate::forUser($request->user())->allows('create', Customer::class);
-        $counts = $service->commit($data['preview'], $request->user(), $canCreate);
+        $counts = $service->commit($data['preview'], $request->user(), $canCreate, 25, $data['source_key'] ?? null);
         $rows = collect($service->plan($service->snapshot($data['preview'], $request->user())));
         $remaining = $rows->filter(fn ($row) => $row['status'] === 'link' || ($canCreate && $row['status'] === 'create') || ($row['status'] === 'update' && Gate::forUser($request->user())->allows('update', $row['target'])))->count();
         $created = $rows->filter(fn ($row) => ($row['result']['ok'] ?? false) && $row['result']['action'] === 'create')->count();
@@ -110,8 +110,12 @@ class GoogleSheetCustomerImportController extends Controller
         if ($counts['errors'] > 0) {
             $message .= ' Có dòng lỗi, vui lòng kiểm tra danh sách.';
         }
-        $request->session()->flash('success', $message);
-        $url = route('customers.sheet-import.index', ['preview' => $data['preview']]);
+        if (! empty($data['source_key'])) {
+            $result = $service->snapshot($data['preview'], $request->user())['results'][$data['source_key']] ?? null;
+            $message = ! empty($result['ok']) ? 'Đã áp dụng đồng bộ cho khách được chọn.' : ($result['message'] ?? 'Khách này chưa sẵn sàng để áp dụng.');
+        }
+        $request->session()->flash($counts['errors'] > 0 ? 'error' : 'success', $message);
+        $url = route('customers.sheet-import.index', array_intersect_key($data, array_flip(['preview', 'page', 'search', 'status'])));
         if ($request->expectsJson()) {
             return response()->json(['counts' => $counts, 'remaining' => $remaining, 'url' => $url]);
         }
