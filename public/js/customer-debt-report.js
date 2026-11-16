@@ -39,7 +39,7 @@
             boxes.forEach(box=>box.disabled=busy);
         };
         const daysLabel=value=>value===''?'Chưa rõ':Number(value)===0?'Hôm nay':Number(value)===1?'Hôm qua':`${value} ngày`;
-        const debtDaysLabel=value=>value===''?'Chưa rõ':`${value} ngày`;
+        const debtDaysLabel=value=>value===''?'Chưa thanh toán':`${value} ngày`;
         const line=box=>{
             const d=box.dataset;
             const purchase=d.purchase?`${d.purchase} (${daysLabel(d.purchaseDays)})`:'Chưa có ngày mua';
@@ -49,6 +49,12 @@
         all.addEventListener('change',()=>{boxes.forEach(box=>box.checked=all.checked);update();});
         copy.addEventListener('click',async()=>{
             const targets=selected();
+            const saleGroups=new Map();
+            targets.forEach(box=>{
+                const key=box.dataset.saleKey||'unassigned';
+                if(!saleGroups.has(key))saleGroups.set(key,{label:box.dataset.saleLabel||'Chưa phân công',boxes:[]});
+                saleGroups.get(key).boxes.push(box);
+            });
             const range=bulk.dataset.from&&bulk.dataset.to?`${bulk.dataset.from} – ${bulk.dataset.to}`:'';
             const title=`NHẮC CÔNG NỢ | ${range||bulk.dataset.date}`;
             const escape=value=>String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -57,13 +63,16 @@
                 const bold=value=>rich?`<strong>${escape(value)}</strong>`:String(value);
                 const total=targets.reduce((sum,box)=>sum+Number(box.dataset.balance),0);
                 const lines=[`💰💰💰 ${bold(title)} 💰💰💰`, '',
-                    `💬 ${bold('Doanh số là thành tích – Thu tiền là kết quả!')}`,
-                    'Anh em cùng chủ động theo sát công nợ để hoa hồng về đúng hẹn nhé!',
                     `📌 ${bold('Danh sách khách hàng cần theo dõi và thu hồi công nợ:')}`, ''];
-                targets.forEach((box,index)=>{
-                    const d=box.dataset;
-                    const purchase=d.purchase?`${d.purchase} (${daysLabel(d.purchaseDays)})`:'Chưa có ngày mua';
-                    lines.push(`${index+1}. ${bold(d.name)}: ${bold(money(Number(d.balance))+'đ')} --- Nợ: ${bold(debtDaysLabel(d.paymentDays))} --- Đơn mới: ${text(purchase)}`);
+                let index=0;
+                saleGroups.forEach(group=>{
+                    if(index>0)lines.push('');
+                    lines.push(bold(`-----   ${group.label}   -----`));
+                    group.boxes.forEach(box=>{
+                        const d=box.dataset;
+                        const purchase=d.purchase?`${d.purchase} (${daysLabel(d.purchaseDays)})`:'Chưa có ngày mua';
+                        lines.push(`${++index}. ${bold(d.name)}: ${bold(money(Number(d.balance))+'đ')} --- Nợ: ${bold(debtDaysLabel(d.paymentDays))} --- Đơn mới: ${text(purchase)}`);
+                    });
                 });
                 lines.push('',`💰 TỔNG CÔNG NỢ: ${bold(money(total)+'đ')}`);
                 if(range){
@@ -73,7 +82,7 @@
                     const top=available.filter(box=>Number(box.dataset.periodIncrease)>0).sort((a,b)=>Number(b.dataset.periodIncrease)-Number(a.dataset.periodIncrease)).slice(0,3);
                     if(top.length)lines.push('    • Khách phát sinh nhiều:',...top.map(box=>`    🔥 ${bold(box.dataset.name)}: ${bold(money(Number(box.dataset.periodIncrease))+' đ')}`));
                 }
-                lines.push('','🎯 CÔNG NỢ CHƯA VỀ – HOA HỒNG CÒN XA! 🦆💸');
+                lines.push('','🎯 ANH EM CẬP NHẬT CÔNG NỢ GIÚP  🦆💸');
                 return lines.join(rich?'<br>':'\n');
             };
             const content=buildContent(false);
