@@ -45,7 +45,7 @@ class GoogleSheetCustomerImportController extends Controller
     {
         $this->authorizeImport($request);
         $data = $request->validate(['mode' => 'nullable|in:import,sync', 'sync_fields' => 'nullable|required_if:mode,sync|array|min:1', 'sync_fields.*' => [Rule::in(array_keys(GoogleSheetCustomerImportService::SYNC_FIELDS))]]);
-        $fields = $data['sync_fields'] ?? ['name', 'phone', 'address'];
+        $fields = $data['sync_fields'] ?? ['name', 'phone', 'address', 'delivery_time'];
         abort_if(in_array('sale_id', $fields, true) && ! $request->user()->isAdmin() && ! $request->user()->hasPermission('customers.assign-sale'), 403);
         try {
             $token = $service->load($request->user(), $data['mode'] ?? 'import', $fields);
@@ -63,7 +63,7 @@ class GoogleSheetCustomerImportController extends Controller
         $this->authorizeImport($request);
         $data = $request->validate(['search' => 'nullable|string|max:150', 'page' => 'nullable|integer|min:1']);
         $search = trim($data['search'] ?? '');
-        $customers = Customer::query()->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('name', 'like', '%'.$search.'%')->orWhere('customer_code', 'like', '%'.$search.'%')->orWhere('phone', 'like', '%'.$search.'%')))->orderBy('name')->paginate(20, ['id', 'name', 'customer_code', 'phone', 'address', 'assigned_to', 'current_owner_sale_id', 'customer_status', 'assigned_at']);
+        $customers = Customer::query()->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('name', 'like', '%'.$search.'%')->orWhere('customer_code', 'like', '%'.$search.'%')->orWhere('phone', 'like', '%'.$search.'%')))->orderBy('name')->paginate(20, ['id', 'name', 'customer_code', 'phone', 'address', 'delivery_time', 'assigned_to', 'current_owner_sale_id', 'customer_status', 'assigned_at']);
         $service = app(GoogleSheetCustomerImportService::class);
         $customers->getCollection()->each(fn ($customer) => $customer->setAttribute('revision', $service->customerRevision($customer)));
 
@@ -81,11 +81,11 @@ class GoogleSheetCustomerImportController extends Controller
             'customer_revision' => 'nullable|required_if:action,update|string|size:64',
             'customer_id' => ['nullable', 'required_if:action,link,update', 'integer', Rule::exists('customers', 'id')->whereNull('deleted_at')],
             'name' => 'nullable|required_if:action,create|string|max:255', 'customer_code' => 'nullable|string|max:255',
-            'phone' => 'nullable|string|max:30', 'address' => 'nullable|string|max:255',
+            'phone' => 'nullable|string|max:30', 'address' => 'nullable|string|max:255', 'delivery_time' => 'nullable|date_format:H:i',
             'sale_id' => ['nullable', 'integer', Rule::in($service->sales()->pluck('id')->all())],
         ]);
         abort_if($data['action'] === 'create' && ! Gate::forUser($request->user())->allows('create', Customer::class), 403);
-        foreach (['phone', 'address'] as $field) {
+        foreach (['phone', 'address', 'delivery_time'] as $field) {
             if (array_key_exists($field, $data)) {
                 $data[$field] = trim($data[$field] ?? '');
             }

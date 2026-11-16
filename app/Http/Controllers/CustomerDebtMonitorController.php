@@ -29,7 +29,13 @@ class CustomerDebtMonitorController extends Controller
         $orderCustomerIds = Order::query()->whereDate('delivery_date', '>=', $from)->whereDate('delivery_date', '<=', $to)
             ->when(! $canLoad, fn ($q) => $q->whereIn('customer_id', $allowedIds))->distinct()->pluck('customer_id');
         $selected = isset($data['customer']) ? ($groups[$data['customer']] ?? null) : null;
-        abort_if(isset($data['customer']) && ! $selected, 404);
+        if (isset($data['customer']) && ! $selected) {
+            $legacy = collect($groups)->firstWhere('legacy_key', $data['customer']);
+            if ($legacy) {
+                return redirect()->to($request->fullUrlWithQuery(['customer' => $legacy['key']]).'#debt-detail');
+            }
+            abort(404);
+        }
         if (isset($data['system_customer'])) {
             $selected = $customerDebts[(int) $data['system_customer']] ?? null;
             abort_unless($selected, 404);
@@ -322,14 +328,12 @@ class CustomerDebtMonitorController extends Controller
     private function resolveGroups(Request $request, CustomerDebtSheetService $service): array
     {
         $canLoad = $request->user()->hasRole(['admin', 'account', 'accountant', 'accounting', 'director', 'ceo']);
-        $customers = Customer::query()->with(['currentOwner:id,name,short_name', 'assignedTo:id,name,short_name'])->get(['id', 'name', 'customer_code', 'current_owner_sale_id', 'assigned_to', 'phone', 'address']);
+        $customers = Customer::query()->with(['currentOwner:id,name,short_name', 'assignedTo:id,name,short_name'])->get(['id', 'name', 'customer_code', 'current_owner_sale_id', 'assigned_to', 'phone', 'address', 'company_name']);
         $allowedIds = $canLoad ? $customers->pluck('id') : Customer::query()->managedBySale($request->user()->id)->pluck('id');
         $snapshot = $service->snapshot();
         $groups = $service->summarize($snapshot['entries'] ?? []);
         $mappings = $service->mappings();
         $byId = $customers->keyBy('id');
-        $byCode = $customers->filter(fn ($c) => trim((string) $c->customer_code) !== '')->groupBy(fn ($c) => mb_strtoupper(trim($c->customer_code)));
-        $byName = $customers->groupBy(fn ($c) => $service->customerName($c->name));
         $staffNames = [];
         foreach (User::query()->get(['id', 'name', 'short_name']) as $staff) {
             foreach (array_unique([$service->customerName($staff->name), $service->customerName($staff->short_name ?? '')]) as $name) {
@@ -338,15 +342,11 @@ class CustomerDebtMonitorController extends Controller
                 }
             }
         }
-        $sourceNames = collect($groups)->groupBy(fn ($g) => $service->customerName($g['name']));
+        $sourceNames = collect($groups)->countBy(fn ($g) => $service->customerName($g['name']));
         foreach ($groups as $key => &$group) {
-            $matches = $group['code'] !== '' ? ($byCode[$group['code']] ?? collect()) : collect();
-            $group['matched_by'] = 'code';
-            $nameKey = $service->customerName($group['name']);
-            if ($matches->isEmpty() && ($sourceNames[$nameKey] ?? collect())->count() === 1) {
-                $matches = $byName[$nameKey] ?? collect();
-                $group['matched_by'] = 'name';
-            }
+            $group['name_conflict'] = ($sourceNames[$service->customerName($group['name'])] ?? 0) > 1;
+            $matches = $service->matchingCustomers($group, $customers);
+            $group['matched_by'] = $matches->count() === 1 && $group['code'] !== '' && mb_strtoupper(trim((string) $matches->first()->customer_code)) === $group['code'] ? 'code' : 'name';
             $group['customer_id'] = $matches->count() === 1 ? $matches->first()->id : null;
             $group['manual_mapping'] = isset($mappings[$key]);
             if ($group['manual_mapping']) {

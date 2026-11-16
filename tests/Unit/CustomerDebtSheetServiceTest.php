@@ -108,6 +108,52 @@ class CustomerDebtSheetServiceTest extends TestCase
         self::assertSame(-50, array_values($groups)[0]['balance']);
     }
 
+    public function test_reused_code_keeps_company_names_and_their_nameless_code_receipts_separate(): void
+    {
+        $s = new CustomerDebtSheetService;
+        $base = ['date' => '2026-11-12', 'row' => 1, 'note' => ''];
+        $groups = $s->summarize([
+            $base + ['code' => '5119', 'name' => 'CHU DIMSUM HOUSE', 'type' => 'sale', 'amount' => 2928800],
+            $base + ['code' => '5119', 'name' => 'Huyền Nguyễn - con c Trung Hoa', 'type' => 'sale', 'amount' => 309566800],
+            $base + ['code' => '', 'name' => ' chu  dimsum house ', 'type' => 'payment', 'amount' => 2732000],
+            $base + ['code' => '', 'name' => 'Huyền Nguyễn - con c Trung Hoa', 'type' => 'payment', 'amount' => 276978000],
+        ]);
+        self::assertCount(2, $groups);
+        self::assertSame(196800, collect($groups)->firstWhere('name', 'CHU DIMSUM HOUSE')['balance']);
+        self::assertSame(32588800, collect($groups)->firstWhere('name', 'Huyền Nguyễn - con c Trung Hoa')['balance']);
+        self::assertSame(32785600, array_sum(array_column($groups, 'balance')));
+        self::assertArrayNotHasKey(hash('sha256', 'code:5119'), $groups);
+    }
+
+    public function test_phone_variants_separate_same_code_and_name_and_leave_ambiguous_receipts_unassigned(): void
+    {
+        $s = new CustomerDebtSheetService;
+        $base = ['date' => '2026-11-12', 'name' => 'Anh Bình', 'row' => 1, 'note' => ''];
+        $groups = $s->summarize([
+            $base + ['code' => 'KH01', 'phone' => '0901234567', 'type' => 'sale', 'amount' => 1000],
+            $base + ['code' => 'KH01', 'phone' => '0907654321', 'type' => 'sale', 'amount' => 2000],
+            $base + ['code' => '', 'phone' => '+84 901 234 567', 'type' => 'payment', 'amount' => 300],
+            $base + ['code' => '', 'type' => 'payment', 'amount' => 100],
+        ]);
+        self::assertCount(3, $groups);
+        self::assertSame(700, collect($groups)->firstWhere('phone', '0901234567')['balance']);
+        self::assertSame(2000, collect($groups)->firstWhere('phone', '0907654321')['balance']);
+        self::assertTrue(collect($groups)->firstWhere('phone', '')['ambiguous']);
+        self::assertSame(2600, array_sum(array_column($groups, 'balance')));
+    }
+
+    public function test_missing_phone_joins_only_one_known_phone_without_changing_legacy_key(): void
+    {
+        $s = new CustomerDebtSheetService;
+        $base = ['date' => '2026-11-12', 'name' => 'Anh Bình', 'row' => 1, 'note' => ''];
+        $groups = $s->summarize([
+            $base + ['code' => 'KH01', 'phone' => '0901234567', 'type' => 'sale', 'amount' => 1000],
+            $base + ['code' => '', 'type' => 'payment', 'amount' => 300],
+        ]);
+        self::assertCount(1, $groups);
+        self::assertSame(700, $groups[hash('sha256', 'code:KH01')]['balance']);
+    }
+
     public function test_ambiguous_cashflow_headers_are_rejected(): void
     {
         $this->expectException(\RuntimeException::class);

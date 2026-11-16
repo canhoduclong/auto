@@ -13,14 +13,16 @@ class CustomerPaymentReportService
         $tracker = app(CustomerPaymentSyncService::class);
         $groups = $context['groups'];
         $customers = $context['customers']->keyBy('id');
-        $byCode = $customers->filter(fn ($c) => trim((string) $c->customer_code) !== '')->groupBy(fn ($c) => mb_strtoupper(trim($c->customer_code)));
-        $byName = $customers->groupBy(fn ($c) => Customer::normalizeName($c->name));
-        $mappings = app(CustomerDebtSheetService::class)->mappings();
+        $sheets = app(CustomerDebtSheetService::class);
         $bySlot = [];
+        $byPaymentId = [];
         foreach ($groups as $group) {
             foreach ($group['entries'] as $entry) {
                 if (in_array($entry['type'], ['sale', 'payment'], true)) {
                     $bySlot[($entry['source_sheet'] ?? 'Dongtienhoatdong').'|'.$entry['row']] = $group;
+                    if (! empty($entry['payment_id'])) {
+                        $byPaymentId[$entry['payment_id']] = $group;
+                    }
                 }
             }
         }
@@ -42,17 +44,24 @@ class CustomerPaymentReportService
         }
         $rows = [];
         foreach ($raw as $entry) {
-            $sourceKey = $entry['customer_source_key'] ?? null;
-            $group = $sourceKey ? ($groups[$sourceKey] ?? null) : (! $batch ? ($bySlot[$entry['source_sheet'].'|'.$entry['row']] ?? null) : null);
-            $target = $group && $group['customer_id'] ? ($customers[$group['customer_id']] ?? null) : null;
-            if (! $target && $sourceKey && isset($mappings[$sourceKey])) {
-                $target = $customers[$mappings[$sourceKey]['customer_id']] ?? null;
-            }
-            if (! $target && ! $group && (! $sourceKey || ! isset($mappings[$sourceKey])) && ! empty($entry['name'])) {
-                $matches = trim($entry['code'] ?? '') !== '' ? ($byCode[mb_strtoupper(trim($entry['code']))] ?? collect()) : collect();
-                if ($matches->isEmpty()) {
-                    $matches = $byName[Customer::normalizeName($entry['name'])] ?? collect();
+            $group = ! $batch ? ($bySlot[$entry['source_sheet'].'|'.$entry['row']] ?? null) : ($byPaymentId[$entry['payment_id'] ?? ''] ?? null);
+            if (! $group && ! empty($entry['name'])) {
+                // Historical batches may contain the former code-only key or moved rows.
+                $matches = collect($groups)->filter(function ($candidate) use ($entry, $sheets) {
+                    $code = mb_strtoupper(trim(($entry['code'] ?? '') ?: ($entry['customer_source_code'] ?? '')));
+                    $phone = $sheets->customerPhone($entry['phone'] ?? '');
+                    return $sheets->customerName($candidate['name']) === $sheets->customerName($entry['name'])
+                        && ($code === '' || $candidate['code'] === '' || $code === $candidate['code'])
+                        && ($phone === '' || ($candidate['phone'] ?? '') === '' || $phone === $candidate['phone']);
+                });
+                if ($matches->count() === 1) {
+                    $group = $matches->first();
                 }
+            }
+            $sourceKey = $group['key'] ?? null;
+            $target = $group && $group['customer_id'] ? ($customers[$group['customer_id']] ?? null) : null;
+            if (! $group && ! empty($entry['name'])) {
+                $matches = $sheets->matchingCustomers($entry, $customers);
                 if ($matches->count() === 1) {
                     $target = $matches->first();
                 }

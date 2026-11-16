@@ -70,6 +70,7 @@ class CustomerDebtMonitorTest extends TestCase
             $t->unsignedInteger('current_cycle_no')->default(1);
             $t->timestamps();
             $t->string('phone')->nullable();
+            $t->string('company_name')->nullable();
             $t->unsignedBigInteger('assigned_to')->nullable();
             $t->unsignedBigInteger('current_owner_sale_id')->nullable();
             $t->boolean('is_employee')->default(false);
@@ -657,18 +658,60 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertCount(1, collect($importer->plan($importer->snapshot($token, $actor)))->where('status', 'create'));
     }
 
+    public function test_google_customer_sync_includes_contact_details_and_delivery_time_and_preserves_blank_values(): void
+    {
+        \Illuminate\Support\Facades\Event::fake(['eloquent.updated: App\Models\Customer']);
+        $importer = $this->sheetCustomerImporter([
+            ['Ngày', 'Mã KH', 'Khách hàng', 'NVKD', 'Tổng tiền', 'SĐT', 'Địa chỉ', 'Giờ giao'],
+            ['12/11/2026', 'CRM01', 'Chị Bình', '', '1000', '0901234567', '123 Đường A', '7:30'],
+            ['13/11/2026', 'CRM01', 'Chị Bình', '', '1000', '', '', ''],
+        ]);
+        $actor = $this->user('admin');
+        $token = $importer->load($actor, 'sync');
+        $row = collect($importer->plan($importer->snapshot($token, $actor)))->firstWhere('code', 'CRM01');
+        self::assertSame('07:30', $row['delivery_time']);
+        self::assertSame('0901234567', $row['phone']);
+        self::assertSame('123 Đường A', $row['address']);
+        self::assertSame('07:30', $row['changes']['delivery_time']['after']);
+        self::assertSame(1, $importer->commit($token, $actor, true)['updated']);
+        $customer = DB::table('customers')->where('id', 1)->first();
+        self::assertSame('07:30', $customer->delivery_time);
+        self::assertSame('0901234567', $customer->phone);
+        self::assertSame('123 Đường A', $customer->address);
+        $empty = $this->sheetCustomerImporter([
+            ['Ngày', 'Mã KH', 'Khách hàng', 'Tổng tiền', 'Giờ giao'],
+            ['14/11/2026', 'CRM01', 'Chị Bình', '1000', ''],
+        ]);
+        $next = $empty->load($actor, 'sync');
+        $empty->commit($next, $actor, true);
+        self::assertSame('07:30', DB::table('customers')->where('id', 1)->value('delivery_time'));
+    }
+
+    public function test_google_customer_sync_rejects_invalid_delivery_time(): void
+    {
+        $importer = $this->sheetCustomerImporter([
+            ['Ngày', 'Mã KH', 'Khách hàng', 'Tổng tiền', 'Giờ giao'],
+            ['12/11/2026', 'CRM01', 'Chị Bình', '1000', '25:30'],
+        ]);
+        $actor = $this->user('admin');
+        $token = $importer->load($actor, 'sync');
+        self::assertSame('conflict', collect($importer->plan($importer->snapshot($token, $actor)))->first()['status']);
+        self::assertSame(0, $importer->commit($token, $actor, true)['updated']);
+        self::assertNull(DB::table('customers')->where('id', 1)->value('delivery_time'));
+    }
+
     public function test_google_customer_sync_keeps_latest_nonempty_contact_information(): void
     {
         \Illuminate\Support\Facades\Event::fake(['eloquent.updated: App\Models\Customer']);
         $importer = $this->sheetCustomerImporter([
             ['Ngày', 'Mã KH', 'Khách hàng', 'Tổng tiền', 'SĐT', 'Địa chỉ'],
-            ['01/11/2026', 'CRM01', 'Tên cũ', '1000', '0901111111', 'Địa chỉ mới'],
-            ['12/11/2026', 'CRM01', 'Tên mới', '1000', '', ''],
+            ['01/11/2026', 'CRM01', 'Chị Bình', '1000', '0901111111', 'Địa chỉ mới'],
+            ['12/11/2026', 'CRM01', 'Chị Bình', '1000', '', ''],
         ]);
         $actor = $this->user('admin');
         $token = $importer->load($actor, 'sync');
         $row = array_values($importer->plan($importer->snapshot($token, $actor)))[0];
-        self::assertSame('Tên mới', $row['new_name']);
+        self::assertSame('Chị Bình', $row['new_name']);
         self::assertSame('0901111111', $row['phone']);
         self::assertSame(1, $importer->commit($token, $actor, true)['updated']);
         self::assertSame('0901111111', DB::table('customers')->where('id', 1)->value('phone'));
@@ -783,6 +826,72 @@ class CustomerDebtMonitorTest extends TestCase
     private function reminderData(array $overrides = []): array
     {
         return $overrides + ['request_id' => (string) \Illuminate\Support\Str::uuid(), 'target_amount' => 1000, 'channel' => 'phone', 'note' => 'Đã gọi điện nhắc thanh toán', 'promised_date' => null, 'follow_up_date' => null];
+    }
+
+    public function test_reused_code_is_separate_on_all_four_debt_pages_and_stale_payment_keys_are_reassigned(): void
+    {
+        $legacy = hash('sha256', 'code:CRM01');
+        $entries = [
+            $this->entry('CRM01', 'Chị Bình', 1),
+            array_replace($this->entry('CRM01', 'Công ty khác', 2), ['amount' => 2000]),
+            array_replace($this->entry('', 'Chị Bình', 3), ['type' => 'payment', 'amount' => 100, 'source_sheet' => 'TKCTVPB', 'customer_source_key' => $legacy]),
+            array_replace($this->entry('', 'Công ty khác', 4), ['type' => 'payment', 'amount' => 200, 'source_sheet' => 'TKCTVPB', 'customer_source_key' => $legacy]),
+        ];
+        $service = $this->service($entries);
+        $context = (new CustomerDebtMonitorController)->debtContext($this->request([], 'admin'), $service);
+        self::assertCount(2, $context['groups']);
+        $redirect = (new CustomerDebtMonitorController)->index($this->request(['customer' => $legacy], 'admin'), $service);
+        self::assertStringNotContainsString('customer='.$legacy, $redirect->getTargetUrl());
+        self::assertStringContainsString('#debt-detail', $redirect->getTargetUrl());
+        $first = collect($context['groups'])->firstWhere('name', 'Chị Bình');
+        $second = collect($context['groups'])->firstWhere('name', 'Công ty khác');
+        self::assertSame(1, $first['customer_id']);
+        self::assertNull($second['customer_id']);
+        foreach ([$first, $second] as $group) {
+            $detail = (new CustomerDebtMonitorController)->index($this->request(['customer' => $group['key'], 'window' => 'all'], 'admin'), $service)->getData();
+            self::assertSame($group['balance'], $detail['closing']);
+        }
+        $report = new \App\Services\CustomerDebtReportService;
+        $data = (new \App\Http\Controllers\CustomerDebtReportController)->index($this->request([], 'admin'), $service, $report, new \App\Services\DebtCollectionService)->getData();
+        self::assertSame(2, $data['rows']->total());
+        self::assertSame(2700, $data['summary']['balance']);
+        $terms = (new \App\Http\Controllers\CustomerDebtNegotiationController)->index($this->request([], 'admin'), $service, $report)->getData();
+        self::assertSame(2700, $terms['summary']['balance']);
+        foreach ([$first['key'] => 100, $second['key'] => 200] as $key => $amount) {
+            $payments = (new \App\Http\Controllers\CustomerPaymentController)->index($this->request(['customer_source_key' => $key], 'admin'), $service, new \App\Services\CustomerPaymentReportService)->getData();
+            self::assertSame(1, $payments['rows']->total());
+            self::assertSame($amount, $payments['summary']['amount']);
+        }
+        $batch = ['changes' => [['kind' => 'removed', 'before' => $entries[3], 'after' => null, 'delta' => -200]]];
+        $historical = (new \App\Services\CustomerPaymentReportService)->rows($context, $batch)->first();
+        self::assertSame($second['key'], $historical['source_key']);
+        self::assertNull($historical['customer_id']);
+    }
+
+    public function test_company_name_and_phone_corroborate_customer_matching_instead_of_code_alone(): void
+    {
+        DB::table('customers')->where('id', 1)->update(['company_name' => 'Công ty Bình', 'phone' => '0901234567']);
+        $service = $this->service([
+            $this->entry('CRM01', 'Công ty Bình', 1) + ['phone' => '+84 901 234 567'],
+            $this->entry('CRM01', 'Công ty khác', 2) + ['phone' => '0907654321'],
+        ]);
+        $context = (new CustomerDebtMonitorController)->debtContext($this->request([], 'admin'), $service);
+        self::assertSame(1, collect($context['groups'])->firstWhere('name', 'Công ty Bình')['customer_id']);
+        self::assertNull(collect($context['groups'])->firstWhere('name', 'Công ty khác')['customer_id']);
+    }
+
+    public function test_phone_distinguishes_same_name_and_code_without_merging_back_to_one_crm_customer(): void
+    {
+        DB::table('customers')->where('id', 1)->update(['phone' => '0901234567']);
+        $entries = [
+            $this->entry('CRM01', 'Chị Bình', 1) + ['phone' => '+84 901 234 567'],
+            $this->entry('CRM01', 'Chị Bình', 2) + ['phone' => '0907654321'],
+        ];
+        $context = (new CustomerDebtMonitorController)->debtContext($this->request([], 'admin'), $this->service($entries));
+        self::assertCount(2, $context['groups']);
+        self::assertSame(1, collect($context['groups'])->firstWhere('phone', '0901234567')['customer_id']);
+        self::assertNull(collect($context['groups'])->firstWhere('phone', '0907654321')['customer_id']);
+        self::assertSame(1000, $context['customerDebts'][1]['balance']);
     }
 
     public function test_report_summary_separates_lifetime_and_period_totals_before_pagination(): void

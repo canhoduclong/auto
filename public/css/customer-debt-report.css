@@ -68,3 +68,9 @@
 .collection-report-table .collection-status .badge { max-width:100%; white-space:normal; text-align:left; line-height:1.4; }
 .collection-report-table .collection-tools,
 .collection-report-table .collection-tools-heading { width:1%; min-width:160px; }
+
+.collection-recovery-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 14px; }
+.collection-recovery-tab { display:inline-block; padding:9px 14px; border:1px solid #dbe3ee; border-radius:7px; background:#fff; color:#19324d; font-size:13px; text-decoration:none; }
+.collection-recovery-tab:hover { border-color:#1688ff; color:#0879e5; text-decoration:none; }
+.collection-recovery-tab.is-active { background:#1688ff; border-color:#1688ff; color:#fff; font-weight:600; }
+.collection-recovery-tab:focus-visible { outline:2px solid #1688ff; outline-offset:3px; }

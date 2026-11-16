@@ -42,6 +42,12 @@
     </section>
     @if($period['undated_payments']!=0)<div class="small text-muted mb-2">Có {{ number_format($period['undated_payments'],0,',','.') }} đ thanh toán tổng hợp chưa rõ ngày thu; đã tính vào số dư tổng, chưa đưa vào thanh toán trong kỳ.</div>@endif
 
+    <nav class="collection-recovery-tabs" aria-label="Theo dõi khả năng thu hồi công nợ">
+        @foreach(['all'=>'Tất cả','normal'=>'Đang theo dõi','difficult'=>'Khó thu hồi','unrecoverable'=>'Không có khả năng thu hồi'] as $value=>$label)
+        <a class="collection-recovery-tab {{ request('recovery','normal') === $value ? 'is-active' : '' }}" href="{{ request()->fullUrlWithQuery(['recovery'=>$value,'page'=>1]) }}" @if(request('recovery','normal') === $value) aria-current="page" @endif>{{ $label }}</a>
+        @endforeach
+    </nav>
+
     <div class="collection-bulk-actions" data-collection-bulk data-from="{{ $hasPeriodFilter ? \Carbon\Carbon::parse($period['from'])->format('d/m') : '' }}" data-to="{{ $hasPeriodFilter ? \Carbon\Carbon::parse($period['to'])->format('d/m') : '' }}" data-date="{{ now()->format('d/m') }}" data-today="{{ now()->toDateString() }}" data-url="{{ route('customer-debt.report.remind') }}" data-source="{{ $reportSource }}">
         <span data-selection-count>Đã chọn 0 khách</span>
         <button type="button" class="btn btn-primary btn-sm" data-bulk-remind disabled>Nhắc nhở</button>

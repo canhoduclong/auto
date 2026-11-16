@@ -22,6 +22,12 @@ class CustomerPaymentController extends Controller
             $request->validate(['to' => 'after_or_equal:from']);
         }
         $context = app(CustomerDebtMonitorController::class)->debtContext($request, $sheets);
+        if (! empty($data['customer_source_key']) && ! isset($context['groups'][$data['customer_source_key']])) {
+            $legacy = collect($context['groups'])->firstWhere('legacy_key', $data['customer_source_key']);
+            if ($legacy) {
+                return redirect()->to($request->fullUrlWithQuery(['customer_source_key' => $legacy['key']]));
+            }
+        }
         $snapshot = $context['snapshot'];
         $batch = ! empty($data['batch']) ? $sheets->paymentBatch($data['batch'], $snapshot) : null;
         $rows = $report->rows($context, $batch);

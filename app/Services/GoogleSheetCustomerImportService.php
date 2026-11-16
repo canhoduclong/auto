@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 
 class GoogleSheetCustomerImportService
 {
-    public const SYNC_FIELDS = ['name' => 'Tên khách', 'customer_code' => 'Mã khách', 'phone' => 'Điện thoại', 'address' => 'Địa chỉ', 'sale_id' => 'Sale phụ trách'];
+    public const SYNC_FIELDS = ['name' => 'Tên khách', 'customer_code' => 'Mã khách', 'phone' => 'Điện thoại', 'address' => 'Địa chỉ', 'delivery_time' => 'Giờ giao', 'sale_id' => 'Sale phụ trách'];
 
     public function __construct(private CustomerDebtSheetService $sheets, private CustomerPriorityService $priorities) {}
 
@@ -21,14 +21,17 @@ class GoogleSheetCustomerImportService
         return User::query()->whereHas('roles', fn ($q) => $q->whereIn('name', ['sale', 'leader', 'leader_sale', 'sale_manager', 'manager', 'manager_sale']))->orderBy('name')->get(['id', 'name', 'short_name']);
     }
 
-    public function load(User $actor, string $mode = 'import', array $fields = ['name', 'phone', 'address']): string
+    public function load(User $actor, string $mode = 'import', array $fields = ['name', 'phone', 'address', 'delivery_time']): string
     {
         $entries = $this->sheets->parse($this->sheets->fetchSales(), 'sale');
         $groups = $this->sheets->summarize($entries);
         foreach ($groups as &$group) {
             $latest = collect($group['entries'])->sortByDesc(fn ($entry) => $entry['date'].'|'.str_pad((string) $entry['row'], 10, '0', STR_PAD_LEFT));
-            foreach (['name', 'phone', 'address'] as $field) {
+            foreach (['name', 'phone', 'address', 'delivery_time'] as $field) {
                 $group[$field] = trim((string) ($latest->first(fn ($entry) => trim((string) ($entry[$field] ?? '')) !== '')[$field] ?? ($group[$field] ?? '')));
+            }
+            if (preg_match('/^(\d{1,2}):(\d{2})(?::00)?$/', $group['delivery_time'], $time)) {
+                $group['delivery_time'] = sprintf('%02d:%s', (int) $time[1], $time[2]);
             }
             unset($group['entries']);
         }
@@ -65,7 +68,7 @@ class GoogleSheetCustomerImportService
 
     public function plan(array $snapshot): array
     {
-        $customers = Customer::withTrashed()->get(['id', 'name', 'customer_code', 'name_normalized', 'deleted_at', 'assigned_to', 'current_owner_sale_id', 'phone', 'address', 'customer_status', 'assigned_at']);
+        $customers = Customer::withTrashed()->get(['id', 'name', 'customer_code', 'name_normalized', 'deleted_at', 'assigned_to', 'current_owner_sale_id', 'phone', 'address', 'delivery_time', 'customer_status', 'assigned_at']);
         $byId = $customers->keyBy('id');
         $byName = $customers->groupBy(fn ($c) => Customer::normalizeName($c->name));
         $byCode = $customers->filter(fn ($c) => trim((string) $c->customer_code) !== '')->groupBy(fn ($c) => mb_strtoupper(trim($c->customer_code)));
@@ -152,7 +155,7 @@ class GoogleSheetCustomerImportService
             $changes = [];
             $desired = [];
             if ($sync && $target && ! $target->trashed() && $status === 'link' && $syncFields) {
-                $incoming = ['name' => $name, 'customer_code' => $code, 'phone' => trim($decision['phone'] ?? ($group['phone'] ?? '')), 'address' => trim($decision['address'] ?? ($group['address'] ?? '')), 'sale_id' => $saleId];
+                $incoming = ['name' => $name, 'customer_code' => $code, 'phone' => trim($decision['phone'] ?? ($group['phone'] ?? '')), 'address' => trim($decision['address'] ?? ($group['address'] ?? '')), 'delivery_time' => trim($decision['delivery_time'] ?? ($group['delivery_time'] ?? '')), 'sale_id' => $saleId];
                 if ((in_array('phone', $syncFields, true) && mb_strlen($incoming['phone']) > 30) || (in_array('address', $syncFields, true) && mb_strlen($incoming['address']) > 255)) {
                     $status = 'conflict';
                     $reason = 'Điện thoại hoặc địa chỉ nguồn vượt độ dài cho phép. Cần kiểm tra lại Sheet.';
@@ -188,6 +191,11 @@ class GoogleSheetCustomerImportService
                 $status = 'unchanged';
                 $reason = 'Đã ghép · Không có thay đổi';
             }
+            $deliveryTime = trim($decision['delivery_time'] ?? ($group['delivery_time'] ?? ''));
+            if ($deliveryTime !== '' && ($status === 'create' || in_array('delivery_time', $syncFields, true)) && ! preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/', $deliveryTime)) {
+                $status = 'conflict';
+                $reason = 'Giờ giao nguồn không hợp lệ. Sử dụng định dạng HH:mm (ví dụ 07:30).';
+            }
             $targetRevision = $target ? $this->customerRevision($target) : null;
             $result = $snapshot['results'][$key] ?? null;
             if ($result && ($result['ok'] ?? false)) {
@@ -195,7 +203,7 @@ class GoogleSheetCustomerImportService
                 $target = $byId[$result['customer_id']] ?? null;
                 $reason = $result['action'] === 'update' ? 'Đã cập nhật thông tin từ Sheet' : ($result['action'] === 'create' ? 'Đã tạo khách mới và ghép' : 'Đã ghép khách hệ thống');
             }
-            $rows[$key] = array_replace($group, ['status' => $status, 'reason' => $reason, 'target' => $target, 'new_name' => $name, 'new_code' => $code, 'sale_id' => $saleId, 'phone' => $decision['phone'] ?? ($group['phone'] ?? ''), 'address' => $decision['address'] ?? ($group['address'] ?? ''), 'result' => $result, 'sync_mode' => $sync, 'sync_explicit' => in_array($action, ['link', 'update'], true), 'sync_preferences' => $syncFields, 'desired' => $desired, 'changes' => $changes, 'target_revision' => $targetRevision]);
+            $rows[$key] = array_replace($group, ['status' => $status, 'reason' => $reason, 'target' => $target, 'new_name' => $name, 'new_code' => $code, 'sale_id' => $saleId, 'phone' => $decision['phone'] ?? ($group['phone'] ?? ''), 'address' => $decision['address'] ?? ($group['address'] ?? ''), 'delivery_time' => $deliveryTime, 'result' => $result, 'sync_mode' => $sync, 'sync_explicit' => in_array($action, ['link', 'update'], true), 'sync_preferences' => $syncFields, 'desired' => $desired, 'changes' => $changes, 'target_revision' => $targetRevision]);
         }
 
         if (($snapshot['mode'] ?? 'import') === 'sync') {
@@ -227,7 +235,7 @@ class GoogleSheetCustomerImportService
 
     public function customerRevision(Customer $customer): string
     {
-        return hash('sha256', json_encode([$customer->id, $customer->name, $customer->customer_code, $customer->phone, $customer->address, $customer->assigned_to, $customer->current_owner_sale_id, $customer->customer_status, (string) $customer->assigned_at], JSON_THROW_ON_ERROR));
+        return hash('sha256', json_encode([$customer->id, $customer->name, $customer->customer_code, $customer->phone, $customer->address, $customer->delivery_time, $customer->assigned_to, $customer->current_owner_sale_id, $customer->customer_status, (string) $customer->assigned_at], JSON_THROW_ON_ERROR));
     }
 
     public function decide(string $token, User $actor, array $data): void
@@ -291,7 +299,7 @@ class GoogleSheetCustomerImportService
                                 $saleId = $row['sale_id'];
                                 $customer = Customer::create([
                                     'name' => $row['new_name'], 'customer_code' => $row['new_code'] ?: null, 'phone' => $row['phone'] ?: null,
-                                    'address' => $row['address'] ?: null, 'user_id' => $actor->id, 'assigned_to' => $saleId, 'current_owner_sale_id' => $saleId,
+                                    'address' => $row['address'] ?: null, 'delivery_time' => $row['delivery_time'] ?: null, 'user_id' => $actor->id, 'assigned_to' => $saleId, 'current_owner_sale_id' => $saleId,
                                     'assigned_at' => $saleId ? now() : null, 'customer_status' => $saleId ? 'active' : 'free',
                                     'free_from_date' => $saleId ? null : now(), 'current_cycle_no' => 1,
                                 ]);

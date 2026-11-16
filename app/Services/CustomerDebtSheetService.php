@@ -306,10 +306,11 @@ class CustomerDebtSheetService
         $aliases = [
             'date' => ['ngay', 'ngay thang', 'ngay giao dich', 'date'],
             'code' => ['ma kh', 'ma khach hang', 'customer code'],
-            'name' => ['khach hang', 'ten khach hang', 'ten kh', 'ten kh/ncc', 'customer'],
+            'name' => ['khach hang', 'ten khach hang', 'ten kh', 'ten kh/ncc', 'ten cong ty', 'company name', 'customer'],
             'sale_name' => ['nvkd', 'sale', 'nhan vien kinh doanh'],
             'phone' => ['sdt', 'so dien thoai', 'dien thoai', 'phone'],
             'address' => ['dia chi', 'address'],
+            'delivery_time' => ['gio giao', 'gio giao hang', 'thoi gian giao', 'thoi gian giao hang', 'delivery time'],
             'amount' => $type === 'sale' ? ['tong tien', 'thanh tien', 'amount'] : ['tien thu', 'so tien thu', 'thu'],
             'gift' => ['tang', 'tien tang'],
             'inline_payment' => $type === 'sale' ? ['thanh toan', 'da thanh toan'] : [],
@@ -425,7 +426,7 @@ class CustomerDebtSheetService
             if ($giftNote !== '') {
                 $note = ($note !== '' ? $note.' · ' : '').'Ghi chú cột Tặng: '.$giftNote;
             }
-            $entries[] = ['date' => $date, 'code' => $row['code'], 'name' => $row['name'], 'type' => $type, 'sale_name' => $row['sale_name'] ?? '', 'phone' => $row['phone'] ?? '', 'address' => $row['address'] ?? '', 'amount' => $this->money($amount), 'gift' => $giftAmount, 'gift_note' => $giftNote, 'inline_payment' => $type === 'sale' && ! in_array(trim($row['inline_payment'] ?? ''), ['', '-'], true) ? $this->money($row['inline_payment']) : 0, 'note' => $note, 'row' => $index + 1, 'source_sheet' => $sourceSheet ?? ($type === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong')];
+            $entries[] = ['date' => $date, 'code' => $row['code'], 'name' => $row['name'], 'type' => $type, 'sale_name' => $row['sale_name'] ?? '', 'phone' => $row['phone'] ?? '', 'address' => $row['address'] ?? '', 'delivery_time' => $row['delivery_time'] ?? '', 'amount' => $this->money($amount), 'gift' => $giftAmount, 'gift_note' => $giftNote, 'inline_payment' => $type === 'sale' && ! in_array(trim($row['inline_payment'] ?? ''), ['', '-'], true) ? $this->money($row['inline_payment']) : 0, 'note' => $note, 'row' => $index + 1, 'source_sheet' => $sourceSheet ?? ($type === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong')];
         }
         if (! $headers) {
             throw new RuntimeException('Không nhận diện tiêu đề tab '.($type === 'sale' ? 'nhatkybanhang (Ngày, Mã KH, Khách hàng, Tổng tiền).' : 'Dongtienhoatdong (Ngày, Mã KH, Khách hàng, Tiền thu hoặc Số tiền và Thu/Chi).'));
@@ -456,24 +457,92 @@ class CustomerDebtSheetService
         return $entry['type'] === 'sale' ? $entry['amount'] - ($entry['gift'] ?? 0) : -$entry['amount'];
     }
 
+    public function customerPhone(string $value): string
+    {
+        $phone = preg_replace('/\D+/', '', $value);
+        return str_starts_with($phone, '84') && strlen($phone) === 11 ? '0'.substr($phone, 2) : $phone;
+    }
+
+    /** Match names and corroborate with codes and phones where identity is ambiguous. */
+    public function matchingCustomers(array $source, \Illuminate\Support\Collection $customers): \Illuminate\Support\Collection
+    {
+        if (! empty($source['ambiguous'])) {
+            return collect();
+        }
+        $name = $this->customerName($source['name'] ?? '');
+        $code = mb_strtoupper(trim($source['code'] ?? ''));
+        $phone = $this->customerPhone($source['phone'] ?? '');
+        return $customers->filter(function ($customer) use ($source, $name, $code, $phone) {
+            $names = [$this->customerName($customer->name), $this->customerName((string) $customer->company_name)];
+            if ($name === '' || ! in_array($name, $names, true)) {
+                return false;
+            }
+            $targetCode = mb_strtoupper(trim((string) $customer->customer_code));
+            $targetPhone = $this->customerPhone((string) $customer->phone);
+            if (! empty($source['name_conflict']) && ($code === '' || $targetCode !== $code)) {
+                return false;
+            }
+            if ($phone !== '' && $targetPhone !== '' && $phone !== $targetPhone) {
+                return false;
+            }
+            return empty($source['phone_conflict']) || ($phone !== '' && $phone === $targetPhone);
+        });
+    }
+
     public function summarize(array $entries): array
     {
         $groups = [];
-        // Codes are authoritative. Name fallback only links to exactly one known code.
+        // A reused code is not an identity: retain company name and phone evidence.
         $codes = [];
+        $explicitPhones = [];
         foreach ($entries as $entry) {
-            if ($entry['code'] !== '') {
-                $codes[$this->customerName($entry['name'])][mb_strtoupper(trim($entry['code']))] = true;
+            $code = mb_strtoupper(trim($entry['code']));
+            $name = $this->customerName($entry['name']);
+            $phone = $this->customerPhone($entry['phone'] ?? '');
+            if ($code !== '') {
+                $codes[$name][$code] = true;
+                if ($phone !== '') {
+                    $explicitPhones[$name][$phone][$code] = true;
+                }
             }
         }
-        foreach ($entries as $entry) {
+        $resolved = [];
+        $phones = [];
+        foreach ($entries as $index => $entry) {
             $name = $this->customerName($entry['name']);
             $code = mb_strtoupper(trim($entry['code']));
-            if ($code === '' && count($codes[$name] ?? []) === 1) {
-                $code = array_key_first($codes[$name]);
+            $phone = $this->customerPhone($entry['phone'] ?? '');
+            if ($code === '') {
+                $candidates = $phone !== '' && isset($explicitPhones[$name][$phone]) ? $explicitPhones[$name][$phone] : ($codes[$name] ?? []);
+                if (count($candidates) === 1) {
+                    $code = (string) array_key_first($candidates);
+                }
             }
-            $key = hash('sha256', $code !== '' ? 'code:'.$code : 'name:'.$name);
-            $groups[$key] ??= ['key' => $key, 'code' => $code, 'name' => $entry['name'], 'sales' => 0, 'gifts' => 0, 'payments' => 0, 'balance' => 0, 'last_purchase_date' => null, 'last_payment_date' => null, 'sale_name' => '', 'sale_rank' => '', 'entries' => [], 'ambiguous' => $code === '' && count($codes[$name] ?? []) > 1];
+            $pair = json_encode([$code, $name], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            $resolved[$index] = compact('code', 'name', 'phone', 'pair');
+            if ($phone !== '') {
+                $phones[$pair][$phone] = true;
+            }
+        }
+        $identities = [];
+        foreach ($resolved as &$identity) {
+            if ($identity['phone'] === '' && count($phones[$identity['pair']] ?? []) === 1) {
+                $identity['phone'] = (string) array_key_first($phones[$identity['pair']]);
+            }
+            $identity['signature'] = json_encode([$identity['code'], $identity['name'], $identity['phone']], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            $bucket = $identity['code'] !== '' ? 'code:'.$identity['code'] : 'name:'.$identity['name'];
+            $identities[$bucket][$identity['signature']] = true;
+            $identity['bucket'] = $bucket;
+        }
+        unset($identity);
+        foreach ($entries as $index => $entry) {
+            ['code' => $code, 'name' => $name, 'phone' => $phone, 'pair' => $pair, 'signature' => $signature, 'bucket' => $bucket] = $resolved[$index];
+            // Keep established keys only where they still represent exactly one identity.
+            $key = hash('sha256', count($identities[$bucket]) === 1 ? $bucket : 'customer:'.$signature);
+            $phoneConflict = count($phones[$pair] ?? []) > 1;
+            $ambiguous = ($code === '' && count($codes[$name] ?? []) > 1) || ($phone === '' && $phoneConflict);
+            $legacyKey = count($identities[$bucket]) > 1 && array_key_first($identities[$bucket]) === $signature ? hash('sha256', $bucket) : null;
+            $groups[$key] ??= ['legacy_key' => $legacyKey, 'key' => $key, 'code' => $code, 'name' => $entry['name'], 'phone' => $phone, 'phone_conflict' => $phoneConflict, 'sales' => 0, 'gifts' => 0, 'payments' => 0, 'balance' => 0, 'last_purchase_date' => null, 'last_payment_date' => null, 'sale_name' => '', 'sale_rank' => '', 'entries' => [], 'ambiguous' => $ambiguous];
             $groups[$key][$entry['type'] === 'sale' ? 'sales' : 'payments'] += $entry['amount'];
             if ($entry['type'] === 'sale') {
                 $groups[$key]['gifts'] += $entry['gift'] ?? 0;
