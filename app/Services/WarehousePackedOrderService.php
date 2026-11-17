@@ -23,6 +23,7 @@ class WarehousePackedOrderService
         if ((float) $order->order_discount > 0) {
             $adjustment = (float) $order->order_discount * ($order->order_discount_type === 'increase' ? -1 : 1);
         }
+        $adjustment = min(max(0, $subtotal), $adjustment);
         $vat = $order->resolvedVatAmount(max(0, $subtotal - $adjustment));
         $shipping = $order->charge_shipping_fee ? max(0, (float) $order->shipping_fee) : 0;
         $customerShipping = $order->collect_customer_shipping_fee ? max(0, (float) $order->customer_shipping_fee) : 0;
@@ -35,6 +36,7 @@ class WarehousePackedOrderService
             'subtotal_amount' => round($baseSubtotal, 2),
             'item_discount_total' => round($baseSubtotal - $subtotal, 2),
             'extra_discount_total' => $adjustment,
+            'goods_after_discount' => round(max(0, $subtotal - $adjustment), 2),
             'vat_amount' => $vat,
             'shipping_fee' => $shipping + $customerShipping,
             'foam_box_fee' => $foamBox,

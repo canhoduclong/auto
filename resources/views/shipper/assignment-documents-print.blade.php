@@ -125,7 +125,11 @@
         <tr><td>Khối lượng thực tế</td><td>{{ $totalWeight > 0 ? format_kg($totalWeight) : '—' }}</td></tr>
         <tr><td>Tiền hàng</td><td>{{ number_format((float) $printSummary['items_subtotal'], 0, ',', '.') }}đ</td></tr>
         @if((float) $printSummary['extra_discount_total'] != 0)
-        <tr><td>{{ $printSummary['extra_discount_total'] > 0 ? 'Chiết khấu đơn' : 'Điều chỉnh tăng' }}</td><td>{{ $printSummary['extra_discount_total'] > 0 ? '-' : '+' }}{{ number_format(abs((float) $printSummary['extra_discount_total']), 0, ',', '.') }}đ</td></tr>
+        <tr><td>{{ $printSummary['extra_discount_total'] > 0 ? 'Chiết khấu tiền hàng' : 'Điều chỉnh tăng' }}</td><td>{{ $printSummary['extra_discount_total'] > 0 ? '-' : '+' }}{{ number_format(abs((float) $printSummary['extra_discount_total']), 0, ',', '.') }}đ</td></tr>
+        @endif
+        @if($printSummary['extra_discount_total'] > 0)
+        @if($printSummary['goods_after_discount'] == 0)<tr><td colspan="2">Toàn bộ giá trị hàng</td></tr>@endif
+        <tr><td>Tiền hàng sau chiết khấu</td><td>{{ number_format($printSummary['goods_after_discount'], 0, ',', '.') }}đ</td></tr>
         @endif
         <tr><td>Phí ship</td><td>{{ number_format((float) $printSummary['shipping_fee'], 0, ',', '.') }}đ</td></tr>
         <tr><td>VAT{{ $order->charge_vat && (float) $order->vat_percent > 0 ? ' ('.number_format((float) $order->vat_percent, 0, ',', '.').'%)' : '' }}</td><td>{{ number_format((float) $vatAmount, 0, ',', '.') }}đ</td></tr>

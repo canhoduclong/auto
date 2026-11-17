@@ -111,6 +111,8 @@ class DraftOrderAutomationService
                     'recipient_address' => $draft->address ?: $customer->address,
                     'note' => $draft->note,
                     'warehouse_product_permissions' => $draft->warehouse_product_permissions,
+                    'order_discount' => (float) ($draft->order_discount ?? 0),
+                    'order_discount_type' => 'decrease',
                     'charge_vat' => $draft->charge_vat,
                     'vat_percent' => $draft->vat_percent,
                     'collect_customer_shipping_fee' => $draft->collect_customer_shipping_fee,

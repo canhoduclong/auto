@@ -306,6 +306,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::get('/orders', [AccountingDashboardController::class, 'orders'])->name('orders');
         Route::get('/orders/{order}/detail', [AccountingDashboardController::class, 'orderDetail'])->name('orders.detail');
         Route::get('/customer-debts', [AccountingDashboardController::class, 'customerDebts'])->name('customer-debts');
+        Route::post('/customer-debts/policy', [AccountingDashboardController::class, 'customerDebtPolicyUpdate'])->name('customer-debts.policy');
         Route::get('/customer-debts/{customer}', [AccountingDashboardController::class, 'customerDebtShow'])->name('customer-debts.show');
         Route::post('/customer-debts/{customer}/debt-type', [AccountingDashboardController::class, 'customerDebtTypeUpdate'])->name('customer-debts.debt-type.update');
         Route::post('/customer-debts/{customer}/adjustments', [AccountingDashboardController::class, 'customerDebtAdjustmentStore'])->name('customer-debts.adjustments.store');

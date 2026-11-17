@@ -349,6 +349,7 @@
                         $weight = max(0.01, (float) ($item['size_kg'] ?? 1));
                         return $quantity * $weight * max(0, (float) ($item['unit_price'] ?? 0));
                     });
+                    $draftTotal = max(0, $draftTotal - (float) ($draft->order_discount ?? 0));
                     $draftVat = $draft->charge_vat ? round($draftTotal * (float) $draft->vat_percent / 100, 2) : 0;
                     $draftShipping = $draft->collect_customer_shipping_fee ? (float) $draft->customer_shipping_fee : 0;
                     $draftTotal += $draftVat + $draftShipping;
@@ -592,6 +593,12 @@
                                         <div class="draft-product-results"><div class="text-center text-muted py-3">Đang tải danh sách sản phẩm...</div></div>
                                     </div>
                                     <div class="draft-vat-total-footer"><div class="js-draft-vat-note" @if($draftVat > 0) hidden @endif><div class="monitor-vat-pending-note" style="font-size:12px;line-height:1.5;color:#334155">Ghi chú: Giá chưa bao gồm VAT (chờ kế toán xử lý)</div></div><div class="draft-edit-total"><span>Tổng cộng:</span><strong class="draft-edit-grand-total">{{ number_format($draftTotal, 0, ',', '.') }}đ</strong></div></div>
+                                <details class="border rounded p-2 my-2 js-draft-discount" @if($draft->order_discount > 0) open @endif>
+                                    <summary class="fw-semibold">Chiết khấu đơn hàng</summary>
+                                    <label class="form-label mt-2">Số tiền chiết khấu (đ)</label><input type="text" inputmode="decimal" data-discount-money name="order_discount" class="form-control js-draft-fee" min="0" step="1" value="{{ (float) ($draft->order_discount ?? 0) }}" aria-label="Chiết khấu đơn hàng">
+                                    <button type="button" class="btn btn-sm btn-outline-success mt-2 js-draft-discount-all">Toàn bộ giá trị hàng</button>
+                                    <div class="small text-muted">Chỉ giảm tiền hàng; phí ship và các phí khác vẫn tính riêng.</div>
+                                </details>
                                 <details id="draftFees{{ $draft->id }}" class="border rounded p-2 my-2 js-draft-fees" @if($draft->charge_vat || $draft->collect_customer_shipping_fee) open @endif>
                                     <summary class="fw-semibold">Chi phí khác</summary>
                                     <div class="row g-2 mt-1">
@@ -619,6 +626,7 @@
                                 </details>
                                     <div class="draft-edit-footer">
                                         <div class="draft-edit-footer-actions">
+                                            <button type="button" class="btn btn-sm btn-outline-success js-draft-discount-toggle">Chiết khấu</button>
                                             <button type="button" class="btn btn-sm btn-outline-success js-draft-fees-toggle" aria-controls="draftFees{{ $draft->id }}"><i class="bi bi-plus-circle me-1"></i>Chi phí khác</button>
                                             <button type="button" class="btn btn-sm btn-outline-success js-draft-product-toggle"><i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm</button>
                                             <button type="button" class="btn btn-sm btn-outline-success js-draft-customer-toggle"><i class="bi bi-person-check me-1"></i>Chọn khách hàng</button>
@@ -784,6 +792,9 @@
 @endsection
 
 @push('scripts')
+@once
+<script src="{{ asset('js/order-discount-money.js') }}?v={{ filemtime(public_path('js/order-discount-money.js')) }}"></script>
+@endonce
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || @json(csrf_token());
@@ -845,6 +856,9 @@ document.addEventListener('DOMContentLoaded', () => {
             row.querySelector('.draft-edit-line-total').textContent = money(lineTotal);
             total += lineTotal;
         });
+        const discountInput = editor.querySelector('[name="order_discount"]');
+        if (discountInput) discountInput.max = total;
+        total = Math.max(0, total - Math.max(0, window.DiscountMoney.parse(discountInput?.value) || 0));
         const vatAmount = editor.querySelector('[name="charge_vat"]')?.checked
             ? Math.round(total * Math.min(100, Math.max(0, Number(editor.querySelector('[name="vat_percent"]').value) || 0))) / 100 : 0;
         total += vatAmount;
@@ -1064,6 +1078,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const editor = card.querySelector('.draft-template-editor');
         const value = name => editor?.querySelector(`[name="${name}"]`)?.value || null;
         return {
+            order_discount: Math.max(0, window.DiscountMoney.parse(value('order_discount')) || 0),
             charge_vat: editor?.querySelector('[name="charge_vat"]')?.checked ? 1 : 0,
             vat_percent: editor?.querySelector('[name="charge_vat"]')?.checked ? value('vat_percent') : null,
             collect_customer_shipping_fee: editor?.querySelector('[name="collect_customer_shipping_fee"]')?.checked ? 1 : 0,
@@ -1287,6 +1302,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (phoneMeta) phoneMeta.textContent = customerButton.dataset.customerPhone || '';
             editor.querySelector('.draft-customer-picker').hidden = true;
             return;
+        }
+        const discountToggle = event.target.closest('.js-draft-discount-toggle');
+        if (discountToggle) { const details=discountToggle.closest('.draft-template-editor').querySelector('.js-draft-discount'); details.open=!details.open; }
+        const discountAll = event.target.closest('.js-draft-discount-all');
+        if (discountAll) {
+            const editor=discountAll.closest('.draft-template-editor');
+            editor.querySelector('[name="order_discount"]').value=window.DiscountMoney.format(Array.from(editor.querySelectorAll('[data-draft-item]')).reduce((sum,row)=>sum+quantity(row)*weight(row)*price(row),0));
+            updateDraftTotals(editor);
         }
         const feesToggle = event.target.closest('.js-draft-fees-toggle');
         if (feesToggle) {

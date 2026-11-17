@@ -81,7 +81,7 @@
                                 <span class="badge bg-secondary">Chưa in</span>
                             @endif
                         </td>
-                        <td class="text-end fw-bold">{{ number_format((float) $order->total, 0, ',', '.') }}đ</td>
+                        <td class="text-end fw-bold">@include('warehouse.assignment-review._order-amounts')</td>
                         <td class="text-center">
                             <button type="button" class="btn btn-outline-success btn-sm print-one" data-order-id="{{ $order->id }}" title="In phiếu {{ $order->code }}"><i class="bi bi-printer"></i></button>
                         </td>

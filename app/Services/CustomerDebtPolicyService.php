@@ -38,7 +38,7 @@ class CustomerDebtPolicyService
 
     public function defaults(): array
     {
-        return ['allowed_orders' => 0, 'credit_limit' => 0, 'due_days' => 1];
+        return ['allowed_orders' => 1, 'credit_limit' => 0, 'due_days' => 1, 'payment_mode' => 'default', 'cycle_type' => 'weekly', 'cycle_weekday' => 5, 'cycle_monthday' => 15];
     }
 
     public function isLocked(array $policy): bool
@@ -110,6 +110,13 @@ class CustomerDebtPolicyService
                 'allowed_orders' => isset($data['allowed_orders']) ? (int) $data['allowed_orders'] : null,
                 'credit_limit' => isset($data['credit_limit']) ? (int) $data['credit_limit'] : null,
                 'due_days' => isset($data['due_days']) ? (int) $data['due_days'] : null,
+                'payment_mode' => $data['payment_mode'] ?? $current['payment_mode'] ?? 'default',
+                'rolling_only' => $data['rolling_only'] ?? $current['rolling_only'] ?? false,
+                'cycle_close_weekday' => isset($data['cycle_close_weekday']) ? (int) $data['cycle_close_weekday'] : ($current['cycle_close_weekday'] ?? null),
+                'cycle_close_monthday' => isset($data['cycle_close_monthday']) ? (int) $data['cycle_close_monthday'] : ($current['cycle_close_monthday'] ?? null),
+                'cycle_type' => $data['cycle_type'] ?? $current['cycle_type'] ?? 'weekly',
+                'cycle_weekday' => (int) ($data['cycle_weekday'] ?? $current['cycle_weekday'] ?? 5),
+                'cycle_monthday' => (int) ($data['cycle_monthday'] ?? $current['cycle_monthday'] ?? 15),
                 'updated_by' => $userId, 'updated_at' => now()->toIso8601String(), 'staff_edit_locked' => true,
                 'edit_version' => (int) ($current['edit_version'] ?? 0) + 1,
                 'staff_edit_count' => (int) ($current['staff_edit_count'] ?? 0) + ($isAdmin ? 0 : 1),
@@ -202,11 +209,41 @@ class CustomerDebtPolicyService
         $count = $balance > 0 ? count(array_filter($unpaid, fn ($bucket) => $bucket['is_bill'])) : 0;
         $dueDays = $policy['due_days'] ?? null;
         $dueDate = $balance > 0 && ($latestDelivery ?? $oldest) !== null && $dueDays !== null ? CarbonImmutable::parse($latestDelivery ?? $oldest)->addDays((int) $dueDays)->toDateString() : null;
+        if ($policy['payment_mode'] === 'cycle') {
+            // A new delivery must not postpone an existing unpaid cycle.
+            $dueDate = null;
+            if ($balance > 0 && $oldest) {
+                $anchor = CarbonImmutable::parse($oldest);
+                if ($policy['cycle_type'] === 'monthly') {
+                    $closeDay = (int) ($policy['cycle_close_monthday'] ?? $policy['cycle_monthday']);
+                    $month = $anchor->startOfMonth();
+                    $close = $month->addDays(min($closeDay, $month->daysInMonth) - 1);
+                    if ($close->lt($anchor)) {
+                        $month = $month->addMonth();
+                        $close = $month->addDays(min($closeDay, $month->daysInMonth) - 1);
+                    }
+                    $due = $month->addDays(min((int) $policy['cycle_monthday'], $month->daysInMonth) - 1);
+                    if ($due->lt($close)) {
+                        $month = $month->addMonth();
+                        $due = $month->addDays(min((int) $policy['cycle_monthday'], $month->daysInMonth) - 1);
+                    }
+                } else {
+                    $closeDay = (int) ($policy['cycle_close_weekday'] ?? $policy['cycle_weekday']);
+                    $close = $anchor->addDays(($closeDay - $anchor->dayOfWeekIso + 7) % 7);
+                    $due = $close->addDays(((int) $policy['cycle_weekday'] - $close->dayOfWeekIso + 7) % 7);
+                }
+                $dueDate = $due->toDateString();
+            }
+        }
+        $rolling = $policy['payment_mode'] === 'default' && ($policy['rolling_only'] ?? false);
+        if ($rolling) {
+            $dueDate = null;
+        }
         $lateDays = $dueDate !== null ? max(0, (int) CarbonImmutable::parse($dueDate)->diffInDays($today, false)) : 0;
         $orderLimit = $policy['allowed_orders'] ?? null;
         $creditLimit = $policy['credit_limit'] ?? null;
-        $orderReached = $balance > 0 && $orderLimit !== null && $count >= (int) $orderLimit;
-        $creditReached = $balance > 0 && $creditLimit !== null && $balance >= (int) $creditLimit;
+        $orderReached = $balance > 0 && $orderLimit !== null && ($rolling ? $count > 1 : ($policy['payment_mode'] !== 'cycle' && $count >= (int) $orderLimit));
+        $creditReached = $balance > 0 && $creditLimit !== null && (($rolling || $policy['payment_mode'] === 'cycle') ? ((int) $creditLimit > 0 && $balance >= (int) $creditLimit) : $balance >= (int) $creditLimit);
         $dueSoon = $balance > 0 && $dueDate !== null && (int) $today->diffInDays(CarbonImmutable::parse($dueDate), false) <= 3;
         $risk = $balance <= 0 || $age < 15 ? null : ($age <= 30 ? 'medium' : ($age <= 60 ? 'high' : 'very_high'));
         $reasons = [];

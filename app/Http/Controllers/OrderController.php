@@ -709,6 +709,7 @@ class OrderController extends Controller
     public function storeFromMonitoring(Request $request, ApprovalService $approvalService)
     {
         $validated = $request->validate([
+            'order_discount' => ['nullable', 'numeric', 'min:0', 'max:999999999999.99'],
             'creation_token' => ['nullable', 'uuid'],
             'customer_id' => ['required', 'integer', 'exists:customers,id'],
             'items' => ['required', 'array', 'min:1'],
@@ -770,6 +771,8 @@ class OrderController extends Controller
             $order = $this->createOrderWithUnifiedStockFlow(
                 items: $items,
                 orderData: [
+                    'order_discount' => (float) ($validated['order_discount'] ?? 0),
+                    'order_discount_type' => 'decrease',
                     'creation_token' => $validated['creation_token'] ?? null,
                     'creation_payload_hash' => hash('sha256', json_encode($validated)),
                     'customer_id' => (int) $customer->id,
@@ -2460,6 +2463,11 @@ class OrderController extends Controller
             $orderLevelDiscount = (float) $order->extra_discount_total;
             $orderLevelDiscountType = $orderLevelDiscount < 0 ? 'increase' : 'decrease';
             $orderLevelDiscountAmount = abs($orderLevelDiscount);
+        }
+
+        if ($orderLevelDiscountType === 'decrease') {
+            $orderLevelDiscountAmount = min($orderLevelDiscountAmount, max(0, $subtotalAfterItemDiscount));
+            $orderLevelDiscount = $orderLevelDiscountAmount;
         }
 
         $totalWeight = (float) $order->items->sum(function ($item) {

@@ -85,11 +85,11 @@ class CustomerDebtPolicyServiceTest extends TestCase
         }
     }
 
-    public function test_default_terms_are_zero_bills_zero_credit_and_one_day_after_delivery(): void
+    public function test_default_terms_are_one_bill_zero_credit_and_one_day_after_delivery(): void
     {
         $service = new CustomerDebtPolicyService;
         $policy = $service->effective(['customer_id' => 1], []);
-        self::assertSame(['allowed_orders' => 0, 'credit_limit' => 0, 'due_days' => 1], array_intersect_key($policy, $service->defaults()));
+        self::assertSame(array_replace($service->defaults(), ['allowed_orders' => 1, 'credit_limit' => 0, 'due_days' => 1]), array_intersect_key($policy, $service->defaults()));
         $result = $service->evaluate([$this->sale('2026-11-10')], [], '2026-11-12');
         self::assertTrue($result['remind']);
         self::assertSame('2026-11-11', $result['due_date']);
@@ -102,9 +102,45 @@ class CustomerDebtPolicyServiceTest extends TestCase
     {
         $service = new CustomerDebtPolicyService;
         $custom = ['allowed_orders' => 3, 'credit_limit' => 10000000, 'due_days' => 7];
-        self::assertSame($custom, array_intersect_key($service->effective(['customer_id' => 1], ['customer_1' => $custom]), $service->defaults()));
+        self::assertSame(array_replace($service->defaults(), $custom), array_intersect_key($service->effective(['customer_id' => 1], ['customer_1' => $custom]), $service->defaults()));
         self::assertSame($service->defaults(), array_intersect_key($service->effective(['customer_id' => 1], ['customer_1' => ['allowed_orders' => null, 'credit_limit' => null, 'due_days' => null]]), $service->defaults()));
-        self::assertSame(['allowed_orders' => 0, 'credit_limit' => 0, 'due_days' => 0], array_intersect_key($service->effective(['customer_id' => 1], ['customer_1' => ['allowed_orders' => 0, 'credit_limit' => 0, 'due_days' => 0]]), $service->defaults()));
+        self::assertSame(array_replace($service->defaults(), ['allowed_orders' => 0, 'credit_limit' => 0, 'due_days' => 0]), array_intersect_key($service->effective(['customer_id' => 1], ['customer_1' => ['allowed_orders' => 0, 'credit_limit' => 0, 'due_days' => 0]]), $service->defaults()));
+    }
+
+    public function test_close_day_assigns_sales_to_the_correct_week_and_month(): void
+    {
+        $service = new CustomerDebtPolicyService;
+        $weekly = ['payment_mode' => 'cycle', 'cycle_type' => 'weekly', 'cycle_close_weekday' => 2, 'cycle_weekday' => 5];
+        self::assertSame('2026-11-20', $service->evaluate([$this->sale('2026-11-17')], $weekly, '2026-11-19')['due_date']);
+        self::assertSame('2026-11-27', $service->evaluate([$this->sale('2026-11-18')], $weekly, '2026-11-19')['due_date']);
+        self::assertSame('2026-11-20', $service->evaluate([$this->sale('2026-11-17'), $this->sale('2026-11-25')], $weekly, '2026-11-26')['due_date']);
+        $monthly = ['payment_mode' => 'cycle', 'cycle_type' => 'monthly', 'cycle_close_monthday' => 25, 'cycle_monthday' => 5];
+        self::assertSame('2026-12-05', $service->evaluate([$this->sale('2026-11-25')], $monthly, '2026-11-26')['due_date']);
+        self::assertSame('2027-01-05', $service->evaluate([$this->sale('2026-11-26')], $monthly, '2026-11-26')['due_date']);
+    }
+
+    public function test_rolling_one_order_has_no_one_day_deadline_or_zero_ceiling_warning(): void
+    {
+        $service = new CustomerDebtPolicyService;
+        $policy = ['payment_mode' => 'default', 'rolling_only' => true];
+        $one = $service->evaluate([$this->sale('2026-11-17')], $policy, '2026-11-19');
+        self::assertNull($one['due_date']);
+        self::assertFalse($one['remind']);
+        self::assertTrue($service->evaluate([$this->sale('2026-11-17'), $this->sale('2026-11-18')], $policy, '2026-11-19')['remind']);
+    }
+
+    public function test_fixed_cycles_keep_overdue_dates_and_clamp_short_months(): void
+    {
+        $service = new CustomerDebtPolicyService;
+        $entries = [$this->sale('2026-11-02'), $this->sale('2026-11-10')];
+        $weekly = $service->evaluate($entries, ['payment_mode' => 'cycle', 'cycle_type' => 'weekly', 'cycle_weekday' => 5], '2026-11-12');
+        self::assertSame('2026-11-06', $weekly['due_date']);
+        self::assertSame(6, $weekly['overdue_days']);
+        $monthly = $service->evaluate([$this->sale('2026-02-01')], ['payment_mode' => 'cycle', 'cycle_type' => 'monthly', 'cycle_monthday' => 31], '2026-03-02');
+        self::assertSame('2026-02-28', $monthly['due_date']);
+        self::assertTrue($monthly['overdue']);
+        $paid = $service->evaluate(array_merge($entries, [['date' => '2026-11-12', 'type' => 'payment', 'amount' => 1000]]), ['payment_mode' => 'cycle', 'cycle_type' => 'weekly', 'cycle_weekday' => 5], '2026-11-12');
+        self::assertSame('2026-11-13', $paid['due_date']);
     }
 
     public function test_future_sales_and_receipts_do_not_change_todays_warning(): void

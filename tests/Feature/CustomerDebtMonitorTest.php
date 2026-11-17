@@ -908,6 +908,66 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(3000, $data['summary']['balance']);
     }
 
+    public function test_accounting_sale_filter_applies_to_rows_and_totals_and_keeps_all_sale_options(): void
+    {
+        $service = $this->service([
+            $this->entry('CRM01', 'Chị Bình'),
+            $this->entry('KH02', 'Anh Hải', 2),
+            $this->entry('NEW01', 'Khách chưa ghép', 3),
+        ]);
+        $controller = new \App\Http\Controllers\MyCustomerDebtController;
+        foreach (['user:7' => 'Chị Bình', 'user:8' => 'Anh Hải', 'unassigned' => 'Khách chưa ghép'] as $sale => $name) {
+            $data = $controller->accountingIndex($this->request(['range' => 'all', 'sale' => $sale], 'accountant'), $service, new CustomerDebtMonitorController)->getData();
+            self::assertSame([$name], $data['debts']->pluck('name')->all());
+            self::assertSame(1000, $data['summary']['balance']);
+            self::assertCount(3, $data['saleOptions']);
+        }
+    }
+
+    public function test_accounting_can_update_locked_payment_cycle_and_preserves_recovery(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình')]);
+        $groups = $service->summarize($service->snapshot()['entries']);
+        $group = reset($groups);
+        $policies = new \App\Services\CustomerDebtPolicyService;
+        $policies->save(['customer_id' => 1], ['allowed_orders' => 1, 'credit_limit' => 5000, 'due_days' => 1], 7, true, 0);
+        $request = $this->request([
+            'source_key' => $group['key'], 'policy_version' => 1,
+            'payment_mode' => 'cycle', 'cycle_type' => 'monthly', 'cycle_close_monthday' => 15, 'cycle_monthday' => 20,
+            'allowed_orders' => 3, 'credit_limit' => 10000, 'due_days' => 2,
+        ], 'accountant');
+        (new \App\Http\Controllers\AccountingDashboardController)->customerDebtPolicyUpdate($request, $service, new CustomerDebtMonitorController);
+        $data = (new \App\Http\Controllers\MyCustomerDebtController)->accountingIndex($this->request(['payment_mode' => 'cycle'], 'accountant'), $service, new CustomerDebtMonitorController)->getData();
+        self::assertSame(1, $data['debts']->total());
+        $row = $data['debts']->first();
+        self::assertSame(20, $row['policy']['cycle_monthday']);
+        self::assertSame(2, $row['policy']['edit_version']);
+        self::assertSame('normal', $row['recovery']['status']);
+    }
+
+    public function test_sale_payment_cycle_locks_and_admin_unlock_grants_exactly_one_update(): void
+    {
+        $controller = new \App\Http\Controllers\CustomerDebtPolicyController;
+        $customer = \App\Models\Customer::findOrFail(1);
+        $policies = new \App\Services\CustomerDebtPolicyService;
+        $data = ['payment_mode' => 'cycle', 'cycle_type' => 'weekly', 'cycle_close_weekday' => 2, 'cycle_weekday' => 5, 'credit_limit' => 10000, 'policy_version' => 0];
+        $result = $controller->update($this->request($data), $customer, $policies)->getData(true);
+        self::assertTrue($result['policy']['staff_edit_locked']);
+        self::assertSame(2, $result['policy']['cycle_close_weekday']);
+        try {
+            $controller->update($this->request(array_replace($data, ['policy_version' => 1])), $customer, $policies);
+            self::fail('Second sale save must be locked');
+        } catch (\Illuminate\Validation\ValidationException) {
+            self::assertSame(1, $policies->effective(['customer_id' => 1], $policies->policies())['edit_version']);
+        }
+        $controller->unlock($this->request(['policy_version' => 1], 'admin'), $customer, $policies);
+        $result = $controller->update($this->request(array_replace($data, ['payment_mode' => 'default', 'policy_version' => 2])), $customer, $policies)->getData(true);
+        self::assertTrue($result['policy']['staff_edit_locked']);
+        self::assertTrue($result['policy']['rolling_only']);
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $controller->update($this->request(array_replace($data, ['policy_version' => 3])), $customer, $policies);
+    }
+
     public function test_sale_cannot_open_accounting_debt_table(): void
     {
         $this->expectException(HttpException::class);
@@ -1385,7 +1445,7 @@ class CustomerDebtMonitorTest extends TestCase
         $defaults = $controller->index($this->request(['terms' => 'default'], 'admin'), $service, new \App\Services\CustomerDebtReportService)->getData();
         self::assertSame(26, $defaults['rows']->total());
         self::assertSame(0, $defaults['summary']['max_debt']);
-        self::assertTrue($defaults['rows']->every(fn ($r) => $r['policy']['allowed_orders'] === 0 && $r['policy']['due_days'] === 1));
+        self::assertTrue($defaults['rows']->every(fn ($r) => $r['policy']['allowed_orders'] === 1 && $r['policy']['due_days'] === 1));
     }
 
     public function test_debt_report_displays_agreed_ceiling_and_days_for_customers_without_source_rows(): void
@@ -2451,7 +2511,7 @@ class CustomerDebtMonitorTest extends TestCase
         $data = (new CustomerDebtMonitorController)->index($this->request(['tab' => 'all'], 'admin'), $service)->getData();
         self::assertSame('2026-11-10', $data['customerDebts'][1]['last_purchase_date']);
         self::assertSame('2026-11-09', $data['customerDebts'][1]['last_payment_date']);
-        self::assertSame(0, $data['customerDebts'][1]['policy']['allowed_orders']);
+        self::assertSame(1, $data['customerDebts'][1]['policy']['allowed_orders']);
         self::assertSame(0, $data['customerDebts'][1]['policy']['credit_limit']);
         self::assertSame(1, $data['customerDebts'][1]['policy']['due_days']);
     }

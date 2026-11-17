@@ -1,7 +1,9 @@
 @extends(($accountingDebt ?? false) ? accounting_layout() : 'layouts.site')
 @section('title', ($accountingDebt ?? false) ? 'Công nợ toàn bộ khách hàng' : 'Công nợ khách hàng của tôi')
 @section(($accountingDebt ?? false) ? 'accounting_content' : 'content')
-@php($debtListUrl = ($accountingDebt ?? false) ? accounting_route('customer-debts') : route('pages.my_customer_debt'))
+@php
+    $debtListUrl = ($accountingDebt ?? false) ? accounting_route('customer-debts') : route('pages.my_customer_debt');
+@endphp
 <div class="debt-page sale-debt-page">
     <header class="debt-page-header">
         <div><h1>Công nợ khách hàng</h1><div class="debt-updated">@if($snapshot)Cập nhật {{ \Carbon\Carbon::parse($snapshot['loaded_at'])->format('d/m/Y H:i') }}@else Chưa có dữ liệu công nợ @endif</div></div>
@@ -18,6 +20,11 @@
         <div class="debt-filter-field"><label class="form-label" for="sale-debt-from">Thống kê từ ngày</label><input class="form-control" type="date" id="sale-debt-from" name="from" value="{{ request('from') }}"></div>
         <div class="debt-filter-field"><label class="form-label" for="sale-debt-to">Đến ngày</label><input class="form-control" type="date" id="sale-debt-to" name="to" value="{{ request('to') }}"></div>
         <div class="debt-filter-field debt-filter-search"><label class="form-label" for="sale-debt-search">Khách hàng</label><input class="form-control" type="search" id="sale-debt-search" name="search" value="{{ request('search') }}" placeholder="Tên, mã khách hoặc số điện thoại" maxlength="150"></div>
+        @if($accountingDebt ?? false)
+        <div class="debt-filter-field"><label class="form-label" for="accounting-debt-sale">Sale phụ trách</label><select class="form-select" id="accounting-debt-sale" name="sale"><option value="">Tất cả sale</option>@foreach($saleOptions as $saleOption)<option value="{{ $saleOption['key'] }}" @selected(request('sale') === $saleOption['key'])>{{ $saleOption['label'] }}</option>@endforeach</select></div>
+        <div class="debt-filter-field"><label class="form-label" for="acc-mode-filter">Thanh toán</label><select class="form-select" id="acc-mode-filter" name="payment_mode"><option value="">Tất cả</option><option value="default" @selected(request('payment_mode') === 'default')>Mặc định</option><option value="cycle" @selected(request('payment_mode') === 'cycle')>Theo chu kỳ</option></select></div>
+        <div class="debt-filter-field"><label class="form-label" for="acc-reminder-filter">Cảnh báo</label><select class="form-select" id="acc-reminder-filter" name="reminder"><option value="">Tất cả</option><option value="remind" @selected(request('reminder') === 'remind')>Nhắc thu nợ</option><option value="overdue" @selected(request('reminder') === 'overdue')>Quá hạn</option></select></div>
+        @endif
         <div class="debt-filter-field"><label class="form-label" for="sale-debt-scope">Phạm vi khách</label><select class="form-select" id="sale-debt-scope" name="scope"><option value="all" @selected(request('scope','all') === 'all')>{{ ($accountingDebt ?? false) ? 'Toàn bộ khách hàng' : 'Tất cả khách phụ trách' }}</option><option value="orders" @selected(request('scope') === 'orders')>Có mua hàng trong kỳ</option></select></div>
         <div class="debt-filter-field"><label class="form-label" for="sale-debt-balance">Công nợ</label><select class="form-select" id="sale-debt-balance" name="balance">@foreach(['debt'=>'Đang có nợ','all'=>'Tất cả số dư','settled'=>'Đã cân đối','credit'=>'Khách trả trước'] as $value=>$label)<option value="{{ $value }}" @selected(request('balance','debt') === $value)>{{ $label }}</option>@endforeach</select></div>
         <div class="debt-filter-field sale-debt-page-size"><label class="form-label" for="sale-debt-per-page">Số dòng / trang</label><select class="form-select" id="sale-debt-per-page" name="per_page">@foreach([20,30,50,100] as $size)<option value="{{ $size }}" @selected((int) request('per_page',30) === $size)>{{ $size }}</option>@endforeach</select></div>
@@ -36,7 +43,11 @@
             <a class="btn btn-sm {{ $quickActive ? 'btn-primary' : 'btn-light' }}" href="{{ request()->fullUrlWithQuery(['range'=>null,'from'=>$quickFrom,'to'=>$quickTo,'page'=>1,'customer'=>null,'system_customer'=>null,'report_from'=>null,'report_to'=>null,'purchase_page'=>null,'payment_page'=>null]) }}" @if($quickActive) aria-current="page" @endif>{{ $label }}</a>
         @endforeach
         <a class="btn btn-sm {{ !request('from') && !request('to') ? 'btn-primary' : 'btn-light' }}" href="{{ request()->fullUrlWithQuery(['range'=>'all','from'=>null,'to'=>null,'page'=>1,'customer'=>null,'system_customer'=>null,'report_from'=>null,'report_to'=>null,'purchase_page'=>null,'payment_page'=>null]) }}">Toàn bộ</a>
-        @if(!($accountingDebt ?? false))
+        @if($accountingDebt ?? false)
+        <form method="POST" action="{{ route('customer-debt.load') }}" class="sale-debt-refresh" onsubmit="this.querySelector('button').disabled=true;this.querySelector('span').textContent='Đang cập nhật…'">
+            @csrf<input type="hidden" name="source" value="google"><button type="submit" class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-repeat"></i> <span>Cập nhật bán hàng & thanh toán Google Sheet</span></button>
+        </form>
+        @else
         <form method="POST" action="{{ route('pages.my_customer_debt.refresh') }}" class="sale-debt-refresh" data-sale-debt-refresh>
             @csrf<button type="submit" class="btn btn-sm btn-outline-primary" title="Cập nhật dữ liệu mới từ Google Sheet"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> <span>Cập nhật Google Sheet</span></button>
             <span role="status" class="small text-danger"></span>
@@ -92,9 +103,14 @@
                     @foreach(range(1,5) as $star)<button type="submit" name="stars" value="{{ $star }}" class="sale-debt-star {{ $star <= $debt['priority']['stars'] ? 'is-active' : '' }}" title="Ghim {{ $star }} sao" aria-label="Ghim {{ $star }} sao" aria-pressed="{{ $star === $debt['priority']['stars'] ? 'true' : 'false' }}">★</button>@endforeach
                     @if($debt['priority']['stars'] > 0)<button type="submit" name="stars" value="0" class="sale-debt-unpin" title="Bỏ ghim" aria-label="Bỏ ghim">×</button>@endif
                     <span class="small text-danger" role="status"></span>
-                </form>@else
+                </form>
+                    <div class="small mt-1">{{ $debt['policy']['payment_mode'] === 'cycle' ? 'Thanh toán theo chu kỳ '.($debt['policy']['cycle_type'] === 'weekly' ? 'hằng tuần' : 'hằng tháng') : 'Mặc định — gối đầu 1 đơn' }}</div>
+                    @include('customer-debt.alerts', ['alert'=>$debt['alerts'], 'compact'=>true])
+                @else
                     <div class="small text-muted">{{ $debt['code'] ?: 'Chưa có mã' }} · {{ $debt['phone'] ?: 'Chưa có SĐT' }}</div>
                     <div class="small text-muted">{{ $debt['sale_label'] ?? 'Chưa có sale' }} · {{ $debt['recovery']['label'] }}</div>
+                    <div class="small mt-1">{{ ($debt['policy']['payment_mode'] ?? 'default') === 'cycle' ? (($debt['policy']['cycle_type'] ?? 'weekly') === 'monthly' ? 'Chốt ngày '.($debt['policy']['cycle_close_monthday'] ?? $debt['policy']['cycle_monthday']).', trả ngày '.$debt['policy']['cycle_monthday'].' hằng tháng' : 'Chốt thứ '.(($debt['policy']['cycle_close_weekday'] ?? $debt['policy']['cycle_weekday']) === 7 ? 'CN' : ($debt['policy']['cycle_close_weekday'] ?? $debt['policy']['cycle_weekday'])+1).', trả '.([1=>'thứ hai',2=>'thứ ba',3=>'thứ tư',4=>'thứ năm',5=>'thứ sáu',6=>'thứ bảy',7=>'chủ nhật'][$debt['policy']['cycle_weekday']]).' hằng tuần') : 'Mặc định — gối đầu 1 đơn' }} · Trần {{ number_format($debt['policy']['credit_limit'],0,',','.') }} đ</div>
+                    @include('customer-debt.alerts', ['alert'=>$debt['alerts'], 'compact'=>true])
                     @if($debt['customer_id'])<a class="small" href="{{ accounting_route('customer-debts.show', $debt['customer_id']) }}">Sổ kế toán / Điều chỉnh</a>@endif
                 @endif</td>
                 @foreach(['sales','payments','balance','period_sales','period_payments','period_increase'] as $column)<td class="text-end text-nowrap {{ in_array($column,['payments','period_payments']) ? 'text-success' : (in_array($column,['balance','period_increase']) && $debt[$column] > 0 ? 'text-danger fw-bold' : '') }}">{{ number_format($debt[$column],0,',','.') }} đ</td>@endforeach
@@ -106,12 +122,34 @@
                     @endphp
                     <div class="small text-muted">{{ $days === 0 ? 'Hôm nay' : ($days === 1 ? 'Hôm qua' : ($days > 1 ? $days.' ngày trước' : 'Sau '.abs($days).' ngày')) }}</div>
                 @else — @endif</td>
-                <td><a class="btn btn-sm btn-outline-primary text-nowrap" href="{{ request()->fullUrlWithQuery(['customer'=>$debt['key'],'system_customer'=>null,'window'=>request('from') ? 'custom' : 'all','report_from'=>request('from') ? $periodFrom : null,'report_to'=>request('to') ? $periodTo : null,'purchase_page'=>null,'payment_page'=>null,'detail_page'=>null]) }}#debt-detail">Đối chiếu</a></td>
+                <td><a class="btn btn-sm btn-outline-primary text-nowrap" href="{{ request()->fullUrlWithQuery(['customer'=>$debt['key'],'system_customer'=>null,'window'=>request('from') ? 'custom' : 'all','report_from'=>request('from') ? $periodFrom : null,'report_to'=>request('to') ? $periodTo : null,'purchase_page'=>null,'payment_page'=>null,'detail_page'=>null]) }}#debt-detail">Đối chiếu</a>
+                    @if(!($accountingDebt ?? false) && $debt['customer_id'])
+                    <div class="d-flex flex-column gap-1 mt-2">
+                        <button class="btn btn-sm btn-light" type="button" data-accounting-policy data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}" data-policy='@json($debt["policy"])' data-update-url="{{ route('customers.debt-policy.update', $debt['customer_id']) }}" @disabled($debt['policy']['staff_edit_locked'] && !auth()->user()->isAdmin())>Chính sách thanh toán</button>
+                        <span class="small text-muted">{{ $debt['policy']['staff_edit_locked'] ? 'Đã khóa' : 'Được lưu 1 lần' }}</span>
+                    </div>
+                    @endif
+                    @if(auth()->user()->isAdmin() && $debt['customer_id'] && $debt['policy']['staff_edit_locked'])
+                    <div class="mt-1"><button type="button" class="btn btn-sm btn-light" data-unlock-sale-policy data-url="{{ route('customers.debt-policy.unlock', $debt['customer_id']) }}" data-version="{{ $debt['policy']['edit_version'] }}">Mở khóa cho sale sửa 1 lần</button><span class="small text-danger" role="status"></span></div>
+                    @endif
+                    @if($accountingDebt ?? false)
+                    <div class="d-flex flex-column gap-1 mt-2">
+                        <button class="btn btn-sm btn-light" type="button" data-accounting-policy data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}" data-policy='@json($debt["policy"])'>Chính sách thanh toán</button>
+                        @if($canAdjust) @include('customer-debt.balance-button') @endif
+                        <button type="button" class="btn btn-sm btn-light debt-recovery-button" data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}" data-status="{{ $debt['recovery']['status'] }}" data-note="{{ $debt['recovery']['note'] }}" data-version="{{ $debt['recovery']['version'] }}">Phân loại thu hồi</button>
+                    </div>
+                    @endif
+                </td>
             </tr>
         @empty<tr><td colspan="11" class="sale-debt-empty"><div><i class="bi bi-wallet2" aria-hidden="true"></i><strong>Chưa có khách hàng phù hợp</strong><span>Bạn có thể điều chỉnh bộ lọc để tìm khách cần theo dõi.</span></div></td></tr>@endforelse</tbody>
         <tfoot><tr><th colspan="2">Tổng tất cả trang</th>@foreach(['sales','payments','balance','period_sales','period_payments','period_increase'] as $column)<th class="text-end text-nowrap">{{ number_format($summary[$column === 'balance' ? 'balance_net' : $column],0,',','.') }} đ</th>@endforeach<th colspan="3"></th></tr></tfoot>
     </table></div></div>
     <div class="sale-debt-pagination"><span class="small text-muted">{{ $debts->total() }} khách · {{ $debts->perPage() }} dòng / trang</span>{{ $debts->onEachSide(1)->links() }}</div>
+    @include('accounting.partials.customer-debt-tools')
+    @if($accountingDebt ?? false)
+        @include('customer-debt.recovery-dialog')
+        @if($canAdjust) @include('customer-debt.balance-adjustment-dialog') @endif
+    @endif
     @if($selected)
         @include('customer-debt.detail-report', ['debtDetailAction'=>$debtListUrl])
     @endif
@@ -120,7 +158,7 @@
 @push('styles')
 <link rel="stylesheet" href="{{ asset('css/customer-debt.css') }}?v={{ filemtime(public_path('css/customer-debt.css')) }}">
 <style>
-.sale-debt-page { --debt-accent:#0f766e; --debt-border:#e2e8f0; width:100%; max-width:1400px; box-sizing:border-box; margin:auto; padding:28px 20px; color:#24364b; overflow-wrap:break-word; }
+.sale-debt-page { --debt-accent:#0f766e; --debt-border:#e2e8f0; width:100%; max-width:none; box-sizing:border-box; margin:auto; padding:20px 8px; color:#24364b; overflow-wrap:break-word; }
 .sale-debt-page .debt-page-header { margin-bottom:20px; }
 .sale-debt-page .card { min-width:0; max-width:100%; }
 .sale-debt-filters { gap:12px; border-color:var(--debt-border); padding:16px; border-radius:10px; background:#fff; box-shadow:0 2px 5px rgba(15,23,42,.025); }
@@ -163,7 +201,7 @@
 .sale-debt-priority-hint i { color:#d5a445; font-size:10px; margin-right:4px; }
 .sale-debt-table-card { border:1px solid #dce3ec!important; border-radius:10px; overflow:hidden; box-shadow:0 2px 6px rgba(15,23,42,.03); }
 .sale-debt-scroll { width:100%; max-width:100%; overflow-x:auto; }
-.sale-debt-table { width:100%; min-width:1280px; table-layout:fixed; border-collapse:separate; border-spacing:0; margin:0; font-size:13px; }
+.sale-debt-table { width:100%; min-width:1450px; table-layout:fixed; border-collapse:separate; border-spacing:0; margin:0; font-size:13px; }
 .sale-debt-table> :not(caption)>*>* { padding:9px 6px; border-color:#e9edf3; background:#fff; box-shadow:none; }
 .sale-debt-table thead th { vertical-align:middle!important; text-align:center!important; color:#526278; font-size:12px; font-weight:600; white-space:normal; line-height:1.5; border-bottom:1px solid #e0e6ee; }
 .sale-debt-table .sale-debt-group-head th { position:sticky; top:0; z-index:2; height:44px; background:#f1f4f8; }

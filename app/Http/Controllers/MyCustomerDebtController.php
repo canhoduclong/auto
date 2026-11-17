@@ -40,6 +40,9 @@ class MyCustomerDebtController extends Controller
             'balance' => 'nullable|in:debt,all,settled,credit', 'page' => 'nullable|integer|min:1',
             'per_page' => 'nullable|in:20,30,50,100',
             'recovery' => 'nullable|in:all,normal,difficult,unrecoverable',
+            'payment_mode' => 'nullable|in:default,cycle',
+            'reminder' => 'nullable|in:remind,overdue',
+            'sale' => ['nullable', 'string', 'regex:/^(user:[0-9]+|sheet:[a-f0-9]{16}|unassigned)$/'],
             'sort' => 'nullable|in:balance,sales,payments,period_sales,period_payments,period_increase,days_without_payment,last_purchase_date',
             'direction' => 'nullable|in:asc,desc',
         ]);
@@ -72,6 +75,7 @@ class MyCustomerDebtController extends Controller
 
                 return $row;
             })->values();
+        $saleOptions = $rows->map(fn ($row) => ['key' => $row['sale_key'], 'label' => $row['sale_label']])->unique('key')->sortBy('label')->values();
         $customerOptions = $rows->map(fn ($r) => ['key' => $r['key'], 'name' => $r['name'], 'code' => $r['code']])->sortBy('name')->values();
         $periodFrom = $filters['from'] ?? min(now()->toDateString(), $rows->flatMap(fn ($r) => $r['entries'])->min('date') ?? now()->toDateString());
         $periodTo = $filters['to'] ?? now()->toDateString();
@@ -85,7 +89,16 @@ class MyCustomerDebtController extends Controller
 
             return $row;
         });
-        $visible = $rows->filter(function ($row) use ($request, $filters, $sheets, $periodFrom, $periodTo) {
+        $visible = $rows->filter(function ($row) use ($request, $filters, $sheets, $periodFrom, $periodTo, $accountingDebt) {
+            if ($accountingDebt && ! empty($filters['sale']) && $row['sale_key'] !== $filters['sale']) {
+                return false;
+            }
+            if (! empty($filters['payment_mode']) && $row['policy']['payment_mode'] !== $filters['payment_mode']) {
+                return false;
+            }
+            if (! empty($filters['reminder']) && ! $row['alerts'][$filters['reminder']]) {
+                return false;
+            }
             $balance = $filters['balance'] ?? 'debt';
             if (($balance === 'debt' && $row['balance'] <= 0) || ($balance === 'settled' && $row['balance'] != 0) || ($balance === 'credit' && $row['balance'] >= 0)) {
                 return false;
@@ -114,7 +127,7 @@ class MyCustomerDebtController extends Controller
         $debts = new LengthAwarePaginator($visible->forPage($page, $perPage)->values(), $visible->count(), $perPage, $page, ['path' => $request->url(), 'query' => $request->except('page')]);
         $settings = Setting::whereIn('key', ['logo', 'brand_name', 'slogan', 'HOTLINE', 'address', 'email', 'footer_logo', 'hotline', 'tax_number'])->get()->keyBy('key');
 
-        return view('site.my_customer_debt', array_replace($data, compact('debts', 'summary', 'customerOptions', 'periodFrom', 'periodTo', 'settings', 'accountingDebt')));
+        return view('site.my_customer_debt', array_replace($data, compact('debts', 'summary', 'customerOptions', 'periodFrom', 'periodTo', 'settings', 'accountingDebt', 'saleOptions')));
     }
 
     public function refresh(Request $request, CustomerDebtSheetService $sheets)

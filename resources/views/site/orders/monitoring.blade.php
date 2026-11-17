@@ -1919,6 +1919,11 @@
                             <h3>Sản phẩm</h3>
                             <div id="monitorConfirmItems"></div>
                             <div class="border-top mt-3 pt-3">
+                                <details class="mb-3"><summary class="fw-semibold">Chiết khấu</summary>
+                                    <label class="form-label small mt-2" for="monitorOrderDiscount">Số tiền chiết khấu (đ)</label><input class="form-control form-control-sm" type="text" inputmode="decimal" data-discount-money id="monitorOrderDiscount" min="0" step="1" value="0">
+                                    <button type="button" class="btn btn-sm btn-outline-success mt-2" id="monitorDiscountAll">Toàn bộ giá trị hàng</button>
+                                    <div class="small text-muted">Chỉ giảm giá trị hàng hóa; phí ship và các phí khác vẫn tính riêng.</div>
+                                </details>
                                 <h3 class="mb-2">Chi phí khác <span class="fw-normal text-muted">(nếu có)</span></h3>
                                 <label class="monitor-fee-choice mb-2" for="monitorChargeVat">
                                     <input type="checkbox" id="monitorChargeVat">
@@ -1947,6 +1952,7 @@
                             </div>
                             <div class="border-top mt-3 pt-2 small">
                                 <div class="d-flex justify-content-between"><span>Tạm tính sản phẩm:</span><strong id="monitorConfirmSubtotal">0đ</strong></div>
+                                <div class="d-flex justify-content-between mt-1 text-danger"><span>Chiết khấu:</span><strong id="monitorConfirmDiscount">0đ</strong></div>
                                 <div class="d-flex justify-content-between mt-1" id="monitorConfirmVatLine" hidden><span>VAT:</span><strong id="monitorConfirmVatAmount">0đ</strong></div>
                                 <div class="d-flex justify-content-between mt-1" id="monitorConfirmCustomerShippingLine" hidden><span>Thu tiền ship:</span><strong id="monitorConfirmCustomerShippingAmount">0đ</strong></div>
                                 <div class="d-flex justify-content-between border-top mt-2 pt-2 fs-6 fw-bold text-success"><span>Tổng cộng:</span><span id="monitorConfirmTotal">0đ</span></div>
@@ -2499,7 +2505,7 @@
                                             <input type="hidden" name="customer_id" value="{{ $order->customer_id }}">
                                             <input type="hidden" name="recipient_email" value="{{ $order->recipient_email }}">
                                             <input type="hidden" name="shipper_note" value="{{ $order->shipper_note }}">
-                                            <input type="hidden" name="order_discount" value="{{ (float) ($order->order_discount ?? 0) }}">
+
                                             <input type="hidden" name="order_discount_type" value="{{ ($order->order_discount_type ?? 'decrease') === 'increase' ? 'increase' : 'decrease' }}">
 
                                             <div class="monitor-inline-edit-title"><i class="bi bi-pencil-square me-1"></i>Sửa đơn {{ $order->code ?: ('#' . $order->id) }}</div>
@@ -2639,6 +2645,13 @@
                                                     <div class="monitor-edit-picker-results monitor-edit-product-results"></div>
                                                 </div>
                                             </div>
+                                            <div class="collapse" id="monitorEditDiscount{{ $order->id }}">
+                                                <div class="monitor-edit-picker"><label class="form-label" for="monitorDiscount{{ $order->id }}">Chiết khấu đơn hàng (đ)</label>
+                                                    <input id="monitorDiscount{{ $order->id }}" type="text" inputmode="decimal" data-discount-money name="order_discount" class="form-control monitor-edit-fee" min="0" step="1" value="{{ (float) ($order->order_discount ?? 0) }}">
+                                                    <button type="button" class="btn btn-sm btn-outline-success mt-2 monitor-edit-discount-all">Toàn bộ giá trị hàng</button>
+                                                    <div class="small text-muted">Chỉ giảm tiền hàng; phí ship và các phí khác vẫn tính riêng.</div>
+                                                </div>
+                                            </div>
                                             <div class="collapse" id="monitorEditFees{{ $order->id }}">
                                                 <div class="monitor-edit-picker" data-monitor-edit-fees
                                                     data-existing-fees="{{ ($order->charge_shipping_fee ? (float) $order->shipping_fee : 0) + ($order->charge_foam_box_fee ? (float) $order->foam_box_price : 0) }}">
@@ -2677,6 +2690,7 @@
                                             <div class="monitor-inline-edit-actions">
                                                 <div class="monitor-inline-edit-action-group">
                                                     <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="collapse" data-bs-target="#monitorEditProducts{{ $order->id }}" aria-expanded="false" aria-controls="monitorEditProducts{{ $order->id }}"><i class="bi bi-plus-circle me-1"></i>Thêm sản phẩm</button>
+                                                    <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="collapse" data-bs-target="#monitorEditDiscount{{ $order->id }}">Chiết khấu</button>
                                                     <button type="button" class="btn btn-sm btn-outline-success" data-bs-toggle="collapse" data-bs-target="#monitorEditFees{{ $order->id }}" aria-expanded="false" aria-controls="monitorEditFees{{ $order->id }}"><i class="bi bi-plus-circle me-1"></i>Chi phí khác</button>
                                                 </div>
                                                 <div class="monitor-inline-edit-action-group">
@@ -2907,6 +2921,9 @@
 @include('orders.partials.special-pickup')
 
 @push('scripts')
+@once
+<script src="{{ asset('js/order-discount-money.js') }}?v={{ filemtime(public_path('js/order-discount-money.js')) }}"></script>
+@endonce
 <script>
 (() => {
     const sidebar = document.getElementById('monitorSidebar');
@@ -3107,11 +3124,12 @@ document.addEventListener('click', async event => {
     const selectedVatPercent = () => document.getElementById('monitorChargeVat').checked
         ? Math.min(100, Math.max(0, Number(document.getElementById('monitorVatPercent').value) || 0))
         : 0;
-    const calculatedVatAmount = () => itemsSubtotal() * selectedVatPercent() / 100;
+    const selectedOrderDiscount = () => Math.min(itemsSubtotal(), Math.max(0, window.DiscountMoney.parse(document.getElementById('monitorOrderDiscount').value) || 0));
+    const calculatedVatAmount = () => (itemsSubtotal() - selectedOrderDiscount()) * selectedVatPercent() / 100;
     const selectedCustomerShippingFee = () => document.getElementById('monitorCollectCustomerShippingFee').checked
         ? Math.max(0, Number(document.getElementById('monitorCustomerShippingFee').value) || 0)
         : 0;
-    const orderTotal = () => itemsSubtotal() + calculatedVatAmount() + selectedCustomerShippingFee();
+    const orderTotal = () => itemsSubtotal() - selectedOrderDiscount() + calculatedVatAmount() + selectedCustomerShippingFee();
     const notify = (message, type = 'error') => {
         if (typeof window.showToast === 'function') window.showToast(message, type);
         else window.alert(message);
@@ -3257,6 +3275,8 @@ document.addEventListener('click', async event => {
     function updateConfirmationTotals() {
         const chargeVat = document.getElementById('monitorChargeVat').checked;
         const collectShipping = document.getElementById('monitorCollectCustomerShippingFee').checked;
+        document.getElementById('monitorOrderDiscount').max = itemsSubtotal();
+        document.getElementById('monitorConfirmDiscount').textContent = '−' + money(selectedOrderDiscount());
         document.getElementById('monitorConfirmSubtotal').textContent = money(itemsSubtotal());
         document.getElementById('monitorConfirmVatLine').hidden = !chargeVat;
         document.getElementById('monitorConfirmVatAmount').textContent = money(calculatedVatAmount());
@@ -3265,8 +3285,10 @@ document.addEventListener('click', async event => {
         document.getElementById('monitorConfirmTotal').textContent = money(orderTotal());
     }
 
+    document.getElementById('monitorDiscountAll').addEventListener('click',()=>{document.getElementById('monitorOrderDiscount').value=window.DiscountMoney.format(itemsSubtotal());updateConfirmationTotals();});
     openButton.addEventListener('click', () => {
         if (submittingOrder) return;
+        document.getElementById('monitorOrderDiscount').value=0;
         creationToken = newCreationToken();
         const submitButton = document.getElementById('monitorSubmitOrder');
         submitButton.disabled = false;
@@ -3404,7 +3426,7 @@ document.addEventListener('click', async event => {
     });
 
     createPanel.addEventListener('input', event => {
-        if (event.target.matches('#monitorVatPercent, #monitorCustomerShippingFee')) {
+        if (event.target.matches('#monitorVatPercent, #monitorCustomerShippingFee, #monitorOrderDiscount')) {
             updateConfirmationTotals();
             return;
         }
@@ -3487,6 +3509,7 @@ document.addEventListener('click', async event => {
                     'X-CSRF-TOKEN': csrfToken
                 },
                 body: JSON.stringify({
+                    order_discount: selectedOrderDiscount(),
                     creation_token: creationToken,
                     customer_id: selectedCustomer.id,
                     items: Array.from(selectedItems.values()).map(item => ({
@@ -3548,8 +3571,9 @@ document.addEventListener('click', async event => {
             row.querySelector('.monitor-edit-price-decrease').disabled = sellingPrice <= (Number(row.dataset.minPrice) || 0);
             total += lineTotal;
         });
+        form.dataset.goodsTotal=String(total);
         form.querySelector('.monitor-inline-edit-total span').textContent = money(total);
-        const discount = Math.max(0, Number(form.elements.order_discount.value) || 0);
+        const discount = Math.max(0, window.DiscountMoney.parse(form.elements.order_discount.value) || 0);
         const productTotal = Math.max(0, total + (form.elements.order_discount_type.value === 'increase' ? discount : -discount));
         const vatEnabled = form.querySelector('input[type="checkbox"][name="charge_vat"]').checked;
         const shippingEnabled = form.querySelector('input[type="checkbox"][name="collect_customer_shipping_fee"]').checked;
@@ -3804,6 +3828,12 @@ document.addEventListener('click', async event => {
         }
     });
 
+    document.addEventListener('click', event => {
+        const button=event.target.closest('.monitor-edit-discount-all');if(!button)return;
+        const form=button.closest('[data-monitor-edit-form]');updateInlineEditTotals(form);
+        form.elements.order_discount.value=window.DiscountMoney.format(Number(form.dataset.goodsTotal));
+        form.elements.order_discount_type.value='decrease';updateInlineEditTotals(form);
+    });
     document.addEventListener('input', event => {
         if (!event.target.matches('[data-monitor-edit-form] .monitor-edit-quantity, [data-monitor-edit-form] .monitor-edit-weight, [data-monitor-edit-form] .monitor-edit-fee')) return;
         if (event.target.matches('.monitor-edit-quantity')) {

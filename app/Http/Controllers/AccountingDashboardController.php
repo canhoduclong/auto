@@ -132,6 +132,32 @@ class AccountingDashboardController extends Controller
         ]);
     }
 
+    public function customerDebtPolicyUpdate(Request $request, \App\Services\CustomerDebtSheetService $sheets, CustomerDebtMonitorController $monitor)
+    {
+        $data = $request->validate([
+            'source_key' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/',
+            'policy_version' => 'required|integer|min:0',
+            'payment_mode' => 'required|in:default,cycle',
+            'cycle_type' => 'required_if:payment_mode,cycle|in:weekly,monthly',
+            'cycle_close_weekday' => 'required_if:cycle_type,weekly|nullable|integer|min:1|max:7',
+            'cycle_close_monthday' => 'required_if:cycle_type,monthly|nullable|integer|min:1|max:31',
+            'cycle_weekday' => 'required_if:cycle_type,weekly|nullable|integer|min:1|max:7',
+            'cycle_monthday' => 'required_if:cycle_type,monthly|nullable|integer|min:1|max:31',
+            'allowed_orders' => 'nullable|integer|min:0|max:100000',
+            'credit_limit' => 'required|integer|min:0|max:999999999999999',
+            'due_days' => 'nullable|integer|min:0|max:3650',
+        ]);
+        $data['allowed_orders'] = 1;
+        $data['rolling_only'] = $data['payment_mode'] === 'default';
+        $request->attributes->set('own_customer_debt', false);
+        $context = $monitor->debtContext($request, $sheets);
+        $group = $context['groups'][$data['source_key']] ?? null;
+        abort_unless($group, 404);
+        app(\App\Services\CustomerDebtPolicyService::class)->save($group, $data, $request->user()->id, true, (int) $data['policy_version']);
+
+        return back()->with('success', 'Đã lưu chính sách thanh toán và cập nhật cảnh báo.');
+    }
+
     public function customerDebts(Request $request)
     {
         if (! $request->boolean('ledger')) {
@@ -1084,6 +1110,7 @@ class AccountingDashboardController extends Controller
             'total_orders' => $allForStats->count(),
             'total_items' => (float) $allForStats->sum('total_item_quantity'),
             'total_goods' => (float) $allForStats->sum(fn (Order $order) => (float) ($order->subtotal_amount ?? $order->total ?? 0)),
+            'total_order_discount' => (float) $allForStats->sum(fn (Order $order) => max(0, \App\Support\AccountingOrderAmounts::orderDiscount($order))),
             'total_revenue' => (float) $allForStats->sum(fn (Order $order) => $this->recognizedRevenueForOrder($order)),
             'total_paid' => (float) $allForStats->sum(fn (Order $order) => $this->effectivePaidForOrder($order)),
             'total_due' => (float) $allForStats->sum(fn (Order $order) => $this->effectiveDueForOrder($order)),
@@ -2967,19 +2994,11 @@ class AccountingDashboardController extends Controller
         $currentItemIncreaseTotal = round((float) $reconciliationItems
             ->filter(fn (array $item): bool => $item['discount_type'] === 'increase')
             ->sum('discount_total'), 2);
-        $orderDiscountAmount = abs((float) ($order->extra_discount_total ?: $order->order_discount ?: 0));
-        $signedOrderDiscount = (string) ($order->order_discount_type ?? 'decrease') === 'increase'
-            ? $orderDiscountAmount
-            : -$orderDiscountAmount;
-        $currentOrderTotal = round(max(0,
-            $currentGoodsTotal
-            - $currentItemDiscountTotal
-            + $currentItemIncreaseTotal
-            + $signedOrderDiscount
-            + $this->customerDeliveryFeeForOrder($order)
-            + (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0)
-            + (float) ($order->vat_amount ?? 0)
-        ), 2);
+        $currentAmounts = \App\Support\AccountingOrderAmounts::calculate(
+            $order,
+            $currentGoodsTotal - $currentItemDiscountTotal + $currentItemIncreaseTotal
+        );
+        $currentOrderTotal = $currentAmounts['total'];
 
         return response()->json([
             'order' => [
@@ -2994,6 +3013,9 @@ class AccountingDashboardController extends Controller
                 'current_item_discount_total' => $currentItemDiscountTotal,
                 'current_item_increase_total' => $currentItemIncreaseTotal,
                 'current_calculated_total' => $currentOrderTotal,
+                'current_order_discount' => $currentAmounts['order_discount'],
+                'current_goods_after_discount' => $currentAmounts['goods_after_discount'],
+                'current_vat_amount' => $currentAmounts['vat_amount'],
                 'subtotal_amount' => (float) ($order->subtotal_amount ?? $order->total ?? 0),
                 'total_discount' => (float) ($order->total_discount ?? 0),
                 'item_discount_total' => (float) ($order->item_discount_total ?? 0),

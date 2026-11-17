@@ -14,7 +14,7 @@ use Symfony\Component\HttpKernel\Exception\HttpException;
 class AdminOrderTemplatesTest extends TestCase
 {
     private $app;
-    private array $tables = ['text_order_drafts', 'users', 'customers', 'products', 'product_variants', 'orders', 'settings'];
+    private array $tables = ['text_order_drafts', 'users', 'customers', 'products', 'product_variants', 'orders', 'settings', 'role_user', 'roles'];
     protected function setUp(): void
     {
         $this->app = require dirname(__DIR__, 2).'/bootstrap/app.php';
@@ -23,8 +23,10 @@ class AdminOrderTemplatesTest extends TestCase
         Schema::create('text_order_drafts', function (Blueprint $t) {
             $t->id(); foreach (['sale_id', 'customer_id', 'created_by', 'order_id', 'product_variant_id', 'truck_brand_id', 'truck_station_id'] as $column) $t->unsignedBigInteger($column)->nullable();
             foreach (['draft_scope', 'customer_name', 'phone', 'product_text', 'status', 'error_message', 'delivery_date', 'delivery_time', 'note', 'automation_mode', 'automation_last_error', 'automation_last_run_at', 'truck_brand_name', 'truck_station_name', 'truck_station_address', 'truck_station_phone', 'truck_receive_time'] as $column) $t->text($column)->nullable();
-            $t->json('parsed_items')->nullable(); $t->json('automation_dates')->nullable(); $t->boolean('automation_enabled')->default(false); $t->boolean('use_truck_station')->default(false); $t->timestamps();
+            $t->decimal('order_discount',15,2)->default(0); $t->json('parsed_items')->nullable(); $t->json('automation_dates')->nullable(); $t->boolean('automation_enabled')->default(false); $t->boolean('use_truck_station')->default(false); $t->timestamps();
         });
+        Schema::create('roles', fn (Blueprint $t) => [$t->id(), $t->string('name')]);
+        Schema::create('role_user', fn (Blueprint $t) => [$t->unsignedBigInteger('user_id'), $t->unsignedBigInteger('role_id')]);
         Schema::create('users', fn (Blueprint $t) => [$t->id(), $t->string('name')]);
         Schema::create('customers', fn (Blueprint $t) => [$t->id(), $t->string('name'), $t->string('phone')->nullable(), $t->string('customer_code')->nullable(), $t->softDeletes()]);
         Schema::create('products', fn (Blueprint $t) => [$t->id(), $t->string('name')]);
@@ -76,6 +78,13 @@ class AdminOrderTemplatesTest extends TestCase
         self::assertSame('Đã sửa bởi admin', $draft->note);
         self::assertSame('ORDER-EXISTING', DB::table('orders')->where('id', 10)->value('code'));
     }
+    public function test_template_discount_amount_is_saved_without_touching_existing_order(): void
+    {
+        $this->mutations()->adminTemplateUpdate($this->request(['customer_id' => 1, 'order_discount' => 22000, 'items' => [['product_variant_id' => 1, 'quantity' => 2, 'unit_price' => 11000, 'size_kg' => 1]]]), TextOrderDraft::findOrFail(1));
+        self::assertSame('22000.00', TextOrderDraft::findOrFail(1)->order_discount);
+        self::assertSame('ORDER-EXISTING', DB::table('orders')->where('id', 10)->value('code'));
+    }
+
     public function test_editing_content_preserves_existing_truck_station_configuration(): void
     {
         DB::table('text_order_drafts')->where('id', 2)->update(['use_truck_station' => true, 'truck_station_name' => 'Trạm cũ', 'truck_brand_name' => 'Nhà xe cũ', 'truck_station_phone' => '0901234567']);

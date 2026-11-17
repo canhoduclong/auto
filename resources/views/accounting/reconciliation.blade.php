@@ -505,6 +505,9 @@
                             <td data-label="STT" class="text-center text-muted">{{ ($orders->firstItem() ?? 1) + $loop->index + ($missingOrders ?? collect())->count() }}</td>
                             <td data-label="Khách hàng" class="fw-bold">
                                 {{ $order->customer?->name ?? '-' }}
+                                @if(\App\Support\AccountingOrderAmounts::orderDiscount($order) > 0)
+                                <div class="small text-danger fw-normal">Chiết khấu tiền hàng: −{{ $money(\App\Support\AccountingOrderAmounts::orderDiscount($order)) }}</div>
+                                @endif
                                 <span class="small text-muted fw-normal d-block mt-1">{{ $order->code }}, Ngày {{ optional($order->created_at)->format('d/m/Y') ?: '-' }}</span>
                                 @if($isMissingOrder)
                                     <span class="badge text-bg-dark d-block mt-1">Không còn tồn tại</span>
@@ -574,6 +577,7 @@
                 <div class="recon-stat"><span>Tổng số đơn</span><strong>{{ number_format($stats['total_orders']) }}</strong></div>
                 <div class="recon-stat"><span>Tổng mặt hàng bán</span><strong>{{ number_format($stats['total_items']) }}</strong></div>
                 <div class="recon-stat"><span>Tổng giá trị hàng bán</span><strong>{{ $money($stats['total_goods']) }}</strong></div>
+                <div class="recon-stat"><span>Chiết khấu đơn hàng</span><strong class="text-danger">{{ $money($stats['total_order_discount']) }}</strong></div>
                 <div class="recon-stat"><span>Tổng doanh thu</span><strong>{{ $money($stats['total_revenue']) }}</strong></div>
                 <div class="recon-stat"><span>Tổng đã thanh toán</span><strong class="text-success">{{ $money($stats['total_paid']) }}</strong></div>
                 <div class="recon-stat"><span>Tổng còn thiếu</span><strong class="text-danger">{{ $money($stats['total_due']) }}</strong></div>
@@ -821,6 +825,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         ['Địa chỉ', esc(order.customer?.address)],
                         ['Tổng tiền hàng', money(order.current_goods_total)],
                         ['Tổng Giảm giá sản phẩm', `<span class="text-danger">-${money(order.current_item_discount_total)}</span>`],
+                        ['Chiết khấu đơn hàng', `${Number(order.current_order_discount) < 0 ? '+' : '-'}${money(Math.abs(Number(order.current_order_discount || 0)))}`],
+                        ['Tiền hàng sau chiết khấu', money(order.current_goods_after_discount)],
                         ['Tổng giá trị tính lại', money(order.current_calculated_total)],
                         ['Doanh thu ghi nhận', `<span class="text-success">${money(order.recognized_revenue)}</span>`],
                     ])}
@@ -846,10 +852,11 @@ document.addEventListener('DOMContentLoaded', function () {
                             <div class="recon-mini-row"><span>Tổng tiền hàng</span><span>${money(order.current_goods_total)}</span></div>
                             <div class="recon-mini-row text-danger"><span>Tổng giảm giá sản phẩm</span><span>-${money(order.current_item_discount_total)}</span></div>
                             ${Number(order.current_item_increase_total || 0) > 0 ? `<div class="recon-mini-row text-primary"><span>Điều chỉnh tăng sản phẩm</span><span>+${money(order.current_item_increase_total)}</span></div>` : ''}
-                            <div class="recon-mini-row"><span>Chiết khấu đơn</span><span class="${order.order_discount_type === 'increase' ? 'text-primary' : 'text-danger'}">${order.order_discount_type === 'increase' ? '+' : '-'}${money(Math.abs(Number(order.extra_discount_total || order.order_discount || 0)))}</span></div>
+                            <div class="recon-mini-row"><span>Chiết khấu đơn hàng${Number(order.current_order_discount) > 0 && Number(order.current_goods_after_discount) === 0 ? ' · Toàn bộ giá trị hàng' : ' (tiền hàng)'}</span><span class="${Number(order.current_order_discount) < 0 ? 'text-primary' : 'text-danger'}">${Number(order.current_order_discount) < 0 ? '+' : '-'}${money(Math.abs(Number(order.current_order_discount || 0)))}</span></div>
+                            <div class="recon-mini-row"><span>Tiền hàng sau chiết khấu</span><strong>${money(order.current_goods_after_discount)}</strong></div>
                             <div class="recon-mini-row"><span>Phí giao hàng thu khách</span><span>${money(order.customer_shipping_fee)}</span></div>
                             ${Number(order.foam_box_fee || 0) > 0 ? `<div class="recon-mini-row"><span>Phí thùng xốp</span><span>${money(order.foam_box_fee)}</span></div>` : ''}
-                            <div class="recon-mini-row"><span>VAT ${Number(order.vat_percent || 0) > 0 ? `(${Number(order.vat_percent).toLocaleString('vi-VN')}%)` : ''}</span><span>${money(order.vat_amount)}</span></div>
+                            <div class="recon-mini-row"><span>VAT ${Number(order.vat_percent || 0) > 0 ? `(${Number(order.vat_percent).toLocaleString('vi-VN')}%)` : ''}</span><span>${money(order.current_vat_amount)}</span></div>
                             <div class="recon-mini-row border-top mt-1 pt-2 fs-6"><strong>Tổng giá trị đơn hàng</strong><strong>${money(order.current_calculated_total)}</strong></div>
                         </div></div>
                     </div>

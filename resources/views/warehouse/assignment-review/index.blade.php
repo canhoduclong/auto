@@ -112,7 +112,7 @@
                                 <span class="badge bg-secondary">Kho chưa in</span>
                             @endif
                         </td>
-                        <td class="text-end fw-bold">{{ number_format((float) $order->total, 0, ',', '.') }}đ</td>
+                        <td class="text-end fw-bold">@include('warehouse.assignment-review._order-amounts')</td>
                         <td>
                             @if($order->use_truck_station)
                                 <button type="button" class="btn btn-outline-primary btn-sm warehouse-print-foam-label" data-order-id="{{ $order->id }}">

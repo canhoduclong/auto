@@ -249,7 +249,8 @@
             @endif
             @if($packedOrder)
                 <div class="summary-row"><span>Khối lượng thực tế</span><strong>{{ $documentPackedWeight !== null ? format_kg($documentPackedWeight) : '—' }}</strong></div>
-                @if($orderAdjustment != 0)<div class="summary-row"><span>Điều chỉnh đơn</span><strong>{{ number_format(-$orderAdjustment) }}đ</strong></div>@endif
+                @if($orderAdjustment > 0)<div class="summary-row"><span>{{ max(0, $itemsSubtotal - $orderAdjustment) == 0 ? 'Toàn bộ giá trị hàng' : 'Tiền hàng sau chiết khấu' }}</span><strong>{{ number_format(max(0, $itemsSubtotal - $orderAdjustment), 0, ',', '.') }}đ</strong></div>@endif
+                @if($orderAdjustment != 0)<div class="summary-row"><span>{{ $orderAdjustment > 0 ? 'Chiết khấu tiền hàng' : 'Điều chỉnh tăng' }}</span><strong>{{ number_format(-$orderAdjustment) }}đ</strong></div>@endif
                 @if($vatAmount > 0)<div class="summary-row"><span>VAT</span><strong>{{ number_format($vatAmount) }}đ</strong></div>@endif
                 @if($foamBoxFee > 0)<div class="summary-row"><span>Phí thùng xốp</span><strong>{{ number_format($foamBoxFee) }}đ</strong></div>@endif
             @endif
@@ -440,7 +441,8 @@
         <tr><td>Tổng số lượng</td><td>{{ number_format($document->items->sum('quantity')) }}</td></tr>
         @if($packedOrder)
             <tr><td>Khối lượng thực tế</td><td>{{ $documentPackedWeight !== null ? format_kg($documentPackedWeight) : '—' }}</td></tr>
-            @if($orderAdjustment != 0)<tr><td>Điều chỉnh đơn</td><td>{{ number_format(-$orderAdjustment, 0, ',', '.') }}đ</td></tr>@endif
+            @if($orderAdjustment > 0)<tr><td>{{ max(0, $itemsSubtotal - $orderAdjustment) == 0 ? 'Toàn bộ giá trị hàng' : 'Tiền hàng sau chiết khấu' }}</td><td>{{ number_format(max(0, $itemsSubtotal - $orderAdjustment), 0, ',', '.') }}đ</td></tr>@endif
+            @if($orderAdjustment != 0)<tr><td>{{ $orderAdjustment > 0 ? 'Chiết khấu tiền hàng' : 'Điều chỉnh tăng' }}</td><td>{{ number_format(-$orderAdjustment, 0, ',', '.') }}đ</td></tr>@endif
             @if($foamBoxFee > 0)<tr><td>Phí thùng xốp</td><td>{{ number_format($foamBoxFee, 0, ',', '.') }}đ</td></tr>@endif
         @endif
         <tr><td>Phí vận chuyển</td><td>{{ number_format($shippingFee, 0, ',', '.') }}đ</td></tr>

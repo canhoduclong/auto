@@ -194,6 +194,7 @@ class TextOrderImportController extends Controller
                 'delivery_date' => $this->today(),
                 'delivery_time' => $order->delivery_time,
                 'note' => $order->note,
+                'order_discount' => ($order->order_discount_type ?? 'decrease') === 'decrease' ? ($order->order_discount ?? 0) : 0,
                 'charge_vat' => $order->charge_vat ?? false,
                 'vat_percent' => $order->vat_percent ?? 0,
                 'collect_customer_shipping_fee' => $order->collect_customer_shipping_fee ?? false,
@@ -895,6 +896,8 @@ class TextOrderImportController extends Controller
                     'recipient_address' => $draft->address ?: $customer->address,
                     'note' => $draft->note,
                     'warehouse_product_permissions' => $draft->warehouse_product_permissions,
+                    'order_discount' => (float) ($draft->order_discount ?? 0),
+                    'order_discount_type' => 'decrease',
                     'charge_vat' => $draft->charge_vat,
                     'vat_percent' => $draft->vat_percent,
                     'collect_customer_shipping_fee' => $draft->collect_customer_shipping_fee,
@@ -1053,6 +1056,7 @@ class TextOrderImportController extends Controller
     private function validatedDraftData(Request $request): array
     {
         $validated = $request->validate([
+            'order_discount' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:999999999999.99'],
             'charge_vat' => ['sometimes', 'boolean'],
             'vat_percent' => [Rule::requiredIf($request->boolean('charge_vat')), 'nullable', 'numeric', 'gt:0', 'max:100'],
             'collect_customer_shipping_fee' => ['sometimes', 'boolean'],

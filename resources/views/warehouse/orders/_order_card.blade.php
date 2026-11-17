@@ -713,7 +713,12 @@
                                         <div class="wh-meta-label">Kg thực đóng</div>
                                         <div class="wh-meta-value text-primary">{{ $packedSummary['packed_weight'] !== null ? $formatKg($packedSummary['packed_weight']) : '—' }}</div>
                                         <div class="wh-meta-label mt-1">Giá trị đơn theo thực đóng</div>
-                                        <div class="wh-meta-value">{{ number_format($packedSummary['total']) }}đ</div>
+                                        <div class="wh-meta-value">{{ number_format($packedSummary['total'], 0, ',', '.') }}đ</div>
+                                        @if($packedSummary['extra_discount_total'] > 0)
+                                        <div class="small text-danger">Chiết khấu tiền hàng: −{{ number_format($packedSummary['extra_discount_total'], 0, ',', '.') }}đ</div>
+                                        @if($packedSummary['goods_after_discount'] == 0)<div class="small text-danger">Toàn bộ giá trị hàng</div>@endif
+                                        <div class="small">Tiền hàng sau chiết khấu: {{ number_format($packedSummary['goods_after_discount'], 0, ',', '.') }}đ</div>
+                                        @endif
                                     </div>
                                     <div class="col-6">
                                         <div class="wh-meta-label">Trạng thái</div>

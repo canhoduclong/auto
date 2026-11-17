@@ -19,10 +19,11 @@ class TextOrderDraft extends Model
         'note', 'raw_text', 'status', 'error_message', 'automation_mode', 'automation_enabled',
         'automation_dates', 'automation_last_run_at', 'automation_last_error',
         'charge_vat', 'vat_percent', 'collect_customer_shipping_fee', 'customer_shipping_fee',
-        'warehouse_product_permissions',
+        'warehouse_product_permissions', 'order_discount',
     ];
 
     protected $casts = [
+        'order_discount' => 'decimal:2',
         'charge_vat' => 'boolean',
         'vat_percent' => 'decimal:2',
         'collect_customer_shipping_fee' => 'boolean',

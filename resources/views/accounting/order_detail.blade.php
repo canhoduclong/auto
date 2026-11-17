@@ -50,6 +50,7 @@
         <div class="acc-card h-100"><div class="card-body">
             <div class="text-muted small">Tổng đơn hàng</div>
             <div class="fs-5 fw-bold">{{ $money($order->total) }}</div>
+            @if(\App\Support\AccountingOrderAmounts::orderDiscount($order) > 0)<div class="small text-danger">Đã gồm chiết khấu tiền hàng: −{{ $money(\App\Support\AccountingOrderAmounts::orderDiscount($order)) }}</div>@endif
         </div></div>
     </div>
     <div class="col-md-3">
