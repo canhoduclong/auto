@@ -968,6 +968,28 @@ class CustomerDebtMonitorTest extends TestCase
         $controller->update($this->request(array_replace($data, ['policy_version' => 3])), $customer, $policies);
     }
 
+    public function test_accounting_classification_and_recovery_filters_intersect_before_totals(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình'), $this->entry('KH02', 'Anh Hải', 2), $this->entry('NEW01', 'Khách định kỳ', 3)]);
+        $policies = new \App\Services\CustomerDebtPolicyService;
+        $policies->save(['customer_id' => 2], ['allowed_orders' => 2], 7, true, 0);
+        $groups = $service->summarize($service->snapshot()['entries']);
+        $cycle = collect($groups)->firstWhere('code', 'NEW01');
+        $policies->save($cycle, ['payment_mode' => 'cycle', 'cycle_type' => 'weekly', 'cycle_weekday' => 5], 7, true, 0);
+        $recovery = new \App\Services\CustomerDebtRecoveryService;
+        $group = ['customer_id' => 2];
+        $before = $recovery->effective($group, $recovery->records());
+        $recovery->save($group, ['recovery_status' => 'difficult', 'recovery_version' => $before['version']], $this->user('admin'));
+        $controller = new \App\Http\Controllers\MyCustomerDebtController;
+        foreach ([['all', 'all', 3], ['default', 'all', 1], ['multi', 'all', 1], ['multi', 'difficult', 1], ['multi', 'normal', 0], ['cycle', 'normal', 1], ['cycle', 'difficult', 0]] as [$classification, $status, $count]) {
+            $data = $controller->accountingIndex($this->request(['range' => 'all', 'payment_class' => $classification, 'recovery' => $status], 'accountant'), $service, new CustomerDebtMonitorController)->getData();
+            self::assertSame($count, $data['debts']->total());
+            self::assertSame($count * 1000, $data['summary']['balance']);
+        }
+        $data = $controller->accountingIndex($this->request([], 'accountant'), $service, new CustomerDebtMonitorController)->getData();
+        self::assertSame(3, $data['debts']->total());
+    }
+
     public function test_sale_cannot_open_accounting_debt_table(): void
     {
         $this->expectException(HttpException::class);

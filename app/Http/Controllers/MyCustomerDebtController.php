@@ -41,9 +41,10 @@ class MyCustomerDebtController extends Controller
             'per_page' => 'nullable|in:20,30,50,100',
             'recovery' => 'nullable|in:all,normal,difficult,unrecoverable',
             'payment_mode' => 'nullable|in:default,cycle',
+            'payment_class' => 'nullable|in:all,default,multi,cycle',
             'reminder' => 'nullable|in:remind,overdue',
             'sale' => ['nullable', 'string', 'regex:/^(user:[0-9]+|sheet:[a-f0-9]{16}|unassigned)$/'],
-            'sort' => 'nullable|in:balance,sales,payments,period_sales,period_payments,period_increase,days_without_payment,last_purchase_date',
+            'sort' => 'nullable|in:balance,sales,payments,period_sales,period_payments,period_increase,days_without_payment,overdue_days,last_purchase_date',
             'direction' => 'nullable|in:asc,desc',
         ]);
         $request->attributes->set('own_customer_debt', ! $accountingDebt);
@@ -71,6 +72,7 @@ class MyCustomerDebtController extends Controller
                 $row['priority'] = $priorities->effective($row, $priorityRecords);
                 $row['phone'] = $group['system_customer']?->phone ?: ($group['phone'] ?? '');
                 $row['search_text'] = $row['name'].' '.$row['code'].' '.$row['phone'].' '.($group['system_customer']?->company_name ?? '').' '.$group['name'];
+                $row['overdue_days'] = $row['alerts']['overdue_days'];
                 $row['days_without_payment'] = $row['last_payment_date'] ? max(0, (int) CarbonImmutable::parse($row['last_payment_date'])->diffInDays(CarbonImmutable::today())) : null;
 
                 return $row;
@@ -92,6 +94,12 @@ class MyCustomerDebtController extends Controller
         $visible = $rows->filter(function ($row) use ($request, $filters, $sheets, $periodFrom, $periodTo, $accountingDebt) {
             if ($accountingDebt && ! empty($filters['sale']) && $row['sale_key'] !== $filters['sale']) {
                 return false;
+            }
+            if ($accountingDebt) {
+                $classification = $row['policy']['payment_mode'] === 'cycle' ? 'cycle' : ((int) $row['policy']['allowed_orders'] >= 2 ? 'multi' : 'default');
+                if (($filters['payment_class'] ?? 'all') !== 'all' && $classification !== $filters['payment_class']) {
+                    return false;
+                }
             }
             if (! empty($filters['payment_mode']) && $row['policy']['payment_mode'] !== $filters['payment_mode']) {
                 return false;
