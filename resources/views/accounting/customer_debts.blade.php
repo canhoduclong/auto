@@ -19,6 +19,7 @@
 <div class="acc-card mb-3">
     <div class="card-body">
         <form method="GET" class="row g-2 align-items-end">
+            <input type="hidden" name="ledger" value="1">
             <input type="hidden" name="sort_by" value="{{ $sortBy }}">
             <div class="col-lg-3 col-md-6">
                 <label class="form-label">Tìm khách hàng</label>
@@ -42,7 +43,7 @@
             </div>
             <div class="col-lg-1 col-md-6"><button class="btn btn-primary w-100">Lọc</button></div>
             <div class="col-12 d-flex justify-content-between align-items-center gap-2 flex-wrap">
-                <a href="{{ accounting_route('customer-debts') }}" class="btn btn-outline-secondary btn-sm">Xóa lọc</a>
+                <a href="{{ accounting_route('customer-debts', ['ledger'=>1]) }}" class="btn btn-outline-secondary btn-sm">Xóa lọc</a>
                 <span class="badge text-bg-light border">Tổng nợ trang này: {{ number_format($totalDebt, 0, ',', '.') }} đ</span>
             </div>
         </form>

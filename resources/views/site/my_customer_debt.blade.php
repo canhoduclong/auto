@@ -1,25 +1,30 @@
-@extends('layouts.site')
-@section('title', 'Công nợ khách hàng của tôi')
-@section('content')
+@extends(($accountingDebt ?? false) ? accounting_layout() : 'layouts.site')
+@section('title', ($accountingDebt ?? false) ? 'Công nợ toàn bộ khách hàng' : 'Công nợ khách hàng của tôi')
+@section(($accountingDebt ?? false) ? 'accounting_content' : 'content')
+@php($debtListUrl = ($accountingDebt ?? false) ? accounting_route('customer-debts') : route('pages.my_customer_debt'))
 <div class="debt-page sale-debt-page">
     <header class="debt-page-header">
         <div><h1>Công nợ khách hàng</h1><div class="debt-updated">@if($snapshot)Cập nhật {{ \Carbon\Carbon::parse($snapshot['loaded_at'])->format('d/m/Y H:i') }}@else Chưa có dữ liệu công nợ @endif</div></div>
+        @if($accountingDebt ?? false)
+        <div class="d-flex flex-wrap gap-2"><a class="btn btn-outline-primary" href="{{ accounting_route('customer-debts', ['ledger'=>1]) }}">Sổ kế toán & điều chỉnh</a><a class="btn btn-outline-primary" href="{{ route('customer-debt.index', ['tab'=>'all', 'recovery'=>'all']) }}">Quản lý nguồn & cảnh báo</a></div>
+        @else
         <a href="{{ route('pages.my_dashboard') }}" class="btn btn-light">Về bảng điều khiển</a>
+        @endif
     </header>
     @foreach(['success'=>'success','error'=>'danger'] as $key=>$color)@if(session($key))<div class="alert alert-{{ $color }} py-2">{{ session($key) }}</div>@endif @endforeach
     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
     @if(!$snapshot)<div class="alert alert-info">Chưa có dữ liệu công nợ. Vui lòng liên hệ kế toán cập nhật dữ liệu.</div>@endif
-    <form method="GET" action="{{ route('pages.my_customer_debt') }}" class="debt-filters sale-debt-filters">
+    <form method="GET" action="{{ $debtListUrl }}" class="debt-filters sale-debt-filters">
         <div class="debt-filter-field"><label class="form-label" for="sale-debt-from">Thống kê từ ngày</label><input class="form-control" type="date" id="sale-debt-from" name="from" value="{{ request('from') }}"></div>
         <div class="debt-filter-field"><label class="form-label" for="sale-debt-to">Đến ngày</label><input class="form-control" type="date" id="sale-debt-to" name="to" value="{{ request('to') }}"></div>
         <div class="debt-filter-field debt-filter-search"><label class="form-label" for="sale-debt-search">Khách hàng</label><input class="form-control" type="search" id="sale-debt-search" name="search" value="{{ request('search') }}" placeholder="Tên, mã khách hoặc số điện thoại" maxlength="150"></div>
-        <div class="debt-filter-field"><label class="form-label" for="sale-debt-scope">Phạm vi khách</label><select class="form-select" id="sale-debt-scope" name="scope"><option value="all" @selected(request('scope','all') === 'all')>Tất cả khách phụ trách</option><option value="orders" @selected(request('scope') === 'orders')>Có mua hàng trong kỳ</option></select></div>
+        <div class="debt-filter-field"><label class="form-label" for="sale-debt-scope">Phạm vi khách</label><select class="form-select" id="sale-debt-scope" name="scope"><option value="all" @selected(request('scope','all') === 'all')>{{ ($accountingDebt ?? false) ? 'Toàn bộ khách hàng' : 'Tất cả khách phụ trách' }}</option><option value="orders" @selected(request('scope') === 'orders')>Có mua hàng trong kỳ</option></select></div>
         <div class="debt-filter-field"><label class="form-label" for="sale-debt-balance">Công nợ</label><select class="form-select" id="sale-debt-balance" name="balance">@foreach(['debt'=>'Đang có nợ','all'=>'Tất cả số dư','settled'=>'Đã cân đối','credit'=>'Khách trả trước'] as $value=>$label)<option value="{{ $value }}" @selected(request('balance','debt') === $value)>{{ $label }}</option>@endforeach</select></div>
         <div class="debt-filter-field sale-debt-page-size"><label class="form-label" for="sale-debt-per-page">Số dòng / trang</label><select class="form-select" id="sale-debt-per-page" name="per_page">@foreach([20,30,50,100] as $size)<option value="{{ $size }}" @selected((int) request('per_page',30) === $size)>{{ $size }}</option>@endforeach</select></div>
         @if(request('range') === 'all')<input type="hidden" name="range" value="all">@endif
         <input type="hidden" name="recovery" value="{{ request('recovery','all') }}">
         @if(request('sort'))<input type="hidden" name="sort" value="{{ request('sort') }}"><input type="hidden" name="direction" value="{{ request('direction','desc') }}">@endif
-        <div class="debt-filter-actions"><button class="btn btn-primary">Lọc</button><a class="btn btn-light" href="{{ route('pages.my_customer_debt') }}">Xóa lọc</a></div>
+        <div class="debt-filter-actions"><button class="btn btn-primary">Lọc</button><a class="btn btn-light" href="{{ $debtListUrl }}">Xóa lọc</a></div>
     </form>
     <nav class="sale-debt-shortcuts" aria-label="Chọn nhanh khoảng ngày">
         @foreach(['Hôm nay'=>0,'Hôm qua'=>-1,'2 ngày'=>2,'3 ngày'=>3,'5 ngày'=>5,'7 ngày'=>7,'14 ngày'=>14,'30 ngày'=>30] as $label=>$days)
@@ -31,10 +36,12 @@
             <a class="btn btn-sm {{ $quickActive ? 'btn-primary' : 'btn-light' }}" href="{{ request()->fullUrlWithQuery(['range'=>null,'from'=>$quickFrom,'to'=>$quickTo,'page'=>1,'customer'=>null,'system_customer'=>null,'report_from'=>null,'report_to'=>null,'purchase_page'=>null,'payment_page'=>null]) }}" @if($quickActive) aria-current="page" @endif>{{ $label }}</a>
         @endforeach
         <a class="btn btn-sm {{ !request('from') && !request('to') ? 'btn-primary' : 'btn-light' }}" href="{{ request()->fullUrlWithQuery(['range'=>'all','from'=>null,'to'=>null,'page'=>1,'customer'=>null,'system_customer'=>null,'report_from'=>null,'report_to'=>null,'purchase_page'=>null,'payment_page'=>null]) }}">Toàn bộ</a>
+        @if(!($accountingDebt ?? false))
         <form method="POST" action="{{ route('pages.my_customer_debt.refresh') }}" class="sale-debt-refresh" data-sale-debt-refresh>
             @csrf<button type="submit" class="btn btn-sm btn-outline-primary" title="Cập nhật dữ liệu mới từ Google Sheet"><i class="bi bi-arrow-repeat" aria-hidden="true"></i> <span>Cập nhật Google Sheet</span></button>
             <span role="status" class="small text-danger"></span>
         </form>
+        @endif
     </nav>
     <section class="sale-debt-summary" aria-label="Tổng hợp công nợ">
         <div class="sale-debt-summary-caption"><strong>Tổng hợp công nợ</strong><span>{{ $summary['customers'] }} khách · Tất cả các trang</span></div>
@@ -60,7 +67,7 @@
     <nav class="sale-debt-shortcuts" aria-label="Khả năng thu hồi">@foreach(['all'=>'Tất cả','normal'=>'Đang theo dõi','difficult'=>'Khó thu hồi','unrecoverable'=>'Không có khả năng thu hồi'] as $value=>$label)<a class="btn btn-sm {{ request('recovery','all') === $value ? 'btn-primary' : 'btn-light' }}" href="{{ request()->fullUrlWithQuery(['recovery'=>$value,'page'=>1,'customer'=>null,'system_customer'=>null]) }}">{{ $label }}</a>@endforeach</nav>
     <div class="sale-debt-pagination"><span class="small text-muted">Hiển thị {{ $debts->firstItem() ?? 0 }}–{{ $debts->lastItem() ?? 0 }} / {{ $debts->total() }} khách</span>{{ $debts->onEachSide(1)->links() }}</div>
     </div>
-    <div class="sale-debt-priority-hint"><i class="bi bi-star-fill" aria-hidden="true"></i> Ưu tiên 5 sao → 1 sao → chưa ghim · Cùng mức sao, sắp xếp theo cột đã chọn</div>
+    @if(!($accountingDebt ?? false))<div class="sale-debt-priority-hint"><i class="bi bi-star-fill" aria-hidden="true"></i> Ưu tiên 5 sao → 1 sao → chưa ghim · Cùng mức sao, sắp xếp theo cột đã chọn</div>@endif
     <div class="card sale-debt-table-card"><div class="table-responsive sale-debt-scroll"><table class="table table-hover align-middle sale-debt-table mb-0">
         <colgroup><col style="width:3%"><col style="width:20%">@foreach(range(1,6) as $unused)<col style="width:8%">@endforeach<col style="width:9%"><col style="width:10%"><col style="width:10%"></colgroup>
         <thead>
@@ -78,14 +85,18 @@
         <tbody>@forelse($debts as $debt)
             <tr class="{{ request('customer') === $debt['key'] ? 'table-primary' : '' }}">
                 <td>{{ $debts->firstItem()+$loop->index }}</td>
-                <td><strong title="{{ $debt['name'] }}{{ $debt['phone'] ? ' · '.$debt['phone'] : '' }}">{{ $debt['name'] }}</strong><form method="POST" action="{{ route('pages.my_customer_debt.priority') }}" class="sale-debt-stars" data-sale-debt-priority aria-label="Ghim {{ $debt['name'] }}">
+                <td><strong title="{{ $debt['name'] }}{{ $debt['phone'] ? ' · '.$debt['phone'] : '' }}">{{ $debt['name'] }}</strong>@if(!($accountingDebt ?? false))<form method="POST" action="{{ route('pages.my_customer_debt.priority') }}" class="sale-debt-stars" data-sale-debt-priority aria-label="Ghim {{ $debt['name'] }}">
                     @csrf<input type="hidden" name="customer_id" value="{{ $debt['customer_id'] }}"><input type="hidden" name="source_key" value="{{ $debt['key'] }}"><input type="hidden" name="priority_version" value="{{ $debt['priority']['version'] }}">
                     <span class="sale-debt-customer-code" title="Mã khách hàng{{ $debt['phone'] ? ' · SĐT: '.$debt['phone'] : '' }}">{{ $debt['code'] ?: 'Chưa có mã' }}</span>
                     @if(($debt['recovery']['status'] ?? 'normal') !== 'normal')<span class="sale-debt-recovery" title="{{ $debt['recovery']['label'] }}" aria-label="{{ $debt['recovery']['label'] }}">●</span>@endif
                     @foreach(range(1,5) as $star)<button type="submit" name="stars" value="{{ $star }}" class="sale-debt-star {{ $star <= $debt['priority']['stars'] ? 'is-active' : '' }}" title="Ghim {{ $star }} sao" aria-label="Ghim {{ $star }} sao" aria-pressed="{{ $star === $debt['priority']['stars'] ? 'true' : 'false' }}">★</button>@endforeach
                     @if($debt['priority']['stars'] > 0)<button type="submit" name="stars" value="0" class="sale-debt-unpin" title="Bỏ ghim" aria-label="Bỏ ghim">×</button>@endif
                     <span class="small text-danger" role="status"></span>
-                </form></td>
+                </form>@else
+                    <div class="small text-muted">{{ $debt['code'] ?: 'Chưa có mã' }} · {{ $debt['phone'] ?: 'Chưa có SĐT' }}</div>
+                    <div class="small text-muted">{{ $debt['sale_label'] ?? 'Chưa có sale' }} · {{ $debt['recovery']['label'] }}</div>
+                    @if($debt['customer_id'])<a class="small" href="{{ accounting_route('customer-debts.show', $debt['customer_id']) }}">Sổ kế toán / Điều chỉnh</a>@endif
+                @endif</td>
                 @foreach(['sales','payments','balance','period_sales','period_payments','period_increase'] as $column)<td class="text-end text-nowrap {{ in_array($column,['payments','period_payments']) ? 'text-success' : (in_array($column,['balance','period_increase']) && $debt[$column] > 0 ? 'text-danger fw-bold' : '') }}">{{ number_format($debt[$column],0,',','.') }} đ</td>@endforeach
                 <td>{{ $debt['days_without_payment'] !== null ? $debt['days_without_payment'].' ngày' : 'Chưa thanh toán' }}</td>
                 <td>@if($debt['last_purchase_date'])
@@ -102,7 +113,7 @@
     </table></div></div>
     <div class="sale-debt-pagination"><span class="small text-muted">{{ $debts->total() }} khách · {{ $debts->perPage() }} dòng / trang</span>{{ $debts->onEachSide(1)->links() }}</div>
     @if($selected)
-        @include('customer-debt.detail-report', ['debtDetailAction'=>route('pages.my_customer_debt')])
+        @include('customer-debt.detail-report', ['debtDetailAction'=>$debtListUrl])
     @endif
 </div>
 @endsection

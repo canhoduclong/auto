@@ -134,6 +134,10 @@ class AccountingDashboardController extends Controller
 
     public function customerDebts(Request $request)
     {
+        if (! $request->boolean('ledger')) {
+            return app(MyCustomerDebtController::class)->accountingIndex($request, app(\App\Services\CustomerDebtSheetService::class), app(CustomerDebtMonitorController::class));
+        }
+
         $query = Customer::query()->with('assignedTo:id,name');
         $debtDaysMin = $request->filled('debt_days_min') ? max(0, (int) $request->input('debt_days_min')) : null;
         $debtDaysMax = $request->filled('debt_days_max') ? max(0, (int) $request->input('debt_days_max')) : null;

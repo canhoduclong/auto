@@ -894,6 +894,26 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(1000, $context['customerDebts'][1]['balance']);
     }
 
+    public function test_accounting_debt_table_includes_other_sales_and_unmapped_sources(): void
+    {
+        $service = $this->service([
+            $this->entry('CRM01', 'Chị Bình'),
+            $this->entry('KH02', 'Anh Hải', 2),
+            $this->entry('NEW01', 'Khách chưa ghép', 3),
+        ]);
+        $data = (new \App\Http\Controllers\MyCustomerDebtController)->accountingIndex($this->request(['range' => 'all'], 'accountant'), $service, new CustomerDebtMonitorController)->getData();
+        self::assertTrue($data['accountingDebt']);
+        self::assertTrue($data['canLoad']);
+        self::assertSame(3, $data['debts']->total());
+        self::assertSame(3000, $data['summary']['balance']);
+    }
+
+    public function test_sale_cannot_open_accounting_debt_table(): void
+    {
+        $this->expectException(HttpException::class);
+        (new \App\Http\Controllers\MyCustomerDebtController)->accountingIndex($this->request(), $this->service([]), new CustomerDebtMonitorController);
+    }
+
     public function test_sale_debt_table_excludes_unmapped_sources_even_when_the_sheet_names_the_sale(): void
     {
         $service = $this->service([

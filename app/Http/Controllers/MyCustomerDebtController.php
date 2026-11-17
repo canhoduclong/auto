@@ -17,6 +17,18 @@ class MyCustomerDebtController extends Controller
     public function index(Request $request, CustomerDebtSheetService $sheets, CustomerDebtMonitorController $monitor)
     {
         abort_unless($request->user() && ($request->user()->isAdmin() || $request->user()->isSalesFlowRole()), 403);
+        return $this->listing($request, $sheets, $monitor);
+    }
+
+    public function accountingIndex(Request $request, CustomerDebtSheetService $sheets, CustomerDebtMonitorController $monitor)
+    {
+        abort_unless($request->user() && $request->user()->hasRole(['admin', 'account', 'accountant', 'accounting', 'director', 'ceo']), 403);
+
+        return $this->listing($request, $sheets, $monitor, true);
+    }
+
+    private function listing(Request $request, CustomerDebtSheetService $sheets, CustomerDebtMonitorController $monitor, bool $accountingDebt = false)
+    {
         if (! $request->filled('from') && ! $request->filled('to') && $request->input('range') !== 'all') {
             $yesterday = now()->subDay()->toDateString();
             $request->merge(['from' => $yesterday, 'to' => $yesterday]);
@@ -31,7 +43,7 @@ class MyCustomerDebtController extends Controller
             'sort' => 'nullable|in:balance,sales,payments,period_sales,period_payments,period_increase,days_without_payment,last_purchase_date',
             'direction' => 'nullable|in:asc,desc',
         ]);
-        $request->attributes->set('own_customer_debt', true);
+        $request->attributes->set('own_customer_debt', ! $accountingDebt);
         // The shared ledger has its own sort options; the sale table sorts independently below.
         $sort = $filters['sort'] ?? 'balance';
         $request->query->remove('sort');
@@ -48,7 +60,7 @@ class MyCustomerDebtController extends Controller
         }
         $data = $result->getData();
         $priorities = app(CustomerDebtPriorityService::class);
-        $priorityRecords = $priorities->personalRecords($request->user());
+        $priorityRecords = $accountingDebt ? [] : $priorities->personalRecords($request->user());
         $rows = collect($data['groups'])->unique(fn ($g) => $g['customer_id'] ? 'customer:'.$g['customer_id'] : $g['key'])
             ->map(function ($group) use ($data, $priorities, $priorityRecords) {
                 $row = $group['customer_id'] ? $data['customerDebts'][$group['customer_id']] : $group;
@@ -102,7 +114,7 @@ class MyCustomerDebtController extends Controller
         $debts = new LengthAwarePaginator($visible->forPage($page, $perPage)->values(), $visible->count(), $perPage, $page, ['path' => $request->url(), 'query' => $request->except('page')]);
         $settings = Setting::whereIn('key', ['logo', 'brand_name', 'slogan', 'HOTLINE', 'address', 'email', 'footer_logo', 'hotline', 'tax_number'])->get()->keyBy('key');
 
-        return view('site.my_customer_debt', array_replace($data, compact('debts', 'summary', 'customerOptions', 'periodFrom', 'periodTo', 'settings')));
+        return view('site.my_customer_debt', array_replace($data, compact('debts', 'summary', 'customerOptions', 'periodFrom', 'periodTo', 'settings', 'accountingDebt')));
     }
 
     public function refresh(Request $request, CustomerDebtSheetService $sheets)
