@@ -113,18 +113,7 @@
     </details>
     @endif
 </div>
-<dialog id="debt-policy-dialog" aria-labelledby="debt-policy-title" style="width:min(550px,95vw);max-height:90vh;overflow:auto;border:1px solid #cbd5e1;border-radius:12px;padding:24px;">
-    <div class="d-flex justify-content-between align-items-center mb-3"><h5 id="debt-policy-title" class="mb-0">Sửa nhanh tiêu chí công nợ</h5><button type="button" id="debt-policy-close" class="btn btn-sm btn-light">Đóng</button></div>
-    <p id="debt-policy-name" class="fw-bold"></p>
-    <form method="POST" action="{{ route('customer-debt.policy') }}">@csrf @method('PATCH')
-        <input type="hidden" id="debt-policy-key" name="source_key"><input type="hidden" id="debt-policy-version" name="policy_version">
-        <label for="debt-policy-orders" class="form-label">Số Bill được phép nợ</label><input id="debt-policy-orders" name="allowed_orders" type="number" min="0" max="100000" step="1" class="form-control mb-3" placeholder="Mặc định: 1 Bill">
-        <label for="debt-policy-limit" class="form-label">Trần công nợ (đ)</label><input id="debt-policy-limit" name="credit_limit" inputmode="numeric" class="form-control mb-3" placeholder="Mặc định: 0 đ">
-        <label for="debt-policy-days" class="form-label">Ngày nợ (từ ngày giao hàng gần nhất)</label><input id="debt-policy-days" name="due_days" type="number" min="0" max="3650" step="1" class="form-control mb-3" placeholder="Mặc định: 1 ngày">
-        <p class="small text-muted">Để trống để dùng mặc định: cho nợ 1 Bill, trần nợ 0 đ, hạn thanh toán 1 ngày kể từ ngày giao hàng gần nhất. Nhập hạn thanh toán 0 ngày nếu cần thanh toán trong ngày. Tiêu chí dùng chung cho mọi nguồn đã ghép. Nhân viên lưu một lần rồi khóa; chỉ admin được mở khóa.</p>
-        <button type="submit" class="btn btn-primary">Lưu & cập nhật cảnh báo</button>
-    </form>
-</dialog>
+@include('customer-debt.policy-dialog')
 @if($canLoad)
 <dialog id="debt-map-dialog" aria-labelledby="debt-map-title" style="width:min(850px,95vw);max-height:90vh;overflow:auto;border:1px solid #cbd5e1;border-radius:12px;padding:24px;">
     <div class="d-flex justify-content-between align-items-center mb-3"><h5 id="debt-map-title" class="mb-0">Ghép khách hàng hệ thống</h5><button type="button" id="debt-map-close" class="btn btn-sm btn-light" aria-label="Đóng">Đóng</button></div>
@@ -299,17 +288,6 @@
 @push('scripts')
 <script>
 (() => {
-    const dialog = document.getElementById('debt-policy-dialog');
-    document.querySelectorAll('.debt-policy-button').forEach(button => button.addEventListener('click', () => {
-        document.getElementById('debt-policy-key').value = button.dataset.key;
-        document.getElementById('debt-policy-version').value = button.dataset.version;
-        document.getElementById('debt-policy-name').textContent = button.dataset.name;
-        document.getElementById('debt-policy-orders').value = button.dataset.orders;
-        document.getElementById('debt-policy-limit').value = button.dataset.limit === '' ? '' : Number(button.dataset.limit).toLocaleString('vi-VN');
-        document.getElementById('debt-policy-days').value = button.dataset.days;
-        dialog.showModal();
-    }));
-    document.getElementById('debt-policy-close').addEventListener('click', () => dialog.close());
     const tools = document.querySelector('.debt-tools');
     document.addEventListener('click', event => { if (tools && tools.open && !tools.contains(event.target)) tools.open = false; });
     document.addEventListener('keydown', event => { if (event.key === 'Escape' && tools) tools.open = false; });
@@ -347,7 +325,6 @@
 @endpush
 @push('styles')
 <style>
-#debt-policy-dialog::backdrop { background: rgba(15,23,42,.45); }
 #debt-alert-filter, #debt-sale-filter { display:block !important; }
 #debt-alert-filter + .nice-select, #debt-sale-filter + .nice-select { display:none !important; }
 </style>

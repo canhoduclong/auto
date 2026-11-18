@@ -84,6 +84,21 @@
                     <button type="button" class="btn btn-sm btn-light debt-recovery-button" data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}" data-status="{{ $debt['recovery']['status'] }}" data-note="{{ $debt['recovery']['note'] }}" data-version="{{ $debt['recovery']['version'] }}" data-customer="{{ $debt['customer_id'] }}" data-report-source="{{ $reportSource }}">Khả năng thu hồi</button>
                     <a class="btn btn-sm btn-light" href="{{ $reportSource === 'system' ? accounting_route('customer-debts.show',$debt['customer_id']) : route('customer-debt.index',['tab'=>'all','customer'=>$debt['key'],'window'=>'all','recovery'=>'all']).'#debt-detail' }}">Chi tiết công nợ</a>
                 @else<a class="btn btn-sm btn-light" href="{{ route('customer-debt.index',['tab'=>'all','search'=>$debt['name'],'recovery'=>'all']) }}">Kiểm tra nguồn / ghép khách</a>@endif
+                @if($reportSource === 'sheet' && ($debt['customer_id'] || ($debt['key'] && empty($debt['manual_only']))))
+                    <button type="button" class="btn btn-sm btn-light debt-policy-button"
+                        data-policy-action="{{ $debt['customer_id'] ? route('customers.debt-policy.update', $debt['customer_id']) : route('customer-debt.policy') }}"
+                        data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}"
+                        data-orders="{{ $debt['policy']['allowed_orders'] }}" data-limit="{{ $debt['policy']['credit_limit'] }}"
+                        data-days="{{ $debt['policy']['due_days'] }}" data-version="{{ $debt['policy']['edit_version'] }}">Sửa tiêu chí công nợ</button>
+                    @if($debt['customer_id'] && $debt['policy']['staff_edit_locked'])
+                        <form method="POST" action="{{ route('customers.debt-policy.unlock', $debt['customer_id']) }}">
+                            @csrf
+                            <input type="hidden" name="policy_version" value="{{ $debt['policy']['edit_version'] }}">
+                            <input type="hidden" name="return_to_report" value="1">
+                            <button type="submit" class="btn btn-sm btn-light w-100">Mở khóa cho sale sửa 1 lần</button>
+                        </form>
+                    @endif
+                @endif
                 @if($debt['customer_id'])<a class="btn btn-sm btn-light" href="{{ route('customers.show',$debt['customer_id']) }}">Hồ sơ khách</a>@endif
             </div></details>
         </div></td></tr>
@@ -92,7 +107,10 @@
         <div class="card-body collection-pagination">{{ $rows->links() }}<form method="GET">@foreach(request()->except(['page','per_page']) as $key=>$value)@if(is_scalar($value))<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif @endforeach<select class="form-select form-select-sm" name="per_page" aria-label="Khách mỗi trang" onchange="this.form.submit()">@foreach([20,30,50,100] as $size)<option value="{{ $size }}" @selected((int)request('per_page',30)===$size)>{{ $size }} khách/trang</option>@endforeach</select></form></div>
     </div>
     <details class="small text-muted mt-2"><summary>Cách đọc báo cáo</summary><p class="mt-2">Mỗi khách hệ thống hiển thị một dòng, gộp các mã nguồn đã ghép. Doanh thu, thanh toán và công nợ là tổng lịch sử nguồn; bộ lọc ngày và cột “Chưa mua” luôn dùng cùng nguồn đang chọn, không giới hạn số dư theo kỳ. Google Sheet dùng chung bản cập nhật với trang Thanh toán, lấy cột Thanh toán của nhatkybanhang và các khoản Thu – TTBH tại 5 tab dòng tiền; nguồn gồm {{ implode(', ', \App\Services\CustomerDebtSheetService::SETTLEMENT_TABS) }} theo khách đã ghép; khoản chưa xác định khách chỉ xuất hiện ở trang Thanh toán, chưa trừ công nợ. Bấm số tiền Thanh toán để đối chiếu từng khoản. Tổng trên báo cáo theo danh sách khách đang lọc; bộ lọc ngày chọn phạm vi khách có mua hàng khi chọn “Có mua hàng”; doanh thu và thanh toán trong phần Phát sinh trong kỳ chỉ cộng giao dịch có ngày trong khoảng thống kê. Cột Công nợ là số dư toàn lịch sử. Đơn hệ thống chỉ ghi nhận đơn đã đối soát xác nhận; doanh thu là giá trị được ghi nhận sau trả hàng / chi phí theo kế toán, thanh toán gồm phiếu đã duyệt và số đã thu trên đơn / đối soát theo số lớn nhất để tránh cộng trùng. Ngày mua hệ thống theo ngày giao, thiếu thì dùng ngày tạo; số đã thu tổng hợp thiếu phiếu không tự coi là khoản thu mới sau nhắc. Công nợ = doanh thu − tặng − thanh toán + điều chỉnh. Ngày chưa mua / chưa thanh toán tính từ giao dịch gần nhất; chưa có thanh toán hiển thị “Chưa có”.</p><p>Thanh toán được đối chiếu với bản dữ liệu tại lần nhắc, mỗi khoản chỉ ghi nhận cho một lần nhắc. Khoản Sheet cùng ngày nhắc, dòng thu bị sửa hoặc khoản thu hệ thống có số tổng hợp thiếu phiếu cần admin đối chiếu trong lịch sử. “Đạt” khi thu đủ mục tiêu; ngày hẹn dùng để phân biệt đúng hẹn / trễ hẹn. Đây là kết quả đối chiếu thanh toán, không khẳng định việc nhắc là nguyên nhân thanh toán. Bấm cập nhật Sheet để đánh giá với dữ liệu mới nhất.</p></details>
-    @if($reportSource === 'sheet') @include('customer-debt.balance-adjustment-dialog') @endif
+    @if($reportSource === 'sheet')
+        @include('customer-debt.balance-adjustment-dialog')
+        @include('customer-debt.policy-dialog', ['policyFromReport' => true])
+    @endif
     @include('customer-debt.recovery-dialog',['recoveryAction'=>route('customer-debt.report.recovery')])
     @include('customer-debt.report-dialogs')
 </div>

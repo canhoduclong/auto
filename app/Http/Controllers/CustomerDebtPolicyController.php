@@ -33,7 +33,12 @@ class CustomerDebtPolicyController extends Controller
         $group = ['customer_id' => $customer->id];
         $policies->save($group, $data, $request->user()->id, $request->user()->isAdmin(), (int) $data['policy_version'], $request->user());
 
-        return response()->json(['message' => 'Đã cập nhật và khóa tiêu chí công nợ.', 'policy' => $policies->effective($group, $policies->policies())]);
+        $message = 'Đã cập nhật và khóa tiêu chí công nợ.';
+        if ($request->boolean('return_to_report') && ! $request->expectsJson()) {
+            return back()->with('success', $message);
+        }
+
+        return response()->json(['message' => $message, 'policy' => $policies->effective($group, $policies->policies())]);
     }
 
     public function unlock(Request $request, Customer $customer, CustomerDebtPolicyService $policies)
@@ -43,6 +48,11 @@ class CustomerDebtPolicyController extends Controller
         $data = $request->validate(['policy_version' => 'required|integer|min:0']);
         $policies->unlock($group, $request->user(), (int) $data['policy_version']);
 
-        return response()->json(['message' => 'Đã mở khóa. Nhân viên được lưu thêm một lần rồi tự khóa lại.', 'policy' => $policies->effective($group, $policies->policies())]);
+        $message = 'Đã mở khóa. Nhân viên được lưu thêm một lần rồi tự khóa lại.';
+        if ($request->boolean('return_to_report') && ! $request->expectsJson()) {
+            return back()->with('success', $message);
+        }
+
+        return response()->json(['message' => $message, 'policy' => $policies->effective($group, $policies->policies())]);
     }
 }
