@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\CustomerDebtReportService;
 use App\Services\CustomerDebtSheetService;
 use App\Services\DebtCollectionService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -38,7 +39,16 @@ class CustomerDebtReportController extends Controller
         $priorities = app(\App\Services\CustomerDebtPriorityService::class);
         $priorityRecords = $priorities->records();
         $sales = $rows->map(fn ($r) => ['key' => $r['sale_key'], 'label' => $r['sale_label']])->unique('key')->sortBy('label')->values();
-        $rows = $rows->map(fn ($row) => $row + ['collection' => $collections->evaluate($row, $records), 'priority' => $priorities->effective($row, $priorityRecords)]);
+        $rows = $rows->map(function ($row) use ($collections, $records, $priorities, $priorityRecords) {
+            $collection = $collections->evaluate($row, $records);
+            $remindedAt = $collection['latest']['record']->reminded_at ?? null;
+
+            return $row + [
+                'collection' => $collection,
+                'priority' => $priorities->effective($row, $priorityRecords),
+                'reminded_today' => $remindedAt !== null && Carbon::parse($remindedAt)->isToday(),
+            ];
+        });
         $visible = $rows->filter(function ($row) use ($data, $sheets) {
             // Use the same positive Sheet purchases as the last-purchase date / days column.
             if (($data['scope'] ?? 'all') === 'orders' && ! collect($row['entries'])->contains(fn ($e) => $e['type'] === 'sale' && $e['amount'] > 0 && $e['date'] >= $data['from'] && $e['date'] <= $data['to'])) {
@@ -100,7 +110,7 @@ class CustomerDebtReportController extends Controller
         $summary = ['customers' => $visible->count(), 'sales' => $visible->where('data_available', true)->sum('sales'), 'balance' => $visible->where('balance', '>', 0)->sum('balance'), 'gifts' => $visible->where('data_available', true)->sum('gifts'), 'payments' => $visible->where('data_available', true)->sum('payments'), 'received' => $visible->sum(fn ($r) => $r['collection']['received_total'])];
         $sort = $data['sort'] ?? 'balance';
         $direction = ($data['direction'] ?? 'desc') === 'asc' ? 1 : -1;
-        $visible = $visible->sort(fn ($a, $b) => ($b['priority']['stars'] <=> $a['priority']['stars']) ?: ($a[$sort] === null || $b[$sort] === null ? (($a[$sort] === null ? 1 : 0) <=> ($b[$sort] === null ? 1 : 0)) : ($a[$sort] <=> $b[$sort]) * $direction) ?: strcmp($a['name'], $b['name']));
+        $visible = $visible->sort(fn ($a, $b) => ($b['reminded_today'] <=> $a['reminded_today']) ?: ($b['priority']['stars'] <=> $a['priority']['stars']) ?: ($a[$sort] === null || $b[$sort] === null ? (($a[$sort] === null ? 1 : 0) <=> ($b[$sort] === null ? 1 : 0)) : ($a[$sort] <=> $b[$sort]) * $direction) ?: strcmp($a['name'], $b['name']));
         $perPage = (int) ($data['per_page'] ?? 30);
         $page = (int) ($data['page'] ?? 1);
         $rows = new \Illuminate\Pagination\LengthAwarePaginator($visible->forPage($page, $perPage)->values(), $visible->count(), $perPage, $page, ['path' => $request->url(), 'query' => $request->except('page')]);

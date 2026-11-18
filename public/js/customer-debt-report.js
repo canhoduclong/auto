@@ -25,6 +25,11 @@
         if(!response.ok)throw new Error(Object.values(result.errors||{}).flat()[0]||result.message||'Không lưu được dữ liệu.');
         return result;
     };
+    function showFirstReportPage() {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('page');
+        window.location.assign(url);
+    }
     const bulk=document.querySelector('[data-collection-bulk]');
     if(bulk){
         const boxes=[...document.querySelectorAll('[data-collection-select]:not(:disabled)')];
@@ -121,6 +126,10 @@
                     badge.textContent=`Đã nhắc ngày ${bulk.dataset.date}`;
                 }catch(error){failures.push(`${box.dataset.name}: ${error.message}`);}
             }
+            if (success === targets.length) {
+                showFirstReportPage();
+                return;
+            }
             busy=false;update();
             status.textContent=`Đã ghi nhận ${success}/${targets.length} khách.${failures.length?' Chưa ghi nhận: '+failures.join('; '):''}`;
         });
@@ -140,7 +149,7 @@
         remindForm.elements.target_amount.setCustomValidity(Number.isNaN(amount)?'Nhập số tiền nguyên lớn hơn 0.':'');
         if(remindSave.disabled||!remindForm.reportValidity())return;
         remindSave.disabled=true;remindClose.disabled=true;remindError.hidden=true;
-        try{const data=new FormData(remindForm);data.set('target_amount',String(amount));await send(remindForm.action,data);window.location.reload();}
+        try{const data=new FormData(remindForm);data.set('target_amount',String(amount));await send(remindForm.action,data);showFirstReportPage();}
         catch(failure){remindError.textContent=failure.message;remindError.hidden=false;remindSave.disabled=false;remindClose.disabled=false;}
     });
     const history=document.getElementById('collection-history-dialog'),historyContent=history.querySelector('[data-history-content]'),historyError=history.querySelector('[data-history-error]'),historyClose=history.querySelector('[data-history-close]');

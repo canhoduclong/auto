@@ -1521,6 +1521,28 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(0, $report()['rows']->firstWhere('customer_id', 2)['priority']['stars']);
     }
 
+    public function test_report_sorts_todays_reminders_above_starred_customers(): void
+    {
+        $this->collectionClock('2026-11-17 14:00:00');
+        $sheets = $this->service([$this->entry('CRM01', 'Chị Bình', 1), $this->entry('KH02', 'Anh Hải', 2)]);
+        $controller = new \App\Http\Controllers\CustomerDebtReportController;
+        $collections = new \App\Services\DebtCollectionService;
+        $priorities = new \App\Services\CustomerDebtPriorityService;
+        $report = fn () => $controller->index($this->request([], 'admin'), $sheets, new \App\Services\CustomerDebtReportService, $collections)->getData()['rows'];
+        $version = $report()->firstWhere('customer_id', 1)['priority']['version'];
+        $controller->updatePriority($this->request(['customer_id' => 1, 'stars' => 5, 'priority_version' => $version], 'admin'), $sheets, $priorities);
+        $controller->remind($this->request($this->reminderData(['customer_id' => 1, 'target_amount' => 500]), 'admin'), $sheets, $collections);
+
+        $this->collectionClock('2026-11-18 14:00:00');
+        $controller->remind($this->request($this->reminderData(['customer_id' => 2, 'target_amount' => 500]), 'admin'), $sheets, $collections);
+        $rows = $report();
+        self::assertSame([2, 1], $rows->pluck('customer_id')->all());
+        self::assertSame([true, false], $rows->pluck('reminded_today')->all());
+
+        $this->collectionClock('2026-11-19 14:00:00');
+        self::assertSame([1, 2], $report()->pluck('customer_id')->all());
+    }
+
     public function test_source_priority_moves_a_later_page_customer_to_top_and_survives_mapping(): void
     {
         $entries = [];
