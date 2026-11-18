@@ -1404,9 +1404,9 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(5000, $data['period']['sales']);
         self::assertSame(500, $data['period']['gifts']);
         self::assertSame(12500, $data['period']['payments']);
-        self::assertSame(-8000, $data['period']['increase']);
+        self::assertSame(0, $data['period']['increase']);
         self::assertTrue($data['hasPeriodFilter']);
-        self::assertTrue($data['rows']->every(fn ($row) => $row['period_increase'] === -320));
+        self::assertTrue($data['rows']->every(fn ($row) => $row['period_increase'] === 0));
         self::assertSame('2026-10-26', $data['period']['from']);
         self::assertSame('2026-11-13', $data['period']['to']);
     }
@@ -1423,8 +1423,23 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(1000, $data['summary']['sales']);
         self::assertSame(0, $data['period']['sales']);
         self::assertSame(50, $data['period']['payments']);
-        self::assertSame(-50, $data['period']['increase']);
-        self::assertSame(-50, $data['rows']->first()['period_increase']);
+        self::assertSame(0, $data['period']['increase']);
+        self::assertSame(0, $data['rows']->first()['period_increase']);
+    }
+
+    public function test_sheet_report_applies_opening_credit_to_new_debt(): void
+    {
+        $entries = [
+            array_replace($this->entry('CRM01', 'Chị Bình', 1), ['date' => '2026-11-01', 'amount' => 1659631000]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 2), ['date' => '2026-11-02', 'type' => 'payment', 'amount' => 1700000000]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 3), ['date' => '2026-11-18', 'amount' => 42735000]),
+        ];
+        $request = $this->request(['scope' => 'orders', 'from' => '2026-11-10', 'to' => '2026-11-18'], 'admin');
+        $data = (new \App\Http\Controllers\CustomerDebtReportController)->index($request, $this->service($entries), new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+
+        self::assertSame(2366000, $data['rows']->first()['period_increase']);
+        self::assertSame(2366000, $data['period']['increase']);
+        self::assertSame(0, $data['period']['payments']);
     }
 
     public function test_negotiation_deduplicates_aliases_and_includes_customer_without_sheet_history(): void

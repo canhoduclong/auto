@@ -73,11 +73,17 @@ class CustomerDebtReportController extends Controller
         $periodFrom = $data['from'] ?? min(now()->toDateString(), $periodEntries->min('date') ?? now()->toDateString());
         $periodTo = $data['to'] ?? now()->toDateString();
         $hasPeriodFilter = ! empty($data['from']) && ! empty($data['to']);
-        $visible = $visible->map(function ($row) use ($periodFrom, $periodTo) {
+        $visible = $visible->map(function ($row) use ($periodFrom, $periodTo, $reportSource, $sheets) {
             $entries = collect($row['entries'])->filter(fn ($entry) => $entry['date'] >= $periodFrom && $entry['date'] <= $periodTo);
             $row['period_increase'] = $row['data_available'] ? $entries->where('type', 'sale')->sum('amount')
                 - $entries->where('type', 'sale')->sum('gift') - $entries->where('type', 'payment')->sum('amount')
                 + $entries->where('type', 'adjustment')->sum('amount') : null;
+
+            if ($reportSource === 'sheet' && $row['period_increase'] !== null) {
+                $opening = collect($row['entries'])->where('date', '<', $periodFrom)
+                    ->sum(fn ($entry) => $sheets->movement($entry));
+                $row['period_increase'] = max(0, $row['period_increase'] + min(0, $opening));
+            }
 
             return $row;
         });
@@ -89,7 +95,7 @@ class CustomerDebtReportController extends Controller
         $periodAdjustments = $inPeriod->where('type', 'adjustment')->sum('amount');
         $period = ['from' => $periodFrom, 'to' => $periodTo, 'sales' => $periodSales, 'gifts' => $periodGifts,
             'payments' => $periodPayments, 'adjustments' => $periodAdjustments,
-            'increase' => $periodSales - $periodGifts - $periodPayments + $periodAdjustments,
+            'increase' => $reportSource === 'sheet' ? $visible->sum('period_increase') : $periodSales - $periodGifts - $periodPayments + $periodAdjustments,
             'undated_payments' => $periodEntries->where('type', 'payment_summary')->sum('amount')];
         $summary = ['customers' => $visible->count(), 'sales' => $visible->where('data_available', true)->sum('sales'), 'balance' => $visible->where('balance', '>', 0)->sum('balance'), 'gifts' => $visible->where('data_available', true)->sum('gifts'), 'payments' => $visible->where('data_available', true)->sum('payments'), 'received' => $visible->sum(fn ($r) => $r['collection']['received_total'])];
         $sort = $data['sort'] ?? 'balance';
