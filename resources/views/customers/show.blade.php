@@ -230,6 +230,24 @@
             </div>
         </div>
 
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-header bg-white fw-semibold">Điều kiện công nợ</div>
+            <dl class="card-body row g-3 mb-0">
+                <div class="col-12 col-md-4">
+                    <dt class="small text-muted fw-normal">Trần công nợ</dt>
+                    <dd class="fw-semibold mb-0">{{ number_format($debtPolicy['credit_limit'], 0, ',', '.') }} đ</dd>
+                </div>
+                <div class="col-12 col-md-4">
+                    <dt class="small text-muted fw-normal">Thời hạn công nợ</dt>
+                    <dd class="fw-semibold mb-0">{{ $debtPolicy['due_days'] }} ngày</dd>
+                </div>
+                <div class="col-12 col-md-4">
+                    <dt class="small text-muted fw-normal">Số đơn được cho nợ</dt>
+                    <dd class="fw-semibold mb-0">{{ $debtPolicy['allowed_orders'] }} đơn</dd>
+                </div>
+            </dl>
+        </div>
+
         <div class="card border-0 shadow-sm">
             <div class="card-header bg-white fw-semibold">Chi tiet cong no theo don hang</div>
             <div class="card-body p-0">

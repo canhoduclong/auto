@@ -10,6 +10,7 @@ use App\Models\TruckStation;
 use App\Models\User;
 use App\Models\Ward;
 use App\Services\AdminActivityService;
+use App\Services\CustomerDebtPolicyService;
 use App\Services\CustomerPriorityService;
 use App\Services\CustomerTextImportService;
 use Carbon\Carbon;
@@ -383,7 +384,7 @@ class CustomerController extends Controller
         ));
     }
 
-    public function show(Request $request, Customer $customer)
+    public function show(Request $request, Customer $customer, CustomerDebtPolicyService $debtPolicies)
     {
         $this->authorize('view', $customer);
 
@@ -554,6 +555,11 @@ class CustomerController extends Controller
             ->filter()
             ->values();
 
+        $activeTab = $validated['tab'] ?? 'info';
+        $debtPolicy = $activeTab === 'debt'
+            ? $debtPolicies->effective(['customer_id' => $customer->id], $debtPolicies->policies())
+            : null;
+
         return view('customers.show', [
             'customer' => $customer,
             'orders' => $orders,
@@ -576,7 +582,8 @@ class CustomerController extends Controller
             'period' => (string) ($validated['period'] ?? 'month'),
             'fromDate' => $fromDate,
             'toDate' => $toDate,
-            'activeTab' => (string) ($validated['tab'] ?? 'info'),
+            'activeTab' => $activeTab,
+            'debtPolicy' => $debtPolicy,
             'orderStatuses' => $orderStatuses,
         ]);
     }
