@@ -1,9 +1,30 @@
 <section id="debt-detail" class="debt-report mt-3" aria-labelledby="debt-report-title">
     <header class="debt-report-header">
-        <div><div class="small text-muted mb-1">ĐỐI CHIẾU CÔNG NỢ</div><h2 id="debt-report-title">{{ $selected['name'] }}</h2><div class="small text-muted">{{ $selected['code'] ?: 'Chưa có mã KH' }} · Sale: {{ $selected['sale_label'] }}@if($selected['customer_id']) · Tổng hợp mọi nguồn đã ghép @endif</div></div>
+        <div><div class="small text-muted mb-1">ĐỐI CHIẾU CÔNG NỢ</div><h2 id="debt-report-title">{{ $selected['name'] }}</h2><div class="small text-muted">Sale: {{ $selected['sale_label'] }}@if($selected['customer_id']) · Tổng hợp mọi nguồn đã ghép @endif</div></div>
         <div class="d-flex flex-wrap gap-2"><a class="btn btn-primary btn-sm" target="_blank" rel="noopener" href="{{ request()->fullUrlWithQuery(['presentation'=>'customer','purchase_page'=>null,'payment_page'=>null,'detail_page'=>null]) }}">Bản gửi khách</a>
         <a class="btn btn-light btn-sm" href="{{ request()->fullUrlWithQuery(['customer'=>null,'system_customer'=>null,'report_from'=>null,'report_to'=>null,'window'=>null,'purchase_page'=>null,'payment_page'=>null,'detail_page'=>null]) }}">Đóng chi tiết</a></div>
     </header>
+    @php
+        $sheetSources = collect($selected['source_keys'] ?? [$selected['key']])
+            ->map(fn ($key) => $groups[$key] ?? null)
+            ->filter(fn ($source) => $source && empty($source['manual_only']));
+    @endphp
+    <div class="mb-3">
+        <div><strong>Hệ thống:</strong> {{ $selected['customer_id'] ? $selected['name'].' · '.($selected['code'] ?: 'Chưa có mã KH') : 'Chưa ghép khách hệ thống' }}</div>
+        @forelse($sheetSources as $source)
+            <div class="mt-2">
+                <strong>Google Sheet:</strong> {{ $source['name'] }} · {{ $source['code'] ?: 'Chưa có mã KH' }}
+                @if($source['customer_id'] && $source['code'] && $selected['code'] && strcasecmp($source['code'], trim($selected['code'])) !== 0)
+                    <span class="small text-danger">Mã khách khác hệ thống</span>
+                @endif
+                @if(!isset($debtDetailAction))
+                    @include('customer-debt.mapping-actions')
+                @endif
+            </div>
+        @empty
+            <div class="mt-2"><strong>Google Sheet:</strong> Chưa có nguồn đã ghép</div>
+        @endforelse
+    </div>
     <form method="GET" action="{{ $debtDetailAction ?? route('customer-debt.index') }}#debt-detail" class="debt-report-filters">
         @foreach(['tab','from','to','customer','system_customer','search','sale','alert','recovery','sort','direction','debt_page','balance','per_page','scope','range'] as $queryKey)
             @if(request()->filled($queryKey))<input type="hidden" name="{{ $queryKey }}" value="{{ request($queryKey) }}">@endif

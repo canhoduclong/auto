@@ -2373,8 +2373,35 @@ class CustomerDebtMonitorTest extends TestCase
         $service->mapCustomer($key, 1, 7);
         $service->save($sales, $payments, 7, 'paste');
         self::assertSame(1, $service->mappings()[$key]['customer_id']);
-        $service->unmapCustomer($key);
-        self::assertSame([], $service->mappings());
+        $controller = new CustomerDebtMonitorController;
+        $controller->unmap($this->request(['source_key' => $key, 'customer_id' => 1], 'admin'), $service);
+        $service->save($sales, $payments, 7, 'paste');
+        self::assertTrue($service->mappings()[$key]['unlinked']);
+        $data = $controller->index($this->request(['customer' => $key], 'admin'), $service)->getData();
+        self::assertNull($data['selected']['customer_id']);
+        self::assertSame('Khách nguồn A', $data['selected']['name']);
+        self::assertSame(500000, $data['closing']);
+    }
+
+    public function test_unlinking_an_automatic_match_requires_an_explicit_remap(): void
+    {
+        $service = $this->service([$this->entry('WRONG01', 'Anh Hải')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $controller = new CustomerDebtMonitorController;
+        $before = $controller->index($this->request(['customer' => $key], 'admin'), $service)->getData();
+        self::assertSame(2, $before['selected']['customer_id']);
+        self::assertSame('KH02', $before['selected']['code']);
+        self::assertSame('WRONG01', $before['groups'][$key]['code']);
+
+        $redirect = $controller->unmap($this->request(['source_key' => $key, 'customer_id' => 2], 'admin'), $service);
+        self::assertStringEndsWith('#debt-detail', $redirect->getTargetUrl());
+        $after = $controller->index($this->request(['customer' => $key], 'admin'), $service)->getData();
+        self::assertNull($after['selected']['customer_id']);
+        self::assertArrayNotHasKey(2, $after['customerDebts']);
+
+        $service->mapCustomer($key, 2, 7);
+        $after = $controller->index($this->request(['customer' => $key], 'admin'), $service)->getData();
+        self::assertSame(2, $after['selected']['customer_id']);
     }
 
     public function test_deleted_manual_target_does_not_fall_back_to_another_customer(): void

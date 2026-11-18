@@ -105,6 +105,9 @@ class GoogleSheetCustomerImportService
                     $status = 'link';
                     $reason = 'Ghép theo lựa chọn';
                 }
+            } elseif ($action === 'auto' && ! empty($mappings[$key]['unlinked'])) {
+                $status = 'conflict';
+                $reason = 'Nguồn đã được gỡ ghép. Hãy chọn khách để ghép lại.';
             } elseif ($action === 'auto' && isset($mappings[$key])) {
                 $target = $byId[$mappings[$key]['customer_id']] ?? null;
                 if (! $target || $target->trashed()) {

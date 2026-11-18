@@ -359,8 +359,11 @@ class CustomerDebtMonitorController extends Controller
             }
             $group['matched_by'] = $matches->count() === 1 && $group['code'] !== '' && mb_strtoupper(trim((string) $matches->first()->customer_code)) === $group['code'] ? 'code' : 'name';
             $group['customer_id'] = $matches->count() === 1 ? $matches->first()->id : null;
-            $group['manual_mapping'] = isset($mappings[$key]);
-            if ($group['manual_mapping']) {
+            $group['manual_mapping'] = isset($mappings[$key]['customer_id']);
+            if (! empty($mappings[$key]['unlinked'])) {
+                $group['customer_id'] = null;
+                $group['matched_by'] = 'unlinked';
+            } elseif ($group['manual_mapping']) {
                 // A saved link overrides automatic matching; deleted targets must be remapped.
                 $target = $byId[$mappings[$key]['customer_id']] ?? null;
                 $group['customer_id'] = $target?->id;
@@ -486,10 +489,24 @@ class CustomerDebtMonitorController extends Controller
     public function unmap(Request $request, CustomerDebtSheetService $service)
     {
         abort_unless($request->user()->hasRole(['admin', 'account', 'accountant', 'accounting', 'director', 'ceo']), 403);
-        $data = $request->validate(['source_key' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/']);
-        $service->unmapCustomer($data['source_key']);
+        $data = $request->validate([
+            'source_key' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/',
+            'customer_id' => 'present|nullable|integer|min:1',
+        ]);
+        $key = $data['source_key'];
+        \Illuminate\Support\Facades\Cache::lock('customer-debt-load', 60)->block(5, function () use ($request, $service, $key, $data) {
+            $group = $this->resolveGroups($request, $service)['groups'][$key] ?? null;
+            abort_unless($group, 404);
+            $expected = isset($data['customer_id']) ? (int) $data['customer_id'] : null;
+            abort_unless($group['customer_id'] === $expected, 409, 'Liên kết đã thay đổi. Vui lòng tải lại trang.');
+            if ($group['customer_id'] || $group['manual_mapping']) {
+                $service->unmapCustomerWithinLock($key);
+            }
+        });
 
-        return back()->with('success', 'Đã bỏ liên kết ghép thủ công. Hệ thống sẽ kiểm tra ghép tự động theo mã / tên.');
+        return redirect()->route('customer-debt.index', ['tab' => 'all', 'customer' => $key, 'window' => 'all', 'recovery' => 'all'], 303)
+            ->withFragment('debt-detail')
+            ->with('success', 'Đã gỡ ghép khách. Nguồn này chờ được ghép lại thủ công.');
     }
 
     public function load(Request $request, CustomerDebtSheetService $service)

@@ -154,7 +154,7 @@ class CustomerDebtSheetService
                 continue;
             }
             $data = json_decode($setting->value, true);
-            if (isset($data['customer_id'])) {
+            if (isset($data['customer_id']) || ! empty($data['unlinked'])) {
                 $result[substr($setting->key, strlen($prefix))] = $data;
             }
         }
@@ -188,9 +188,10 @@ class CustomerDebtSheetService
         ] + $sync, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     }
 
-    public function unmapCustomer(string $sourceKey): void
+    /** Caller must hold customer-debt-load. */
+    public function unmapCustomerWithinLock(string $sourceKey): void
     {
-        Cache::lock('customer-debt-load', 60)->block(5, fn () => Setting::query()->where('key', $this->mappingPrefix().$sourceKey)->delete());
+        Setting::set($this->mappingPrefix().$sourceKey, json_encode(['unlinked' => true], JSON_THROW_ON_ERROR));
     }
 
     public function textValues(string $text): array
