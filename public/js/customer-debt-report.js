@@ -45,11 +45,6 @@
         };
         const daysLabel=value=>value===''?'Chưa rõ':Number(value)===0?'Hôm nay':Number(value)===1?'Hôm qua':`${value} ngày`;
         const debtDaysLabel=value=>value===''?'Chưa thanh toán':`${value} ngày`;
-        const line=box=>{
-            const d=box.dataset;
-            const purchase=d.purchase?`${d.purchase} (${daysLabel(d.purchaseDays)})`:'Chưa có ngày mua';
-            return `${d.name}: ${money(Number(d.balance))}đ --- Nợ: ${debtDaysLabel(d.paymentDays)} --- Đơn mới: ${purchase}`;
-        };
         boxes.forEach(box=>box.addEventListener('change',update));
         all.addEventListener('change',()=>{boxes.forEach(box=>box.checked=all.checked);update();});
         copy.addEventListener('click',async()=>{
@@ -116,7 +111,7 @@
                 data.set('_token',document.querySelector('meta[name="csrf-token"]').content);
                 data.set('report_source',bulk.dataset.source);data.set('source_key',box.dataset.key);data.set('customer_id',box.dataset.customer);
                 data.set('request_id',box.dataset.requestId);data.set('target_amount',box.dataset.balance);data.set('channel','zalo');
-                data.set('note',`Nhắc công nợ ngày ${bulk.dataset.date}: ${line(box)}`);
+                data.set('note', box.dataset.reminderNote);
                 try{
                     await send(bulk.dataset.url,data);success++;
                     box.closest('tr').classList.add('collection-reminded-today');
@@ -139,6 +134,7 @@
     document.querySelectorAll('.collection-remind').forEach(button=>button.addEventListener('click',()=>{
         remindForm.reset();remindError.hidden=true;
         remindForm.elements.report_source.value=button.dataset.reportSource||'sheet';remindForm.elements.source_key.value=button.dataset.key;remindForm.elements.customer_id.value=button.dataset.customer;remindForm.elements.request_id.value=button.dataset.requestId;
+        remindForm.elements.note.value = button.dataset.reminderNote || '';
         remindForm.elements.target_amount.value=money(Number(button.dataset.balance));remindForm.elements.target_amount.setCustomValidity('');
         remind.querySelector('[data-collection-name]').textContent=button.dataset.name;remind.showModal();
     }));

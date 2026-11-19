@@ -13,6 +13,38 @@ class DebtCollectionService
 
     public const CHANNELS = ['phone' => 'Điện thoại', 'zalo' => 'Zalo', 'email' => 'Email', 'in_person' => 'Trực tiếp', 'other' => 'Khác'];
 
+    public static function reminderNote(int $balance, ?string $lastPayment, ?string $lastPurchase): string
+    {
+        $today = CarbonImmutable::today();
+        $paymentDays = $lastPayment ? (int) CarbonImmutable::parse($lastPayment)->startOfDay()->diffInDays($today, false) : null;
+        $payment = $paymentDays === null || $paymentDays < 0 ? 'Chưa có ngày thu' : $paymentDays.' ngày';
+        $purchase = 'Chưa có ngày mua';
+        if ($lastPurchase) {
+            $date = CarbonImmutable::parse($lastPurchase)->startOfDay();
+            $days = (int) $date->diffInDays($today, false);
+            $label = match ($days) {
+                0 => 'Hôm nay',
+                1 => 'Hôm qua',
+                default => $days > 0 ? $days.' ngày trước' : 'Sau hôm nay '.abs($days).' ngày',
+            };
+            $purchase = $date->format('d/m').' ('.$label.')';
+        }
+
+        return $today->format('d/m').' : Công nợ: '.number_format($balance, 0, ',', '.').'đ -- Chưa thanh toán: '.$payment.' -- Đơn mới: '.$purchase;
+    }
+
+    public static function displayReminderNote(string $note): string
+    {
+        if (! preg_match('~^Nhắc công nợ ngày (\d{1,2}/\d{1,2}): [^\r\n]+?: ([\d.]+)\s*đ --- Nợ: (\d+ ngày|Chưa thanh toán) --- Đơn mới: ([^\r\n]+)$~uD', $note, $parts)) {
+            return $note;
+        }
+
+        [, $date, $amount, $payment, $purchase] = $parts;
+        $payment = $payment === 'Chưa thanh toán' ? 'Chưa có ngày thu' : $payment;
+
+        return "{$date} : Công nợ: {$amount}đ -- Chưa thanh toán: {$payment} -- Đơn mới: {$purchase}";
+    }
+
     public function namespace(string $source = 'sheet'): string
     {
         if ($source === 'system') {
