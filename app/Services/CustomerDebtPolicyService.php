@@ -36,9 +36,21 @@ class CustomerDebtPolicyService
         return $result;
     }
 
+    public static function cycleRules(): array
+    {
+        return [
+            'payment_mode' => 'nullable|in:default,cycle',
+            'cycle_type' => 'nullable|required_if:payment_mode,cycle|in:weekly,monthly',
+            'cycle_close_weekday' => 'nullable|required_if:cycle_type,weekly|integer|min:1|max:7',
+            'cycle_weekday' => 'nullable|required_if:cycle_type,weekly|integer|min:1|max:7',
+            'cycle_close_monthday' => 'nullable|required_if:cycle_type,monthly|integer|min:1|max:31',
+            'cycle_monthday' => 'nullable|required_if:cycle_type,monthly|integer|min:1|max:31',
+        ];
+    }
+
     public function defaults(): array
     {
-        return ['allowed_orders' => 1, 'credit_limit' => 0, 'due_days' => 1, 'payment_mode' => 'default', 'cycle_type' => 'weekly', 'cycle_weekday' => 5, 'cycle_monthday' => 15];
+        return ['allowed_orders' => 1, 'credit_limit' => 0, 'fixed_debt' => null, 'threshold_days' => 0, 'due_days' => 1, 'payment_mode' => 'default', 'cycle_type' => 'weekly', 'cycle_weekday' => 5, 'cycle_monthday' => 15];
     }
 
     public function isLocked(array $policy): bool
@@ -49,6 +61,7 @@ class CustomerDebtPolicyService
     private function applyDefaults(array $policy): array
     {
         $result = array_replace($this->defaults(), array_filter($policy, fn ($value) => $value !== null));
+        $result['warning_threshold'] = (int) $result['fixed_debt'] + (int) $result['credit_limit'];
         $result['staff_edit_locked'] = $this->isLocked($policy);
         $result['edit_version'] = (int) ($policy['edit_version'] ?? 0);
 
@@ -107,9 +120,11 @@ class CustomerDebtPolicyService
                 throw ValidationException::withMessages(['policy_version' => 'Cấu hình đã thay đổi. Vui lòng tải lại trang trước khi cập nhật.']);
             }
             $next = array_replace($current, [
-                'allowed_orders' => isset($data['allowed_orders']) ? (int) $data['allowed_orders'] : null,
+                'allowed_orders' => array_key_exists('allowed_orders', $data) ? (isset($data['allowed_orders']) ? (int) $data['allowed_orders'] : null) : ($current['allowed_orders'] ?? null),
                 'credit_limit' => isset($data['credit_limit']) ? (int) $data['credit_limit'] : null,
-                'due_days' => isset($data['due_days']) ? (int) $data['due_days'] : null,
+                'due_days' => array_key_exists('due_days', $data) ? (isset($data['due_days']) ? (int) $data['due_days'] : null) : ($current['due_days'] ?? null),
+                'fixed_debt' => array_key_exists('fixed_debt', $data) ? (isset($data['fixed_debt']) ? (int) $data['fixed_debt'] : null) : ($current['fixed_debt'] ?? null),
+                'threshold_days' => array_key_exists('threshold_days', $data) ? (isset($data['threshold_days']) ? (int) $data['threshold_days'] : null) : ($current['threshold_days'] ?? null),
                 'payment_mode' => $data['payment_mode'] ?? $current['payment_mode'] ?? 'default',
                 'rolling_only' => $data['rolling_only'] ?? $current['rolling_only'] ?? false,
                 'cycle_close_weekday' => isset($data['cycle_close_weekday']) ? (int) $data['cycle_close_weekday'] : ($current['cycle_close_weekday'] ?? null),
@@ -159,9 +174,16 @@ class CustomerDebtPolicyService
         $credits = 0;
         $balance = 0;
         $latestDelivery = null;
+        $usesFixedDebt = $policy['fixed_debt'] !== null;
+        $dailyChanges = [];
         foreach ($entries as $entry) {
             if ($entry['date'] > $today->toDateString()) {
                 continue;
+            }
+            if ($usesFixedDebt) {
+                $change = $entry['amount'] - ($entry['gift'] ?? 0);
+                $dailyChanges[$entry['date']] = ($dailyChanges[$entry['date']] ?? 0)
+                    + ($entry['type'] === 'payment' ? -$entry['amount'] : $change);
             }
             if ($entry['type'] === 'adjustment') {
                 $balance += $entry['amount'];
@@ -209,6 +231,7 @@ class CustomerDebtPolicyService
         $count = $balance > 0 ? count(array_filter($unpaid, fn ($bucket) => $bucket['is_bill'])) : 0;
         $dueDays = $policy['due_days'] ?? null;
         $dueDate = $balance > 0 && ($latestDelivery ?? $oldest) !== null && $dueDays !== null ? CarbonImmutable::parse($latestDelivery ?? $oldest)->addDays((int) $dueDays)->toDateString() : null;
+        $cycleCloseDate = null;
         if ($policy['payment_mode'] === 'cycle') {
             // A new delivery must not postpone an existing unpaid cycle.
             $dueDate = null;
@@ -232,6 +255,7 @@ class CustomerDebtPolicyService
                     $close = $anchor->addDays(($closeDay - $anchor->dayOfWeekIso + 7) % 7);
                     $due = $close->addDays(((int) $policy['cycle_weekday'] - $close->dayOfWeekIso + 7) % 7);
                 }
+                $cycleCloseDate = $close->toDateString();
                 $dueDate = $due->toDateString();
             }
         }
@@ -242,8 +266,26 @@ class CustomerDebtPolicyService
         $lateDays = $dueDate !== null ? max(0, (int) CarbonImmutable::parse($dueDate)->diffInDays($today, false)) : 0;
         $orderLimit = $policy['allowed_orders'] ?? null;
         $creditLimit = $policy['credit_limit'] ?? null;
-        $orderReached = $balance > 0 && $orderLimit !== null && ($rolling ? $count > 1 : ($policy['payment_mode'] !== 'cycle' && $count >= (int) $orderLimit));
+        $orderReached = ! $usesFixedDebt && $balance > 0 && $orderLimit !== null && ($rolling ? $count > 1 : ($policy['payment_mode'] !== 'cycle' && $count >= (int) $orderLimit));
         $creditReached = $balance > 0 && $creditLimit !== null && (($rolling || $policy['payment_mode'] === 'cycle') ? ((int) $creditLimit > 0 && $balance >= (int) $creditLimit) : $balance >= (int) $creditLimit);
+        if ($usesFixedDebt) {
+            $creditReached = $balance > 0 && $balance >= $policy['warning_threshold'];
+        }
+
+        $aboveThreshold = $creditReached && $balance > $policy['warning_threshold'];
+        $thresholdAge = null;
+        if ($usesFixedDebt && $aboveThreshold) {
+            ksort($dailyChanges);
+            $runningBalance = 0;
+            $aboveSince = null;
+            foreach ($dailyChanges as $date => $change) {
+                $runningBalance += $change;
+                $aboveSince = $runningBalance > $policy['warning_threshold'] ? ($aboveSince ?? $date) : null;
+            }
+            if ($aboveSince !== null) {
+                $thresholdAge = (int) CarbonImmutable::parse($aboveSince)->diffInDays($today);
+            }
+        }
         $dueSoon = $balance > 0 && $dueDate !== null && (int) $today->diffInDays(CarbonImmutable::parse($dueDate), false) <= 3;
         $risk = $balance <= 0 || $age < 15 ? null : ($age <= 30 ? 'medium' : ($age <= 60 ? 'high' : 'very_high'));
         $reasons = [];
@@ -251,7 +293,9 @@ class CustomerDebtPolicyService
             $reasons[] = $count > (int) $orderLimit ? 'Vượt số đơn được phép nợ' : 'Đã chạm số đơn được phép nợ';
         }
         if ($creditReached) {
-            $reasons[] = $balance > (int) $creditLimit ? 'Vượt trần công nợ' : 'Đã chạm trần công nợ';
+            $reasons[] = $usesFixedDebt
+                ? ($aboveThreshold ? 'Vượt ngưỡng cảnh báo công nợ' : 'Đã chạm ngưỡng cảnh báo công nợ')
+                : ($aboveThreshold ? 'Vượt trần công nợ' : 'Đã chạm trần công nợ');
         }
         if ($lateDays > 0) {
             $reasons[] = 'Trễ thanh toán '.$lateDays.' ngày';
@@ -262,6 +306,6 @@ class CustomerDebtPolicyService
             $reasons[] = 'Khoản còn nợ lâu nhất '.$age.' ngày';
         }
 
-        return ['balance' => $balance, 'unpaid_orders' => $count, 'oldest_date' => $oldest, 'age_days' => $age, 'due_date' => $dueDate, 'latest_delivery_date' => $latestDelivery, 'overdue_days' => $lateDays, 'overdue' => $lateDays > 0, 'remind' => $orderReached || $creditReached || $dueSoon || $risk !== null, 'risk' => $risk, 'reasons' => $reasons];
+        return ['balance' => $balance, 'unpaid_orders' => $count, 'oldest_date' => $oldest, 'age_days' => $age, 'due_date' => $dueDate, 'cycle_close_date' => $cycleCloseDate, 'latest_delivery_date' => $latestDelivery, 'overdue_days' => $lateDays, 'overdue' => $lateDays > 0, 'threshold_reached' => $creditReached, 'above_threshold' => $aboveThreshold, 'threshold_age_days' => $thresholdAge, 'threshold_grace_elapsed' => $thresholdAge !== null && $thresholdAge >= $policy['threshold_days'], 'remind' => $orderReached || $creditReached || $dueSoon || $risk !== null, 'risk' => $risk, 'reasons' => $reasons];
     }
 }

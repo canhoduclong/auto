@@ -945,6 +945,58 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame('normal', $row['recovery']['status']);
     }
 
+    public function test_debt_vouchers_use_selected_delivery_dates_without_posting_a_payment(): void
+    {
+        $this->collectionClock('2026-11-19 10:00:00');
+        $sheets = $this->service([
+            array_replace($this->entry('CRM01', 'Chị Bình', 1), ['date' => '2026-11-13', 'amount' => 3000, 'gift' => 500]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 2), ['date' => '2026-11-13', 'amount' => 2000]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 3), ['date' => '2026-11-14', 'amount' => 7000]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 4), ['date' => '2026-11-15', 'type' => 'payment', 'amount' => 1000]),
+        ]);
+        $controller = new CustomerDebtMonitorController;
+        $query = ['customer' => hash('sha256', 'code:CRM01'), 'window' => 'all'];
+        $preview = $controller->index($this->request($query + ['presentation' => 'payment-request'], 'admin'), $sheets)->getData();
+        self::assertSame(['2026-11-13' => 4500, '2026-11-14' => 7000], $preview['deliveries']->all());
+        self::assertTrue($preview['lines']->isEmpty());
+
+        $request = $this->request($query + ['presentation' => 'receipt', 'voucher_dates' => ['2026-11-13'], 'voucher_method' => 'transfer', 'voucher_number' => 'PT-01'], 'admin');
+        $receipt = $controller->index($request, $sheets)->getData();
+        self::assertSame(['2026-11-13' => 4500], $receipt['lines']->all());
+        self::assertSame(4500, $receipt['total']);
+        self::assertSame('PT-01', $receipt['number']);
+        self::assertSame('Chuyển khoản', $receipt['method']);
+        self::assertCount(4, $sheets->snapshot()['entries']);
+        self::assertSame('Mười bảy triệu tám trăm bảy mươi lăm nghìn đồng.', \App\Support\VietnameseMoneyWords::format(17875000));
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $controller->index($this->request($query + ['presentation' => 'payment-request', 'voucher_dates' => ['2026-11-15']], 'admin'), $sheets);
+    }
+
+    public function test_report_lists_only_periodic_customers_and_shows_the_current_cycle_dates(): void
+    {
+        $this->collectionClock('2026-11-19 10:00:00');
+        $sheets = $this->service([
+            array_replace($this->entry('CRM01', 'Chị Bình'), ['date' => '2026-11-17']),
+            $this->entry('KH02', 'Anh Hải', 2),
+        ]);
+        $key = hash('sha256', 'code:CRM01');
+        (new CustomerDebtMonitorController)->updatePolicy($this->request([
+            'source_key' => $key, 'payment_mode' => 'cycle', 'cycle_type' => 'weekly',
+            'cycle_close_weekday' => 2, 'cycle_weekday' => 5,
+        ], 'admin'), $sheets);
+
+        $controller = new \App\Http\Controllers\CustomerDebtReportController;
+        $report = fn (array $filters) => $controller->index($this->request($filters, 'admin'), $sheets, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        self::assertSame(2, $report([])['rows']->total());
+        $periodic = $report(['payment_mode' => 'cycle']);
+        self::assertSame(1, $periodic['summary']['customers']);
+        $row = $periodic['rows']->first();
+        self::assertSame(1, $row['customer_id']);
+        self::assertSame('2026-11-17', $row['alerts']['cycle_close_date']);
+        self::assertSame('2026-11-20', $row['alerts']['due_date']);
+    }
+
     public function test_sale_payment_cycle_locks_and_admin_unlock_grants_exactly_one_update(): void
     {
         $controller = new \App\Http\Controllers\CustomerDebtPolicyController;
@@ -2021,16 +2073,31 @@ class CustomerDebtMonitorTest extends TestCase
     {
         \Illuminate\Support\Facades\Storage::fake('local');
         $this->collectionClock('2026-11-13 12:00:00');
-        $tabs = [
-            [['Ngày', 'Mã KH', 'Khách hàng', 'Tổng tiền'], ['13/11/2026', 'CRM01', 'Chị Bình', '1000']],
-            [['Ngày', 'Mã KH', 'Khách hàng', 'Tiền thu'], ['12/11/2026', 'CRM01', 'Chị Bình', '100']],
-        ];
-        foreach (array_slice(CustomerDebtSheetService::PAYMENT_TABS, 1) as $tab) {
-            $tabs[] = [['Ngày tháng', 'Code', 'Tên KH', 'Thu', 'Chi'],
-                ['13/11/2026', 'TTBH', 'Chị Bình', '100', ''],
-                ['13/11/2026', 'TTM', 'Chị Bình', '9000', ''],
-                ['13/11/2026', 'CPK', '', '', '10'],
-                ['13/11/2026', 'TTBH', '', '50', '']];
+        Schema::create('accounts', function (Blueprint $table) {
+            $table->temporary();
+            $table->id();
+            $table->string('account_number');
+            $table->string('name');
+            $table->string('type');
+            $table->string('bank_name');
+            $table->string('owner_type');
+            $table->decimal('opening_balance', 18, 2);
+            $table->decimal('balance', 18, 2);
+            $table->boolean('is_active');
+            $table->timestamps();
+        });
+        $this->tables[] = 'accounts';
+        $tabs = [[['Ngày', 'Mã KH', 'Khách hàng', 'Tổng tiền'], ['13/11/2026', 'CRM01', 'Chị Bình', '1000']]];
+        $accountNumbers = ['1115129999', '7799131453666', '1050717555', '8638596666', '39876555'];
+        foreach ($accountNumbers as $index => $number) {
+            $tabs[] = [
+                ['NKC TK '.$number],
+                ['Ngày tháng', 'Tháng', $index === 0 ? 'Loại' : 'Code', 'Tên KH', 'NVKD', 'Nội dung', 'Thu', 'Chi', 'Còn lại'],
+                ['13/11/2026', '11', 'TTBH', 'Chị Bình', '', 'Thu khách', '100', '', '600'],
+                ['13/11/2026', '11', 'TTM', 'Chị Bình', '', 'Nộp tiền', '9000', '', '9600'],
+                ['13/11/2026', '11', 'CPK', '', '', 'Phí', '', '10', '9590'],
+                ...($index === 0 ? [] : [['13/11/2026', '11', 'TTBH', '', '', 'Chưa rõ khách', '50', '', '9640']]),
+            ];
         }
         $service = new class($tabs) extends CustomerDebtSheetService
         {
@@ -2047,6 +2114,13 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(9, $first['new_count']);
         (new \App\Http\Controllers\CustomerPaymentController)->refresh($this->request([], 'admin'), $service);
         self::assertSame(0, $service->snapshot()['payment_syncs'][0]['new_count']);
+        self::assertSame(5, DB::table('accounts')->count());
+        $cashflow = $service->snapshot()['cashflow_ledgers']['TKCTBIDV'];
+        self::assertSame(500, $cashflow['opening']);
+        self::assertSame(9640, $cashflow['closing']);
+        self::assertSame(4, count($cashflow['rows']));
+        self::assertSame(10, $cashflow['rows'][2]['out']);
+        self::assertSame(9590, $cashflow['rows'][2]['balance']);
         self::assertSame(CustomerDebtSheetService::SETTLEMENT_TABS, $service->snapshot()['payment_tabs']);
         $monitor = (new CustomerDebtMonitorController)->index($this->request(['tab' => 'all'], 'admin'), $service)->getData();
         self::assertSame(500, $monitor['customerDebts'][1]['payments']);

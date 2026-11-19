@@ -28,7 +28,7 @@ class CustomerDebtSheetService
         return $disk->exists(self::FILE) ? json_decode($disk->get(self::FILE), true, 512, JSON_THROW_ON_ERROR) : null;
     }
 
-    public function save(array $sales, array $payments, ?int $userId, string $source, ?array $bankPayments = null, array $additionalPayments = []): array
+    public function save(array $sales, array $payments, ?int $userId, string $source, ?array $bankPayments = null, array $additionalPayments = [], ?array $cashflowLedgers = null): array
     {
         // Validate every supplied tab before atomically replacing the complete snapshot.
         $issues = [];
@@ -54,10 +54,17 @@ class CustomerDebtSheetService
         }
         $data = ['entries' => $entries, 'gift_note_count' => count(array_filter($entries, fn ($entry) => ($entry['gift_note'] ?? '') !== '')), 'issues' => $issues, 'spreadsheet_id' => config('services.google_sheets.debt_spreadsheet_id'), 'loaded_at' => now()->toIso8601String(), 'loaded_by' => $userId, 'source' => $source, 'payment_tabs' => $paymentTabs];
 
-        return Cache::lock('customer-debt-load', 60)->block(5, function () use ($data) {
+        return Cache::lock('customer-debt-load', 60)->block(5, function () use ($data, $cashflowLedgers) {
             $disk = Storage::disk('local');
             $previous = $this->snapshot() ?? [];
             $previous = $this->withPaymentGroupKeys($previous);
+            if ($cashflowLedgers !== null) {
+                $data['cashflow_ledgers'] = $cashflowLedgers;
+                $data['cashflow_loaded_at'] = $data['loaded_at'];
+            } elseif (isset($previous['cashflow_ledgers'])) {
+                $data['cashflow_ledgers'] = $previous['cashflow_ledgers'];
+                $data['cashflow_loaded_at'] = $previous['cashflow_loaded_at'];
+            }
             $data = $this->withPaymentGroupKeys($data);
             $batchId = (string) Str::uuid();
             $tracked = app(CustomerPaymentSyncService::class)->track($previous, $data, $batchId, $data['loaded_at']);
@@ -83,6 +90,9 @@ class CustomerDebtSheetService
                     throw new RuntimeException('Không lưu được bản dữ liệu công nợ mới.');
                 }
                 chmod($disk->path($temporary), 0660);
+                if ($cashflowLedgers !== null) {
+                    \Illuminate\Support\Facades\DB::transaction(fn () => app(GoogleSheetCashflowService::class)->registerAccounts($cashflowLedgers));
+                }
                 // The snapshot is the commit marker: only referenced archives are visible to users.
                 if (! rename($disk->path($temporary), $disk->path(self::FILE))) {
                     throw new RuntimeException('Không lưu được dữ liệu công nợ.');
@@ -106,7 +116,11 @@ class CustomerDebtSheetService
             }
         }
 
-        return $this->save($tabs[0], $tabs[1], $userId, $source, $tabs[2] ?? null, $additional);
+        $cashflowLedgers = $source === 'google' && count($tabs) === count(self::SETTLEMENT_TABS)
+            ? app(GoogleSheetCashflowService::class)->parse(array_combine(self::PAYMENT_TABS, array_values(array_slice($tabs, 1))), $this)
+            : null;
+
+        return $this->save($tabs[0], $tabs[1], $userId, $source, $tabs[2] ?? null, $additional, $cashflowLedgers);
     }
 
     private function withPaymentGroupKeys(array $data): array
@@ -227,6 +241,11 @@ class CustomerDebtSheetService
     public function fetchSales(): array
     {
         return $this->fetchTabs(['nhatkybanhang'])[0];
+    }
+
+    public function fetchPurchases(): array
+    {
+        return $this->fetchTabs(['nhatkymuahang'])[0];
     }
 
     public function fetch(): array

@@ -4,10 +4,39 @@
     <form method="POST" action="{{ route('customer-debt.policy') }}">@csrf @method('PATCH')
         @if($policyFromReport ?? false)<input type="hidden" name="return_to_report" value="1">@endif
         <input type="hidden" id="debt-policy-key" name="source_key"><input type="hidden" id="debt-policy-version" name="policy_version">
-        <label for="debt-policy-orders" class="form-label">Số Bill được phép nợ</label><input id="debt-policy-orders" name="allowed_orders" type="number" min="0" max="100000" step="1" class="form-control mb-3" placeholder="Mặc định: 1 Bill">
+        <label for="debt-policy-fixed" class="form-label">Công nợ cố định (đ)</label><input id="debt-policy-fixed" name="fixed_debt" inputmode="numeric" class="form-control mb-3">
         <label for="debt-policy-limit" class="form-label">Trần công nợ (đ)</label><input id="debt-policy-limit" name="credit_limit" inputmode="numeric" class="form-control mb-3" placeholder="Mặc định: 0 đ">
-        <label for="debt-policy-days" class="form-label">Ngày nợ (từ ngày giao hàng gần nhất)</label><input id="debt-policy-days" name="due_days" type="number" min="0" max="3650" step="1" class="form-control mb-3" placeholder="Mặc định: 1 ngày">
-        <p class="small text-muted">Để trống để dùng mặc định: cho nợ 1 Bill, trần nợ 0 đ, hạn thanh toán 1 ngày kể từ ngày giao hàng gần nhất. Nhập hạn thanh toán 0 ngày nếu cần thanh toán trong ngày. Tiêu chí dùng chung cho mọi nguồn đã ghép. Nhân viên lưu một lần rồi khóa; chỉ admin được mở khóa.</p>
+        <label for="debt-policy-threshold-days" class="form-label">Số ngày cho nợ khi vượt ngưỡng</label><input id="debt-policy-threshold-days" name="threshold_days" type="number" min="0" max="3650" step="1" class="form-control mb-3" placeholder="Mặc định 0 ngày">
+        <label for="debt-policy-payment-mode" class="form-label">Lịch thanh toán</label>
+        <select id="debt-policy-payment-mode" class="form-select mb-3" name="payment_mode">
+            <option value="default">Theo tiêu chí công nợ</option>
+            <option value="cycle">Thanh toán định kỳ</option>
+        </select>
+        <fieldset data-policy-cycle hidden disabled>
+            <label for="debt-policy-cycle-type" class="form-label">Chu kỳ</label>
+            <select id="debt-policy-cycle-type" class="form-select mb-3" name="cycle_type">
+                <option value="weekly">Hằng tuần</option>
+                <option value="monthly">Hằng tháng</option>
+            </select>
+            <fieldset data-policy-weekly>
+                @foreach(['cycle_close_weekday' => 'Thứ chốt gửi công nợ', 'cycle_weekday' => 'Thứ thanh toán'] as $field => $label)
+                    <label for="debt-policy-{{ $field }}" class="form-label">{{ $label }}</label>
+                    <select id="debt-policy-{{ $field }}" class="form-select mb-3" name="{{ $field }}" required>
+                        @foreach([1 => 'Thứ hai', 2 => 'Thứ ba', 3 => 'Thứ tư', 4 => 'Thứ năm', 5 => 'Thứ sáu', 6 => 'Thứ bảy', 7 => 'Chủ nhật'] as $day => $dayLabel)
+                            <option value="{{ $day }}">{{ $dayLabel }}</option>
+                        @endforeach
+                    </select>
+                @endforeach
+            </fieldset>
+            <fieldset data-policy-monthly hidden disabled>
+                @foreach(['cycle_close_monthday' => 'Ngày chốt gửi công nợ trong tháng', 'cycle_monthday' => 'Ngày thanh toán trong tháng'] as $field => $label)
+                    <label for="debt-policy-{{ $field }}" class="form-label">{{ $label }}</label>
+                    <input id="debt-policy-{{ $field }}" class="form-control mb-3" name="{{ $field }}" type="number" min="1" max="31" required>
+                @endforeach
+            </fieldset>
+            <p class="small text-muted">Nếu ngày thanh toán đứng trước ngày chốt, hạn thanh toán chuyển sang tuần hoặc tháng kế tiếp.</p>
+        </fieldset>
+        <p class="small text-muted">Ngưỡng cảnh báo bằng công nợ cố định cộng trần công nợ. Nhập 0 nếu công nợ cố định bằng 0 đ. Để trống nếu khách chưa có mức công nợ cố định. Nhân viên lưu một lần rồi khóa; chỉ admin được mở khóa.</p>
         <button type="submit" class="btn btn-primary">Lưu & cập nhật cảnh báo</button>
     </form>
 </dialog>

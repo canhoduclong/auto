@@ -12,6 +12,27 @@ class CustomerDebtPolicyServiceTest extends TestCase
         return ['date' => $date, 'amount' => $amount, 'gift' => $gift, 'type' => 'sale'];
     }
 
+    public function test_fixed_debt_and_ceiling_trigger_warning_and_restart_grace_after_payment(): void
+    {
+        $service = new CustomerDebtPolicyService;
+        $policy = ['fixed_debt' => 2000, 'credit_limit' => 500, 'threshold_days' => 2, 'allowed_orders' => 1, 'due_days' => 30];
+        $entries = [$this->sale('2026-11-10', 2400), $this->sale('2026-11-11', 100), $this->sale('2026-11-12', 200)];
+        self::assertFalse($service->evaluate($entries, $policy, '2026-11-10')['remind']);
+        $atThreshold = $service->evaluate($entries, $policy, '2026-11-11');
+        self::assertTrue($atThreshold['threshold_reached']);
+        self::assertFalse($atThreshold['above_threshold']);
+
+        $entries[] = ['date' => '2026-11-13', 'amount' => 400, 'type' => 'payment'];
+        $entries[] = $this->sale('2026-11-14', 300);
+        $alert = $service->evaluate(array_reverse($entries), $policy, '2026-11-15');
+        self::assertTrue($alert['remind']);
+        self::assertTrue($alert['above_threshold']);
+        self::assertSame(1, $alert['threshold_age_days']);
+        self::assertFalse($alert['threshold_grace_elapsed']);
+        self::assertTrue($service->evaluate($entries, $policy, '2026-11-16')['threshold_grace_elapsed']);
+        self::assertTrue($service->evaluate($entries, ['threshold_days' => 0] + $policy, '2026-11-14')['threshold_grace_elapsed']);
+    }
+
     public function test_adjustments_change_debt_without_creating_a_bill_or_delivery(): void
     {
         $service = new CustomerDebtPolicyService;

@@ -16,7 +16,7 @@ class CustomerDebtMonitorController extends Controller
 {
     public function index(Request $request, CustomerDebtSheetService $service)
     {
-        $data = $request->validate(['presentation' => 'nullable|in:customer', 'from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d', 'tab' => 'nullable|in:orders,all', 'sort' => 'nullable|in:overdue_days', 'direction' => 'nullable|in:asc,desc', 'search' => 'nullable|string|max:150', 'sale' => ['nullable', 'string', 'regex:/^(user:[0-9]+|sheet:[a-f0-9]{16}|unassigned)$/'], 'recovery' => 'nullable|in:normal,difficult,unrecoverable,flagged,all', 'alert' => 'nullable|in:overdue,remind,medium,high,very_high', 'customer' => 'nullable|string|size:64', 'system_customer' => 'nullable|integer|min:1', 'window' => 'nullable|in:recent,all,custom', 'report_from' => 'nullable|required_with:report_to|date_format:Y-m-d', 'report_to' => 'nullable|required_with:report_from|date_format:Y-m-d|after_or_equal:report_from', 'purchase_page' => 'nullable|integer|min:1', 'payment_page' => 'nullable|integer|min:1', 'adjustment_page' => 'nullable|integer|min:1', 'detail_page' => 'nullable|integer|min:1', 'debt_page' => 'nullable|integer|min:1', 'issue_page' => 'nullable|integer|min:1']);
+        $data = $request->validate(['presentation' => 'nullable|in:customer,payment-request,receipt', 'from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d', 'tab' => 'nullable|in:orders,all', 'sort' => 'nullable|in:overdue_days', 'direction' => 'nullable|in:asc,desc', 'search' => 'nullable|string|max:150', 'sale' => ['nullable', 'string', 'regex:/^(user:[0-9]+|sheet:[a-f0-9]{16}|unassigned)$/'], 'recovery' => 'nullable|in:normal,difficult,unrecoverable,flagged,all', 'alert' => 'nullable|in:overdue,remind,medium,high,very_high', 'customer' => 'nullable|string|size:64', 'system_customer' => 'nullable|integer|min:1', 'window' => 'nullable|in:recent,all,custom', 'report_from' => 'nullable|required_with:report_to|date_format:Y-m-d', 'report_to' => 'nullable|required_with:report_from|date_format:Y-m-d|after_or_equal:report_from', 'purchase_page' => 'nullable|integer|min:1', 'payment_page' => 'nullable|integer|min:1', 'adjustment_page' => 'nullable|integer|min:1', 'detail_page' => 'nullable|integer|min:1', 'debt_page' => 'nullable|integer|min:1', 'issue_page' => 'nullable|integer|min:1']);
         $from = $data['from'] ?? now()->toDateString();
         $to = $data['to'] ?? now()->toDateString();
         Validator::make(['from' => $from, 'to' => $to], ['to' => 'after_or_equal:from'])->validate();
@@ -67,6 +67,12 @@ class CustomerDebtMonitorController extends Controller
         }
         $saleEntries = collect($periodEntries)->where('type', 'sale')
             ->sort(fn ($a, $b) => strcmp($b['date'], $a['date']) ?: ($b['row'] <=> $a['row']))->values();
+        if (in_array($data['presentation'] ?? null, ['payment-request', 'receipt'], true)) {
+            abort_unless($selected, 404);
+
+            return $this->voucher($request, $data['presentation'], $selected, $saleEntries, $reportFrom, $reportTo);
+        }
+
         $paymentEntries = collect($periodEntries)->where('type', 'payment')
             ->sort(fn ($a, $b) => strcmp($b['date'], $a['date']) ?: strcmp($a['source_sheet'] ?? 'Dongtienhoatdong', $b['source_sheet'] ?? 'Dongtienhoatdong') ?: ($b['row'] <=> $a['row']))->values();
         $detailSales = $saleEntries->sum('amount');
@@ -157,6 +163,33 @@ class CustomerDebtMonitorController extends Controller
         }
 
         return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'detailSalesPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail', 'canCreateQuickCustomer', 'quickCustomerSales'));
+    }
+
+    private function voucher(Request $request, string $presentation, array $selected, \Illuminate\Support\Collection $sales, string $reportFrom, string $reportTo)
+    {
+        $data = $request->validate([
+            'voucher_dates' => 'nullable|array|max:100',
+            'voucher_dates.*' => 'required|date_format:Y-m-d|distinct',
+            'voucher_number' => 'nullable|string|max:50',
+            'voucher_method' => 'nullable|in:cash,transfer',
+        ]);
+        $deliveries = $sales->groupBy('date')->map(fn ($rows) => $rows->sum('amount') - $rows->sum('gift'))
+            ->filter(fn ($amount) => $amount > 0)->sortKeys();
+        $dates = $data['voucher_dates'] ?? [];
+        if (array_diff($dates, $deliveries->keys()->all())) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['voucher_dates' => 'Ngày giao hàng đã thay đổi hoặc nằm ngoài kỳ đối chiếu.']);
+        }
+
+        $lines = $deliveries->only($dates);
+        $total = $lines->sum();
+        $issuedDate = now(config('app.display_timezone'))->format('d/m/Y');
+        $receipt = $presentation === 'receipt';
+        $title = $receipt ? 'Phiếu thu' : 'Phiếu đề nghị thanh toán';
+        $company = \App\Models\Setting::get('company_legal_name', 'CÔNG TY CỔ PHẦN THỰC PHẨM HOÀNG LONG TNT');
+        $number = $data['voucher_number'] ?? '';
+        $method = ['cash' => 'Tiền mặt', 'transfer' => 'Chuyển khoản'][$data['voucher_method'] ?? ''] ?? '';
+
+        return view('customer-debt.voucher', compact('presentation', 'selected', 'deliveries', 'lines', 'total', 'issuedDate', 'receipt', 'title', 'company', 'number', 'method', 'reportFrom', 'reportTo'));
     }
 
     private function quickCustomerSales()
@@ -384,7 +417,7 @@ class CustomerDebtMonitorController extends Controller
                 $snapshot['has_unidentified_payments'] = ! empty($snapshot['issues']);
                 $snapshot['entries'] = collect($groups)->flatMap(fn ($group) => $group['entries'])->values()->all();
                 $snapshot['issues'] = [];
-                unset($snapshot['payment_syncs'], $snapshot['loaded_by']);
+                unset($snapshot['payment_syncs'], $snapshot['loaded_by'], $snapshot['cashflow_ledgers'], $snapshot['cashflow_loaded_at']);
             }
         }
 
@@ -420,16 +453,28 @@ class CustomerDebtMonitorController extends Controller
         }
         $request->merge([
             'credit_limit' => $limit === '' ? null : $limit,
-            'allowed_orders' => $request->filled('allowed_orders') ? $request->input('allowed_orders') : null,
-            'due_days' => $request->filled('due_days') ? $request->input('due_days') : null,
         ]);
+        foreach (['allowed_orders', 'due_days'] as $field) {
+            if ($request->has($field) && ! $request->filled($field)) {
+                $request->merge([$field => null]);
+            }
+        }
+        if ($request->has('fixed_debt')) {
+            $fixedDebt = trim((string) $request->input('fixed_debt', ''));
+            if (preg_match('/^\d{1,3}(?:\.\d{3})+$/', $fixedDebt)) {
+                $fixedDebt = str_replace('.', '', $fixedDebt);
+            }
+            $request->merge(['fixed_debt' => $fixedDebt === '' ? null : $fixedDebt]);
+        }
         $data = $request->validate([
+            'fixed_debt' => 'nullable|integer|min:0|max:999999999999999',
+            'threshold_days' => 'nullable|integer|min:0|max:3650',
             'source_key' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/',
             'policy_version' => 'required|integer|min:0',
             'allowed_orders' => 'nullable|integer|min:0|max:100000',
             'credit_limit' => 'nullable|integer|min:0|max:999999999999999',
             'due_days' => 'nullable|integer|min:0|max:3650',
-        ]);
+        ] + CustomerDebtPolicyService::cycleRules());
         $context = $this->resolveGroups($request, $service);
         $group = $context['groups'][$data['source_key']] ?? null;
         abort_unless($group, 404);

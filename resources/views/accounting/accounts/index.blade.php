@@ -68,6 +68,7 @@
                         <th>Loại</th>
                         <th>Chủ thể</th>
                         <th>Số tài khoản / Ngân hàng</th>
+                        <th class="text-end">Số dư đầu nguồn</th>
                         <th class="text-end">Số dư</th>
                         <th class="text-end">Ngưỡng cảnh báo</th>
                         <th class="text-center">Trạng thái</th>
@@ -76,7 +77,11 @@
                 </thead>
                 <tbody>
                 @forelse($accounts as $acc)
-                    @php $low = $acc->isLowBalance(); @endphp
+                    @php
+                        $sheetAccount = $sheetAccounts[$acc->account_number] ?? null;
+                        $displayBalance = $sheetAccount['closing'] ?? $acc->balance;
+                        $low = $displayBalance < $acc->warning_threshold;
+                    @endphp
                     <tr class="{{ $low ? 'table-warning' : '' }}">
                         <td>
                             <div class="fw-semibold">{{ $acc->name }}</div>
@@ -99,8 +104,10 @@
                             @if($acc->account_number)<div>{{ $acc->account_number }}</div>@endif
                             @if($acc->bank_name)<div class="text-muted small">{{ $acc->bank_name }}</div>@endif
                         </td>
+                        <td class="text-end">{{ $sheetAccount ? number_format($sheetAccount['opening']).' đ' : '—' }}</td>
                         <td class="text-end fw-bold {{ $low ? 'text-danger' : 'text-success' }}">
-                            {{ number_format((float)$acc->balance) }}đ
+                            {{ number_format((float)$displayBalance) }}đ
+                            @if($sheetAccount)<div class="small text-muted fw-normal">Google Sheet · {{ $sheetAccount['label'] }}</div>@endif
                             @if($low)<br><span class="badge bg-danger" style="font-size:10px"><i class="bi bi-exclamation-triangle-fill me-1"></i>Dưới ngưỡng</span>@endif
                         </td>
                         <td class="text-end text-muted">{{ number_format((float)$acc->warning_threshold) }}đ</td>
@@ -130,7 +137,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="8" class="text-center text-muted py-4">Chưa có tài khoản nào. <a href="{{ accounting_route('accounts.create') }}">Thêm ngay</a></td></tr>
+                    <tr><td colspan="9" class="text-center text-muted py-4">Chưa có tài khoản nào. <a href="{{ accounting_route('accounts.create') }}">Thêm ngay</a></td></tr>
                 @endforelse
                 </tbody>
             </table>
@@ -149,7 +156,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-2 small text-muted">Số dư hiện tại: <strong>{{ number_format((float)$acc->balance) }}đ</strong></div>
+                <div class="mb-2 small text-muted">Số dư hệ thống: <strong>{{ number_format((float)$acc->balance) }}đ</strong></div>
                 <label class="form-label">Số tiền nạp</label>
                 <input type="text" name="amount" class="form-control money-input" required inputmode="numeric" autocomplete="off" placeholder="500000">
                 <label class="form-label mt-2">Ghi chú</label>
@@ -171,7 +178,7 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-2 small text-muted">Số dư hiện tại: <strong>{{ number_format((float)$acc->balance) }}đ</strong></div>
+                <div class="mb-2 small text-muted">Số dư hệ thống: <strong>{{ number_format((float)$acc->balance) }}đ</strong></div>
                 <label class="form-label">Số tiền rút</label>
                 <input type="text" name="amount" class="form-control money-input" required inputmode="numeric" autocomplete="off" placeholder="500000">
                 <label class="form-label mt-2">Ghi chú</label>

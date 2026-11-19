@@ -1,0 +1,60 @@
+:root {
+    --voucher-brown: #482619;
+    --voucher-gold: #ffe18b;
+    --voucher-paper: #f6f0e9;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #eeebe7; color: #3c241b; font: 16px/1.5 Arial, sans-serif; }
+main { max-width: 960px; margin: 24px auto; padding: 0 16px; }
+.voucher-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.voucher-tools a { color: var(--voucher-brown); }
+button { border: 0; border-radius: 6px; padding: 9px 15px; background: var(--voucher-brown); color: white; font: inherit; cursor: pointer; }
+.voucher-editor { padding: 14px 18px; background: white; border: 1px solid #dfd4ca; border-radius: 8px; margin-bottom: 16px; }
+.voucher-editor summary { cursor: pointer; font-weight: bold; }
+.voucher-editor p { margin: 9px 0; font-size: 14px; }
+.voucher-error { color: #a32121; }
+.voucher-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 6px; max-height: 260px; overflow: auto; margin: 12px 0; }
+.voucher-options label { display: flex; align-items: center; gap: 8px; padding: 6px; background: #faf6f0; cursor: pointer; }
+.voucher-options strong { margin-left: auto; white-space: nowrap; }
+.voucher-fields { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
+.voucher-fields :is(input, select) { display: block; padding: 6px; font: inherit; max-width: 100%; }
+
+.voucher { background: var(--voucher-paper); padding: 24px; }
+.voucher-brand { display: flex; align-items: center; gap: 22px; padding: 20px 24px; background: var(--voucher-brown); border-radius: 14px; color: var(--voucher-gold); }
+.voucher-mark { flex: 0 0 auto; display: grid; place-items: center; width: 64px; height: 64px; border: 4px double var(--voucher-gold); border-radius: 50%; font-size: 25px; font-weight: bold; }
+.voucher-brand strong { max-width: 30ch; font-size: 25px; text-transform: uppercase; }
+.voucher-body { padding: 0 22px 8px; }
+.voucher h1 { margin: 22px 0 8px; font-size: 32px; text-align: center; text-transform: uppercase; }
+.voucher h2 { font-size: 21px; margin: 16px 0 6px; }
+.voucher p { margin: 6px 0 12px; }
+.voucher-date { text-align: right; }
+.voucher table { width: 100%; border-collapse: collapse; margin: 16px 0 6px; }
+.voucher th, .voucher td { padding: 8px 12px; text-align: left; }
+.voucher th { background: #e8d7be; }
+.voucher :is(th, td):first-child { width: 12%; text-align: center; }
+.voucher :is(th, td):last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.voucher tbody tr { background: #fffdf8; }
+.voucher tbody tr:nth-child(even) { background: #eee7db; }
+.voucher-total { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 3px 14px; padding: 9px 12px; border-radius: 8px; background: var(--voucher-brown); color: white; text-transform: uppercase; }
+.voucher-total b { color: var(--voucher-gold); font-size: 22px; text-transform: none; white-space: nowrap; }
+.voucher-office, .voucher-signatures { margin-top: 22px; font-weight: bold; text-transform: uppercase; }
+.voucher-office { text-align: right; }
+.voucher-signatures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); text-align: center; gap: 6px; padding-bottom: 46px; }
+.voucher-signatures span { display: block; font-weight: normal; text-transform: none; }
+
+@media screen and (max-width: 550px) {
+    main, .voucher { padding: 10px; }
+    .voucher-body { padding: 0; }
+    .voucher h1 { font-size: 23px; }
+    .voucher-brand strong { font-size: 17px; }
+    .voucher-brand { padding: 12px; gap: 12px; }
+}
+@page { size: A4 portrait; margin: 11mm; }
+@media print {
+    body { background: white; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    main { margin: 0; padding: 0; max-width: none; }
+    .voucher-tools, .voucher-editor { display: none; }
+    .voucher { padding: 10px; }
+    .voucher thead { display: table-header-group; }
+    .voucher tr, .voucher-at-end, .voucher-brand { break-inside: avoid; }
+}

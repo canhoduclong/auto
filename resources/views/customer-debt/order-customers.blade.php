@@ -20,7 +20,7 @@
                         @if($debt['data_available'])
                             <a class="btn btn-sm btn-outline-primary" aria-label="Xem công nợ của {{ $debt['name'] }}" href="{{ request()->fullUrlWithQuery(['customer'=>null,'system_customer'=>$debt['customer_id'],'window'=>'recent','detail_page'=>null,'purchase_page'=>1,'payment_page'=>1,'report_from'=>null,'report_to'=>null]) }}#debt-detail">Chi tiết</a>
                             @if($canAdjust) @include('customer-debt.balance-button') @endif
-                            <button type="button" class="btn btn-sm btn-light debt-policy-button" data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}" data-orders="{{ $debt['policy']['allowed_orders'] }}" data-limit="{{ $debt['policy']['credit_limit'] }}" data-days="{{ $debt['policy']['due_days'] }}" data-version="{{ $debt['policy']['edit_version'] }}" @disabled($debt['policy']['staff_edit_locked'] && !auth()->user()->isAdmin())>Sửa tiêu chí</button>
+                            <button type="button" class="btn btn-sm btn-light debt-policy-button" data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}" @include('customer-debt.policy-cycle-values', ['policy' => $debt['policy']]) data-fixed="{{ $debt['policy']['fixed_debt'] }}" data-limit="{{ $debt['policy']['credit_limit'] }}" data-threshold-days="{{ $debt['policy']['threshold_days'] }}" data-version="{{ $debt['policy']['edit_version'] }}" @disabled($debt['policy']['staff_edit_locked'] && !auth()->user()->isAdmin())>Sửa tiêu chí</button>
                         @elseif($canLoad)
                             <a class="btn btn-sm btn-outline-primary" href="{{ route('customer-debt.index', ['tab'=>'all','search'=>$debt['name']]) }}">Ghép dữ liệu</a>
                         @endif
@@ -43,7 +43,7 @@
                     @else
                         <p class="small text-muted mt-2 mb-0">Chưa có dữ liệu Google Sheet đã ghép với khách này. Cần cập nhật hoặc ghép dữ liệu trước khi xác định số nợ và mức cảnh báo.</p>
                     @endif
-                    <div class="debt-customer-card-terms" title="Số Bill được phép nợ · Trần công nợ · Hạn từ ngày giao hàng gần nhất">Cho nợ: <strong>{{ $debt['policy']['allowed_orders'] }} Bill</strong> · Trần nợ: <strong>{{ number_format($debt['policy']['credit_limit'], 0, ',', '.') }} đ</strong> · Ngày nợ: <strong>{{ $debt['policy']['due_days'] }} ngày</strong></div>
+                    <div class="debt-customer-card-terms">Công nợ cố định <strong>{{ $debt['policy']['fixed_debt'] === null ? 'Chưa đặt' : number_format($debt['policy']['fixed_debt'], 0, ',', '.').' đ' }}</strong> · Ngưỡng cảnh báo <strong>{{ number_format($debt['policy']['warning_threshold'], 0, ',', '.') }} đ</strong> · Cho vượt <strong>{{ $debt['policy']['threshold_days'] }} ngày</strong></div>
                 </details>
             </article>
             @empty

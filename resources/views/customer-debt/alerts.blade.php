@@ -1,5 +1,6 @@
 @if($alert['balance'] > 0)
 <div class="d-flex flex-wrap gap-1 mb-1">
+    @include('customer-debt.threshold-alert')
     @if($alert['overdue'])<span class="badge bg-danger">Trễ thanh toán {{ $alert['overdue_days'] }} ngày</span>@endif
     @if($alert['remind'])<span class="badge bg-warning text-dark">Nhắc thu tiền</span>@endif
     @if($alert['risk'])<span class="badge {{ $alert['risk'] === 'medium' ? 'bg-warning text-dark' : ($alert['risk'] === 'high' ? 'bg-danger' : 'bg-dark') }}">Rủi ro {{ ['medium'=>'Trung bình','high'=>'Cao','very_high'=>'Rất cao'][$alert['risk']] }}</span>@endif

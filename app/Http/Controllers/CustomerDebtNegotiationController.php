@@ -12,13 +12,12 @@ class CustomerDebtNegotiationController extends Controller
     public function index(Request $request, CustomerDebtSheetService $sheets, CustomerDebtReportService $report)
     {
         abort_unless($request->user()->hasRole(['admin', 'account', 'accountant', 'accounting', 'director', 'ceo']), 403);
-        $data = $request->validate(['search' => 'nullable|string|max:150', 'sale' => 'nullable|string|max:100', 'terms' => 'nullable|in:all,configured,default', 'sort' => 'nullable|in:name,max_debt,allowed_orders,due_days', 'direction' => 'nullable|in:asc,desc', 'per_page' => 'nullable|in:20,30,50,100', 'page' => 'nullable|integer|min:1']);
+        $data = $request->validate(['search' => 'nullable|string|max:150', 'sale' => 'nullable|string|max:100', 'terms' => 'nullable|in:all,configured,default', 'sort' => 'nullable|in:name,max_debt,allowed_orders,due_days,fixed_debt,threshold_days,credit_limit', 'direction' => 'nullable|in:asc,desc', 'per_page' => 'nullable|in:20,30,50,100', 'page' => 'nullable|integer|min:1']);
         $context = app(CustomerDebtMonitorController::class)->debtContext($request, $sheets);
         $rows = $report->rows($context)->map(function ($row) use ($context) {
             $row['policy'] = $context['policyService']->effective($row, $context['policies']);
             $row['configured'] = ! empty($row['policy']['updated_at']);
-            // Monetary ceiling; Bill count and days remain independent warning conditions.
-            $row['max_debt'] = (int) $row['policy']['credit_limit'];
+            $row['max_debt'] = $row['policy']['warning_threshold'];
 
             return $row;
         });
@@ -31,8 +30,8 @@ class CustomerDebtNegotiationController extends Controller
         $sort = $data['sort'] ?? 'max_debt';
         $direction = ($data['direction'] ?? 'desc') === 'asc' ? 1 : -1;
         $rows = $rows->sort(function ($a, $b) use ($sort, $direction) {
-            $aValue = in_array($sort, ['allowed_orders', 'due_days'], true) ? $a['policy'][$sort] : $a[$sort];
-            $bValue = in_array($sort, ['allowed_orders', 'due_days'], true) ? $b['policy'][$sort] : $b[$sort];
+            $aValue = in_array($sort, ['allowed_orders', 'due_days', 'fixed_debt', 'threshold_days', 'credit_limit'], true) ? $a['policy'][$sort] : $a[$sort];
+            $bValue = in_array($sort, ['allowed_orders', 'due_days', 'fixed_debt', 'threshold_days', 'credit_limit'], true) ? $b['policy'][$sort] : $b[$sort];
 
             return ($aValue <=> $bValue) * $direction ?: strcmp($a['name'], $b['name']);
         });

@@ -1,0 +1,6 @@
+data-payment-mode="{{ $policy['payment_mode'] }}"
+data-cycle-type="{{ $policy['cycle_type'] }}"
+data-close-weekday="{{ $policy['cycle_close_weekday'] ?? $policy['cycle_weekday'] }}"
+data-pay-weekday="{{ $policy['cycle_weekday'] }}"
+data-close-monthday="{{ $policy['cycle_close_monthday'] ?? $policy['cycle_monthday'] }}"
+data-pay-monthday="{{ $policy['cycle_monthday'] }}"

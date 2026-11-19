@@ -145,9 +145,13 @@ class AccountingDashboardController extends Controller
             'cycle_monthday' => 'required_if:cycle_type,monthly|nullable|integer|min:1|max:31',
             'allowed_orders' => 'nullable|integer|min:0|max:100000',
             'credit_limit' => 'required|integer|min:0|max:999999999999999',
+            'fixed_debt' => 'nullable|integer|min:0|max:999999999999999',
+            'threshold_days' => 'nullable|integer|min:0|max:3650',
             'due_days' => 'nullable|integer|min:0|max:3650',
         ]);
-        $data['allowed_orders'] = 1;
+        if (! array_key_exists('fixed_debt', $data)) {
+            $data['allowed_orders'] = 1;
+        }
         $data['rolling_only'] = $data['payment_mode'] === 'default';
         $request->attributes->set('own_customer_debt', false);
         $context = $monitor->debtContext($request, $sheets);
@@ -767,6 +771,28 @@ class AccountingDashboardController extends Controller
     public function cashflow(Request $request)
     {
         [$from, $to, $rangeLabel] = $this->resolveDateRange($request);
+        if ($request->routeIs('admin.accounting.cashflow') && ! $request->boolean('work_queue')) {
+            $snapshot = app(\App\Services\CustomerDebtSheetService::class)->snapshot();
+            $ledgers = app(\App\Services\GoogleSheetCashflowService::class)->ledgers($snapshot);
+            if ($request->input('cashflow_source', 'sheet') === 'sheet' && ($ledgers->isNotEmpty() || $request->has('cashflow_source'))) {
+                $tab = $request->validate(['sheet_tab' => ['nullable', \Illuminate\Validation\Rule::in($ledgers->keys()->all())]])['sheet_tab'] ?? null;
+                $rows = ($tab ? $ledgers->only([$tab]) : $ledgers)->flatMap(fn ($ledger, $name) => collect($ledger['rows'])
+                    ->map(fn ($row) => $row + ['tab' => $name]))
+                    ->filter(fn ($row) => $row['date'] >= $from->toDateString() && $row['date'] <= $to->toDateString())
+                    ->sortBy([['date', 'desc'], ['tab', 'asc'], ['row', 'desc']])->values();
+                $page = \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPage();
+                $transactions = new \Illuminate\Pagination\LengthAwarePaginator($rows->forPage($page, 25)->values(), $rows->count(), 25, $page, [
+                    'path' => $request->url(), 'query' => $request->except('page'),
+                ]);
+
+                return view('accounting.sheet-cashflow', [
+                    'ledgers' => $ledgers, 'transactions' => $transactions, 'tab' => $tab,
+                    'incomeTotal' => $rows->sum('in'), 'expenseTotal' => $rows->sum('out'),
+                    'from' => $from, 'to' => $to, 'loadedAt' => $snapshot['cashflow_loaded_at'] ?? null,
+                ]);
+            }
+        }
+
         $categoryId = (int) $request->input('category_id', 0);
         $accountId = (int) $request->input('account_id', 0);
 

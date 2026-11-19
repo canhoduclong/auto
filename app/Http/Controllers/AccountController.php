@@ -14,10 +14,14 @@ class AccountController extends Controller
     public function index()
     {
         $accounts = Account::orderBy('name')->get();
-        $totalBalance = $accounts->where('is_active', true)->sum('balance');
-        $lowBalanceCount = $accounts->where('is_active', true)->filter(fn ($a) => $a->isLowBalance())->count();
+        $snapshot = request()->routeIs('admin.accounting.accounts.index') ? app(\App\Services\CustomerDebtSheetService::class)->snapshot() : null;
+        $sheetAccounts = app(\App\Services\GoogleSheetCashflowService::class)->ledgers($snapshot)
+            ->map(fn ($ledger) => \Illuminate\Support\Arr::except($ledger, ['rows']))->keyBy('number');
+        $activeAccounts = $accounts->where('is_active', true);
+        $totalBalance = $activeAccounts->sum(fn ($account) => $sheetAccounts[$account->account_number]['closing'] ?? $account->balance);
+        $lowBalanceCount = $activeAccounts->filter(fn ($account) => ($sheetAccounts[$account->account_number]['closing'] ?? $account->balance) < $account->warning_threshold)->count();
 
-        return view('accounting.accounts.index', compact('accounts', 'totalBalance', 'lowBalanceCount'));
+        return view('accounting.accounts.index', compact('accounts', 'totalBalance', 'lowBalanceCount', 'sheetAccounts'));
     }
 
     public function adjustmentHistory(Request $request)

@@ -5,7 +5,7 @@
 
 @section('accounting_content')
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <div></div>
+    <div>@if(request()->routeIs('admin.accounting.cashflow'))<a class="btn btn-outline-primary btn-sm" href="{{ request()->fullUrlWithQuery(['cashflow_source' => 'sheet', 'page' => null]) }}">Thu chi Google Sheet</a>@endif</div>
     @if(current_accounting_route_prefix() !== 'ceo.')
         <a href="{{ accounting_route('transactions.create') }}" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-circle me-1"></i>Tao giao dich

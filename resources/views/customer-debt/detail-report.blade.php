@@ -2,6 +2,12 @@
     <header class="debt-report-header">
         <div><div class="small text-muted mb-1">ĐỐI CHIẾU CÔNG NỢ</div><h2 id="debt-report-title">{{ $selected['name'] }}</h2><div class="small text-muted">Sale: {{ $selected['sale_label'] }}@if($selected['customer_id']) · Tổng hợp mọi nguồn đã ghép @endif</div></div>
         <div class="d-flex flex-wrap gap-2"><a class="btn btn-primary btn-sm" target="_blank" rel="noopener" href="{{ request()->fullUrlWithQuery(['presentation'=>'customer','purchase_page'=>null,'payment_page'=>null,'detail_page'=>null]) }}">Bản gửi khách</a>
+        @if(!isset($debtDetailAction) && $purchases->total() > 0)
+            @foreach(['payment-request' => 'Tạo đề nghị thanh toán', 'receipt' => 'Tạo phiếu thu'] as $type => $label)
+                <a class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener"
+                    href="{{ request()->fullUrlWithQuery(['presentation' => $type, 'purchase_page' => null, 'payment_page' => null, 'detail_page' => null]) }}">{{ $label }}</a>
+            @endforeach
+        @endif
         <a class="btn btn-light btn-sm" href="{{ request()->fullUrlWithQuery(['customer'=>null,'system_customer'=>null,'report_from'=>null,'report_to'=>null,'window'=>null,'purchase_page'=>null,'payment_page'=>null,'detail_page'=>null]) }}">Đóng chi tiết</a></div>
     </header>
     @php

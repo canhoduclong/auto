@@ -1433,6 +1433,12 @@ Route::middleware('auth')->group(function () {
 
 // Sales debt monitoring: sheet-derived balances are separate from order accounting.
 Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,manager,manager_sale,account,accountant,accounting,director,ceo'])->group(function () {
+    Route::middleware('role:admin,account,accountant,accounting,director,ceo')->prefix('customer-debt/suppliers')->name('customer-debt.suppliers.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\SupplierSheetDebtController::class, 'index'])->name('index');
+        Route::post('/refresh', [\App\Http\Controllers\SupplierSheetDebtController::class, 'refresh'])->middleware('throttle:6,1')->name('refresh');
+        Route::patch('/{supplier}/pin', [\App\Http\Controllers\SupplierSheetDebtController::class, 'updatePin'])->where('supplier', '[a-f0-9]{64}')->name('pin');
+        Route::get('/{supplier}', [\App\Http\Controllers\SupplierSheetDebtController::class, 'show'])->where('supplier', '[a-f0-9]{64}')->name('show');
+    });
     Route::get('/customer-debt/negotiation', [\App\Http\Controllers\CustomerDebtNegotiationController::class, 'index'])->name('customer-debt.negotiation');
     Route::get('/customer-debt/payments', [\App\Http\Controllers\CustomerPaymentController::class, 'index'])->name('customer-debt.payments');
     Route::post('/customer-debt/payments/refresh', [\App\Http\Controllers\CustomerPaymentController::class, 'refresh'])->middleware('throttle:6,1')->name('customer-debt.payments.refresh');

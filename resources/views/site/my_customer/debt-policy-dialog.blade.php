@@ -14,10 +14,10 @@
     <div class="d-flex align-items-center justify-content-between gap-2"><h5 id="mclDebtPolicyTitle" class="mb-0">Sửa nhanh tiêu chí công nợ</h5><button class="btn btn-sm btn-light" type="button" data-close-debt-policy>Đóng</button></div>
     <p class="fw-bold mt-3 mb-1" id="mclDebtPolicyCustomer"></p>
     <form id="mclDebtPolicyForm">
-        <label for="mclDebtOrders" class="form-label">Cho nợ (số Bill)</label><input id="mclDebtOrders" name="allowed_orders" type="number" min="0" max="100000" step="1" class="form-control" required>
+        <label for="mclDebtFixed" class="form-label">Công nợ cố định (đ)</label><input id="mclDebtFixed" name="fixed_debt" inputmode="numeric" class="form-control">
         <label for="mclDebtLimit" class="form-label">Trần công nợ (đ)</label><input id="mclDebtLimit" name="credit_limit" inputmode="numeric" placeholder="Ví dụ: 10.000.000" class="form-control" required>
-        <label for="mclDebtDays" class="form-label">Ngày nợ (từ ngày giao hàng gần nhất)</label><input id="mclDebtDays" name="due_days" type="number" min="0" max="3650" step="1" class="form-control" required>
-        <p class="small text-muted mt-3">Sale, leader và manager được lưu một lần rồi tự khóa. Chỉ admin được mở khóa; mỗi lần mở khóa chỉ cho phép thêm một lần lưu.</p>
+        <label for="mclDebtDays" class="form-label">Số ngày cho nợ khi vượt ngưỡng</label><input id="mclDebtDays" name="threshold_days" type="number" min="0" max="3650" step="1" class="form-control" required>
+        <p class="small text-muted mt-3">Ngưỡng cảnh báo bằng công nợ cố định cộng trần công nợ. Để trống công nợ cố định để dùng tiêu chí số Bill đã lưu. Sale, leader và manager được lưu một lần rồi tự khóa. Chỉ admin được mở khóa; mỗi lần mở khóa chỉ cho phép thêm một lần lưu.</p>
         <div id="mclDebtPolicyError" class="small text-danger mb-2" role="alert"></div>
         <button id="mclDebtPolicySave" class="btn btn-primary" type="submit">Lưu và khóa</button>
     </form>
@@ -39,9 +39,9 @@
     };
     const paint = (card, policy, message) => {
         card.dataset.policy = JSON.stringify(policy);
-        card.querySelector('[data-debt-orders]').textContent = `${policy.allowed_orders} Bill`;
+        card.querySelector('[data-debt-fixed]').textContent = policy.fixed_debt === null ? `Chưa đặt · ${policy.allowed_orders} Bill` : `${Number(policy.fixed_debt).toLocaleString('vi-VN')} đ`;
         card.querySelector('[data-debt-limit]').textContent = `${Number(policy.credit_limit).toLocaleString('vi-VN')} đ`;
-        card.querySelector('[data-debt-days]').textContent = `${policy.due_days} ngày`;
+        card.querySelector('[data-debt-days]').textContent = `${policy.threshold_days} ngày`;
         card.querySelector('[data-debt-lock]').textContent = policy.staff_edit_locked ? 'Đã khóa' : 'Được lưu 1 lần';
         const edit = card.querySelector('[data-edit-debt-policy]');
         if (edit) edit.hidden = policy.staff_edit_locked && !isAdmin;
@@ -58,9 +58,9 @@
             const policy = JSON.parse(card.dataset.policy);
             active = card;version = policy.edit_version;
             document.getElementById('mclDebtPolicyCustomer').textContent = card.dataset.customerName;
-            document.getElementById('mclDebtOrders').value = policy.allowed_orders;
+            document.getElementById('mclDebtFixed').value = policy.fixed_debt === null ? '' : Number(policy.fixed_debt).toLocaleString('vi-VN');
             document.getElementById('mclDebtLimit').value = Number(policy.credit_limit).toLocaleString('vi-VN');
-            document.getElementById('mclDebtDays').value = policy.due_days;
+            document.getElementById('mclDebtDays').value = policy.threshold_days;
             document.getElementById('mclDebtPolicyError').textContent = '';
             dialog.showModal();
             return;

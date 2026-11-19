@@ -5,7 +5,7 @@
         <strong data-policy-name></strong>
         <input type="hidden" name="source_key"><input type="hidden" name="policy_version">
         <label class="form-label mt-3" for="acc-payment-mode">Phân loại thanh toán</label>
-        <select class="form-select" id="acc-payment-mode" name="payment_mode"><option value="default">Mặc định — gối đầu 1 đơn</option><option value="cycle">Thanh toán theo chu kỳ</option></select>
+        <select class="form-select" id="acc-payment-mode" name="payment_mode"><option value="default">Mặc định</option><option value="cycle">Thanh toán theo chu kỳ</option></select>
         <div data-cycle-fields>
         <label class="form-label mt-3" for="acc-cycle-type">Lịch thanh toán</label><select class="form-select" id="acc-cycle-type" name="cycle_type"><option value="weekly">Hằng tuần</option><option value="monthly">Hằng tháng</option></select>
         <div data-weekly-fields>
@@ -17,9 +17,11 @@
         </div>
         <p class="small text-muted mt-2">Công nợ phát sinh đến hết ngày chốt thuộc kỳ này; sau ngày chốt thuộc kỳ tiếp theo. Nếu ngày thanh toán đứng trước ngày chốt, thanh toán vào tuần/tháng kế tiếp. Tháng thiếu ngày dùng ngày cuối tháng.</p>
         </div>
-        <p class="small text-muted mt-3" data-default-help>Cho phép gối đầu 1 đơn. Nhắc thu nợ khi còn từ 2 đơn chưa thanh toán; không áp dụng hạn sau 1 ngày.</p>
+        <p class="small text-muted mt-3" data-default-help>Để trống công nợ cố định để tiếp tục dùng tiêu chí số Bill hiện có.</p>
+        <label class="form-label mt-3" for="acc-fixed-debt">Công nợ cố định (đ)</label><input class="form-control" id="acc-fixed-debt" name="fixed_debt" type="number" min="0" max="999999999999999">
         <label class="form-label mt-3" for="acc-limit">Trần công nợ (đ)</label><input class="form-control" id="acc-limit" name="credit_limit" type="number" min="0" max="999999999999999" required>
-        <p class="small text-muted">Trần 0 đ: không giới hạn số tiền. Trần lớn hơn 0 sẽ cảnh báo khi chạm hoặc vượt trần. {{ ($accountingDebt ?? false) ? 'Kế toán có thể cập nhật lại; mọi thay đổi được lưu lịch sử.' : 'Sale được lưu một lần rồi khóa. Admin có thể mở khóa để sửa thêm một lần.' }}</p>
+        <label class="form-label mt-3" for="acc-threshold-days">Số ngày cho nợ khi vượt ngưỡng</label><input class="form-control" id="acc-threshold-days" name="threshold_days" type="number" min="0" max="3650">
+        <p class="small text-muted">Ngưỡng cảnh báo bằng công nợ cố định cộng trần công nợ. {{ ($accountingDebt ?? false) ? 'Kế toán có thể cập nhật lại; mọi thay đổi được lưu lịch sử.' : 'Sale được lưu một lần rồi khóa. Admin có thể mở khóa để sửa thêm một lần.' }}</p>
         <div data-policy-error class="text-danger small" role="alert"></div>
         <div class="text-end mt-3"><button class="btn btn-primary" type="submit">Lưu & cập nhật cảnh báo</button></div>
     </form>
@@ -46,7 +48,7 @@
         dialog.querySelector('[data-policy-error]').textContent='';
         form.elements.source_key.value=button.dataset.key;
         form.elements.policy_version.value=policy.edit_version;
-        ['payment_mode','cycle_type','cycle_weekday','cycle_monthday','credit_limit'].forEach(key=>form.elements[key].value=policy[key]);
+        ['payment_mode','cycle_type','cycle_weekday','cycle_monthday','credit_limit','fixed_debt','threshold_days'].forEach(key=>form.elements[key].value=policy[key] ?? '');
         form.elements.cycle_close_weekday.value=policy.cycle_close_weekday ?? policy.cycle_weekday;
         form.elements.cycle_close_monthday.value=policy.cycle_close_monthday ?? policy.cycle_monthday;
         dialog.querySelector('[data-policy-name]').textContent=button.dataset.name;

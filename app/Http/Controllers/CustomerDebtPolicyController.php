@@ -16,18 +16,23 @@ class CustomerDebtPolicyController extends Controller
             $limit = str_replace('.', '', $limit);
         }
         $request->merge(['credit_limit' => $limit === '' ? null : $limit]);
+        if ($request->has('fixed_debt')) {
+            $fixedDebt = trim((string) $request->input('fixed_debt', ''));
+            if (preg_match('/^\d{1,3}(?:\.\d{3})+$/', $fixedDebt)) {
+                $fixedDebt = str_replace('.', '', $fixedDebt);
+            }
+            $request->merge(['fixed_debt' => $fixedDebt === '' ? null : $fixedDebt]);
+        }
         $data = $request->validate([
+            'fixed_debt' => 'nullable|integer|min:0|max:999999999999999',
+            'threshold_days' => 'nullable|integer|min:0|max:3650',
             'allowed_orders' => 'nullable|integer|min:0|max:100000', 'credit_limit' => 'nullable|integer|min:0|max:999999999999999',
-            'payment_mode' => 'nullable|in:default,cycle',
-            'cycle_type' => 'nullable|required_if:payment_mode,cycle|in:weekly,monthly',
-            'cycle_close_weekday' => 'nullable|required_if:cycle_type,weekly|integer|min:1|max:7',
-            'cycle_weekday' => 'nullable|required_if:cycle_type,weekly|integer|min:1|max:7',
-            'cycle_close_monthday' => 'nullable|required_if:cycle_type,monthly|integer|min:1|max:31',
-            'cycle_monthday' => 'nullable|required_if:cycle_type,monthly|integer|min:1|max:31',
             'due_days' => 'nullable|integer|min:0|max:3650', 'policy_version' => 'required|integer|min:0',
-        ]);
-        if (isset($data['payment_mode'])) {
-            $data['allowed_orders'] = 1;
+        ] + CustomerDebtPolicyService::cycleRules());
+        if (isset($data['payment_mode']) && ! $request->boolean('return_to_report')) {
+            if (! array_key_exists('fixed_debt', $data)) {
+                $data['allowed_orders'] = 1;
+            }
             $data['rolling_only'] = $data['payment_mode'] === 'default';
         }
         $group = ['customer_id' => $customer->id];

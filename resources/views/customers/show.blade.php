@@ -242,8 +242,8 @@
                     <dd class="fw-semibold mb-0">{{ $debtPolicy['due_days'] }} ngày</dd>
                 </div>
                 <div class="col-12 col-md-4">
-                    <dt class="small text-muted fw-normal">Số đơn được cho nợ</dt>
-                    <dd class="fw-semibold mb-0">{{ $debtPolicy['allowed_orders'] }} đơn</dd>
+                    <dt class="small text-muted fw-normal">Công nợ cố định</dt>
+                    <dd class="fw-semibold mb-0">{{ $debtPolicy['fixed_debt'] === null ? 'Chưa đặt · '.$debtPolicy['allowed_orders'].' Bill' : number_format($debtPolicy['fixed_debt'], 0, ',', '.').' đ' }}</dd>
                 </div>
             </dl>
         </div>

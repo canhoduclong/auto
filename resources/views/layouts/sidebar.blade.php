@@ -136,6 +136,9 @@
                                 <li class="nav-item"><a href="{{ route('customer-debt.index') }}" class="nav-link{{ request()->routeIs('customer-debt.index') ? ' active' : '' }}">Công nợ & cảnh báo đơn</a></li>
                                 @if(auth()->user()->isAdmin())<li class="nav-item"><a href="{{ route('customer-debt.report') }}" class="nav-link{{ request()->routeIs('customer-debt.report*') ? ' active' : '' }}">Báo cáo công nợ</a></li>@endif
                                 @if(auth()->user()->hasRole(['admin','account','accountant','accounting','director','ceo']))<li class="nav-item"><a href="{{ route('customer-debt.negotiation') }}" class="nav-link{{ request()->routeIs('customer-debt.negotiation') ? ' active' : '' }}">Đàm phán công nợ</a></li>@endif
+                                @if(auth()->user()->hasRole(['admin','account','accountant','accounting','director','ceo']))
+                                    <li class="nav-item"><a href="{{ route('customer-debt.suppliers.index') }}" class="nav-link{{ request()->routeIs('customer-debt.suppliers.*') ? ' active' : '' }}">Nhà cung cấp</a></li>
+                                @endif
                                 @if(auth()->user()->hasRole(['admin','account','accountant','accounting','director','ceo']))<li class="nav-item"><a href="{{ route('customer-debt.payments') }}" class="nav-link{{ request()->routeIs('customer-debt.payments*') ? ' active' : '' }}">Thanh toán</a></li>@endif
                             </ul>
                         </li>

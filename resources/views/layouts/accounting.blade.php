@@ -460,7 +460,7 @@ body.acc-sidebar-collapsed .acc-task-group>summary{justify-content:center;paddin
             <a href="{{ route('accounting.customer-debts') }}" class="{{ request()->routeIs('accounting.customer-debts*') ? 'active' : '' }}">
                 <i class="bi bi-people"></i> Công nợ khách hàng
             </a>
-            <a href="{{ route('accounting.supplier-debts') }}" class="{{ request()->routeIs('accounting.supplier-debts') ? 'active' : '' }}">
+            <a href="{{ route('customer-debt.suppliers.index') }}" class="{{ request()->routeIs('customer-debt.suppliers.*', 'accounting.supplier-debts*') ? 'active' : '' }}">
                 <i class="bi bi-building"></i> Công nợ nhà cung cấp
             </a>
 
