@@ -15,7 +15,7 @@
     <details class="voucher-editor" @if($lines->isEmpty()) open @endif>
         <summary>Chọn ngày giao hàng cho {{ mb_strtolower($title) }}</summary>
         <form method="GET">
-            @foreach(request()->only(['customer', 'system_customer', 'tab', 'recovery', 'window', 'report_from', 'report_to']) as $key => $value)
+            @foreach(request()->only(['customer', 'system_customer', 'tab', 'recovery', 'window', 'report_from', 'report_to', 'from', 'to', 'range', 'search', 'sale', 'balance', 'min_debt', 'scope', 'payment_mode', 'reminder', 'sort', 'direction', 'page', 'per_page']) as $key => $value)
                 <input type="hidden" name="{{ $key }}" value="{{ $value }}">
             @endforeach
             <input type="hidden" name="presentation" value="{{ $presentation }}">

@@ -26,7 +26,7 @@
     @if($selected['policy']['staff_edit_locked'] && !auth()->user()->isAdmin())
         <div class="small text-muted mt-1">Tiêu chí đã khóa.</div>
     @endif
-    @if(auth()->user()->isAdmin() && $selected['customer_id'] && $selected['policy']['staff_edit_locked'])
+    @if(!($saleDebtDetail ?? false) && auth()->user()->isAdmin() && $selected['customer_id'] && $selected['policy']['staff_edit_locked'])
         <form class="mt-2" method="POST" action="{{ route('customers.debt-policy.unlock', $selected['customer_id']) }}">
             @csrf
             <input type="hidden" name="policy_version" value="{{ $selected['policy']['edit_version'] }}">

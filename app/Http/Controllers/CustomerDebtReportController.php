@@ -32,7 +32,7 @@ class CustomerDebtReportController extends Controller
     public function index(Request $request, CustomerDebtSheetService $sheets, CustomerDebtReportService $report, DebtCollectionService $collections)
     {
         abort_unless($request->user()->hasRole(['admin', 'account', 'accountant', 'accounting']), 403);
-        $data = $request->validate(['report_source' => 'nullable|in:sheet,system', 'payment_mode' => 'nullable|in:all,cycle', 'scope' => 'nullable|in:all,orders', 'from' => 'nullable|required_if:scope,orders|date_format:Y-m-d', 'to' => 'nullable|required_if:scope,orders|date_format:Y-m-d|after_or_equal:from', 'search' => 'nullable|string|max:150', 'sale' => 'nullable|string|max:100', 'balance' => 'nullable|in:debt,all,settled,credit', 'recovery' => 'nullable|in:normal,difficult,unrecoverable,all', 'status' => ['nullable', Rule::in(array_merge(array_keys(DebtCollectionService::STATUSES), ['all', 'follow_up_due']))], 'per_page' => 'nullable|in:20,30,50,100', 'page' => 'nullable|integer|min:1', 'sort' => 'nullable|in:balance,period_increase,days_without_purchase,days_without_payment', 'direction' => 'nullable|in:asc,desc']);
+        $data = $request->validate(['report_source' => 'nullable|in:sheet,system', 'payment_mode' => 'nullable|in:all,cycle', 'scope' => 'nullable|in:all,orders', 'from' => 'nullable|required_if:scope,orders|date_format:Y-m-d', 'to' => 'nullable|required_if:scope,orders|date_format:Y-m-d|after_or_equal:from', 'search' => 'nullable|string|max:150', 'sale' => 'nullable|string|max:100', 'balance' => 'nullable|in:debt,all,settled,credit', 'recovery' => 'nullable|in:normal,difficult,unrecoverable,all', 'status' => ['nullable', Rule::in(array_merge(array_keys(DebtCollectionService::STATUSES), ['all', 'follow_up_due']))], 'min_debt' => 'nullable|integer|min:0|max:999999999999999', 'per_page' => 'nullable|in:20,30,50,100,200,300', 'page' => 'nullable|integer|min:1', 'sort' => 'nullable|in:balance,period_increase,days_without_purchase,days_without_payment', 'direction' => 'nullable|in:asc,desc']);
         [$rows, $snapshot] = $this->sourceData($request, $sheets, $report);
         $reportSource = $request->input('report_source') ?: 'sheet';
         $records = $collections->records($reportSource);
@@ -59,7 +59,7 @@ class CustomerDebtReportController extends Controller
                 return false;
             }
             $balance = $data['balance'] ?? 'debt';
-            if ($balance === 'debt' && (! $row['data_available'] || $row['balance'] <= 0)) {
+            if ($balance === 'debt' && (! $row['data_available'] || $row['balance'] <= ($data['min_debt'] ?? 100000))) {
                 return false;
             }
             if ($balance === 'settled' && (! $row['data_available'] || $row['balance'] != 0)) {

@@ -38,7 +38,7 @@ class MyCustomerDebtController extends Controller
             'to' => 'nullable|required_with:from|date_format:Y-m-d|after_or_equal:from',
             'range' => 'nullable|in:all', 'search' => 'nullable|string|max:150', 'scope' => 'nullable|in:all,orders',
             'balance' => 'nullable|in:debt,all,settled,credit', 'page' => 'nullable|integer|min:1',
-            'per_page' => 'nullable|in:20,30,50,100',
+            'min_debt' => 'nullable|integer|min:0|max:999999999999999', 'per_page' => 'nullable|in:20,30,50,100,200,300',
             'recovery' => 'nullable|in:all,normal,difficult,unrecoverable',
             'payment_mode' => 'nullable|in:default,cycle',
             'payment_class' => 'nullable|in:all,default,multi,cycle',
@@ -59,10 +59,15 @@ class MyCustomerDebtController extends Controller
                 $request->merge(['sort' => $sort]);
             }
         }
-        if (! $result instanceof View || $request->input('presentation') === 'customer') {
+        if (! $result instanceof View || $result->name() !== 'customer-debt.index') {
             return $result;
         }
         $data = $result->getData();
+        $settings = Setting::whereIn('key', ['logo', 'brand_name', 'slogan', 'HOTLINE', 'address', 'email', 'footer_logo', 'hotline', 'tax_number'])->get()->keyBy('key');
+        if (! $accountingDebt && $data['selected']) {
+            return view('site.my_customer_debt_detail', $data + compact('settings'));
+        }
+
         $priorities = app(CustomerDebtPriorityService::class);
         $priorityRecords = $accountingDebt ? [] : $priorities->personalRecords($request->user());
         $rows = collect($data['groups'])->unique(fn ($g) => $g['customer_id'] ? 'customer:'.$g['customer_id'] : $g['key'])
@@ -108,7 +113,7 @@ class MyCustomerDebtController extends Controller
                 return false;
             }
             $balance = $filters['balance'] ?? 'debt';
-            if (($balance === 'debt' && $row['balance'] <= 0) || ($balance === 'settled' && $row['balance'] != 0) || ($balance === 'credit' && $row['balance'] >= 0)) {
+            if (($balance === 'debt' && $row['balance'] <= ($filters['min_debt'] ?? 100000)) || ($balance === 'settled' && $row['balance'] != 0) || ($balance === 'credit' && $row['balance'] >= 0)) {
                 return false;
             }
             if (($filters['scope'] ?? 'all') === 'orders' && ! collect($row['entries'])->contains(fn ($e) => $e['type'] === 'sale' && $e['amount'] > 0 && $e['date'] >= $periodFrom && $e['date'] <= $periodTo)) {
@@ -133,7 +138,6 @@ class MyCustomerDebtController extends Controller
         $page = (int) ($filters['page'] ?? 1);
         $perPage = (int) ($filters['per_page'] ?? 30);
         $debts = new LengthAwarePaginator($visible->forPage($page, $perPage)->values(), $visible->count(), $perPage, $page, ['path' => $request->url(), 'query' => $request->except('page')]);
-        $settings = Setting::whereIn('key', ['logo', 'brand_name', 'slogan', 'HOTLINE', 'address', 'email', 'footer_logo', 'hotline', 'tax_number'])->get()->keyBy('key');
 
         return view('site.my_customer_debt', array_replace($data, compact('debts', 'summary', 'customerOptions', 'periodFrom', 'periodTo', 'settings', 'accountingDebt', 'saleOptions')));
     }

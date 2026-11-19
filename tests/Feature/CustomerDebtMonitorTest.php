@@ -212,7 +212,7 @@ class CustomerDebtMonitorTest extends TestCase
 
     private function request(array $params = [], string $role = 'sale'): Request
     {
-        $request = Request::create('/customer-debt', 'GET', $params + ['policy_version' => 0]);
+        $request = Request::create('/customer-debt', 'GET', $params + ['policy_version' => 0, 'min_debt' => 0]);
         $this->app->instance('request', $request);
         $request->setUserResolver(fn () => $this->user($role));
         $request->setLaravelSession($this->app['session']->driver('array'));
@@ -1095,16 +1095,34 @@ class CustomerDebtMonitorTest extends TestCase
         ];
         $service = $this->service($entries);
         $key = array_key_first($service->summarize($entries));
-        $data = (new \App\Http\Controllers\MyCustomerDebtController)->index($this->request([
+        $controller = new \App\Http\Controllers\MyCustomerDebtController;
+        $view = $controller->index($this->request([
             'from' => '2026-11-10', 'to' => '2026-11-16', 'customer' => $key,
             'report_from' => '2026-11-10', 'report_to' => '2026-11-16',
-        ]), $service, new CustomerDebtMonitorController)->getData();
-        self::assertSame(2500, $data['debts']->first()['balance']);
+        ]), $service, new CustomerDebtMonitorController);
+        self::assertSame('site.my_customer_debt_detail', $view->name());
+        $data = $view->getData();
+        self::assertSame(2500, $data['selected']['balance']);
+        self::assertFalse($data['canLoad']);
+        self::assertNull($data['reminderHistory']);
+        self::assertSame(route('customers.debt-policy.update', 1), $data['detailPolicyAction']);
         self::assertSame(1000, $data['opening']);
         self::assertSame(2000, $data['detailSales']);
         self::assertSame(500, $data['detailPayments']);
         self::assertSame(2500, $data['closing']);
         self::assertSame(1, $data['purchases']->total());
+    }
+
+    public function test_sale_can_print_a_voucher_from_their_own_debt_detail(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình')]);
+        $key = array_key_first($service->summarize($service->snapshot()['entries']));
+        $controller = new \App\Http\Controllers\MyCustomerDebtController;
+        $view = $controller->index($this->request([
+            'customer' => $key, 'presentation' => 'receipt', 'voucher_all' => '1',
+        ]), $service, new CustomerDebtMonitorController);
+        self::assertSame('customer-debt.voucher', $view->name());
+        self::assertSame(1000, $view->getData()['total']);
     }
 
     public function test_sale_cannot_open_another_sales_customer_on_the_new_debt_page(): void
@@ -1688,6 +1706,32 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(500, $mixed['lines']['nhatkybanhang:1']['paid']);
         self::assertSame(400, $mixed['lines']['nhatkybanhang:2']['paid']);
         self::assertCount(2, $mixed['unmatched']);
+    }
+
+    public function test_debt_threshold_defaults_to_100000_on_both_lists_and_supports_larger_pages(): void
+    {
+        $service = $this->service([
+            array_replace($this->entry('CRM01', 'Chị Bình'), ['amount' => 100000]),
+            array_replace($this->entry('KH02', 'Anh Hải', 2), ['amount' => 100001]),
+        ]);
+        $report = new \App\Http\Controllers\CustomerDebtReportController;
+        $mine = new \App\Http\Controllers\MyCustomerDebtController;
+        $monitor = new CustomerDebtMonitorController;
+        $request = $this->request(['per_page' => 200], 'admin');
+        $request->query->remove('min_debt');
+        $rows = $report->index($request, $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData()['rows'];
+        self::assertSame(['Anh Hải'], $rows->pluck('name')->all());
+        self::assertSame(200, $rows->perPage());
+
+        $request = $this->request(['per_page' => 300], 'sale');
+        $request->query->remove('min_debt');
+        $rows = $mine->index($request, $service, $monitor)->getData()['debts'];
+        self::assertSame(0, $rows->total());
+        self::assertSame(300, $rows->perPage());
+        $rows = $mine->index($this->request(['min_debt' => 99999]), $service, $monitor)->getData()['debts'];
+        self::assertSame(['Chị Bình'], $rows->pluck('name')->all());
+        $rows = $report->index($this->request(['min_debt' => 900000, 'balance' => 'all'], 'admin'), $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData()['rows'];
+        self::assertTrue($rows->contains('name', 'Chị Bình'));
     }
 
     public function test_debt_report_allows_accounting_and_deduplicates_linked_sources(): void
