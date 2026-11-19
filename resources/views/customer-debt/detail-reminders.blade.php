@@ -12,11 +12,11 @@
         @forelse(array_slice($reminderHistory['logs'], 0, 5) as $log)
             @php($reminder = $log['record'])
             <div class="py-2 border-bottom">
-                <div class="small fw-semibold">{{ \Carbon\Carbon::parse($reminder->reminded_at)->format('d/m/Y H:i') }} · {{ $reminder->actor_name }}</div>
-                <div class="small text-muted">{{ \App\Services\DebtCollectionService::CHANNELS[$reminder->channel] ?? $reminder->channel }} · {{ $log['label'] }}</div>
-                <p class="small my-1 text-break">{{ \App\Services\DebtCollectionService::displayReminderNote($reminder->note) }}</p>
-                <div class="small">Thu {{ number_format($log['paid'], 0, ',', '.') }} / {{ number_format($log['target'], 0, ',', '.') }} đ</div>
-                @if($log['deadline'])<div class="small text-muted">Hẹn trả {{ \Carbon\Carbon::parse($log['deadline'])->format('d/m/Y') }}</div>@endif
+                <p class="small my-0 text-break">
+                    <strong>{{ \Carbon\Carbon::parse($reminder->reminded_at)->format('d/m/Y H:i') }}</strong>
+                    : {{ \App\Services\DebtCollectionService::compactReminderNote($reminder->note) }}
+                </p>
+                <div class="small mt-1">Thu {{ number_format($log['paid'], 0, ',', '.') }} / {{ number_format($log['target'], 0, ',', '.') }} đ</div>
             </div>
         @empty
             <p class="small text-muted my-3">Chưa ghi nhận lần nhắc nợ nào.</p>

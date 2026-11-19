@@ -210,11 +210,15 @@
 #debt-policy-dialog::backdrop { background: rgba(15,23,42,.45); }
 
 
-.debt-detail-context { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.45fr); gap:16px; padding:0 18px 16px; }
+.debt-detail-context, .debt-detail-notes { padding:0 18px 16px; }
+.debt-detail-notes-with-policy { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.45fr); align-items:start; gap:16px; }
 .debt-detail-policy { padding:12px; border:1px solid #e2e8f0; border-radius:8px; background:#f8fafc; }
 .debt-detail-policy-values { display:grid; grid-template-columns:repeat(auto-fit,minmax(125px,1fr)); gap:8px; margin:10px 0 0; }
 .debt-detail-policy-values dt { color:#64748b; font-size:12px; font-weight:400; }
 .debt-detail-policy-values dd { margin:2px 0 0; font-weight:650; }
 @media (min-width:1500px) { .debt-report-columns-with-history { grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(230px,.65fr); } }
 @media (min-width:992px) and (max-width:1499.98px) { .debt-detail-reminders { grid-column:1 / -1; } }
-@media (max-width:767.98px) { .debt-detail-context { grid-template-columns:minmax(0,1fr); padding:0 12px 12px; } }
+@media (max-width:767.98px) {
+    .debt-detail-context, .debt-detail-notes { padding:0 12px 12px; }
+    .debt-detail-notes-with-policy { grid-template-columns:minmax(0,1fr); }
+}

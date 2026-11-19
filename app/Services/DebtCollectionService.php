@@ -45,6 +45,13 @@ class DebtCollectionService
         return "{$date} : Công nợ: {$amount}đ -- Chưa thanh toán: {$payment} -- Đơn mới: {$purchase}";
     }
 
+    public static function compactReminderNote(string $note): string
+    {
+        $note = self::displayReminderNote($note);
+
+        return preg_replace('~^\d{1,2}/\d{1,2}\s*:\s*(?=Công nợ: [\d.]+đ -- Chưa thanh toán: [^\r\n]+ -- Đơn mới: [^\r\n]+$)~uD', '', $note) ?? $note;
+    }
+
     public function namespace(string $source = 'sheet'): string
     {
         if ($source === 'system') {
