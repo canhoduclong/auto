@@ -2235,7 +2235,9 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(500, $data['detailSalesPayments']);
         self::assertSame(150, $data['detailGifts']);
         self::assertSame(150, $data['closing']);
-        self::assertSame(3, $data['payments']->total());
+        self::assertSame(5, $data['payments']->total());
+        self::assertSame(850, $data['detailSettlementTotal']);
+        self::assertSame(150, $data['payments']->getCollection()->where('type', 'gift')->sum('amount'));
         $page = (new \App\Http\Controllers\CustomerPaymentController)->index($this->request(['customer_id' => 1], 'admin'), $service, new \App\Services\CustomerPaymentReportService)->getData();
         self::assertSame(700, $page['summary']['amount']);
         self::assertSame(150, $page['summary']['gifts']);
@@ -2897,7 +2899,8 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(500, $data['detailPayments']);
         self::assertSame(1800, $data['closing']);
         self::assertSame(2, $data['purchases']->total());
-        self::assertSame(1, $data['payments']->total());
+        self::assertSame(2, $data['payments']->total());
+        self::assertSame(700, $data['detailSettlementTotal']);
         self::assertSame('2026-11-10', $data['reportLastPurchase']);
         self::assertSame('2026-11-05', $data['reportLastPayment']);
         self::assertSame(0, $data['reportAlerts']['overdue_days']);

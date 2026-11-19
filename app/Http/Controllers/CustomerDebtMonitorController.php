@@ -92,10 +92,19 @@ class CustomerDebtMonitorController extends Controller
         $allocation = $selected ? $allocationService->reconcile($reportHistory, $settlementMethod, $selected['customer_id']) : null;
         $saleEntries = $saleEntries->map(fn ($entry) => $entry + ['allocation' => $allocation['lines'][$allocationService->key($entry)] ?? null]);
         $paymentEntries = $paymentEntries->map(fn ($entry) => $entry + ['allocation_issue' => $allocation['unmatched'][$allocationService->key($entry)] ?? null]);
+        $giftEntries = $saleEntries->filter(fn ($entry) => ($entry['gift'] ?? 0) != 0)
+            ->map(fn ($entry) => [
+                'type' => 'gift', 'date' => $entry['date'], 'row' => $entry['row'], 'amount' => $entry['gift'],
+                'source_sheet' => $entry['source_sheet'] ?? 'nhatkybanhang',
+                'note' => ($entry['gift_note'] ?? '') ?: ($entry['note'] ?? ''),
+            ]);
+        $settlementEntries = $paymentEntries->concat($giftEntries)
+            ->sort(fn ($a, $b) => strcmp($b['date'], $a['date']) ?: strcmp($a['source_sheet'] ?? 'Dongtienhoatdong', $b['source_sheet'] ?? 'Dongtienhoatdong') ?: ($b['row'] <=> $a['row']) ?: strcmp($b['type'], $a['type']))->values();
+        $detailSettlementTotal = $detailPayments + $detailGifts;
         $purchasePage = (int) ($data['purchase_page'] ?? $data['detail_page'] ?? 1);
         $paymentPage = (int) ($data['payment_page'] ?? 1);
         $purchases = new \Illuminate\Pagination\LengthAwarePaginator($saleEntries->forPage($purchasePage, 100)->values(), $saleEntries->count(), 100, $purchasePage, ['path' => $request->url(), 'pageName' => 'purchase_page', 'query' => $request->except(['purchase_page', 'detail_page']), 'fragment' => 'debt-detail']);
-        $payments = new \Illuminate\Pagination\LengthAwarePaginator($paymentEntries->forPage($paymentPage, 100)->values(), $paymentEntries->count(), 100, $paymentPage, ['path' => $request->url(), 'pageName' => 'payment_page', 'query' => $request->except('payment_page'), 'fragment' => 'debt-detail']);
+        $payments = new \Illuminate\Pagination\LengthAwarePaginator($settlementEntries->forPage($paymentPage, 100)->values(), $settlementEntries->count(), 100, $paymentPage, ['path' => $request->url(), 'pageName' => 'payment_page', 'query' => $request->except('payment_page'), 'fragment' => 'debt-detail']);
         $issues = collect($snapshot['issues'] ?? []);
         $issueTotal = $issues->sum('amount');
         $issuePage = (int) ($data['issue_page'] ?? 1);
@@ -186,7 +195,7 @@ class CustomerDebtMonitorController extends Controller
             }
         }
 
-        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'detailSalesPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail', 'canCreateQuickCustomer', 'quickCustomerSales', 'settlementMethod', 'allocation', 'detailPolicyAction', 'detailPolicyKey', 'reminderHistory'));
+        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'detailSettlementTotal', 'detailSalesPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail', 'canCreateQuickCustomer', 'quickCustomerSales', 'settlementMethod', 'allocation', 'detailPolicyAction', 'detailPolicyKey', 'reminderHistory'));
     }
 
     private function voucher(Request $request, string $presentation, array $selected, \Illuminate\Support\Collection $sales, string $reportFrom, string $reportTo)

@@ -46,8 +46,8 @@
         @endif
     </form>
     <div class="debt-report-metrics">
-        <div class="debt-report-metric"><span>Mua hàng</span><strong>{{ number_format($detailSales, 0, ',', '.') }} đ</strong><small>Tặng: {{ number_format($detailGifts, 0, ',', '.') }} đ</small></div>
-        <div class="debt-report-metric"><span>Thanh toán</span><strong class="text-success">{{ number_format($detailPayments, 0, ',', '.') }} đ</strong><small>Tiền thu trong kỳ · gồm nhatkybanhang</small></div>
+        <div class="debt-report-metric"><span>Mua hàng</span><strong>{{ number_format($detailSales, 0, ',', '.') }} đ</strong></div>
+        <div class="debt-report-metric"><span>Thanh toán & hàng tặng</span><strong class="text-success">{{ number_format($detailSettlementTotal, 0, ',', '.') }} đ</strong><small>Tiền thu {{ number_format($detailPayments, 0, ',', '.') }} đ · Tặng {{ number_format($detailGifts, 0, ',', '.') }} đ</small></div>
         <div class="debt-report-metric"><span>Công nợ</span><strong class="{{ $closing > 0 ? 'text-danger' : 'text-success' }}">{{ number_format($closing, 0, ',', '.') }} đ</strong><small>{{ $closing < 0 ? 'Khách trả trước tại cuối kỳ' : 'Số dư cuối kỳ' }}</small></div>
         <div class="debt-report-metric"><span>Mua gần nhất</span><strong>{{ $reportLastPurchase ? \Carbon\Carbon::parse($reportLastPurchase)->format('d/m/Y') : 'Chưa có' }}</strong>@if($reportLastPurchase) @php($daysFromToday = (int) \Carbon\CarbonImmutable::parse($reportLastPurchase)->startOfDay()->diffInDays(\Carbon\CarbonImmutable::today(), false))<small title="Tính so với hôm nay {{ \Carbon\CarbonImmutable::today()->format('d/m/Y') }}">{{ $daysFromToday === 0 ? 'Hôm nay · 0 ngày' : ($daysFromToday > 0 ? $daysFromToday.' ngày trước' : 'Sau hôm nay '.abs($daysFromToday).' ngày') }}</small>@endif</div>
         <div class="debt-report-metric"><span>Thanh toán gần nhất</span><strong>{{ $reportLastPayment ? \Carbon\Carbon::parse($reportLastPayment)->format('d/m/Y') : 'Chưa có' }}</strong>@if($reportLastPayment) @php($daysFromToday = (int) \Carbon\CarbonImmutable::parse($reportLastPayment)->startOfDay()->diffInDays(\Carbon\CarbonImmutable::today(), false))<small title="Tính so với hôm nay {{ \Carbon\CarbonImmutable::today()->format('d/m/Y') }}">{{ $daysFromToday === 0 ? 'Hôm nay · 0 ngày' : ($daysFromToday > 0 ? $daysFromToday.' ngày trước' : 'Sau hôm nay '.abs($daysFromToday).' ngày') }}</small>@endif</div>
@@ -99,26 +99,32 @@
         <article class="debt-report-ledger">
             <header><h3>Mua hàng <small class="text-muted">· Mới nhất trước</small></h3><span>{{ number_format($purchases->total(), 0, ',', '.') }} dòng</span></header>
             <div class="debt-report-scroll" tabindex="0" aria-label="Chi tiết mua hàng">
-                <table class="table"><thead><tr><th>Ngày mua</th><th>Nội dung</th><th class="text-end">Tiền hàng</th><th class="text-end">Thanh toán</th><th class="text-end">Tặng</th><th class="text-end">Phải thu</th><th class="text-end">Đã phân bổ</th><th class="text-end">Còn phải thu</th></tr></thead><tbody>
+                <table class="table"><thead><tr><th>Ngày mua</th><th>Nội dung</th><th class="text-end">Tiền hàng</th><th class="text-end">Phải thu</th><th class="text-end">Đã phân bổ</th><th class="text-end">Còn phải thu</th></tr></thead><tbody>
                 @forelse($purchases as $entry)
-                    <tr><td class="text-nowrap">{{ \Carbon\Carbon::parse($entry['date'])->format('d/m/Y') }}<small>{{ $entry['source_sheet'] ?? ($entry['type'] === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong') }} · Dòng {{ $entry['row'] }}</small></td><td>{{ $entry['note'] ?: 'Mua hàng' }} @if(!empty($entry['allocation']['code']))<small>Đơn {{ $entry['allocation']['code'] }}</small>@endif</td><td class="text-end">{{ number_format($entry['amount'], 0, ',', '.') }}</td><td class="text-end text-success">{{ number_format($entry['inline_payment'] ?? 0, 0, ',', '.') }}</td><td class="text-end">{{ number_format($entry['gift'] ?? 0, 0, ',', '.') }}</td><td class="text-end">{{ number_format($entry['amount'] - ($entry['gift'] ?? 0), 0, ',', '.') }}</td>
+                    <tr><td class="text-nowrap">{{ \Carbon\Carbon::parse($entry['date'])->format('d/m/Y') }}<small>{{ $entry['source_sheet'] ?? ($entry['type'] === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong') }} · Dòng {{ $entry['row'] }}</small></td><td>{{ $entry['note'] ?: 'Mua hàng' }} @if(!empty($entry['allocation']['code']))<small>Đơn {{ $entry['allocation']['code'] }}</small>@endif</td><td class="text-end">{{ number_format($entry['amount'], 0, ',', '.') }}</td><td class="text-end">{{ number_format($entry['amount'] - ($entry['gift'] ?? 0), 0, ',', '.') }}</td>
                         <td class="text-end text-success">{{ isset($entry['allocation']) ? number_format($entry['allocation']['paid'], 0, ',', '.') : '—' }}</td>
                         <td class="text-end {{ ($entry['allocation']['remaining'] ?? 0) > 0 ? 'text-danger' : 'text-success' }}">{{ isset($entry['allocation']) ? number_format($entry['allocation']['remaining'], 0, ',', '.') : '—' }}</td></tr>
-                @empty<tr><td colspan="8" class="text-center text-muted py-4">Không có giao dịch mua hàng trong kỳ.</td></tr>@endforelse
-                </tbody><tfoot><tr><th colspan="2">Tổng trong kỳ</th><th class="text-end">{{ number_format($detailSales, 0, ',', '.') }}</th><th class="text-end">{{ number_format($detailSalesPayments, 0, ',', '.') }}</th><th class="text-end">{{ number_format($detailGifts, 0, ',', '.') }}</th><th class="text-end">{{ number_format($detailSales - $detailGifts, 0, ',', '.') }}</th><th colspan="2"></th></tr></tfoot></table>
+                @empty<tr><td colspan="6" class="text-center text-muted py-4">Không có giao dịch mua hàng trong kỳ.</td></tr>@endforelse
+                </tbody><tfoot><tr><th colspan="2">Tổng trong kỳ</th><th class="text-end">{{ number_format($detailSales, 0, ',', '.') }}</th><th class="text-end">{{ number_format($detailSales - $detailGifts, 0, ',', '.') }}</th><th colspan="2"></th></tr></tfoot></table>
             </div>
             <footer>{{ $purchases->links() }}</footer>
         </article>
         <article class="debt-report-ledger">
-            <header><h3>Thanh toán <small class="text-muted">· Mới nhất trước</small></h3><span>{{ number_format($payments->total(), 0, ',', '.') }} khoản</span></header>
-            <div class="debt-report-scroll" tabindex="0" aria-label="Chi tiết thanh toán">
-                <table class="table"><thead><tr><th>Ngày thanh toán</th><th>Nội dung</th><th class="text-end">Số tiền</th></tr></thead><tbody>
+            <header><h3>Thanh toán & hàng tặng <small class="text-muted">· Mới nhất trước</small></h3><span>{{ number_format($payments->total(), 0, ',', '.') }} khoản</span></header>
+            <div class="debt-report-scroll" tabindex="0" aria-label="Chi tiết thanh toán và hàng tặng">
+                <table class="table"><thead><tr><th>Ngày giao dịch</th><th>Nội dung</th><th class="text-end">Số tiền</th></tr></thead><tbody>
                 @forelse($payments as $entry)
-                    <tr><td class="text-nowrap">{{ \Carbon\Carbon::parse($entry['date'])->format('d/m/Y') }}<small>{{ $entry['source_sheet'] ?? ($entry['type'] === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong') }} · Dòng {{ $entry['row'] }}</small></td><td>{{ $entry['note'] ?: 'Thanh toán' }} @if(!empty($entry['allocation_issue']))<div class="small text-danger">{{ $entry['allocation_issue']['reason'] }} · {{ number_format($entry['allocation_issue']['amount'], 0, ',', '.') }} đ</div>@endif</td><td class="text-end text-success">{{ number_format($entry['amount'], 0, ',', '.') }} đ</td></tr>
-                @empty<tr><td colspan="3" class="text-center text-muted py-4">Không có khoản thanh toán trong kỳ.</td></tr>@endforelse
-                </tbody><tfoot><tr><th colspan="2">Tổng trong kỳ</th><th class="text-end">{{ number_format($detailPayments, 0, ',', '.') }} đ</th></tr></tfoot></table>
+                    <tr><td class="text-nowrap">{{ \Carbon\Carbon::parse($entry['date'])->format('d/m/Y') }}<small>{{ $entry['source_sheet'] ?? ($entry['type'] === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong') }} · Dòng {{ $entry['row'] }}</small></td><td>@if($entry['type'] === 'gift')
+                        <span class="badge bg-light text-dark">Hàng tặng / giảm trừ</span>
+                        @if($entry['note'])<div class="small text-muted">{{ $entry['note'] }}</div>@endif
+                    @else
+                        {{ $entry['note'] ?: 'Thanh toán' }}
+                    @endif
+                    @if(!empty($entry['allocation_issue']))<div class="small text-danger">{{ $entry['allocation_issue']['reason'] }} · {{ number_format($entry['allocation_issue']['amount'], 0, ',', '.') }} đ</div>@endif</td><td class="text-end text-success">{{ number_format($entry['amount'], 0, ',', '.') }} đ</td></tr>
+                @empty<tr><td colspan="3" class="text-center text-muted py-4">Không có khoản thanh toán hoặc hàng tặng trong kỳ.</td></tr>@endforelse
+                </tbody><tfoot><tr><th colspan="2">Tổng thanh toán & hàng tặng</th><th class="text-end">{{ number_format($detailSettlementTotal, 0, ',', '.') }} đ</th></tr></tfoot></table>
             </div>
-            <footer><div class="small text-muted mb-2">Đang xem {{ $payments->firstItem() ?? 0 }}–{{ $payments->lastItem() ?? 0 }} / {{ number_format($payments->total(), 0, ',', '.') }} khoản thanh toán</div>{{ $payments->links() }}</footer>
+            <footer><div class="small text-muted mb-2">Đang xem {{ $payments->firstItem() ?? 0 }}–{{ $payments->lastItem() ?? 0 }} / {{ number_format($payments->total(), 0, ',', '.') }} khoản thu và hàng tặng</div>{{ $payments->links() }}</footer>
         </article>
         @if(!isset($debtDetailAction) && ($reminderHistory ?? null))
             @include('customer-debt.detail-reminders')
