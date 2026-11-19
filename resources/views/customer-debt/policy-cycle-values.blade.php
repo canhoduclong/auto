@@ -1,3 +1,4 @@
+data-settlement-method="{{ $policy['settlement_method'] }}"
 data-payment-mode="{{ $policy['payment_mode'] }}"
 data-cycle-type="{{ $policy['cycle_type'] }}"
 data-close-weekday="{{ $policy['cycle_close_weekday'] ?? $policy['cycle_weekday'] }}"

@@ -17,6 +17,12 @@
         <label for="mclDebtFixed" class="form-label">Công nợ cố định (đ)</label><input id="mclDebtFixed" name="fixed_debt" inputmode="numeric" class="form-control">
         <label for="mclDebtLimit" class="form-label">Trần công nợ (đ)</label><input id="mclDebtLimit" name="credit_limit" inputmode="numeric" placeholder="Ví dụ: 10.000.000" class="form-control" required>
         <label for="mclDebtDays" class="form-label">Số ngày cho nợ khi vượt ngưỡng</label><input id="mclDebtDays" name="threshold_days" type="number" min="0" max="3650" step="1" class="form-control" required>
+        <label for="mclDebtSettlement" class="form-label">Hình thức thanh toán</label>
+        <select id="mclDebtSettlement" name="settlement_method" class="form-select">
+            @foreach(\App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS as $value => $label)
+                <option value="{{ $value }}">{{ $label }}</option>
+            @endforeach
+        </select>
         <p class="small text-muted mt-3">Ngưỡng cảnh báo bằng công nợ cố định cộng trần công nợ. Để trống công nợ cố định để dùng tiêu chí số Bill đã lưu. Sale, leader và manager được lưu một lần rồi tự khóa. Chỉ admin được mở khóa; mỗi lần mở khóa chỉ cho phép thêm một lần lưu.</p>
         <div id="mclDebtPolicyError" class="small text-danger mb-2" role="alert"></div>
         <button id="mclDebtPolicySave" class="btn btn-primary" type="submit">Lưu và khóa</button>
@@ -61,6 +67,7 @@
             document.getElementById('mclDebtFixed').value = policy.fixed_debt === null ? '' : Number(policy.fixed_debt).toLocaleString('vi-VN');
             document.getElementById('mclDebtLimit').value = Number(policy.credit_limit).toLocaleString('vi-VN');
             document.getElementById('mclDebtDays').value = policy.threshold_days;
+            document.getElementById('mclDebtSettlement').value = policy.settlement_method;
             document.getElementById('mclDebtPolicyError').textContent = '';
             dialog.showModal();
             return;

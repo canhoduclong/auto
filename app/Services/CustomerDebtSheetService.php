@@ -325,6 +325,7 @@ class CustomerDebtSheetService
     {
         $aliases = [
             'date' => ['ngay', 'ngay thang', 'ngay giao dich', 'date'],
+            'order_code' => $type === 'sale' ? ['ma don', 'ma don hang', 'so don hang', 'order code', 'ma bill'] : [],
             'code' => ['ma kh', 'ma khach hang', 'customer code'],
             'name' => ['khach hang', 'ten khach hang', 'ten kh', 'ten kh/ncc', 'ten cong ty', 'company name', 'customer'],
             'sale_name' => ['nvkd', 'sale', 'nhan vien kinh doanh'],
@@ -446,7 +447,7 @@ class CustomerDebtSheetService
             if ($giftNote !== '') {
                 $note = ($note !== '' ? $note.' · ' : '').'Ghi chú cột Tặng: '.$giftNote;
             }
-            $entries[] = ['date' => $date, 'code' => $row['code'], 'name' => $row['name'], 'type' => $type, 'sale_name' => $row['sale_name'] ?? '', 'phone' => $row['phone'] ?? '', 'address' => $row['address'] ?? '', 'delivery_time' => $row['delivery_time'] ?? '', 'amount' => $this->money($amount), 'gift' => $giftAmount, 'gift_note' => $giftNote, 'inline_payment' => $type === 'sale' && ! in_array(trim($row['inline_payment'] ?? ''), ['', '-'], true) ? $this->money($row['inline_payment']) : 0, 'note' => $note, 'row' => $index + 1, 'source_sheet' => $sourceSheet ?? ($type === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong')];
+            $entries[] = ['date' => $date, 'code' => $row['code'], 'name' => $row['name'], 'type' => $type, 'order_code' => $row['order_code'] ?? '', 'sale_name' => $row['sale_name'] ?? '', 'phone' => $row['phone'] ?? '', 'address' => $row['address'] ?? '', 'delivery_time' => $row['delivery_time'] ?? '', 'amount' => $this->money($amount), 'gift' => $giftAmount, 'gift_note' => $giftNote, 'inline_payment' => $type === 'sale' && ! in_array(trim($row['inline_payment'] ?? ''), ['', '-'], true) ? $this->money($row['inline_payment']) : 0, 'note' => $note, 'row' => $index + 1, 'source_sheet' => $sourceSheet ?? ($type === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong')];
         }
         if (! $headers) {
             throw new RuntimeException('Không nhận diện tiêu đề tab '.($type === 'sale' ? 'nhatkybanhang (Ngày, Mã KH, Khách hàng, Tổng tiền).' : 'Dongtienhoatdong (Ngày, Mã KH, Khách hàng, Tiền thu hoặc Số tiền và Thu/Chi).'));

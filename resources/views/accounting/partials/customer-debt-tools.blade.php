@@ -4,6 +4,12 @@
         <div class="d-flex justify-content-between gap-3 mb-3"><h5 id="accounting-policy-title">Chính sách thanh toán</h5><button type="button" class="btn btn-sm btn-light" data-policy-close>Đóng</button></div>
         <strong data-policy-name></strong>
         <input type="hidden" name="source_key"><input type="hidden" name="policy_version">
+        <label class="form-label mt-3" for="acc-settlement-method">Hình thức thanh toán</label>
+        <select class="form-select" id="acc-settlement-method" name="settlement_method">
+            @foreach(\App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS as $value => $label)
+                <option value="{{ $value }}">{{ $label }}</option>
+            @endforeach
+        </select>
         <label class="form-label mt-3" for="acc-payment-mode">Phân loại thanh toán</label>
         <select class="form-select" id="acc-payment-mode" name="payment_mode"><option value="default">Mặc định</option><option value="cycle">Thanh toán theo chu kỳ</option></select>
         <div data-cycle-fields>
@@ -48,7 +54,7 @@
         dialog.querySelector('[data-policy-error]').textContent='';
         form.elements.source_key.value=button.dataset.key;
         form.elements.policy_version.value=policy.edit_version;
-        ['payment_mode','cycle_type','cycle_weekday','cycle_monthday','credit_limit','fixed_debt','threshold_days'].forEach(key=>form.elements[key].value=policy[key] ?? '');
+        ['payment_mode','cycle_type','cycle_weekday','cycle_monthday','credit_limit','fixed_debt','threshold_days','settlement_method'].forEach(key=>form.elements[key].value=policy[key] ?? '');
         form.elements.cycle_close_weekday.value=policy.cycle_close_weekday ?? policy.cycle_weekday;
         form.elements.cycle_close_monthday.value=policy.cycle_close_monthday ?? policy.cycle_monthday;
         dialog.querySelector('[data-policy-name]').textContent=button.dataset.name;

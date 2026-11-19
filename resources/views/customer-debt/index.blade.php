@@ -1,7 +1,8 @@
 @extends(auth()->user()->isAdmin() ? 'layouts.admin' : (auth()->user()->hasRole(['account','accountant','accounting']) ? 'layouts.accounting' : 'layouts.site'))
-@section('title', 'Công nợ & cảnh báo đơn')
+@section('title', $selected ? 'Chi tiết công nợ · '.$selected['name'] : 'Công nợ & cảnh báo đơn')
 @section('content')
 <div class="debt-page">
+    @unless($selected)
     <header class="debt-page-header">
         <div><h1>Công nợ & cảnh báo đơn</h1><div class="debt-updated">@if($snapshot)Cập nhật {{ \Carbon\Carbon::parse($snapshot['loaded_at'])->timezone(config('app.timezone'))->format('d/m/Y H:i') }}@else Chưa tải dữ liệu Sheet @endif</div></div>
         <div class="debt-header-actions">
@@ -12,6 +13,7 @@
             @if($canLoad)<form method="POST" action="{{ route('customer-debt.load') }}" data-sheet-refresh>@csrf<input type="hidden" name="source" value="google"><button class="btn btn-primary" type="submit">Cập nhật Google Sheet</button></form>@endif
         </div>
     </header>
+    @endunless
     @foreach(['success' => 'success', 'error' => 'danger'] as $key => $color)
         @if(session($key))<div class="alert alert-{{ $color }} py-2">{{ session($key) }}</div>@endif
     @endforeach
@@ -22,6 +24,9 @@
     @if($errors->any())<div class="alert alert-danger py-2">{{ $errors->first() }}</div>@endif
     @if($canLoad && $snapshot && array_diff(\App\Services\CustomerDebtSheetService::SETTLEMENT_TABS, $snapshot['payment_tabs'] ?? []))<div class="small text-muted mb-2">Chưa tải đủ 6 nguồn thanh toán / giảm trừ. Bấm <strong>Cập nhật Google Sheet</strong> để đồng bộ công nợ.</div>@endif
     @if(!$snapshot)<div class="alert alert-warning py-2">Chưa có dữ liệu Google Sheet để xác định công nợ.</div>@endif
+    @if($selected)
+        @include('customer-debt.detail-report')
+    @else
     <nav class="nav debt-tabs">
         <a class="nav-link {{ $tab === 'orders' ? 'active' : '' }}" href="{{ route('customer-debt.index', ['tab'=>'orders','from'=>$from,'to'=>$to]) }}">Đơn hàng & khách hàng</a>
         <a class="nav-link {{ $tab === 'all' ? 'active' : '' }}" href="{{ route('customer-debt.index', ['tab'=>'all']) }}">Quản lý công nợ chung</a>
@@ -104,9 +109,6 @@
     @if($canAdjust)
         @include('customer-debt.balance-adjustment-dialog')
     @endif
-    @if($selected)
-        @include('customer-debt.detail-report')
-    @endif
     @if($canLoad && $issueRows->total())
     <details id="debt-issues" class="card mt-3 debt-issues" @if(request()->filled('issue_page')) open @endif><summary class="card-header">Đối chiếu khoản thu · {{ $issueRows->total() }} khoản · {{ number_format($issueTotal, 0, ',', '.') }} đ</summary>
         <div class="card-body">Bổ sung tên / mã khách tại đúng dòng trong tab nguồn tương ứng rồi tải lại. Hệ thống giữ nguyên nội dung nguồn để đối chiếu.</div>
@@ -115,8 +117,18 @@
         </tbody></table></div><div class="card-body">{{ $issueRows->links() }}</div>
     </details>
     @endif
+    @endif
 </div>
-@include('customer-debt.policy-dialog')
+@include('customer-debt.policy-dialog', ['policyFromReport' => (bool) $selected])
+@if($reminderHistory)
+    @include('customer-debt.report-dialogs', ['reportSource' => 'sheet'])
+    @push('styles')
+    <link rel="stylesheet" href="{{ asset('css/customer-debt-report.css') }}?v={{ filemtime(public_path('css/customer-debt-report.css')) }}">
+    @endpush
+    @push('scripts')
+    <script src="{{ asset('js/customer-debt-report.js') }}?v={{ filemtime(public_path('js/customer-debt-report.js')) }}"></script>
+    @endpush
+@endif
 @if($canLoad)
 <dialog id="debt-map-dialog" aria-labelledby="debt-map-title" style="width:min(850px,95vw);max-height:90vh;overflow:auto;border:1px solid #cbd5e1;border-radius:12px;padding:24px;">
     <div class="d-flex justify-content-between align-items-center mb-3"><h5 id="debt-map-title" class="mb-0">Ghép khách hàng hệ thống</h5><button type="button" id="debt-map-close" class="btn btn-sm btn-light" aria-label="Đóng">Đóng</button></div>

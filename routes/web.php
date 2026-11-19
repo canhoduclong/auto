@@ -1445,9 +1445,9 @@ Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,mana
     Route::get('/customer-debt/payments/updates', [\App\Http\Controllers\CustomerPaymentController::class, 'updates'])->name('customer-debt.payments.updates');
     Route::patch('/customer-debt/report/recovery', [\App\Http\Controllers\CustomerDebtReportController::class, 'updateRecovery'])->middleware('role:admin')->name('customer-debt.report.recovery');
     Route::post('/customer-debt/report/priority', [\App\Http\Controllers\CustomerDebtReportController::class, 'updatePriority'])->middleware('role:admin')->name('customer-debt.report.priority');
-    Route::get('/customer-debt/report', [\App\Http\Controllers\CustomerDebtReportController::class, 'index'])->middleware('role:admin')->name('customer-debt.report');
-    Route::get('/customer-debt/report/history', [\App\Http\Controllers\CustomerDebtReportController::class, 'history'])->middleware('role:admin')->name('customer-debt.report.history');
-    Route::post('/customer-debt/report/reminders', [\App\Http\Controllers\CustomerDebtReportController::class, 'remind'])->middleware('role:admin')->name('customer-debt.report.remind');
+    Route::get('/customer-debt/report', [\App\Http\Controllers\CustomerDebtReportController::class, 'index'])->middleware('role:admin,account,accountant,accounting')->name('customer-debt.report');
+    Route::get('/customer-debt/report/history', [\App\Http\Controllers\CustomerDebtReportController::class, 'history'])->middleware('role:admin,account,accountant,accounting')->name('customer-debt.report.history');
+    Route::post('/customer-debt/report/reminders', [\App\Http\Controllers\CustomerDebtReportController::class, 'remind'])->middleware('role:admin,account,accountant,accounting')->name('customer-debt.report.remind');
     Route::post('/customer-debt/report/responses', [\App\Http\Controllers\CustomerDebtReportController::class, 'respond'])->middleware('role:admin')->name('customer-debt.report.respond');
     Route::post('/customer-debt/customers', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'createCustomer'])->name('customer-debt.customers.store');
     Route::patch('/customer-debt/recovery', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'updateRecovery'])->name('customer-debt.recovery');

@@ -137,6 +137,7 @@ class AccountingDashboardController extends Controller
         $data = $request->validate([
             'source_key' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/',
             'policy_version' => 'required|integer|min:0',
+            'settlement_method' => 'nullable|in:batch,bill,mixed',
             'payment_mode' => 'required|in:default,cycle',
             'cycle_type' => 'required_if:payment_mode,cycle|in:weekly,monthly',
             'cycle_close_weekday' => 'required_if:cycle_type,weekly|nullable|integer|min:1|max:7',

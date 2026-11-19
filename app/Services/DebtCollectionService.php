@@ -22,6 +22,11 @@ class DebtCollectionService
         return (string) config('services.google_sheets.debt_identity_spreadsheet_id', config('services.google_sheets.debt_spreadsheet_id'));
     }
 
+    public function canRecord(User $user): bool
+    {
+        return $user->hasRole(['admin', 'account', 'accountant', 'accounting']);
+    }
+
     public function records(string $source = 'sheet'): array
     {
         $reminders = DB::table('debt_collection_reminders')->where('spreadsheet_id', $this->namespace($source))->orderBy('reminded_at')->orderBy('id')->get();

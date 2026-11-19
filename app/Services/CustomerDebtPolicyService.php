@@ -40,6 +40,7 @@ class CustomerDebtPolicyService
     {
         return [
             'payment_mode' => 'nullable|in:default,cycle',
+            'settlement_method' => 'nullable|in:batch,bill,mixed',
             'cycle_type' => 'nullable|required_if:payment_mode,cycle|in:weekly,monthly',
             'cycle_close_weekday' => 'nullable|required_if:cycle_type,weekly|integer|min:1|max:7',
             'cycle_weekday' => 'nullable|required_if:cycle_type,weekly|integer|min:1|max:7',
@@ -48,9 +49,11 @@ class CustomerDebtPolicyService
         ];
     }
 
+    public const SETTLEMENT_METHODS = ['batch' => 'Theo Đợt', 'bill' => 'Theo Bill', 'mixed' => 'Hỗn hợp'];
+
     public function defaults(): array
     {
-        return ['allowed_orders' => 1, 'credit_limit' => 0, 'fixed_debt' => null, 'threshold_days' => 0, 'due_days' => 1, 'payment_mode' => 'default', 'cycle_type' => 'weekly', 'cycle_weekday' => 5, 'cycle_monthday' => 15];
+        return ['allowed_orders' => 1, 'credit_limit' => 0, 'fixed_debt' => null, 'threshold_days' => 0, 'due_days' => 1, 'settlement_method' => 'batch', 'payment_mode' => 'default', 'cycle_type' => 'weekly', 'cycle_weekday' => 5, 'cycle_monthday' => 15];
     }
 
     public function isLocked(array $policy): bool
@@ -125,6 +128,7 @@ class CustomerDebtPolicyService
                 'due_days' => array_key_exists('due_days', $data) ? (isset($data['due_days']) ? (int) $data['due_days'] : null) : ($current['due_days'] ?? null),
                 'fixed_debt' => array_key_exists('fixed_debt', $data) ? (isset($data['fixed_debt']) ? (int) $data['fixed_debt'] : null) : ($current['fixed_debt'] ?? null),
                 'threshold_days' => array_key_exists('threshold_days', $data) ? (isset($data['threshold_days']) ? (int) $data['threshold_days'] : null) : ($current['threshold_days'] ?? null),
+                'settlement_method' => $data['settlement_method'] ?? $current['settlement_method'] ?? 'batch',
                 'payment_mode' => $data['payment_mode'] ?? $current['payment_mode'] ?? 'default',
                 'rolling_only' => $data['rolling_only'] ?? $current['rolling_only'] ?? false,
                 'cycle_close_weekday' => isset($data['cycle_close_weekday']) ? (int) $data['cycle_close_weekday'] : ($current['cycle_close_weekday'] ?? null),

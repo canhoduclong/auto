@@ -556,7 +556,7 @@ class CustomerController extends Controller
             ->values();
 
         $activeTab = $validated['tab'] ?? 'info';
-        $debtPolicy = $activeTab === 'debt'
+        $debtPolicy = in_array($activeTab, ['debt', 'payments'], true)
             ? $debtPolicies->effective(['customer_id' => $customer->id], $debtPolicies->policies())
             : null;
 
@@ -634,15 +634,33 @@ class CustomerController extends Controller
                 ->withInput();
         }
 
-        $receiptImagePath = $request->hasFile('receipt_image')
-            ? $request->file('receipt_image')->store('customer-payments/receipts', 'public')
-            : null;
-
         $unpaidOrders = Order::query()
             ->where('customer_id', $customer->id)
             ->with('transactions')
             ->orderBy('created_at')
             ->get();
+
+        $policies = app(CustomerDebtPolicyService::class);
+        $settlementMethod = $policies->effective(['customer_id' => $customer->id], $policies->policies())['settlement_method'];
+        $specificBills = false;
+        if ($settlementMethod !== 'batch') {
+            $matcher = app(\App\Services\CustomerDebtPaymentAllocation::class);
+            $note = $validated['note'] ?? '';
+            $references = $matcher->references($note);
+            if (! ($settlementMethod === 'mixed' && $references === [] && $matcher->hasBatchReference($note))) {
+                if ($references === []) {
+                    return back()->withErrors(['note' => 'Ghi ngày giao và mã đơn theo mẫu Bill 13/11/2026 | Mã đơn: DH123.'])->withInput();
+                }
+                $ordersByReference = $unpaidOrders->groupBy(fn (Order $order) =>
+                    substr((string) $order->getRawOriginal('delivery_date'), 0, 10).'|'.mb_strtoupper(trim((string) $order->code)));
+                $matched = collect($references)->map(fn ($reference) => $ordersByReference->get($reference));
+                if ($matched->contains(fn ($orders) => $orders?->count() !== 1)) {
+                    return back()->withErrors(['note' => 'Ngày giao hoặc mã đơn không khớp với đơn của khách.'])->withInput();
+                }
+                $unpaidOrders = $matched->map(fn ($orders) => $orders->first());
+                $specificBills = true;
+            }
+        }
 
         $createdTransactions = [];
         $remainingAmount = $amount;
@@ -651,11 +669,29 @@ class CustomerController extends Controller
             $request,
             $validated,
             $customer,
-            $receiptImagePath,
+            $specificBills,
             $unpaidOrders,
             &$createdTransactions,
             &$remainingAmount
         ) {
+            if ($specificBills) {
+                $ids = $unpaidOrders->pluck('id')->all();
+                $locked = Order::query()->where('customer_id', $customer->id)->whereKey($ids)
+                    ->orderBy('id')->lockForUpdate()->with('transactions')->get()->keyBy('id');
+                $unpaidOrders = collect($ids)->map(fn ($id) => $locked->get($id))->filter();
+                $billOutstanding = $unpaidOrders->sum(fn ($order) => max(0, (float) $order->total
+                    - $order->transactions->where('type', 'payment')->sum('amount')
+                    + $order->transactions->where('type', 'refund')->sum('amount')));
+                if ($unpaidOrders->count() !== count($ids) || $remainingAmount - $billOutstanding > 0.0001) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'amount' => 'Số tiền vượt công nợ còn lại hoặc các Bill đã thay đổi. Vui lòng đối chiếu lại.',
+                    ]);
+                }
+            }
+            $receiptImagePath = $request->hasFile('receipt_image')
+                ? $request->file('receipt_image')->store('customer-payments/receipts', 'public')
+                : null;
+
             foreach ($unpaidOrders as $order) {
                 if ($remainingAmount <= 0.0001) {
                     break;

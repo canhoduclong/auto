@@ -31,7 +31,7 @@ class CustomerDebtReportController extends Controller
 
     public function index(Request $request, CustomerDebtSheetService $sheets, CustomerDebtReportService $report, DebtCollectionService $collections)
     {
-        $this->authorizeAdmin($request);
+        abort_unless($request->user()->hasRole(['admin', 'account', 'accountant', 'accounting']), 403);
         $data = $request->validate(['report_source' => 'nullable|in:sheet,system', 'payment_mode' => 'nullable|in:all,cycle', 'scope' => 'nullable|in:all,orders', 'from' => 'nullable|required_if:scope,orders|date_format:Y-m-d', 'to' => 'nullable|required_if:scope,orders|date_format:Y-m-d|after_or_equal:from', 'search' => 'nullable|string|max:150', 'sale' => 'nullable|string|max:100', 'balance' => 'nullable|in:debt,all,settled,credit', 'recovery' => 'nullable|in:normal,difficult,unrecoverable,all', 'status' => ['nullable', Rule::in(array_merge(array_keys(DebtCollectionService::STATUSES), ['all', 'follow_up_due']))], 'per_page' => 'nullable|in:20,30,50,100', 'page' => 'nullable|integer|min:1', 'sort' => 'nullable|in:balance,period_increase,days_without_purchase,days_without_payment', 'direction' => 'nullable|in:asc,desc']);
         [$rows, $snapshot] = $this->sourceData($request, $sheets, $report);
         $reportSource = $request->input('report_source') ?: 'sheet';
@@ -164,7 +164,7 @@ class CustomerDebtReportController extends Controller
 
     public function remind(Request $request, CustomerDebtSheetService $sheets, DebtCollectionService $collections)
     {
-        $this->authorizeAdmin($request);
+        abort_unless($collections->canRecord($request->user()), 403);
         $this->normalizeMoney($request, 'target_amount');
         $request->merge(['note' => trim((string) $request->input('note'))]);
         $data = $request->validate($this->targetRules() + ['request_id' => 'required|uuid', 'target_amount' => 'required|integer|min:1|max:999999999999999', 'channel' => ['required', Rule::in(array_keys(DebtCollectionService::CHANNELS))], 'note' => 'required|string|min:3|max:3000', 'promised_date' => 'nullable|date_format:Y-m-d|after_or_equal:today', 'follow_up_date' => 'nullable|date_format:Y-m-d|after_or_equal:today']);
@@ -181,7 +181,7 @@ class CustomerDebtReportController extends Controller
 
     public function history(Request $request, CustomerDebtSheetService $sheets, DebtCollectionService $collections)
     {
-        $this->authorizeAdmin($request);
+        abort_unless($collections->canRecord($request->user()), 403);
         $request->validate($this->targetRules() + ['history_page' => 'nullable|integer|min:1']);
         [$row,$snapshot] = $this->resolveRow($request, $sheets);
         $evaluation = $collections->evaluate($row, $collections->records($row['report_source']));
@@ -189,7 +189,9 @@ class CustomerDebtReportController extends Controller
         $all = collect($evaluation['logs']);
         $logs = new \Illuminate\Pagination\LengthAwarePaginator($all->forPage($page, 10)->values(), $all->count(), 10, $page, ['path' => $request->url(), 'pageName' => 'history_page', 'query' => $request->except('history_page')]);
 
-        return response()->json(['html' => view('customer-debt.report-history-content', compact('row', 'snapshot', 'evaluation', 'logs'))->render()])->header('Cache-Control', 'no-store');
+        $canRespond = $request->user()->isAdmin();
+
+        return response()->json(['html' => view('customer-debt.report-history-content', compact('row', 'snapshot', 'evaluation', 'logs', 'canRespond'))->render()])->header('Cache-Control', 'no-store');
     }
 
     public function updateRecovery(Request $request, CustomerDebtSheetService $sheets, \App\Services\CustomerDebtRecoveryService $recovery)

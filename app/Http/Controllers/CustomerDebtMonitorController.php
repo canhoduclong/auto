@@ -87,6 +87,11 @@ class CustomerDebtMonitorController extends Controller
         $reportAlerts = $selected ? $policyService->evaluate($reportHistory, $selected['policy'], $reportTo) : null;
         $reportLastPurchase = collect($reportHistory)->where('type', 'sale')->where('amount', '>', 0)->max('date');
         $reportLastPayment = collect($reportHistory)->where('type', 'payment')->where('amount', '>', 0)->max('date');
+        $settlementMethod = $selected['policy']['settlement_method'] ?? 'batch';
+        $allocationService = app(\App\Services\CustomerDebtPaymentAllocation::class);
+        $allocation = $selected ? $allocationService->reconcile($reportHistory, $settlementMethod, $selected['customer_id']) : null;
+        $saleEntries = $saleEntries->map(fn ($entry) => $entry + ['allocation' => $allocation['lines'][$allocationService->key($entry)] ?? null]);
+        $paymentEntries = $paymentEntries->map(fn ($entry) => $entry + ['allocation_issue' => $allocation['unmatched'][$allocationService->key($entry)] ?? null]);
         $purchasePage = (int) ($data['purchase_page'] ?? $data['detail_page'] ?? 1);
         $paymentPage = (int) ($data['payment_page'] ?? 1);
         $purchases = new \Illuminate\Pagination\LengthAwarePaginator($saleEntries->forPage($purchasePage, 100)->values(), $saleEntries->count(), 100, $purchasePage, ['path' => $request->url(), 'pageName' => 'purchase_page', 'query' => $request->except(['purchase_page', 'detail_page']), 'fragment' => 'debt-detail']);
@@ -162,7 +167,26 @@ class CustomerDebtMonitorController extends Controller
             return view('customer-debt.customer-statement', compact('selected', 'statementCustomer', 'snapshot', 'reportFrom', 'reportTo', 'opening', 'closing', 'detailSales', 'detailGifts', 'detailPayments', 'detailAdjustments', 'reportLastPurchase', 'reportLastPayment', 'saleEntries', 'paymentEntries'));
         }
 
-        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'detailSalesPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail', 'canCreateQuickCustomer', 'quickCustomerSales'));
+        $detailPolicyAction = null;
+        $detailPolicyKey = null;
+        $reminderHistory = null;
+        if ($selected) {
+            $customer = $selected['customer_id'] ? $byId->get($selected['customer_id']) : null;
+            $source = $groups[$data['customer'] ?? ($selected['source_keys'][0] ?? '')] ?? null;
+            $detailPolicyKey = $source['key'] ?? null;
+            $actor = $request->user();
+            if ($customer && $policyService->canEditCustomer($actor, $customer)) {
+                $detailPolicyAction = route('customers.debt-policy.update', $customer);
+            } elseif ($canLoad && $source && empty($source['manual_only'])) {
+                $detailPolicyAction = route('customer-debt.policy');
+            }
+            $collections = app(\App\Services\DebtCollectionService::class);
+            if ($canLoad && $collections->canRecord($actor)) {
+                $reminderHistory = $collections->evaluate($selected, $collections->records());
+            }
+        }
+
+        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'detailSalesPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail', 'canCreateQuickCustomer', 'quickCustomerSales', 'settlementMethod', 'allocation', 'detailPolicyAction', 'detailPolicyKey', 'reminderHistory'));
     }
 
     private function voucher(Request $request, string $presentation, array $selected, \Illuminate\Support\Collection $sales, string $reportFrom, string $reportTo)

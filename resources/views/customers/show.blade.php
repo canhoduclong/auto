@@ -404,7 +404,10 @@
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Ghi chu</label>
-                                <textarea name="note" rows="3" class="form-control">{{ old('note') }}</textarea>
+                                <textarea name="note" rows="3" class="form-control" @required($debtPolicy['settlement_method'] !== 'batch')>{{ old('note') }}</textarea>
+                                @if($debtPolicy['settlement_method'] !== 'batch')
+                                    <div class="form-text">Ghi nội dung theo mẫu <strong>Bill 13/11/2026 | Mã đơn: DH123</strong>. @if($debtPolicy['settlement_method'] === 'mixed') Khoản gộp cần ghi <strong>Theo đợt</strong>. @endif</div>
+                                @endif
                             </div>
                             <div class="mb-3">
                                 <label class="form-label">Upload chung tu (tuy chon)</label>

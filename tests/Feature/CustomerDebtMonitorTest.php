@@ -1663,7 +1663,34 @@ class CustomerDebtMonitorTest extends TestCase
         (new \App\Http\Controllers\CustomerDebtReportController)->updatePriority($this->request(['customer_id' => 1, 'stars' => 5, 'priority_version' => str_repeat('0', 64)]), $this->service([]), new \App\Services\CustomerDebtPriorityService);
     }
 
-    public function test_debt_report_is_admin_only_and_deduplicates_linked_sources(): void
+    public function test_bill_allocation_matches_date_and_code_and_leaves_unidentified_receipts_unallocated(): void
+    {
+        $entries = [
+            array_replace($this->entry('CRM01', 'Chị Bình', 1), ['date' => '2026-11-12', 'order_code' => 'DH123']),
+            array_replace($this->entry('CRM01', 'Chị Bình', 2), ['date' => '2026-11-13', 'order_code' => 'DH124']),
+            array_replace($this->entry('CRM01', 'Chị Bình', 3), ['date' => '2026-11-14', 'type' => 'payment', 'amount' => 400, 'note' => 'Bill 13/11/2026 | Mã đơn: DH124']),
+            array_replace($this->entry('CRM01', 'Chị Bình', 4), ['date' => '2026-11-14', 'type' => 'payment', 'amount' => 300, 'note' => 'Thu tiền hàng không có mã']),
+            array_replace($this->entry('CRM01', 'Chị Bình', 5), ['date' => '2026-11-14', 'type' => 'payment', 'amount' => 100, 'note' => 'Bill 12/11/2026 | Mã đơn: DH124']),
+            array_replace($this->entry('CRM01', 'Chị Bình', 6), ['date' => '2026-11-15', 'type' => 'payment', 'amount' => 500, 'note' => 'Theo đợt']),
+        ];
+
+        $service = new \App\Services\CustomerDebtPaymentAllocation;
+        $batch = $service->reconcile($entries, 'batch');
+        self::assertSame(1, $batch['paidThrough']['row']);
+        self::assertSame(700, $batch['firstOpen']['remaining']);
+
+        $bill = $service->reconcile($entries, 'bill');
+        self::assertSame(0, $bill['lines']['nhatkybanhang:1']['paid']);
+        self::assertSame(400, $bill['lines']['nhatkybanhang:2']['paid']);
+        self::assertCount(3, $bill['unmatched']);
+
+        $mixed = $service->reconcile($entries, 'mixed');
+        self::assertSame(500, $mixed['lines']['nhatkybanhang:1']['paid']);
+        self::assertSame(400, $mixed['lines']['nhatkybanhang:2']['paid']);
+        self::assertCount(2, $mixed['unmatched']);
+    }
+
+    public function test_debt_report_allows_accounting_and_deduplicates_linked_sources(): void
     {
         $service = $this->service([$this->entry('CRM01', 'Chị Bình'), $this->entry('OLD02', 'Tên nguồn khác')]);
         $keys = array_keys($service->summarize($service->snapshot()['entries']));
@@ -1674,6 +1701,8 @@ class CustomerDebtMonitorTest extends TestCase
         $data = $controller->index($this->request([], 'admin'), $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
         self::assertSame(1, $data['rows']->total());
         self::assertSame(2000, $data['rows']->first()['balance']);
+        $accounting = $controller->index($this->request([], 'accountant'), $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
+        self::assertSame(2000, $accounting['rows']->first()['balance']);
         $this->expectException(HttpException::class);
         $controller->index($this->request(), $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService);
     }
@@ -1860,6 +1889,26 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(0, $result['latest']['paid']);
         self::assertCount(1, $result['latest']['pending']);
         self::assertSame('needs_review', $result['status']);
+    }
+
+    public function test_accounting_can_record_a_reminder_and_see_it_on_customer_debt_detail(): void
+    {
+        $this->collectionClock('2026-11-19 10:00:00');
+        $sheets = $this->service([$this->entry('CRM01', 'Chị Bình')]);
+        $key = hash('sha256', 'code:CRM01');
+        $collections = new \App\Services\DebtCollectionService;
+        $report = new \App\Http\Controllers\CustomerDebtReportController;
+        $response = $report->remind($this->request($this->reminderData(['source_key' => $key, 'target_amount' => 500]), 'accountant'), $sheets, $collections);
+        self::assertSame(200, $response->getStatusCode());
+        $detail = (new CustomerDebtMonitorController)->index($this->request(['customer' => $key], 'accountant'), $sheets)->getData();
+        self::assertCount(1, $detail['reminderHistory']['logs']);
+        self::assertSame(500, $detail['reminderHistory']['latest']['target']);
+        self::assertSame(route('customer-debt.policy'), $detail['detailPolicyAction']);
+        $history = $report->history($this->request(['source_key' => $key], 'accountant'), $sheets, $collections)->getData(true)['html'];
+        self::assertStringNotContainsString('Thêm phản hồi / lời hẹn', $history);
+
+        $this->expectException(HttpException::class);
+        $report->remind($this->request($this->reminderData(['source_key' => $key, 'target_amount' => 500]), 'sale'), $sheets, $collections);
     }
 
     public function test_collection_reminder_endpoint_resolves_current_customer_and_rejects_excess_target(): void

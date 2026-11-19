@@ -2,20 +2,15 @@
     <header class="debt-report-header">
         <div><div class="small text-muted mb-1">ĐỐI CHIẾU CÔNG NỢ</div><h2 id="debt-report-title">{{ $selected['name'] }}</h2><div class="small text-muted">Sale: {{ $selected['sale_label'] }}@if($selected['customer_id']) · Tổng hợp mọi nguồn đã ghép @endif</div></div>
         <div class="d-flex flex-wrap gap-2"><a class="btn btn-primary btn-sm" target="_blank" rel="noopener" href="{{ request()->fullUrlWithQuery(['presentation'=>'customer','purchase_page'=>null,'payment_page'=>null,'detail_page'=>null]) }}">Bản gửi khách</a>
-        @if(!isset($debtDetailAction) && $purchases->total() > 0)
-            @foreach(['payment-request' => 'Tạo đề nghị thanh toán', 'receipt' => 'Tạo phiếu thu'] as $type => $label)
-                <a class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener"
-                    href="{{ request()->fullUrlWithQuery(['presentation' => $type, 'purchase_page' => null, 'payment_page' => null, 'detail_page' => null]) }}">{{ $label }}</a>
-            @endforeach
-        @endif
-        <a class="btn btn-light btn-sm" href="{{ request()->fullUrlWithQuery(['customer'=>null,'system_customer'=>null,'report_from'=>null,'report_to'=>null,'window'=>null,'purchase_page'=>null,'payment_page'=>null,'detail_page'=>null]) }}">Đóng chi tiết</a></div>
+        <a class="btn btn-light btn-sm" href="{{ request()->fullUrlWithQuery(['customer'=>null,'system_customer'=>null,'report_from'=>null,'report_to'=>null,'window'=>null,'purchase_page'=>null,'payment_page'=>null,'detail_page'=>null,'adjustment_page'=>null]) }}">{{ isset($debtDetailAction) ? 'Đóng chi tiết' : 'Về danh sách công nợ' }}</a></div>
     </header>
     @php
         $sheetSources = collect($selected['source_keys'] ?? [$selected['key']])
             ->map(fn ($key) => $groups[$key] ?? null)
             ->filter(fn ($source) => $source && empty($source['manual_only']));
     @endphp
-    <div class="mb-3">
+    <div class="debt-detail-context">
+        <div>
         <div><strong>Hệ thống:</strong> {{ $selected['customer_id'] ? $selected['name'].' · '.($selected['code'] ?: 'Chưa có mã KH') : 'Chưa ghép khách hệ thống' }}</div>
         @forelse($sheetSources as $source)
             <div class="mt-2">
@@ -30,6 +25,13 @@
         @empty
             <div class="mt-2"><strong>Google Sheet:</strong> Chưa có nguồn đã ghép</div>
         @endforelse
+        @if($selected['customer_id'])
+            <a class="btn btn-light btn-sm mt-2" href="{{ route('customers.show', ['customer' => $selected['customer_id'], 'tab' => 'debt']) }}">Hồ sơ khách hàng</a>
+        @endif
+        </div>
+        @if(!isset($debtDetailAction))
+            @include('customer-debt.detail-policy')
+        @endif
     </div>
     <form method="GET" action="{{ $debtDetailAction ?? route('customer-debt.index') }}#debt-detail" class="debt-report-filters">
         @foreach(['tab','from','to','customer','system_customer','search','sale','alert','recovery','sort','direction','debt_page','balance','per_page','scope','range'] as $queryKey)
@@ -41,6 +43,12 @@
         <button class="btn btn-primary" type="submit">Xem báo cáo</button>
         <a class="btn btn-sm {{ $reportMode === 'recent' ? 'btn-primary' : 'btn-light' }}" href="{{ request()->fullUrlWithQuery(['window'=>'recent','report_from'=>null,'report_to'=>null,'purchase_page'=>1,'payment_page'=>1,'detail_page'=>null]) }}#debt-detail">14 ngày</a>
         <a class="btn btn-sm {{ $reportMode === 'all' ? 'btn-primary' : 'btn-light' }}" href="{{ request()->fullUrlWithQuery(['window'=>'all','report_from'=>null,'report_to'=>null,'purchase_page'=>1,'payment_page'=>1,'detail_page'=>null]) }}#debt-detail">Toàn bộ</a>
+        @if(!isset($debtDetailAction) && $purchases->total() > 0)
+            @foreach(['payment-request' => 'Tạo đề nghị thanh toán', 'receipt' => 'Tạo phiếu thu'] as $type => $label)
+                <a class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener"
+                    href="{{ request()->fullUrlWithQuery(['presentation' => $type, 'purchase_page' => null, 'payment_page' => null, 'detail_page' => null]) }}">{{ $label }}</a>
+            @endforeach
+        @endif
     </form>
     <div class="debt-report-metrics">
         <div class="debt-report-metric"><span>Mua hàng</span><strong>{{ number_format($detailSales, 0, ',', '.') }} đ</strong><small>Tặng: {{ number_format($detailGifts, 0, ',', '.') }} đ</small></div>
@@ -54,15 +62,48 @@
     <div class="debt-report-reconciliation"><span>Dư đầu kỳ <strong>{{ number_format($opening, 0, ',', '.') }} đ</strong></span>@if($detailAdjustments != 0)<span>Điều chỉnh trong kỳ <strong>{{ number_format($detailAdjustments, 0, ',', '.') }} đ</strong></span>@endif<span>{{ \Carbon\Carbon::parse($reportFrom)->format('d/m/Y') }} – {{ \Carbon\Carbon::parse($reportTo)->format('d/m/Y') }} · Phát sinh theo kỳ; số dư, ngày giao dịch gần nhất và rủi ro tính đến cuối kỳ.</span></div>
     <div class="small text-muted px-3 pb-3">Nguồn @if($canLoad ?? false)<a href="https://docs.google.com/spreadsheets/d/{{ $snapshot['spreadsheet_id'] ?? config('services.google_sheets.debt_spreadsheet_id') }}/edit?gid=438108508" target="_blank" rel="noopener">nhatkybanhang</a>@else nhatkybanhang @endif trong kỳ: Thanh toán <strong>{{ number_format($detailSalesPayments, 0, ',', '.') }} đ</strong> · Tặng <strong>{{ number_format($detailGifts, 0, ',', '.') }} đ</strong>. Tặng được trừ riêng khỏi số phải thu.</div>
     @if(!empty($snapshot['issues']) || !empty($snapshot['has_unidentified_payments']))<div class="small text-warning px-3 pb-3">Cần đối chiếu các khoản thu chưa xác định khách hàng để bảo đảm công nợ đầy đủ.</div>@endif
-    <div class="debt-report-columns">
+    @if($allocation ?? null)
+        <div class="px-3 pb-3 small">
+            <strong>Hình thức thanh toán · {{ \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[$settlementMethod] }}</strong>
+            @if($settlementMethod !== 'bill')
+                <div>Khoản theo đợt được phân bổ từ ngày giao cũ nhất. Kết quả tính đến cuối kỳ đối chiếu.</div>
+            @endif
+            @if($allocation['paidThrough'])
+                <div>Đã trả đủ liên tục đến <strong>{{ \Carbon\Carbon::parse($allocation['paidThrough']['date'])->format('d/m/Y') }}</strong>
+                    @if($allocation['paidThrough']['code']) · Đơn {{ $allocation['paidThrough']['code'] }} @else · Dòng Sheet {{ $allocation['paidThrough']['row'] }} @endif
+                </div>
+            @endif
+            @if($allocation['firstOpen'])
+                <div>
+                    Đơn hoặc dòng mua còn nợ đầu tiên <strong>{{ \Carbon\Carbon::parse($allocation['firstOpen']['date'])->format('d/m/Y') }}</strong>
+                    @if($allocation['firstOpen']['code']) · Đơn {{ $allocation['firstOpen']['code'] }} @else · Dòng Sheet {{ $allocation['firstOpen']['row'] }} @endif
+                    · Còn <strong>{{ number_format($allocation['firstOpen']['remaining'], 0, ',', '.') }} đ</strong>
+                </div>
+            @endif
+            @if($allocation['unmatched'])
+                <div class="text-danger">{{ count($allocation['unmatched']) }} khoản thu còn cần so khớp. Mở bảng Thanh toán để xem lý do.</div>
+            @endif
+            @if($allocation['credit'] > 0)
+                <div>Tiền theo đợt chưa cần phân bổ <strong>{{ number_format($allocation['credit'], 0, ',', '.') }} đ</strong></div>
+            @elseif($allocation['credit'] < 0)
+                <div class="text-warning">Khoản thu âm theo đợt cần đối chiếu <strong>{{ number_format(abs($allocation['credit']), 0, ',', '.') }} đ</strong></div>
+            @endif
+            @if($settlementMethod !== 'batch')
+                <div class="text-muted">Khi thu theo Bill, ghi <strong>Bill 13/11/2026 | Mã đơn: DH123</strong> trong nội dung thanh toán. Khoản thiếu ngày hoặc mã khớp được giữ chờ đối chiếu.</div>
+            @endif
+        </div>
+    @endif
+    <div class="debt-report-columns{{ !isset($debtDetailAction) && ($reminderHistory ?? null) ? ' debt-report-columns-with-history' : '' }}">
         <article class="debt-report-ledger">
             <header><h3>Mua hàng <small class="text-muted">· Mới nhất trước</small></h3><span>{{ number_format($purchases->total(), 0, ',', '.') }} dòng</span></header>
             <div class="debt-report-scroll" tabindex="0" aria-label="Chi tiết mua hàng">
-                <table class="table"><thead><tr><th>Ngày mua</th><th>Nội dung</th><th class="text-end">Tiền hàng</th><th class="text-end">Thanh toán</th><th class="text-end">Tặng</th><th class="text-end">Phải thu</th></tr></thead><tbody>
+                <table class="table"><thead><tr><th>Ngày mua</th><th>Nội dung</th><th class="text-end">Tiền hàng</th><th class="text-end">Thanh toán</th><th class="text-end">Tặng</th><th class="text-end">Phải thu</th><th class="text-end">Đã phân bổ</th><th class="text-end">Còn phải thu</th></tr></thead><tbody>
                 @forelse($purchases as $entry)
-                    <tr><td class="text-nowrap">{{ \Carbon\Carbon::parse($entry['date'])->format('d/m/Y') }}<small>{{ $entry['source_sheet'] ?? ($entry['type'] === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong') }} · Dòng {{ $entry['row'] }}</small></td><td>{{ $entry['note'] ?: 'Mua hàng' }}</td><td class="text-end">{{ number_format($entry['amount'], 0, ',', '.') }}</td><td class="text-end text-success">{{ number_format($entry['inline_payment'] ?? 0, 0, ',', '.') }}</td><td class="text-end">{{ number_format($entry['gift'] ?? 0, 0, ',', '.') }}</td><td class="text-end">{{ number_format($entry['amount'] - ($entry['gift'] ?? 0), 0, ',', '.') }}</td></tr>
-                @empty<tr><td colspan="6" class="text-center text-muted py-4">Không có giao dịch mua hàng trong kỳ.</td></tr>@endforelse
-                </tbody><tfoot><tr><th colspan="2">Tổng trong kỳ</th><th class="text-end">{{ number_format($detailSales, 0, ',', '.') }}</th><th class="text-end">{{ number_format($detailSalesPayments, 0, ',', '.') }}</th><th class="text-end">{{ number_format($detailGifts, 0, ',', '.') }}</th><th class="text-end">{{ number_format($detailSales - $detailGifts, 0, ',', '.') }}</th></tr></tfoot></table>
+                    <tr><td class="text-nowrap">{{ \Carbon\Carbon::parse($entry['date'])->format('d/m/Y') }}<small>{{ $entry['source_sheet'] ?? ($entry['type'] === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong') }} · Dòng {{ $entry['row'] }}</small></td><td>{{ $entry['note'] ?: 'Mua hàng' }} @if(!empty($entry['allocation']['code']))<small>Đơn {{ $entry['allocation']['code'] }}</small>@endif</td><td class="text-end">{{ number_format($entry['amount'], 0, ',', '.') }}</td><td class="text-end text-success">{{ number_format($entry['inline_payment'] ?? 0, 0, ',', '.') }}</td><td class="text-end">{{ number_format($entry['gift'] ?? 0, 0, ',', '.') }}</td><td class="text-end">{{ number_format($entry['amount'] - ($entry['gift'] ?? 0), 0, ',', '.') }}</td>
+                        <td class="text-end text-success">{{ isset($entry['allocation']) ? number_format($entry['allocation']['paid'], 0, ',', '.') : '—' }}</td>
+                        <td class="text-end {{ ($entry['allocation']['remaining'] ?? 0) > 0 ? 'text-danger' : 'text-success' }}">{{ isset($entry['allocation']) ? number_format($entry['allocation']['remaining'], 0, ',', '.') : '—' }}</td></tr>
+                @empty<tr><td colspan="8" class="text-center text-muted py-4">Không có giao dịch mua hàng trong kỳ.</td></tr>@endforelse
+                </tbody><tfoot><tr><th colspan="2">Tổng trong kỳ</th><th class="text-end">{{ number_format($detailSales, 0, ',', '.') }}</th><th class="text-end">{{ number_format($detailSalesPayments, 0, ',', '.') }}</th><th class="text-end">{{ number_format($detailGifts, 0, ',', '.') }}</th><th class="text-end">{{ number_format($detailSales - $detailGifts, 0, ',', '.') }}</th><th colspan="2"></th></tr></tfoot></table>
             </div>
             <footer>{{ $purchases->links() }}</footer>
         </article>
@@ -71,12 +112,15 @@
             <div class="debt-report-scroll" tabindex="0" aria-label="Chi tiết thanh toán">
                 <table class="table"><thead><tr><th>Ngày thanh toán</th><th>Nội dung</th><th class="text-end">Số tiền</th></tr></thead><tbody>
                 @forelse($payments as $entry)
-                    <tr><td class="text-nowrap">{{ \Carbon\Carbon::parse($entry['date'])->format('d/m/Y') }}<small>{{ $entry['source_sheet'] ?? ($entry['type'] === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong') }} · Dòng {{ $entry['row'] }}</small></td><td>{{ $entry['note'] ?: 'Thanh toán' }}</td><td class="text-end text-success">{{ number_format($entry['amount'], 0, ',', '.') }} đ</td></tr>
+                    <tr><td class="text-nowrap">{{ \Carbon\Carbon::parse($entry['date'])->format('d/m/Y') }}<small>{{ $entry['source_sheet'] ?? ($entry['type'] === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong') }} · Dòng {{ $entry['row'] }}</small></td><td>{{ $entry['note'] ?: 'Thanh toán' }} @if(!empty($entry['allocation_issue']))<div class="small text-danger">{{ $entry['allocation_issue']['reason'] }} · {{ number_format($entry['allocation_issue']['amount'], 0, ',', '.') }} đ</div>@endif</td><td class="text-end text-success">{{ number_format($entry['amount'], 0, ',', '.') }} đ</td></tr>
                 @empty<tr><td colspan="3" class="text-center text-muted py-4">Không có khoản thanh toán trong kỳ.</td></tr>@endforelse
                 </tbody><tfoot><tr><th colspan="2">Tổng trong kỳ</th><th class="text-end">{{ number_format($detailPayments, 0, ',', '.') }} đ</th></tr></tfoot></table>
             </div>
             <footer><div class="small text-muted mb-2">Đang xem {{ $payments->firstItem() ?? 0 }}–{{ $payments->lastItem() ?? 0 }} / {{ number_format($payments->total(), 0, ',', '.') }} khoản thanh toán</div>{{ $payments->links() }}</footer>
         </article>
+        @if(!isset($debtDetailAction) && ($reminderHistory ?? null))
+            @include('customer-debt.detail-reminders')
+        @endif
     </div>
     @if($balanceAdjustments->total())
     <details class="debt-adjustment-history" open>

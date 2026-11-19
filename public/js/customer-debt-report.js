@@ -1,7 +1,7 @@
 (() => {
     const scope=document.getElementById('collection-scope');
     const toggleDates=()=>document.querySelectorAll('#collection-from,#collection-to').forEach(input=>{input.disabled=false;input.required=scope.value==='orders';});
-    scope.addEventListener('change',toggleDates);toggleDates();
+    if (scope) { scope.addEventListener('change', toggleDates); toggleDates(); }
     document.querySelectorAll('[data-report-sheet-refresh]').forEach(form=>form.addEventListener('submit',()=>{const button=form.querySelector('button');button.disabled=true;button.textContent='Đang cập nhật…';}));
     document.addEventListener('click',event=>document.querySelectorAll('.collection-more[open]').forEach(menu=>{if(!menu.contains(event.target)||(event.target.closest('button,a')&&!event.target.closest('[data-collection-priority]')))menu.open=false;}));
     document.querySelectorAll('[data-collection-priority]').forEach(form=>form.addEventListener('submit',async event=>{

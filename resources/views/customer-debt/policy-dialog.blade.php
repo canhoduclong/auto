@@ -7,6 +7,13 @@
         <label for="debt-policy-fixed" class="form-label">Công nợ cố định (đ)</label><input id="debt-policy-fixed" name="fixed_debt" inputmode="numeric" class="form-control mb-3">
         <label for="debt-policy-limit" class="form-label">Trần công nợ (đ)</label><input id="debt-policy-limit" name="credit_limit" inputmode="numeric" class="form-control mb-3" placeholder="Mặc định: 0 đ">
         <label for="debt-policy-threshold-days" class="form-label">Số ngày cho nợ khi vượt ngưỡng</label><input id="debt-policy-threshold-days" name="threshold_days" type="number" min="0" max="3650" step="1" class="form-control mb-3" placeholder="Mặc định 0 ngày">
+        <label for="debt-policy-settlement" class="form-label">Hình thức thanh toán</label>
+        <select id="debt-policy-settlement" name="settlement_method" class="form-select mb-2">
+            @foreach(\App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS as $value => $label)
+                <option value="{{ $value }}">{{ $label }}</option>
+            @endforeach
+        </select>
+        <p class="small text-muted mb-3">Theo Bill hoặc Hỗn hợp, ghi ngày giao và mã đơn trong nội dung thu, ví dụ <strong>Bill 13/11/2026 | Mã đơn: DH123</strong>. Với khoản gộp của khách Hỗn hợp, ghi rõ <strong>Theo đợt</strong>.</p>
         <label for="debt-policy-payment-mode" class="form-label">Lịch thanh toán</label>
         <select id="debt-policy-payment-mode" class="form-select mb-3" name="payment_mode">
             <option value="default">Theo tiêu chí công nợ</option>
