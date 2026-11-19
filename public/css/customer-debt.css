@@ -216,8 +216,26 @@
 .debt-detail-policy-values { display:grid; grid-template-columns:repeat(auto-fit,minmax(125px,1fr)); gap:8px; margin:10px 0 0; }
 .debt-detail-policy-values dt { color:#64748b; font-size:12px; font-weight:400; }
 .debt-detail-policy-values dd { margin:2px 0 0; font-weight:650; }
-@media (min-width:1500px) { .debt-report-columns-with-history { grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(230px,.65fr); } }
-@media (min-width:992px) and (max-width:1499.98px) { .debt-detail-reminders { grid-column:1 / -1; } }
+.debt-report { container-type:inline-size; }
+.debt-report-columns > .debt-report-ledger { display:flex; flex-direction:column; }
+.debt-report-columns > .debt-report-ledger > header { min-height:54px; align-items:center; }
+.debt-report-columns > .debt-report-ledger > footer { margin-top:auto; }
+.debt-detail-reminders { grid-column:1 / -1; }
+
+.debt-report-scroll :is(.debt-purchase-table, .debt-settlement-table) { table-layout:fixed; }
+.debt-report-scroll :is(.debt-purchase-table, .debt-settlement-table) :is(th, td) { padding:8px; }
+.debt-purchase-table { min-width:35rem; }
+.debt-purchase-table .debt-ledger-date { width:8.25rem; }
+.debt-purchase-table .debt-ledger-money { width:5.7rem; }
+.debt-settlement-table { min-width:20rem; }
+.debt-settlement-table .debt-ledger-date { width:8rem; }
+.debt-settlement-table .debt-ledger-money { width:7.7rem; }
+.debt-report-scroll :is(.debt-purchase-table, .debt-settlement-table) td:nth-child(2) { overflow-wrap:anywhere; }
+
+@container (min-width: 1280px) {
+    .debt-report-columns-with-history { grid-template-columns:minmax(35rem,1.3fr) minmax(20rem,1fr) minmax(17rem,.88fr); }
+    .debt-detail-reminders { grid-column:auto; }
+}
 @media (max-width:767.98px) {
     .debt-detail-context, .debt-detail-notes { padding:0 12px 12px; }
     .debt-detail-notes-with-policy { grid-template-columns:minmax(0,1fr); }

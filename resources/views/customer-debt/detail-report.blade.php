@@ -99,7 +99,7 @@
         <article class="debt-report-ledger">
             <header><h3>Mua hàng <small class="text-muted">· Mới nhất trước</small></h3><span>{{ number_format($purchases->total(), 0, ',', '.') }} dòng</span></header>
             <div class="debt-report-scroll" tabindex="0" aria-label="Chi tiết mua hàng">
-                <table class="table"><thead><tr><th>Ngày mua</th><th>Nội dung</th><th class="text-end">Tiền hàng</th><th class="text-end">Phải thu</th><th class="text-end">Đã phân bổ</th><th class="text-end">Còn phải thu</th></tr></thead><tbody>
+                <table class="table debt-purchase-table"><colgroup><col class="debt-ledger-date"><col><col span="4" class="debt-ledger-money"></colgroup><thead><tr><th>Ngày mua</th><th>Nội dung</th><th class="text-end">Tiền hàng</th><th class="text-end">Phải thu</th><th class="text-end">Đã phân bổ</th><th class="text-end">Còn phải thu</th></tr></thead><tbody>
                 @forelse($purchases as $entry)
                     <tr><td class="text-nowrap">{{ \Carbon\Carbon::parse($entry['date'])->format('d/m/Y') }}<small>{{ $entry['source_sheet'] ?? ($entry['type'] === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong') }} · Dòng {{ $entry['row'] }}</small></td><td>{{ $entry['note'] ?: 'Mua hàng' }} @if(!empty($entry['allocation']['code']))<small>Đơn {{ $entry['allocation']['code'] }}</small>@endif</td><td class="text-end">{{ number_format($entry['amount'], 0, ',', '.') }}</td><td class="text-end">{{ number_format($entry['amount'] - ($entry['gift'] ?? 0), 0, ',', '.') }}</td>
                         <td class="text-end text-success">{{ isset($entry['allocation']) ? number_format($entry['allocation']['paid'], 0, ',', '.') : '—' }}</td>
@@ -112,7 +112,7 @@
         <article class="debt-report-ledger">
             <header><h3>Thanh toán & hàng tặng <small class="text-muted">· Mới nhất trước</small></h3><span>{{ number_format($payments->total(), 0, ',', '.') }} khoản</span></header>
             <div class="debt-report-scroll" tabindex="0" aria-label="Chi tiết thanh toán và hàng tặng">
-                <table class="table"><thead><tr><th>Ngày giao dịch</th><th>Nội dung</th><th class="text-end">Số tiền</th></tr></thead><tbody>
+                <table class="table debt-settlement-table"><colgroup><col class="debt-ledger-date"><col><col class="debt-ledger-money"></colgroup><thead><tr><th>Ngày giao dịch</th><th>Nội dung</th><th class="text-end">Số tiền</th></tr></thead><tbody>
                 @forelse($payments as $entry)
                     <tr><td class="text-nowrap">{{ \Carbon\Carbon::parse($entry['date'])->format('d/m/Y') }}<small>{{ $entry['source_sheet'] ?? ($entry['type'] === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong') }} · Dòng {{ $entry['row'] }}</small></td><td>@if($entry['type'] === 'gift')
                         <span class="badge bg-light text-dark">Hàng tặng / giảm trừ</span>
