@@ -24,7 +24,7 @@ button { border: 0; border-radius: 6px; padding: 9px 15px; background: var(--vou
 .voucher { background: var(--voucher-paper); padding: 24px; }
 .voucher-brand { display: flex; align-items: center; gap: 22px; padding: 20px 24px; background: var(--voucher-brown); border-radius: 14px; color: var(--voucher-gold); }
 .voucher-mark { flex: 0 0 auto; display: grid; place-items: center; width: 64px; height: 64px; border: 4px double var(--voucher-gold); border-radius: 50%; font-size: 25px; font-weight: bold; }
-.voucher-brand strong { max-width: 30ch; font-size: 25px; text-transform: uppercase; }
+.voucher-brand strong { font-size: clamp(17px, 2.3vw, 22px); line-height: 1.3; text-transform: uppercase; }
 .voucher-body { padding: 0 22px 8px; }
 .voucher h1 { margin: 22px 0 8px; font-size: 32px; text-align: center; text-transform: uppercase; }
 .voucher h2 { font-size: 21px; margin: 16px 0 6px; }
@@ -37,12 +37,19 @@ button { border: 0; border-radius: 6px; padding: 9px 15px; background: var(--vou
 .voucher :is(th, td):last-child { text-align: right; font-variant-numeric: tabular-nums; }
 .voucher tbody tr { background: #fffdf8; }
 .voucher tbody tr:nth-child(even) { background: #eee7db; }
-.voucher-total { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 3px 14px; padding: 9px 12px; border-radius: 8px; background: var(--voucher-brown); color: white; text-transform: uppercase; }
+.voucher-total { display: flex; align-items: center; justify-content: space-between; gap: 3px 14px; padding: 9px 12px; border-radius: 8px; background: var(--voucher-brown); color: white; text-transform: uppercase; }
 .voucher-total b { color: var(--voucher-gold); font-size: 22px; text-transform: none; white-space: nowrap; }
 .voucher-office, .voucher-signatures { margin-top: 22px; font-weight: bold; text-transform: uppercase; }
 .voucher-office { text-align: right; }
 .voucher-signatures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); text-align: center; gap: 6px; padding-bottom: 46px; }
 .voucher-signatures span { display: block; font-weight: normal; text-transform: none; }
+
+.voucher-total strong { white-space: nowrap; }
+.voucher-receipt-details { margin: 10px 0 0; }
+.voucher-receipt-details > div { display: grid; grid-template-columns: 11em minmax(0, 1fr); gap: 10px; margin-top: 6px; }
+.voucher-receipt-details dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.voucher-write-in { display: inline-block; width: min(100%, 16em); height: 1.15em; border-bottom: 1px dotted currentColor; }
+.voucher-receipt .voucher-signatures { gap: 10px; padding-bottom: 36px; }
 
 @media screen and (max-width: 550px) {
     main, .voucher { padding: 10px; }
@@ -50,13 +57,27 @@ button { border: 0; border-radius: 6px; padding: 9px 15px; background: var(--vou
     .voucher h1 { font-size: 23px; }
     .voucher-brand strong { font-size: 17px; }
     .voucher-brand { padding: 12px; gap: 12px; }
+    .voucher .voucher-total strong, .voucher .voucher-total b { font-size: clamp(11px, 3.6vw, 16px); }
+    .voucher-receipt-details > div { grid-template-columns: 9.5em minmax(0, 1fr); font-size: 14px; }
+    .voucher-receipt .voucher-signatures { font-size: 12px; }
+}
+@media screen and (max-width: 380px) {
+    .voucher-total strong { white-space: normal; }
 }
 @page { size: A4 portrait; margin: 11mm; }
 @media print {
     body { background: white; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
     main { margin: 0; padding: 0; max-width: none; }
     .voucher-tools, .voucher-editor { display: none; }
-    .voucher { padding: 10px; }
+    .voucher { padding: 10px; font-size: 13px; }
     .voucher thead { display: table-header-group; }
     .voucher tr, .voucher-at-end, .voucher-brand { break-inside: avoid; }
+    .voucher .voucher-brand { padding: 14px 18px; gap: 16px; }
+    .voucher .voucher-brand strong { font-size: 18px; }
+    .voucher .voucher-mark { width: 50px; height: 50px; font-size: 20px; }
+    .voucher h1 { font-size: 26px; margin-top: 16px; }
+    .voucher h2 { font-size: 17px; margin-top: 12px; }
+    .voucher th, .voucher td { padding: 6px 10px; }
+    .voucher .voucher-total b { font-size: 18px; }
+    .voucher-receipt .voucher-signatures { margin-top: 16px; }
 }

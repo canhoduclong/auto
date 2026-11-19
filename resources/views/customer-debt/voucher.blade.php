@@ -55,7 +55,7 @@
     </details>
 
     @if($lines->isNotEmpty())
-        <article class="voucher">
+        <article class="voucher{{ $receipt ? ' voucher-receipt' : '' }}">
             <header class="voucher-brand">
                 <span class="voucher-mark" aria-hidden="true">HL</span>
                 <strong>{{ $company }}</strong>
@@ -77,8 +77,10 @@
                     <div class="voucher-total"><strong>{{ $receipt ? 'Tổng số tiền thu' : 'Tổng đề nghị thanh toán' }}</strong><b>{{ number_format($total, 0, ',', '.') }} đồng</b></div>
                     <p>Bằng chữ · {{ \App\Support\VietnameseMoneyWords::format($total) }}</p>
                     @if($receipt)
-                        <p>Số phiếu · {{ $number !== '' ? $number : '………………………………' }}</p>
-                        <p>Hình thức thanh toán · {{ $method !== '' ? $method : '……………………………………………………' }}</p>
+                        <dl class="voucher-receipt-details">
+                            <div><dt>Số phiếu</dt><dd>@if($number !== ''){{ $number }}@else<span class="voucher-write-in"></span>@endif</dd></div>
+                            <div><dt>Hình thức thanh toán</dt><dd>@if($method !== ''){{ $method }}@else<span class="voucher-write-in"></span>@endif</dd></div>
+                        </dl>
                         <footer class="voucher-signatures">
                             @foreach(['Người nộp tiền', 'Người thu tiền', 'Người lập phiếu'] as $signature)
                                 <div><strong>{{ $signature }}</strong><span>(Ký, ghi rõ họ tên)</span></div>
