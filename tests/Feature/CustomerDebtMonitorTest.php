@@ -945,6 +945,29 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame('normal', $row['recovery']['status']);
     }
 
+    public function test_debt_vouchers_can_include_all_delivery_dates_beyond_the_manual_limit(): void
+    {
+        $this->collectionClock('2026-11-19 10:00:00');
+        $entries = [];
+        foreach (range(0, 120) as $day) {
+            $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', $day + 1), [
+                'date' => \Carbon\CarbonImmutable::parse('2026-01-01')->addDays($day)->toDateString(),
+            ]);
+        }
+        $sheets = $this->service($entries);
+        $controller = new CustomerDebtMonitorController;
+        foreach (['payment-request', 'receipt'] as $presentation) {
+            $request = $this->request([
+                'customer' => hash('sha256', 'code:CRM01'), 'presentation' => $presentation,
+                'report_from' => '2026-01-02', 'report_to' => '2026-11-19', 'voucher_all' => '1',
+            ], 'admin');
+            $voucher = $controller->index($request, $sheets)->getData();
+            self::assertCount(120, $voucher['lines']);
+            self::assertFalse($voucher['lines']->has('2026-01-01'));
+            self::assertSame(120000, $voucher['total']);
+        }
+    }
+
     public function test_debt_vouchers_use_selected_delivery_dates_without_posting_a_payment(): void
     {
         $this->collectionClock('2026-11-19 10:00:00');

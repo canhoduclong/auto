@@ -168,6 +168,7 @@ class CustomerDebtMonitorController extends Controller
     private function voucher(Request $request, string $presentation, array $selected, \Illuminate\Support\Collection $sales, string $reportFrom, string $reportTo)
     {
         $data = $request->validate([
+            'voucher_all' => 'nullable|boolean',
             'voucher_dates' => 'nullable|array|max:100',
             'voucher_dates.*' => 'required|date_format:Y-m-d|distinct',
             'voucher_number' => 'nullable|string|max:50',
@@ -180,7 +181,7 @@ class CustomerDebtMonitorController extends Controller
             throw \Illuminate\Validation\ValidationException::withMessages(['voucher_dates' => 'Ngày giao hàng đã thay đổi hoặc nằm ngoài kỳ đối chiếu.']);
         }
 
-        $lines = $deliveries->only($dates);
+        $lines = ! empty($data['voucher_all']) ? $deliveries : $deliveries->only($dates);
         $total = $lines->sum();
         $issuedDate = now(config('app.display_timezone'))->format('d/m/Y');
         $receipt = $presentation === 'receipt';

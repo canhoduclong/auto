@@ -9,7 +9,7 @@
 <body>
 <main>
     <div class="voucher-tools">
-        <a href="{{ request()->fullUrlWithQuery(['presentation' => null, 'voucher_dates' => null, 'voucher_number' => null, 'voucher_method' => null]) }}#debt-detail">Về đối chiếu công nợ</a>
+        <a href="{{ request()->fullUrlWithQuery(['presentation' => null, 'voucher_dates' => null, 'voucher_all' => null, 'voucher_number' => null, 'voucher_method' => null]) }}#debt-detail">Về đối chiếu công nợ</a>
         @if($lines->isNotEmpty())<button type="button" onclick="window.print()">In / Lưu PDF</button>@endif
     </div>
     <details class="voucher-editor" @if($lines->isEmpty()) open @endif>
@@ -23,6 +23,10 @@
             @if($errors->any())<p class="voucher-error" role="alert">{{ $errors->first() }}</p>@endif
             @if($deliveries->isNotEmpty())
                 <p>Chọn ngày cần lập phiếu. Số tiền mỗi ngày là tiền hàng sau khi trừ tặng. Hãy đối chiếu với khoản cần {{ $receipt ? 'ghi trên phiếu thu' : 'đề nghị thanh toán' }} trước khi in.</p>
+                <label class="voucher-select-all" for="voucher-select-all" hidden>
+                    <input type="checkbox" id="voucher-select-all" name="voucher_all" value="1">
+                    Chọn tất cả ngày
+                </label>
                 <div class="voucher-options" role="group" aria-label="Ngày giao hàng">
                     @foreach($deliveries->reverse() as $date => $amount)
                         <label><input type="checkbox" name="voucher_dates[]" value="{{ $date }}" @checked($lines->has($date))>
@@ -88,5 +92,6 @@
         </article>
     @endif
 </main>
+<script src="{{ asset('js/customer-debt-voucher.js') }}?v={{ filemtime(public_path('js/customer-debt-voucher.js')) }}"></script>
 </body>
 </html>
