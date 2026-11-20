@@ -113,7 +113,19 @@
     </div>
     <div class="debt-report-columns{{ !isset($debtDetailAction) && ($reminderHistory ?? null) ? ' debt-report-columns-with-history' : '' }}">
         <article class="debt-report-ledger">
-            <header><h3>Mua hàng</h3><span>{{ number_format($purchases->total(), 0, ',', '.') }} dòng</span></header>
+            <header>
+                <h3>Mua hàng</h3>
+                <div class="d-flex flex-wrap align-items-center justify-content-end gap-2">
+                    <span class="small text-muted">{{ number_format($purchases->total(), 0, ',', '.') }} dòng</span>
+                    <select class="form-select form-select-sm w-auto" aria-label="Số dòng mua hàng mỗi trang"
+                        onchange="window.location.assign(this.value)">
+                        @foreach($purchasePageSizes as $pageSize)
+                            <option value="{{ request()->fullUrlWithQuery(['purchase_per_page' => $pageSize, 'purchase_page' => 1]) }}#debt-detail"
+                                @selected($purchases->perPage() === $pageSize)>{{ $pageSize }} dòng/trang</option>
+                        @endforeach
+                    </select>
+                </div>
+            </header>
             <div class="debt-report-scroll" tabindex="0" aria-label="Chi tiết mua hàng">
                 <table class="table debt-purchase-table"><colgroup><col class="debt-ledger-date"><col><col span="4" class="debt-ledger-money"></colgroup><thead><tr><th>Ngày mua</th><th>Nội dung</th><th class="text-end">Tiền hàng</th><th class="text-end">Phải thu</th><th class="text-end">Đã phân bổ</th><th class="text-end">Còn phải thu</th></tr></thead><tbody>
                 @forelse($purchases as $entry)

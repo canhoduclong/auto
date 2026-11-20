@@ -2518,7 +2518,7 @@ class CustomerDebtMonitorTest extends TestCase
         }
         $service = $this->service($entries);
         $key = array_key_first($service->summarize($entries));
-        $view = (new CustomerDebtMonitorController)->index($this->request(['customer' => $key, 'window' => 'all', 'detail_page' => 2], 'admin'), $service);
+        $view = (new CustomerDebtMonitorController)->index($this->request(['customer' => $key, 'window' => 'all', 'detail_page' => 2, 'purchase_per_page' => 100], 'admin'), $service);
         $data = $view->getData();
         self::assertSame(101, $data['purchases']->total());
         self::assertCount(1, $data['purchases']);
@@ -2988,8 +2988,17 @@ class CustomerDebtMonitorTest extends TestCase
         }
         $service = $this->service($entries);
         $key = array_key_first($service->summarize($entries));
-        $data = (new CustomerDebtMonitorController)->index($this->request(['tab' => 'all', 'customer' => $key, 'window' => 'all', 'purchase_page' => 2, 'payment_page' => 1], 'admin'), $service)->getData();
-        self::assertCount(1, $data['purchases']);
+        $params = ['tab' => 'all', 'customer' => $key, 'window' => 'all', 'purchase_page' => 2, 'payment_page' => 1];
+        $controller = new CustomerDebtMonitorController;
+        $default = $controller->index($this->request($params, 'admin'), $service)->getData();
+        self::assertSame(20, $default['purchases']->perPage());
+        self::assertCount(20, $default['purchases']);
+
+        $data = $controller->index($this->request($params + ['purchase_per_page' => 50], 'admin'), $service)->getData();
+        self::assertSame(50, $data['purchases']->perPage());
+        self::assertCount(50, $data['purchases']);
+        self::assertStringContainsString('purchase_per_page=50', $data['purchases']->url(3));
+        self::assertStringContainsString('purchase_per_page=50', $data['payments']->url(2));
         self::assertCount(100, $data['payments']);
         self::assertSame(101, $data['purchases']->total());
         self::assertSame(101, $data['payments']->total());
