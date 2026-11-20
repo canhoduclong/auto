@@ -122,6 +122,20 @@
                     @endif
                 </div>
             @endif
+            @if(isset($debtNote))
+                <form class="debt-detail-policy mt-3" method="POST" action="{{ route('customer-debt.note') }}">
+                    @csrf
+                    @if($selected['customer_id'])
+                        <input type="hidden" name="system_customer" value="{{ $selected['customer_id'] }}">
+                    @else
+                        <input type="hidden" name="customer" value="{{ $selected['key'] }}">
+                    @endif
+                    <input type="hidden" name="revision" value="{{ hash('sha256', $debtNote) }}">
+                    <label class="form-label fw-semibold" for="customer-debt-note">Ghi chú công nợ</label>
+                    <textarea class="form-control mb-2" name="note" id="customer-debt-note" rows="3" maxlength="4000">{{ $errors->has('revision') ? $debtNote : old('note', $debtNote) }}</textarea>
+                    <button class="btn btn-sm btn-outline-primary" type="submit">Lưu ghi chú</button>
+                </form>
+            @endif
         </div>
         @if($showDetailPolicy || ($canManageAllocation ?? false))
             <div class="d-grid gap-3">

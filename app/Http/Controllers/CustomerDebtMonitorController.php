@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\Setting;
 use App\Models\User;
 use App\Services\CustomerDebtBalanceService;
 use App\Services\CustomerDebtManualAllocationService;
@@ -259,13 +260,17 @@ class CustomerDebtMonitorController extends Controller
             }
         }
 
-        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'purchasePageSizes', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'detailSettlementTotal', 'detailSalesPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail', 'canCreateQuickCustomer', 'quickCustomerSales', 'settlementMethod', 'allocation', 'changeDate', 'currentSettlementMethod', 'settlementChanges', 'nextSettlementMethod', 'latestChangeDate', 'canManageAllocation', 'allocationRevision', 'settlementPreview', 'allocationForm', 'missingAllocationKeys', 'detailPolicyAction', 'detailPolicyKey', 'reminderHistory'));
+        $debtNote = $selected && $canLoad && $request->user()->canManageCustomerDebt()
+            ? (string) Setting::get($this->noteKey($selected), '')
+            : null;
+
+        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'purchasePageSizes', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'detailSettlementTotal', 'detailSalesPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail', 'canCreateQuickCustomer', 'quickCustomerSales', 'settlementMethod', 'allocation', 'changeDate', 'currentSettlementMethod', 'settlementChanges', 'nextSettlementMethod', 'latestChangeDate', 'canManageAllocation', 'allocationRevision', 'settlementPreview', 'allocationForm', 'missingAllocationKeys', 'detailPolicyAction', 'detailPolicyKey', 'reminderHistory', 'debtNote'));
     }
 
     public function changeSettlementMethod(Request $request, CustomerDebtSheetService $sheets, CustomerDebtManualAllocationService $manual)
     {
         abort_unless($request->user()->canManageCustomerDebt(), 403);
-        $data = $request->validate($this->allocationCustomerRules() + ['transition_date' => 'required|date_format:Y-m-d', 'transition_method' => 'required|in:batch,bill,mixed']);
+        $data = $request->validate($this->detailCustomerRules() + ['transition_date' => 'required|date_format:Y-m-d', 'transition_method' => 'required|in:batch,bill,mixed']);
         Cache::lock('customer-debt-load', 60)->block(5, function () use ($request, $sheets, $manual, $data) {
             $customer = $this->allocationCustomer($request, $sheets, $data);
             if (! hash_equals($manual->revision($customer, $manual->records($customer)), $data['revision'])) {
@@ -282,7 +287,7 @@ class CustomerDebtMonitorController extends Controller
         abort_unless($request->user()->canManageCustomerDebt(), 403);
         $request->merge(['items' => array_values(array_filter((array) $request->input('items', []), static fn ($item) =>
             ! is_array($item) || ($item['target'] ?? null) !== null || ($item['amount'] ?? null) !== null))]);
-        $data = $request->validate($this->allocationCustomerRules() + [
+        $data = $request->validate($this->detailCustomerRules() + [
             'payment_key' => 'required|string|max:160',
             'cancel' => 'nullable|boolean',
             'items' => 'exclude_if:cancel,1|required|array|min:1|max:100',
@@ -302,7 +307,35 @@ class CustomerDebtMonitorController extends Controller
             ! empty($data['cancel']) ? 'Đã hủy ghép khoản thu.' : 'Đã lưu ghép khoản thu.');
     }
 
-    private function allocationCustomerRules(): array
+    public function saveNote(Request $request, CustomerDebtSheetService $sheets)
+    {
+        abort_unless($request->user()->canManageCustomerDebt(), 403);
+        $data = $request->validate($this->detailCustomerRules() + ['note' => 'nullable|string|max:4000']);
+        Cache::lock('customer-debt-load', 60)->block(5, function () use ($request, $sheets, $data) {
+            $detail = $this->detailCustomer($this->debtContext($request, $sheets), $data);
+            $key = $this->noteKey($detail);
+            if (! hash_equals(hash('sha256', (string) Setting::get($key, '')), $data['revision'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['revision' => 'Ghi chú đã được cập nhật ở nơi khác. Vui lòng kiểm tra nội dung mới trước khi lưu lại.']);
+            }
+
+            Setting::set($key, trim($data['note'] ?? ''));
+        });
+
+        return back()->with('success', 'Đã lưu ghi chú công nợ.');
+    }
+
+    private function noteKey(array $customer): string
+    {
+        if ($customer['customer_id']) {
+            return 'customer_debt_note_customer_'.$customer['customer_id'];
+        }
+
+        $source = config('services.google_sheets.debt_identity_spreadsheet_id', config('services.google_sheets.debt_spreadsheet_id'));
+
+        return 'customer_debt_note_source_'.hash('sha256', $source.'|'.$customer['key']);
+    }
+
+    private function detailCustomerRules(): array
     {
         return [
             'system_customer' => 'nullable|required_without:customer|integer|min:1',
@@ -315,6 +348,12 @@ class CustomerDebtMonitorController extends Controller
     {
         $context = $this->debtContext($request, $sheets);
         abort_unless($context['snapshot'], 422, 'Cần cập nhật dữ liệu Google Sheet.');
+
+        return $this->detailCustomer($context, $data);
+    }
+
+    private function detailCustomer(array $context, array $data): array
+    {
         if (isset($data['system_customer'])) {
             $customer = $context['customerDebts'][(int) $data['system_customer']] ?? null;
         } else {

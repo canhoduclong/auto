@@ -1681,6 +1681,26 @@ class CustomerDebtMonitorTest extends TestCase
         (new \App\Http\Controllers\CustomerDebtReportController)->updatePriority($this->request(['customer_id' => 1, 'stars' => 5, 'priority_version' => str_repeat('0', 64)]), $this->service([]), new \App\Services\CustomerDebtPriorityService);
     }
 
+    public function test_debt_notes_are_shared_by_accounting_and_admin_per_customer(): void
+    {
+        $sheets = $this->service([$this->entry('CRM01', 'Chị Bình'), $this->entry('KH02', 'Anh Hải', 2)]);
+        $controller = new CustomerDebtMonitorController;
+        $customer = ['system_customer' => 1];
+        $note = "Khách hẹn thanh toán thứ Sáu.\nKiểm tra lại sau khi nhận tiền.";
+        $controller->saveNote($this->request($customer + [
+            'note' => $note, 'revision' => hash('sha256', ''),
+        ], 'accountant'), $sheets);
+
+        self::assertSame($note, $controller->index($this->request($customer, 'admin'), $sheets)->getData()['debtNote']);
+        self::assertSame('', $controller->index($this->request(['system_customer' => 2], 'admin'), $sheets)->getData()['debtNote']);
+        self::assertNull($controller->index($this->request($customer, 'sale'), $sheets)->getData()['debtNote']);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $controller->saveNote($this->request($customer + [
+            'note' => 'Nội dung cũ', 'revision' => hash('sha256', ''),
+        ], 'admin'), $sheets);
+    }
+
     public function test_accounting_can_preview_bill_transition_and_split_unmatched_receipts_without_changing_balance(): void
     {
         $this->collectionClock('2026-11-20 12:00:00');
