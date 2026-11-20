@@ -1,10 +1,10 @@
 {
-  "version": "1.1.36",
-  "version_code": 79,
-  "apk_url": "https://hoanglongtnt.com/app-update/app-release-1.1.36.apk",
+  "version": "1.1.37",
+  "version_code": 80,
+  "apk_url": "https://hoanglongtnt.com/app-update/app-release-1.1.37.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản 1.1.36: Ẩn chức năng trả hàng đối với đơn đã được kế toán xác nhận.",
+  "message": "Bản 1.1.37: Hiển thị ngày tạo đơn và ngày giao trên thẻ đơn chờ shipper nhận.",
   "requires_reinstall": false,
-  "sha256": "261f5fe1ffe179ff4f4939b74780d84e0f4dc1e2e30616df1f9589663e166ada"
+  "sha256": "0f95cb0594a8935f4e21dc7a4ba8facf4f35bae6db40497fa753d2b215992dd8"
 }
