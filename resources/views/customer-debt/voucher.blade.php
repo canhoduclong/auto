@@ -66,7 +66,7 @@
                 <h2>{{ $receipt ? 'Người nộp tiền' : 'Kính gửi' }}<span> · </span>Khách hàng {{ $selected['name'] }}</h2>
                 <p>{{ $receipt ? 'Lý do thu tiền hàng theo các ngày giao dưới đây.' : 'Kính đề nghị Quý khách thanh toán tiền hàng theo các ngày giao dưới đây.' }}</p>
                 <table>
-                    <thead><tr><th scope="col">STT</th><th scope="col">Ngày giao hàng</th><th scope="col">Còn phải thu (đồng)</th></tr></thead>
+                    <thead><tr><th scope="col">STT</th><th scope="col">Ngày giao hàng</th><th scope="col">Thành tiền (đồng)</th></tr></thead>
                     <tbody>
                     @foreach($lines as $date => $amount)
                         <tr>
@@ -74,7 +74,7 @@
                             <td>{{ \Carbon\Carbon::parse($date)->format('d/m/Y') }}</td>
                             <td>
                                 @if($deliveryTotals[$date] > $amount)
-                                    <small>(Tổng {{ number_format($deliveryTotals[$date], 0, ',', '.') }} đ)</small> –
+                                    <small>( Tổng đơn: {{ number_format($deliveryTotals[$date], 0, ',', '.') }} đ )</small>
                                 @endif
                                 {{ number_format($amount, 0, ',', '.') }} đ
                             </td>
