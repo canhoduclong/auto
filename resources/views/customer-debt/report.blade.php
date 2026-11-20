@@ -75,7 +75,16 @@
         @forelse($rows as $debt)
         @php($reminderNote = \App\Services\DebtCollectionService::reminderNote((int) $debt['balance'], $debt['last_payment_date'], $debt['last_purchase_date']))
         @php($latest=$debt['collection']['latest'])
-        <tr class="{{ $debt['reminded_today'] ? 'collection-reminded-today' : '' }}"><td class="collection-select-column"><input type="checkbox" data-collection-select data-reminder-note="{{ $reminderNote }}" data-sale-key="{{ $debt['sale_key'] }}" data-sale-label="{{ $debt['sale_label'] }}" aria-label="Chọn {{ $debt['name'] }}" data-name="{{ $debt['name'] }}" data-key="{{ $debt['key'] }}" data-customer="{{ $debt['customer_id'] }}" data-balance="{{ $debt['balance'] }}" data-period-increase="{{ $debt['period_increase'] ?? '' }}" data-purchase="{{ $debt['last_purchase_date'] ? \Carbon\Carbon::parse($debt['last_purchase_date'])->format('j/n') : '' }}" data-purchase-days="{{ $debt['days_without_purchase'] }}" data-payment-days="{{ $debt['days_without_payment'] }}" data-request-id="{{ \Illuminate\Support\Str::uuid() }}" @disabled(!$canManageReport || !$debt['data_available'] || $debt['balance']<=0)></td><td class="collection-compact">{{ $rows->firstItem()+$loop->index }}</td><td class="collection-compact">{{ $debt['code'] ?: '—' }}</td><td class="collection-name"><strong>{{ $debt['name'] }}</strong>@if(!$debt['customer_id'])<div class="small text-muted">Khách nguồn · chưa ghép</div>@endif @if($debt['recovery']['status']!=='normal')<span class="badge bg-warning text-dark">{{ $debt['recovery']['label'] }}</span>@endif</td>
+        <tr class="{{ $debt['reminded_today'] ? 'collection-reminded-today' : '' }}"><td class="collection-select-column"><input type="checkbox" data-collection-select data-reminder-note="{{ $reminderNote }}" data-sale-key="{{ $debt['sale_key'] }}" data-sale-label="{{ $debt['sale_label'] }}" aria-label="Chọn {{ $debt['name'] }}" data-name="{{ $debt['name'] }}" data-key="{{ $debt['key'] }}" data-customer="{{ $debt['customer_id'] }}" data-balance="{{ $debt['balance'] }}" data-period-increase="{{ $debt['period_increase'] ?? '' }}" data-purchase="{{ $debt['last_purchase_date'] ? \Carbon\Carbon::parse($debt['last_purchase_date'])->format('j/n') : '' }}" data-purchase-days="{{ $debt['days_without_purchase'] }}" data-payment-days="{{ $debt['days_without_payment'] }}" data-request-id="{{ \Illuminate\Support\Str::uuid() }}" @disabled(!$canManageReport || !$debt['data_available'] || $debt['balance']<=0)></td><td class="collection-compact">{{ $rows->firstItem()+$loop->index }}</td><td class="collection-compact">{{ $debt['code'] ?: '—' }}</td><td class="collection-name">
+            <strong>{{ $debt['name'] }}</strong>
+            @if(!$debt['customer_id'])<div class="small text-muted">Khách nguồn · chưa ghép</div>@endif
+            @if($debt['recovery']['status'] !== 'normal')<span class="badge bg-warning text-dark">{{ $debt['recovery']['label'] }}</span>@endif
+            @if($debt['policy']['payment_mode'] === 'cycle')
+                <div class="collection-payment-cycle">
+                    @include('customer-debt.cycle-status', ['policy' => $debt['policy'], 'alerts' => $debt['alerts']])
+                </div>
+            @endif
+        </td>
         @php($creditLimit = (int) $debt['policy']['credit_limit'])
         <td class="collection-negotiation" title="Trần công nợ và số ngày được phép nợ kể từ ngày giao hàng gần nhất"><strong>{{ number_format($creditLimit,0,',','.') }} đ</strong>, <strong>{{ $debt['policy']['due_days'] }} ngày</strong></td>
         <td class="text-end collection-money">{{ number_format($debt['policy']['warning_threshold'], 0, ',', '.') }} đ</td>
@@ -83,15 +92,13 @@
         <td class="collection-compact">{{ $debt['sale_label'] }}</td><td class="text-end collection-money">{{ $debt['data_available']?number_format($debt['sales'],0,',','.'):'—' }}</td><td class="text-end collection-money">{{ $debt['data_available']?number_format($debt['gifts'],0,',','.'):'—' }}</td><td class="text-end collection-money">@if($reportSource === 'sheet' && $debt['data_available'])<a href="{{ route('customer-debt.payments', $debt['customer_id'] ? ['customer_id'=>$debt['customer_id']] : ['customer_source_key'=>$debt['key']]) }}" title="Xem các khoản thu từ nhatkybanhang và 5 tab dòng tiền">{{ number_format($debt['payments'],0,',','.') }}</a>@else {{ $debt['data_available']?number_format($debt['payments'],0,',','.'):'—' }} @endif</td><td class="text-end collection-money fw-semibold {{ $debt['balance']>0?'text-danger':'' }}">{{ $debt['data_available']?number_format($debt['balance'],0,',','.').' đ':'Chưa có dữ liệu' }}</td>@if($hasPeriodFilter)<td class="text-end collection-money {{ ($debt['period_increase'] ?? 0)>0?'text-danger':'text-success' }}">{{ $debt['period_increase']!==null?number_format($debt['period_increase'],0,',','.').' đ':'—' }}</td>@endif<td class="text-end collection-days" title="Ngày mua: {{ $debt['last_purchase_date'] ?? 'Chưa có' }}">{{ $debt['days_without_purchase']!==null?$debt['days_without_purchase'].' ngày':'—' }}</td><td class="text-end collection-days" title="Ngày thanh toán: {{ $debt['last_payment_date'] ?? 'Chưa có' }}">{{ $debt['days_without_payment']!==null?$debt['days_without_payment'].' ngày':(!empty($debt['payment_date_unknown'])?'Chưa rõ ngày':'Chưa có') }}</td>
 
         <td class="collection-status">
-            <div class="small text-muted">{{ \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[$debt['policy']['settlement_method']] }}</div>
-            @if(!$debt['data_available'])<span class="badge bg-light text-dark">Chưa có dữ liệu</span>@elseif($debt['balance']===0)<span class="badge bg-success">Đã cân đối</span>@elseif($debt['balance']<0)<span class="badge bg-info text-dark">Khách trả trước</span>@endif
-
-            @if($debt['policy']['payment_mode'] === 'cycle')
-                @include('customer-debt.cycle-status', ['policy' => $debt['policy'], 'alerts' => $debt['alerts']])
-            @endif
-            @include('customer-debt.threshold-alert', ['alert' => $debt['alerts']])
-            @if(($debt['alerts']['overdue_days'] ?? 0)>0)<span class="badge bg-danger">Trễ {{ $debt['alerts']['overdue_days'] }} ngày</span>@endif
-            <span class="badge {{ in_array($debt['collection']['status'],['met','met_on_time'],true)?'bg-success':($debt['collection']['status']==='overdue'?'bg-danger':'bg-light text-dark') }}">{{ $debt['collection']['label'] }}</span>
+            <div class="collection-status-items">
+                <span class="small text-muted">{{ \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[$debt['policy']['settlement_method']] }}</span>
+                @if(!$debt['data_available'])<span class="badge bg-light text-dark">Chưa có dữ liệu</span>@elseif($debt['balance']===0)<span class="badge bg-success">Đã cân đối</span>@elseif($debt['balance']<0)<span class="badge bg-info text-dark">Khách trả trước</span>@endif
+                @include('customer-debt.threshold-alert', ['alert' => $debt['alerts']])
+                @if(($debt['alerts']['overdue_days'] ?? 0)>0)<span class="badge bg-danger">Trễ {{ $debt['alerts']['overdue_days'] }} ngày</span>@endif
+                <span class="badge {{ in_array($debt['collection']['status'],['met','met_on_time'],true)?'bg-success':($debt['collection']['status']==='overdue'?'bg-danger':'bg-light text-dark') }}">{{ $debt['collection']['label'] }}</span>
+            </div>
             @if($latest)<div class="small text-muted mt-1">Nhắc {{ \Carbon\Carbon::parse($latest['record']->reminded_at)->format('d/m H:i') }} · Thu {{ number_format($latest['paid'],0,',','.') }} / {{ number_format($latest['target'],0,',','.') }} đ</div>@if($latest['follow_up_due'])<span class="small text-danger">Đến lần nhắc tiếp</span>@endif @endif
         </td>
         <td class="collection-tools"><div class="d-flex flex-wrap gap-1">
