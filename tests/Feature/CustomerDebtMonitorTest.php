@@ -980,13 +980,19 @@ class CustomerDebtMonitorTest extends TestCase
         $controller = new CustomerDebtMonitorController;
         $query = ['customer' => hash('sha256', 'code:CRM01'), 'window' => 'all'];
         $preview = $controller->index($this->request($query + ['presentation' => 'payment-request'], 'admin'), $sheets)->getData();
-        self::assertSame(['2026-11-13' => 4500, '2026-11-14' => 7000], $preview['deliveries']->all());
+        self::assertSame(['2026-11-13' => 3500, '2026-11-14' => 7000], $preview['deliveries']->all());
         self::assertTrue($preview['lines']->isEmpty());
 
         $request = $this->request($query + ['presentation' => 'receipt', 'voucher_dates' => ['2026-11-13'], 'voucher_method' => 'transfer', 'voucher_number' => 'PT-01'], 'admin');
         $receipt = $controller->index($request, $sheets)->getData();
-        self::assertSame(['2026-11-13' => 4500], $receipt['lines']->all());
-        self::assertSame(4500, $receipt['total']);
+        self::assertSame(['2026-11-13' => 3500], $receipt['lines']->all());
+        self::assertSame(4500, $receipt['deliveryTotals']['2026-11-13']);
+        self::assertSame(3500, $receipt['total']);
+        $paymentRequest = $controller->index($this->request($query + [
+            'presentation' => 'payment-request', 'voucher_dates' => ['2026-11-13'],
+        ], 'admin'), $sheets)->getData();
+        self::assertSame($receipt['lines']->all(), $paymentRequest['lines']->all());
+        self::assertSame($receipt['total'], $paymentRequest['total']);
         self::assertSame('PT-01', $receipt['number']);
         self::assertSame('Chuyển khoản', $receipt['method']);
         self::assertCount(4, $sheets->snapshot()['entries']);
@@ -1692,6 +1698,12 @@ class CustomerDebtMonitorTest extends TestCase
         ], 'accountant'), $sheets);
 
         self::assertSame($note, $controller->index($this->request($customer, 'admin'), $sheets)->getData()['debtNote']);
+        $source = ['customer' => hash('sha256', 'code:CRM01'), 'window' => 'all'];
+        foreach (['account', 'accountant', 'accounting'] as $role) {
+            $accountingPage = $controller->index($this->request($source, $role), $sheets);
+            self::assertSame('customer-debt.index', $accountingPage->name());
+            self::assertSame($note, $accountingPage->getData()['debtNote']);
+        }
         self::assertSame('', $controller->index($this->request(['system_customer' => 2], 'admin'), $sheets)->getData()['debtNote']);
         self::assertNull($controller->index($this->request($customer, 'sale'), $sheets)->getData()['debtNote']);
 

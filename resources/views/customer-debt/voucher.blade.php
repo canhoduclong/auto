@@ -22,7 +22,7 @@
             <p>{{ $selected['name'] }} · {{ \Carbon\Carbon::parse($reportFrom)->format('d/m/Y') }} – {{ \Carbon\Carbon::parse($reportTo)->format('d/m/Y') }}</p>
             @if($errors->any())<p class="voucher-error" role="alert">{{ $errors->first() }}</p>@endif
             @if($deliveries->isNotEmpty())
-                <p>Chọn ngày cần lập phiếu. Số tiền mỗi ngày là tiền hàng sau khi trừ tặng. Hãy đối chiếu với khoản cần {{ $receipt ? 'ghi trên phiếu thu' : 'đề nghị thanh toán' }} trước khi in.</p>
+                <p>Chọn các ngày giao còn phải thu. Số tiền trên phiếu là số còn lại sau khi trừ hàng tặng và tiền đã phân bổ đến cuối kỳ đối chiếu.</p>
                 <label class="voucher-select-all" for="voucher-select-all" hidden>
                     <input type="checkbox" id="voucher-select-all" name="voucher_all" value="1">
                     Chọn tất cả ngày
@@ -49,7 +49,7 @@
                 @endif
                 <button type="submit">Xem trước bản in</button>
             @else
-                <p>Kỳ đối chiếu này chưa có ngày giao hàng với số tiền dương.</p>
+                <p>Kỳ đối chiếu này không có ngày giao hàng còn phải thu.</p>
             @endif
         </form>
     </details>
@@ -66,10 +66,19 @@
                 <h2>{{ $receipt ? 'Người nộp tiền' : 'Kính gửi' }}<span> · </span>Khách hàng {{ $selected['name'] }}</h2>
                 <p>{{ $receipt ? 'Lý do thu tiền hàng theo các ngày giao dưới đây.' : 'Kính đề nghị Quý khách thanh toán tiền hàng theo các ngày giao dưới đây.' }}</p>
                 <table>
-                    <thead><tr><th scope="col">STT</th><th scope="col">Ngày giao hàng</th><th scope="col">Thành tiền (đồng)</th></tr></thead>
+                    <thead><tr><th scope="col">STT</th><th scope="col">Ngày giao hàng</th><th scope="col">Còn phải thu (đồng)</th></tr></thead>
                     <tbody>
                     @foreach($lines as $date => $amount)
-                        <tr><td>{{ $loop->iteration }}</td><td>{{ \Carbon\Carbon::parse($date)->format('d/m/Y') }}</td><td>{{ number_format($amount, 0, ',', '.') }}</td></tr>
+                        <tr>
+                            <td>{{ $loop->iteration }}</td>
+                            <td>{{ \Carbon\Carbon::parse($date)->format('d/m/Y') }}</td>
+                            <td>
+                                @if($deliveryTotals[$date] > $amount)
+                                    <small>(Tổng {{ number_format($deliveryTotals[$date], 0, ',', '.') }} đ)</small> –
+                                @endif
+                                {{ number_format($amount, 0, ',', '.') }} đ
+                            </td>
+                        </tr>
                     @endforeach
                     </tbody>
                 </table>

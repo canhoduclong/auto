@@ -73,12 +73,6 @@ class CustomerDebtMonitorController extends Controller
         }
         $saleEntries = collect($periodEntries)->where('type', 'sale')
             ->sort(fn ($a, $b) => strcmp($b['date'], $a['date']) ?: ($b['row'] <=> $a['row']))->values();
-        if (in_array($data['presentation'] ?? null, ['payment-request', 'receipt'], true)) {
-            abort_unless($selected, 404);
-
-            return $this->voucher($request, $data['presentation'], $selected, $saleEntries, $reportFrom, $reportTo);
-        }
-
         $paymentEntries = collect($periodEntries)->where('type', 'payment')
             ->sort(fn ($a, $b) => strcmp($b['date'], $a['date']) ?: strcmp($a['source_sheet'] ?? 'Dongtienhoatdong', $b['source_sheet'] ?? 'Dongtienhoatdong') ?: ($b['row'] <=> $a['row']))->values();
         $detailSales = $saleEntries->sum('amount');
@@ -102,6 +96,12 @@ class CustomerDebtMonitorController extends Controller
         $currentSettlementMethod = $changesInReport[$changeDate] ?? $settlementMethod;
         $manualRecords = $selected ? $manualService->records($selected) : [];
         $allocation = $selected ? $allocationService->reconcile($reportHistory, $settlementMethod, $selected['customer_id'], $changesInReport, $manualRecords) : null;
+        if (in_array($data['presentation'] ?? null, ['payment-request', 'receipt'], true)) {
+            abort_unless($selected, 404);
+            $sales = $saleEntries->map(fn ($entry) => $allocation['lines'][$allocationService->key($entry)]);
+
+            return $this->voucher($request, $data['presentation'], $selected, $sales, $reportFrom, $reportTo);
+        }
         $canManageAllocation = $selected && $snapshot && $request->user()->canManageCustomerDebt()
             && ! $request->attributes->get('own_customer_debt', false);
         $allocationRevision = $canManageAllocation ? $manualService->revision($selected, $manualRecords) : null;
@@ -382,10 +382,12 @@ class CustomerDebtMonitorController extends Controller
             'voucher_number' => 'nullable|string|max:50',
             'voucher_method' => 'nullable|in:cash,transfer',
         ]);
-        $deliveries = $sales->groupBy('date')->map(fn ($rows) => $rows->sum('amount') - $rows->sum('gift'))
+        $salesByDate = $sales->groupBy('date');
+        $deliveryTotals = $salesByDate->map(fn ($rows) => $rows->sum('amount'));
+        $deliveries = $salesByDate->map(fn ($rows) => $rows->sum('remaining'))
             ->filter(fn ($amount) => $amount > 0)->sortKeys();
         $dates = $data['voucher_dates'] ?? [];
-        if (array_diff($dates, $deliveries->keys()->all())) {
+        if (array_diff($dates, $salesByDate->keys()->all())) {
             throw \Illuminate\Validation\ValidationException::withMessages(['voucher_dates' => 'Ngày giao hàng đã thay đổi hoặc nằm ngoài kỳ đối chiếu.']);
         }
 
@@ -398,7 +400,7 @@ class CustomerDebtMonitorController extends Controller
         $number = $data['voucher_number'] ?? '';
         $method = ['cash' => 'Tiền mặt', 'transfer' => 'Chuyển khoản'][$data['voucher_method'] ?? ''] ?? '';
 
-        return view('customer-debt.voucher', compact('presentation', 'selected', 'deliveries', 'lines', 'total', 'issuedDate', 'receipt', 'title', 'company', 'number', 'method', 'reportFrom', 'reportTo'));
+        return view('customer-debt.voucher', compact('presentation', 'selected', 'deliveries', 'deliveryTotals', 'lines', 'total', 'issuedDate', 'receipt', 'title', 'company', 'number', 'method', 'reportFrom', 'reportTo'));
     }
 
     private function quickCustomerSales()
