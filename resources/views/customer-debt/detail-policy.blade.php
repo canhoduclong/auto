@@ -7,7 +7,7 @@
                 @include('customer-debt.policy-cycle-values', ['policy' => $selected['policy']])
                 data-fixed="{{ $selected['policy']['fixed_debt'] }}" data-limit="{{ $selected['policy']['credit_limit'] }}"
                 data-threshold-days="{{ $selected['policy']['threshold_days'] }}" data-version="{{ $selected['policy']['edit_version'] }}"
-                @disabled($selected['policy']['staff_edit_locked'] && !auth()->user()->isAdmin())>Sửa tiêu chí</button>
+                @disabled($selected['policy']['staff_edit_locked'] && !auth()->user()->canManageCustomerDebt())>Sửa tiêu chí</button>
         @endif
     </div>
     <dl class="debt-detail-policy-values">
@@ -23,10 +23,10 @@
     @if($selected['policy']['payment_mode'] === 'cycle')
         @include('customer-debt.cycle-status', ['policy' => $selected['policy'], 'alerts' => $reportAlerts])
     @endif
-    @if($selected['policy']['staff_edit_locked'] && !auth()->user()->isAdmin())
+    @if($selected['policy']['staff_edit_locked'] && !auth()->user()->canManageCustomerDebt())
         <div class="small text-muted mt-1">Tiêu chí đã khóa.</div>
     @endif
-    @if(!($saleDebtDetail ?? false) && auth()->user()->isAdmin() && $selected['customer_id'] && $selected['policy']['staff_edit_locked'])
+    @if(!($saleDebtDetail ?? false) && auth()->user()->canManageCustomerDebt() && $selected['customer_id'] && $selected['policy']['staff_edit_locked'])
         <form class="mt-2" method="POST" action="{{ route('customers.debt-policy.unlock', $selected['customer_id']) }}">
             @csrf
             <input type="hidden" name="policy_version" value="{{ $selected['policy']['edit_version'] }}">

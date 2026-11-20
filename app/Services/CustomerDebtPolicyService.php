@@ -78,7 +78,7 @@ class CustomerDebtPolicyService
 
     public function canEditCustomer(User $user, Customer $customer): bool
     {
-        if ($user->isAdmin()) {
+        if ($user->canManageCustomerDebt()) {
             return true;
         }
         if (! $user->isSalesFlowRole()) {
@@ -110,13 +110,13 @@ class CustomerDebtPolicyService
         ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
     }
 
-    public function save(array $group, array $data, int $userId, bool $isAdmin = false, ?int $expectedVersion = null, ?User $editingUser = null): void
+    public function save(array $group, array $data, int $userId, bool $canOverrideStaffLock = false, ?int $expectedVersion = null, ?User $editingUser = null): void
     {
-        $this->change($group, function ($key, $current, $lockedCustomer) use ($group, $data, $userId, $isAdmin, $expectedVersion, $editingUser) {
-            if ($editingUser && ! $editingUser->isAdmin()) {
+        $this->change($group, function ($key, $current, $lockedCustomer) use ($group, $data, $userId, $canOverrideStaffLock, $expectedVersion, $editingUser) {
+            if ($editingUser && ! $editingUser->canManageCustomerDebt()) {
                 abort_unless($lockedCustomer && $this->canEditCustomer($editingUser, $lockedCustomer), 403);
             }
-            if (! $isAdmin && $this->isLocked($current)) {
+            if (! $canOverrideStaffLock && $this->isLocked($current)) {
                 throw ValidationException::withMessages(['policy' => 'Tiêu chí đã khóa. Chỉ admin được mở khóa để cho phép sửa thêm một lần.']);
             }
             if ($expectedVersion !== null && $expectedVersion !== (int) ($current['edit_version'] ?? 0)) {
@@ -138,7 +138,7 @@ class CustomerDebtPolicyService
                 'cycle_monthday' => (int) ($data['cycle_monthday'] ?? $current['cycle_monthday'] ?? 15),
                 'updated_by' => $userId, 'updated_at' => now()->toIso8601String(), 'staff_edit_locked' => true,
                 'edit_version' => (int) ($current['edit_version'] ?? 0) + 1,
-                'staff_edit_count' => (int) ($current['staff_edit_count'] ?? 0) + ($isAdmin ? 0 : 1),
+                'staff_edit_count' => (int) ($current['staff_edit_count'] ?? 0) + ($canOverrideStaffLock ? 0 : 1),
             ]);
             Setting::set($key, json_encode($next, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
             $this->audit($this->identity($group), 'update', $userId, $current, $next);
@@ -147,7 +147,7 @@ class CustomerDebtPolicyService
 
     public function unlock(array $group, User $actor, ?int $expectedVersion = null): void
     {
-        abort_unless($actor->isAdmin(), 403, 'Chỉ admin mới được mở khóa tiêu chí công nợ.');
+        abort_unless($actor->canManageCustomerDebt(), 403, 'Chỉ quản trị viên và kế toán được mở khóa tiêu chí công nợ.');
         $this->change($group, function ($key, $current) use ($group, $actor, $expectedVersion) {
             if (! $this->isLocked($current)) {
                 return;

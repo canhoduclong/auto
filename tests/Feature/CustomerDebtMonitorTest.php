@@ -1605,7 +1605,7 @@ class CustomerDebtMonitorTest extends TestCase
         $report = fn () => $controller->index($this->request(['sort' => 'balance', 'direction' => 'asc'], 'admin'), $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService)->getData();
         $initial = $report();
         $version = $initial['rows']->firstWhere('customer_id', 2)['priority']['version'];
-        $controller->updatePriority($this->request(['customer_id' => 2, 'stars' => 5, 'priority_version' => $version], 'admin'), $service, $priorities);
+        $controller->updatePriority($this->request(['customer_id' => 2, 'stars' => 5, 'priority_version' => $version], 'accountant'), $service, $priorities);
         $starred = $report();
         self::assertSame(2, $starred['rows']->first()['customer_id']);
         self::assertSame(5, $starred['rows']->first()['priority']['stars']);
@@ -1947,9 +1947,16 @@ class CustomerDebtMonitorTest extends TestCase
         $detail = (new CustomerDebtMonitorController)->index($this->request(['customer' => $key], 'accountant'), $sheets)->getData();
         self::assertCount(1, $detail['reminderHistory']['logs']);
         self::assertSame(500, $detail['reminderHistory']['latest']['target']);
-        self::assertSame(route('customer-debt.policy'), $detail['detailPolicyAction']);
+        self::assertSame(route('customers.debt-policy.update', 1), $detail['detailPolicyAction']);
+        $feedback = $report->respond($this->request([
+            'source_key' => $key, 'reminder_id' => $response->getData(true)['id'],
+            'request_id' => (string) \Illuminate\Support\Str::uuid(),
+            'type' => 'response', 'note' => 'Khách hẹn thanh toán',
+        ], 'accountant'), $sheets, $collections);
+        self::assertSame(200, $feedback->getStatusCode());
         $history = $report->history($this->request(['source_key' => $key], 'accountant'), $sheets, $collections)->getData(true)['html'];
-        self::assertStringNotContainsString('Thêm phản hồi / lời hẹn', $history);
+        self::assertStringContainsString('Thêm phản hồi / lời hẹn', $history);
+        self::assertStringContainsString('Khách hẹn thanh toán', $history);
 
         $this->expectException(HttpException::class);
         $report->remind($this->request($this->reminderData(['source_key' => $key, 'target_amount' => 500]), 'sale'), $sheets, $collections);
@@ -2359,7 +2366,7 @@ class CustomerDebtMonitorTest extends TestCase
         $this->collectionClock('2026-11-13 12:00:00');
         $this->systemAccountingFixture();
         $row = (new \App\Services\SystemCustomerDebtReportService)->rows()->firstWhere('customer_id', 1);
-        (new \App\Http\Controllers\CustomerDebtReportController)->updateRecovery($this->request(['report_source' => 'system', 'customer_id' => 1, 'source_key' => $row['key'], 'recovery_status' => 'difficult', 'recovery_note' => 'Cần nhắc nhiều lần', 'recovery_version' => $row['recovery']['version']], 'admin'), $this->service([]), new \App\Services\CustomerDebtRecoveryService);
+        (new \App\Http\Controllers\CustomerDebtReportController)->updateRecovery($this->request(['report_source' => 'system', 'customer_id' => 1, 'source_key' => $row['key'], 'recovery_status' => 'difficult', 'recovery_note' => 'Cần nhắc nhiều lần', 'recovery_version' => $row['recovery']['version']], 'accountant'), $this->service([]), new \App\Services\CustomerDebtRecoveryService);
         self::assertSame('difficult', (new \App\Services\SystemCustomerDebtReportService)->rows()->firstWhere('customer_id', 1)['recovery']['status']);
     }
 
@@ -3106,15 +3113,15 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(2, app(\App\Services\CustomerDebtPolicyService::class)->policies()['customer_1']['allowed_orders']);
     }
 
-    public function test_admin_unlock_allows_only_one_further_save_and_does_not_bank_credits(): void
+    public function test_admin_and_accounting_unlock_allows_only_one_further_save_and_does_not_bank_credits(): void
     {
         $this->policyUpdate();
         $controller = new \App\Http\Controllers\CustomerDebtPolicyController;
         $service = app(\App\Services\CustomerDebtPolicyService::class);
         $customer = \App\Models\Customer::findOrFail(1);
-        for ($cycle = 0; $cycle < 2; $cycle++) {
-            $unlocked = $controller->unlock($this->request(['policy_version' => $service->policies()['customer_1']['edit_version']], 'admin'), $customer, $service)->getData(true)['policy'];
-            $again = $controller->unlock($this->request(['policy_version' => $service->policies()['customer_1']['edit_version']], 'admin'), $customer, $service)->getData(true)['policy'];
+        foreach (['admin', 'accountant'] as $cycle => $role) {
+            $unlocked = $controller->unlock($this->request(['policy_version' => $service->policies()['customer_1']['edit_version']], $role), $customer, $service)->getData(true)['policy'];
+            $again = $controller->unlock($this->request(['policy_version' => $service->policies()['customer_1']['edit_version']], $role), $customer, $service)->getData(true)['policy'];
             self::assertFalse($again['staff_edit_locked']);
             self::assertSame($unlocked['edit_version'], $again['edit_version']);
             $saved = $this->policyUpdate(['policy_version' => $again['edit_version']], 'leader')['policy'];
@@ -3125,14 +3132,14 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(5, $audits);
     }
 
-    public function test_non_admin_cannot_unlock_even_through_service(): void
+    public function test_roles_outside_debt_management_cannot_unlock_even_through_service(): void
     {
         $this->policyUpdate();
         $service = app(\App\Services\CustomerDebtPolicyService::class);
-        foreach (['sale', 'leader', 'manager', 'accounting'] as $role) {
+        foreach (['sale', 'leader', 'manager', 'warehouse'] as $role) {
             try {
                 $service->unlock(['customer_id' => 1], $this->user($role));
-                self::fail('Non-admin unlocked');
+                self::fail('Unauthorized role unlocked');
             } catch (HttpException $e) {
                 self::assertSame(403, $e->getStatusCode());
             }

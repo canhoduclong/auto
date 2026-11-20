@@ -63,7 +63,7 @@ class DebtCollectionService
 
     public function canRecord(User $user): bool
     {
-        return $user->hasRole(['admin', 'account', 'accountant', 'accounting']);
+        return $user->canManageCustomerDebt();
     }
 
     public function records(string $source = 'sheet'): array

@@ -14,9 +14,9 @@ use Illuminate\Validation\ValidationException;
 
 class CustomerDebtReportController extends Controller
 {
-    private function authorizeAdmin(Request $request): void
+    private function authorizeDebtManagement(Request $request): void
     {
-        abort_unless($request->user()->isAdmin(), 403);
+        abort_unless($request->user()->canManageCustomerDebt(), 403);
     }
 
     private function sourceData(Request $request, CustomerDebtSheetService $sheets, ?CustomerDebtReportService $report = null): array
@@ -31,7 +31,7 @@ class CustomerDebtReportController extends Controller
 
     public function index(Request $request, CustomerDebtSheetService $sheets, CustomerDebtReportService $report, DebtCollectionService $collections)
     {
-        abort_unless($request->user()->hasRole(['admin', 'account', 'accountant', 'accounting']), 403);
+        $this->authorizeDebtManagement($request);
         $data = $request->validate(['report_source' => 'nullable|in:sheet,system', 'payment_mode' => 'nullable|in:all,cycle', 'scope' => 'nullable|in:all,orders', 'from' => 'nullable|required_if:scope,orders|date_format:Y-m-d', 'to' => 'nullable|required_if:scope,orders|date_format:Y-m-d|after_or_equal:from', 'search' => 'nullable|string|max:150', 'sale' => 'nullable|string|max:100', 'balance' => 'nullable|in:debt,all,settled,credit', 'recovery' => 'nullable|in:normal,difficult,unrecoverable,all', 'status' => ['nullable', Rule::in(array_merge(array_keys(DebtCollectionService::STATUSES), ['all', 'follow_up_due']))], 'min_debt' => 'nullable|integer|min:0|max:999999999999999', 'per_page' => 'nullable|in:20,30,50,100,200,300', 'page' => 'nullable|integer|min:1', 'sort' => 'nullable|in:balance,period_increase,days_without_purchase,days_without_payment', 'direction' => 'nullable|in:asc,desc']);
         [$rows, $snapshot] = $this->sourceData($request, $sheets, $report);
         $reportSource = $request->input('report_source') ?: 'sheet';
@@ -124,7 +124,7 @@ class CustomerDebtReportController extends Controller
 
     public function updatePriority(Request $request, CustomerDebtSheetService $sheets, \App\Services\CustomerDebtPriorityService $priorities)
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeDebtManagement($request);
         $data = $request->validate($this->targetRules() + ['stars' => 'required|integer|min:0|max:5', 'priority_version' => 'required|string|size:64|regex:/^[a-f0-9]{64}$/']);
         Cache::lock('customer-debt-load', 60)->block(5, function () use ($request, $sheets, $priorities, $data) {
             DB::transaction(function () use ($request, $sheets, $priorities, $data) {
@@ -189,14 +189,14 @@ class CustomerDebtReportController extends Controller
         $all = collect($evaluation['logs']);
         $logs = new \Illuminate\Pagination\LengthAwarePaginator($all->forPage($page, 10)->values(), $all->count(), 10, $page, ['path' => $request->url(), 'pageName' => 'history_page', 'query' => $request->except('history_page')]);
 
-        $canRespond = $request->user()->isAdmin();
+        $canRespond = $request->user()->canManageCustomerDebt();
 
         return response()->json(['html' => view('customer-debt.report-history-content', compact('row', 'snapshot', 'evaluation', 'logs', 'canRespond'))->render()])->header('Cache-Control', 'no-store');
     }
 
     public function updateRecovery(Request $request, CustomerDebtSheetService $sheets, \App\Services\CustomerDebtRecoveryService $recovery)
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeDebtManagement($request);
         $data = $request->validate($this->targetRules() + ['recovery_status' => ['required', Rule::in(array_keys(\App\Services\CustomerDebtRecoveryService::LABELS))], 'recovery_note' => 'nullable|string|max:1000', 'recovery_version' => 'required|string|size:64']);
         Cache::lock('customer-debt-load', 60)->block(5, function () use ($request, $sheets, $recovery, $data) {
             [$row] = $this->resolveRow($request, $sheets);
@@ -208,7 +208,7 @@ class CustomerDebtReportController extends Controller
 
     public function respond(Request $request, CustomerDebtSheetService $sheets, DebtCollectionService $collections)
     {
-        $this->authorizeAdmin($request);
+        $this->authorizeDebtManagement($request);
         $this->normalizeMoney($request, 'promised_amount');
         $request->merge(['note' => trim((string) $request->input('note'))]);
         $data = $request->validate($this->targetRules() + ['request_id' => 'required|uuid', 'reminder_id' => 'required|integer|min:1', 'type' => 'required|in:response,payment_verified', 'note' => 'required|string|min:3|max:3000', 'promised_amount' => 'nullable|integer|min:1|max:999999999999999', 'promised_date' => 'nullable|date_format:Y-m-d|after_or_equal:today', 'receipt_token' => 'nullable|required_if:type,payment_verified|string|size:64|regex:/^[a-f0-9]{64}$/']);

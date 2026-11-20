@@ -1,7 +1,7 @@
 @extends(auth()->user()->isAdmin() ? 'layouts.admin' : 'layouts.accounting')
 @section('title','Báo cáo công nợ')
 @section('content')
-@php($canManageReport = auth()->user()->isAdmin())
+@php($canManageReport = auth()->user()->canManageCustomerDebt())
 <div class="debt-page debt-collection-page">
     <header class="debt-page-header">
         <div><h1>Báo cáo công nợ</h1><div class="debt-updated">@if($reportSource === 'system')Dữ liệu trực tiếp · Đơn hệ thống đã đối soát @elseif($snapshot)Dữ liệu Google Sheet {{ \Carbon\Carbon::parse($snapshot['loaded_at'])->timezone(config('app.timezone'))->format('d/m/Y H:i') }} @else Chưa có dữ liệu Sheet @endif</div></div>
@@ -109,7 +109,7 @@
                 @if($debt['data_available'])
                     @if($canManageReport && $reportSource === 'sheet') @include('customer-debt.balance-button') @elseif($canManageReport)<a class="btn btn-sm btn-light" href="{{ accounting_route('customer-debts.show',$debt['customer_id']) }}">Cập nhật công nợ hệ thống</a>@endif
                     @if($canManageReport)<button type="button" class="btn btn-sm btn-light debt-recovery-button" data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}" data-status="{{ $debt['recovery']['status'] }}" data-note="{{ $debt['recovery']['note'] }}" data-version="{{ $debt['recovery']['version'] }}" data-customer="{{ $debt['customer_id'] }}" data-report-source="{{ $reportSource }}">Khả năng thu hồi</button>@endif
-                    <a class="btn btn-sm btn-light" href="{{ $reportSource === 'system' ? accounting_route('customer-debts.show',$debt['customer_id']) : route('customer-debt.index',['tab'=>'all','customer'=>$debt['key'],'window'=>'all','recovery'=>'all']).'#debt-detail' }}">Chi tiết công nợ</a>
+                    <a class="btn btn-sm btn-light" href="{{ $reportSource === 'system' ? accounting_route('customer-debts.show',$debt['customer_id']) : route('customer-debt.index',['tab'=>'all','customer'=>$debt['key'],'window'=>'all','recovery'=>'all']).'#debt-detail' }}">{{ $reportSource === 'sheet' ? 'Đối chiếu công nợ' : 'Chi tiết công nợ' }}</a>
                 @else<a class="btn btn-sm btn-light" href="{{ route('customer-debt.index',['tab'=>'all','search'=>$debt['name'],'recovery'=>'all']) }}">Kiểm tra nguồn / ghép khách</a>@endif
                 @if($canManageReport && ($debt['customer_id'] || ($reportSource === 'sheet' && $debt['key'] && empty($debt['manual_only']))))
                     <button type="button" class="btn btn-sm btn-light debt-policy-button"

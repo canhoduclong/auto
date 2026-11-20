@@ -177,6 +177,11 @@ class User extends Authenticatable
         return $this->hasRole('admin');
     }
 
+    public function canManageCustomerDebt(): bool
+    {
+        return $this->hasRole(['admin', 'account', 'accountant', 'accounting']);
+    }
+
     public function isSalesFlowRole(): bool
     {
         return $this->hasRole('sale')

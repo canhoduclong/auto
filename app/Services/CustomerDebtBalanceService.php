@@ -16,7 +16,7 @@ class CustomerDebtBalanceService
 
     public function canAdjust(User $user): bool
     {
-        return $user->hasRole(['admin', 'account', 'accountant', 'accounting']);
+        return $user->canManageCustomerDebt();
     }
 
     public function identity(array $group): string

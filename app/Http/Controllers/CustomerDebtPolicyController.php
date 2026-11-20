@@ -36,7 +36,7 @@ class CustomerDebtPolicyController extends Controller
             $data['rolling_only'] = $data['payment_mode'] === 'default';
         }
         $group = ['customer_id' => $customer->id];
-        $policies->save($group, $data, $request->user()->id, $request->user()->isAdmin(), (int) $data['policy_version'], $request->user());
+        $policies->save($group, $data, $request->user()->id, $request->user()->canManageCustomerDebt(), (int) $data['policy_version'], $request->user());
 
         $message = 'Đã cập nhật và khóa tiêu chí công nợ.';
         if ($request->boolean('return_to_report') && ! $request->expectsJson()) {
@@ -48,7 +48,7 @@ class CustomerDebtPolicyController extends Controller
 
     public function unlock(Request $request, Customer $customer, CustomerDebtPolicyService $policies)
     {
-        abort_unless($request->user()->isAdmin(), 403);
+        abort_unless($request->user()->canManageCustomerDebt(), 403);
         $group = ['customer_id' => $customer->id];
         $data = $request->validate(['policy_version' => 'required|integer|min:0']);
         $policies->unlock($group, $request->user(), (int) $data['policy_version']);
