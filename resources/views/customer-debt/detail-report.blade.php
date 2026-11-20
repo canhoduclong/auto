@@ -135,7 +135,13 @@
                 @empty<tr><td colspan="6" class="text-center text-muted py-4">Không có giao dịch mua hàng trong kỳ.</td></tr>@endforelse
                 </tbody><tfoot><tr><th colspan="2">Tổng trong kỳ</th><th class="text-end">{{ number_format($detailSales, 0, ',', '.') }}</th><th class="text-end">{{ number_format($detailSales - $detailGifts, 0, ',', '.') }}</th><th colspan="2"></th></tr></tfoot></table>
             </div>
-            <footer>{{ $purchases->links() }}</footer>
+            <footer>
+                <div class="d-flex flex-wrap justify-content-between gap-2 small text-muted{{ $purchases->hasPages() ? ' mb-2' : '' }}">
+                    <span>Đang xem {{ number_format($purchases->firstItem() ?? 0, 0, ',', '.') }}–{{ number_format($purchases->lastItem() ?? 0, 0, ',', '.') }} / {{ number_format($purchases->total(), 0, ',', '.') }} dòng mua hàng</span>
+                    <span>Trang {{ $purchases->currentPage() }} / {{ $purchases->lastPage() }}</span>
+                </div>
+                {{ $purchases->links() }}
+            </footer>
         </article>
         <article class="debt-report-ledger">
             <header><h3>Thanh toán & hàng tặng</h3><span>{{ number_format($payments->total(), 0, ',', '.') }} khoản</span></header>
