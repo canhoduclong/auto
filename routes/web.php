@@ -1451,6 +1451,8 @@ Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,mana
     Route::post('/customer-debt/report/responses', [\App\Http\Controllers\CustomerDebtReportController::class, 'respond'])->middleware('role:admin,account,accountant,accounting')->name('customer-debt.report.respond');
     Route::post('/customer-debt/customers', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'createCustomer'])->name('customer-debt.customers.store');
     Route::patch('/customer-debt/recovery', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'updateRecovery'])->name('customer-debt.recovery');
+    Route::post('/customer-debt/settlement-transition', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'changeSettlementMethod'])->middleware('role:admin,account,accountant,accounting')->name('customer-debt.settlement-transition');
+    Route::post('/customer-debt/payment-allocations', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'saveManualAllocation'])->middleware('role:admin,account,accountant,accounting')->name('customer-debt.payment-allocations');
     Route::post('/customer-debt/balance-adjustments', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'adjustBalance'])->name('customer-debt.balance-adjustments');
     Route::get('/customer-debt', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'index'])->middleware('cache.headers:private;no_store;max_age=0')->name('customer-debt.index');
     Route::patch('/customers/{customer}/debt-policy', [\App\Http\Controllers\CustomerDebtPolicyController::class, 'update'])->name('customers.debt-policy.update');

@@ -13,7 +13,7 @@
                 <option value="{{ $value }}">{{ $label }}</option>
             @endforeach
         </select>
-        <p class="small text-muted mb-3">Theo Bill hoặc Hỗn hợp, ghi ngày giao và mã đơn trong nội dung thu, ví dụ <strong>Bill 13/11/2026 | Mã đơn: DH123</strong>. Với khoản gộp của khách Hỗn hợp, ghi rõ <strong>Theo đợt</strong>.</p>
+        <p class="small text-muted mb-3">Theo Bill hoặc Hỗn hợp, ghi ngày giao và mã đơn trong nội dung thu, ví dụ <strong>Bill 13/11/2026 | Mã đơn: DH123</strong>. Với khoản gộp của khách Hỗn hợp, ghi rõ <strong>Theo đợt</strong>. Nếu khách đổi cách trả từ một ngày cụ thể, dùng mục <strong>Chuyển hình thức thanh toán từ ngày giao</strong> trên trang đối chiếu.</p>
         <label for="debt-policy-payment-mode" class="form-label">Lịch thanh toán</label>
         <select id="debt-policy-payment-mode" class="form-select mb-3" name="payment_mode">
             <option value="default">Theo tiêu chí công nợ</option>

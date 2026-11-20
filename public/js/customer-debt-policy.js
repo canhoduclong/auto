@@ -21,6 +21,7 @@
         document.getElementById('debt-policy-limit').value = button.dataset.limit === '' ? '' : Number(button.dataset.limit).toLocaleString('vi-VN');
         document.getElementById('debt-policy-threshold-days').value = button.dataset.thresholdDays;
         form.elements.settlement_method.value = button.dataset.settlementMethod;
+        form.elements.settlement_method.disabled = Boolean(button.dataset.hasSettlementChanges);
         form.elements.payment_mode.value = button.dataset.paymentMode;
         form.elements.cycle_type.value = button.dataset.cycleType;
         form.elements.cycle_close_weekday.value = button.dataset.closeWeekday;

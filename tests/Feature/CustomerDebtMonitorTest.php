@@ -1681,6 +1681,112 @@ class CustomerDebtMonitorTest extends TestCase
         (new \App\Http\Controllers\CustomerDebtReportController)->updatePriority($this->request(['customer_id' => 1, 'stars' => 5, 'priority_version' => str_repeat('0', 64)]), $this->service([]), new \App\Services\CustomerDebtPriorityService);
     }
 
+    public function test_accounting_can_preview_bill_transition_and_split_unmatched_receipts_without_changing_balance(): void
+    {
+        $this->collectionClock('2026-11-20 12:00:00');
+        $entries = [
+            array_replace($this->entry('CRM01', 'Chị Bình', 1), ['date' => '2026-11-17', 'order_code' => 'DH001']),
+            array_replace($this->entry('CRM01', 'Chị Bình', 2), ['date' => '2026-11-19', 'order_code' => 'DH002']),
+            array_replace($this->entry('CRM01', 'Chị Bình', 3), ['date' => '2026-11-20', 'order_code' => 'DH003']),
+            array_replace($this->entry('CRM01', 'Chị Bình', 4), ['date' => '2026-11-18', 'type' => 'payment', 'amount' => 400]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 5), ['type' => 'payment', 'amount' => 800, 'note' => 'Theo đợt']),
+            array_replace($this->entry('CRM01', 'Chị Bình', 6), ['type' => 'payment', 'amount' => 750, 'note' => 'Khách trả gộp']),
+        ];
+        $sheets = $this->service($entries);
+        $controller = new CustomerDebtMonitorController;
+        $manual = app(\App\Services\CustomerDebtManualAllocationService::class);
+        $allocator = app(\App\Services\CustomerDebtPaymentAllocation::class);
+        $query = ['system_customer' => 1, 'window' => 'all'];
+        $detail = fn (array $filters = []) => $controller->index($this->request($query + $filters, 'accountant'), $sheets)->getData();
+
+        $preview = $detail(['transition_preview' => '2026-11-19', 'transition_method' => 'bill']);
+        self::assertSame(600, $preview['settlementPreview']['remaining']);
+        self::assertNull($preview['changeDate']);
+        $controller->changeSettlementMethod($this->request($query + [
+            'transition_date' => '2026-11-19', 'transition_method' => 'bill', 'revision' => $preview['allocationRevision'],
+        ], 'accountant'), $sheets, $manual);
+        $after = $detail();
+        self::assertSame('2026-11-19', $after['changeDate']);
+        self::assertSame($preview['closing'], $after['closing']);
+        self::assertSame(0, $after['allocation']['lines']['nhatkybanhang:1']['remaining']);
+        self::assertSame(1000, $after['allocation']['lines']['nhatkybanhang:2']['remaining']);
+        self::assertSame(200, $after['allocation']['unmatched']['Dongtienhoatdong:5']['amount']);
+
+        $paymentKey = 'Dongtienhoatdong:6';
+        $form = $detail(['allocate' => $paymentKey]);
+        self::assertSame(750, $form['allocationForm']['available']);
+        $allocation = [
+            'payment_key' => $paymentKey, 'revision' => $form['allocationRevision'],
+            'items' => [['target' => 'nhatkybanhang:2', 'amount' => 500], ['target' => 'nhatkybanhang:3', 'amount' => 200]],
+        ];
+        $controller->saveManualAllocation($this->request($query + $allocation, 'accountant'), $sheets, $manual, $allocator);
+        $after = $detail();
+        self::assertSame(50, $after['allocation']['unmatched'][$paymentKey]['amount']);
+        self::assertSame(500, $after['allocation']['lines']['nhatkybanhang:2']['remaining']);
+        self::assertSame(800, $after['allocation']['lines']['nhatkybanhang:3']['remaining']);
+        self::assertSame($preview['closing'], $after['closing']);
+
+        try {
+            $controller->saveManualAllocation($this->request($query + $allocation, 'accountant'), $sheets, $manual, $allocator);
+            self::fail('A stale allocation update was accepted');
+        } catch (\Illuminate\Validation\ValidationException) {
+            self::assertSame(50, $detail()['allocation']['unmatched'][$paymentKey]['amount']);
+        }
+
+        $editedEntries = $entries;
+        $editedEntries[5]['note'] = 'Dòng thu đã sửa trên Sheet';
+        $changed = $controller->index($this->request($query, 'accountant'), $this->service($editedEntries))->getData()['allocation'];
+        self::assertArrayHasKey($paymentKey, $changed['invalidManual']);
+        self::assertSame(750, $changed['unmatched'][$paymentKey]['amount']);
+
+        $controller->saveManualAllocation($this->request($query + [
+            'payment_key' => $paymentKey, 'cancel' => 1, 'revision' => $after['allocationRevision'],
+        ], 'accountant'), $sheets, $manual, $allocator);
+        self::assertSame(750, $detail()['allocation']['unmatched'][$paymentKey]['amount']);
+        self::assertSame(2, DB::table('settings')->where('key', 'like', 'customer_debt_manual_allocation_audit_%')->count());
+    }
+
+    public function test_settlement_changes_can_return_to_batch_and_keep_previous_bill_allocations(): void
+    {
+        $this->collectionClock('2026-11-20 12:00:00');
+        $entries = [
+            array_replace($this->entry('CRM01', 'Chị Bình', 1), ['date' => '2026-11-16', 'order_code' => 'DH001']),
+            array_replace($this->entry('CRM01', 'Chị Bình', 2), ['date' => '2026-11-17', 'order_code' => 'DH002']),
+            array_replace($this->entry('CRM01', 'Chị Bình', 3), ['date' => '2026-11-19', 'order_code' => 'DH003']),
+            array_replace($this->entry('CRM01', 'Chị Bình', 4), ['date' => '2026-11-18', 'type' => 'payment', 'amount' => 300, 'note' => 'Bill 17/11/2026 | Mã đơn: DH002']),
+            array_replace($this->entry('CRM01', 'Chị Bình', 5), ['type' => 'payment', 'amount' => 1100]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 6), ['type' => 'payment', 'amount' => 250, 'note' => 'Bill 17/11/2026 | Mã đơn: DH002']),
+        ];
+        $sheets = $this->service($entries);
+        $controller = new CustomerDebtMonitorController;
+        $manual = app(\App\Services\CustomerDebtManualAllocationService::class);
+        $query = ['system_customer' => 1, 'window' => 'all'];
+        $detail = fn (array $filters = []) => $controller->index($this->request($query + $filters, 'accountant'), $sheets)->getData();
+        foreach (['2026-11-17' => 'bill', '2026-11-19' => 'batch'] as $date => $method) {
+            $preview = $detail(['transition_preview' => $date, 'transition_method' => $method]);
+            self::assertArrayNotHasKey('error', $preview['settlementPreview']);
+            $controller->changeSettlementMethod($this->request($query + [
+                'transition_date' => $date, 'transition_method' => $method, 'revision' => $preview['allocationRevision'],
+            ], 'accountant'), $sheets, $manual);
+        }
+        $after = $detail();
+        self::assertSame('batch', $after['currentSettlementMethod']);
+        self::assertSame('2026-11-19', $after['changeDate']);
+        self::assertSame(1000, $after['allocation']['lines']['nhatkybanhang:1']['remaining']);
+        self::assertSame(450, $after['allocation']['lines']['nhatkybanhang:2']['remaining']);
+        self::assertSame(0, $after['allocation']['lines']['nhatkybanhang:3']['remaining']);
+        self::assertSame(100, $after['allocation']['unmatched']['Dongtienhoatdong:5']['amount']);
+        self::assertSame(1350, $after['closing']);
+
+        $historical = $detail(['report_from' => '2026-11-16', 'report_to' => '2026-11-18']);
+        self::assertSame('bill', $historical['currentSettlementMethod']);
+        self::assertSame(700, $historical['allocation']['lines']['nhatkybanhang:2']['remaining']);
+
+        $policies = app(\App\Services\CustomerDebtPolicyService::class);
+        $legacy = $policies->effective(['customer_id' => 1], ['customer_1' => ['settlement_method' => 'mixed', 'bill_from' => '2026-11-17']]);
+        self::assertSame(['2026-11-17' => 'bill'], $legacy['settlement_changes']);
+    }
+
     public function test_bill_allocation_matches_date_and_code_and_leaves_unidentified_receipts_unallocated(): void
     {
         $entries = [

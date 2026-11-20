@@ -51,6 +51,14 @@ class CustomerDebtPolicyService
 
     public const SETTLEMENT_METHODS = ['batch' => 'Theo Đợt', 'bill' => 'Theo Bill', 'mixed' => 'Hỗn hợp'];
 
+    public static function currentSettlementMethod(array $policy): string
+    {
+        $today = today()->toDateString();
+        $changes = array_filter($policy['settlement_changes'] ?? [], fn ($date) => $date <= $today, ARRAY_FILTER_USE_KEY);
+
+        return $changes[array_key_last($changes)] ?? $policy['settlement_method'];
+    }
+
     public function defaults(): array
     {
         return ['allowed_orders' => 1, 'credit_limit' => 0, 'fixed_debt' => null, 'threshold_days' => 0, 'due_days' => 1, 'settlement_method' => 'batch', 'payment_mode' => 'default', 'cycle_type' => 'weekly', 'cycle_weekday' => 5, 'cycle_monthday' => 15];
@@ -64,6 +72,7 @@ class CustomerDebtPolicyService
     private function applyDefaults(array $policy): array
     {
         $result = array_replace($this->defaults(), array_filter($policy, fn ($value) => $value !== null));
+        $result['settlement_changes'] = $policy['settlement_changes'] ?? (empty($policy['bill_from']) ? [] : [$policy['bill_from'] => 'bill']);
         $result['warning_threshold'] = (int) $result['fixed_debt'] + (int) $result['credit_limit'];
         $result['staff_edit_locked'] = $this->isLocked($policy);
         $result['edit_version'] = (int) ($policy['edit_version'] ?? 0);
@@ -89,10 +98,17 @@ class CustomerDebtPolicyService
         return (int) $owner === (int) $user->id || ($user->hasRole(['manager', 'manager_sale', 'sale_manager']) && $user->canViewAllMonitoringCustomers());
     }
 
+    public function withWriteLock(array $group, callable $callback): mixed
+    {
+        $key = $this->prefix().$this->identity($group);
+
+        return Cache::lock('customer-debt-policy-write-'.hash('sha256', $key), 15)->block(5, $callback);
+    }
+
     private function change(array $group, callable $callback): void
     {
         $key = $this->prefix().$this->identity($group);
-        Cache::lock('customer-debt-policy-write-'.hash('sha256', $key), 15)->block(5, function () use ($group, $key, $callback) {
+        $this->withWriteLock($group, function () use ($group, $key, $callback) {
             DB::transaction(function () use ($group, $key, $callback) {
                 $lockedCustomer = ! empty($group['customer_id']) ? Customer::query()->whereKey($group['customer_id'])->lockForUpdate()->firstOrFail() : null;
                 $setting = Setting::query()->where('key', $key)->lockForUpdate()->first();
@@ -122,6 +138,9 @@ class CustomerDebtPolicyService
             if ($expectedVersion !== null && $expectedVersion !== (int) ($current['edit_version'] ?? 0)) {
                 throw ValidationException::withMessages(['policy_version' => 'Cấu hình đã thay đổi. Vui lòng tải lại trang trước khi cập nhật.']);
             }
+            if ((! empty($current['bill_from']) || ! empty($current['settlement_changes'])) && isset($data['settlement_method']) && $data['settlement_method'] !== $current['settlement_method']) {
+                throw ValidationException::withMessages(['settlement_method' => 'Khách đã có lịch sử chuyển hình thức thanh toán. Hãy thêm mốc chuyển trên trang đối chiếu.']);
+            }
             $next = array_replace($current, [
                 'allowed_orders' => array_key_exists('allowed_orders', $data) ? (isset($data['allowed_orders']) ? (int) $data['allowed_orders'] : null) : ($current['allowed_orders'] ?? null),
                 'credit_limit' => isset($data['credit_limit']) ? (int) $data['credit_limit'] : null,
@@ -142,6 +161,28 @@ class CustomerDebtPolicyService
             ]);
             Setting::set($key, json_encode($next, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
             $this->audit($this->identity($group), 'update', $userId, $current, $next);
+        });
+    }
+
+    public function changeSettlementMethod(array $group, string $date, string $method, int $version, User $actor): void
+    {
+        abort_unless($actor->canManageCustomerDebt(), 403);
+        $this->change($group, function ($key, $current) use ($group, $date, $method, $version, $actor) {
+            $policy = $this->applyDefaults($current + $group['policy']);
+            $changes = $policy['settlement_changes'];
+            $lastDate = array_key_last($changes);
+            $previousMethod = $changes[$lastDate] ?? $policy['settlement_method'];
+            if ($version !== $policy['edit_version'] || ($lastDate !== null && $date <= $lastDate) || $method === $previousMethod) {
+                throw ValidationException::withMessages(['transition_date' => 'Chọn hình thức khác và ngày sau mốc chuyển gần nhất. Nếu dữ liệu đã đổi, vui lòng tải lại trang.']);
+            }
+            $changes[$date] = $method;
+            $next = array_replace($policy, [
+                'settlement_changes' => $changes, 'updated_by' => $actor->id, 'updated_at' => now()->toIso8601String(),
+                'edit_version' => $version + 1,
+            ]);
+            unset($next['bill_from']);
+            Setting::set($key, json_encode($next, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+            $this->audit($this->identity($group), 'change_settlement_method', $actor->id, $current, $next);
         });
     }
 

@@ -69,21 +69,16 @@
         @endif
     </div>
     <div class="small text-muted mb-2">Khách đã nhắc hôm nay lên đầu. Trong mỗi nhóm, xếp theo số sao rồi theo cột đang chọn.</div>
-    <div class="card"><div class="table-responsive"><table class="table table-hover collection-table collection-report-table"><thead><tr><th class="collection-select-column"><input type="checkbox" data-collection-select-all @disabled(!$canManageReport) aria-label="Chọn tất cả khách trên trang này"></th><th class="collection-compact">STT</th><th class="collection-compact">Mã KH</th><th class="collection-name">Tên khách hàng</th><th class="collection-negotiation">Chốt Công nợ</th><th class="text-end">Ngưỡng cảnh báo</th><th class="text-end">Số ngày cho nợ</th><th class="collection-compact">sale</th><th class="text-end">Doanh thu</th><th class="text-end">Tặng</th><th class="text-end">Thanh toán</th>
+    <div class="card"><div class="table-responsive"><table class="table table-hover collection-table collection-report-table"><thead><tr><th class="collection-select-column"><input type="checkbox" data-collection-select-all @disabled(!$canManageReport) aria-label="Chọn tất cả khách trên trang này"></th><th class="collection-compact">STT</th><th class="collection-compact">Mã KH</th><th class="collection-name">Tên khách hàng</th><th class="collection-negotiation">Chốt công nợ</th><th class="text-end">Ngưỡng cảnh báo</th><th class="text-end">Ngày cho nợ</th><th class="collection-compact">Sale</th><th class="text-end">Doanh thu</th><th class="text-end">Tặng</th><th class="text-end">Thanh toán</th>
         @foreach(['balance'=>'Công nợ','days_without_purchase'=>'Chưa mua','days_without_payment'=>'Chưa thanh toán'] as $sort=>$label)<th class="text-end {{ $sort!=='balance' ? 'collection-days' : '' }}"><a class="debt-sort-link" href="{{ request()->fullUrlWithQuery(['sort'=>$sort,'direction'=>request('sort','balance')===$sort&&request('direction','desc')==='desc'?'asc':'desc','page'=>1]) }}">{{ $label }} <span aria-hidden="true">{{ request('sort','balance')===$sort?(request('direction','desc')==='desc'?'↓':'↑'):'↕' }}</span></a></th>@if($sort==='balance' && $hasPeriodFilter)<th class="text-end"><a class="debt-sort-link" title="{{ $reportSource === 'sheet' ? 'Nợ mới còn lại sau khi trừ thanh toán trong kỳ và tiền trả dư đầu kỳ' : 'Doanh thu − Tặng − Thanh toán + Điều chỉnh trong khoảng ngày đang lọc; số âm là giảm nợ' }}" href="{{ request()->fullUrlWithQuery(['sort'=>'period_increase','direction'=>request('sort')==='period_increase'&&request('direction','desc')==='desc'?'asc':'desc','page'=>1]) }}">Công nợ phát sinh <span aria-hidden="true">{{ request('sort')==='period_increase'?(request('direction','desc')==='desc'?'↓':'↑'):'↕' }}</span></a></th>@endif @endforeach
-        <th class="collection-status">Trạng thái</th><th class="collection-tools-heading">Công cụ</th></tr></thead><tbody>
+        <th class="collection-status">Trạng thái</th><th class="collection-warnings">Cảnh báo</th><th class="collection-tools"><span class="visually-hidden">Thao tác</span></th></tr></thead><tbody>
         @forelse($rows as $debt)
         @php($reminderNote = \App\Services\DebtCollectionService::reminderNote((int) $debt['balance'], $debt['last_payment_date'], $debt['last_purchase_date']))
-        @php($latest=$debt['collection']['latest'])
+        @php($latest = $debt['collection']['latest'])
+        @php($isPeriodic = $debt['policy']['payment_mode'] === 'cycle')
         <tr class="{{ $debt['reminded_today'] ? 'collection-reminded-today' : '' }}"><td class="collection-select-column"><input type="checkbox" data-collection-select data-reminder-note="{{ $reminderNote }}" data-sale-key="{{ $debt['sale_key'] }}" data-sale-label="{{ $debt['sale_label'] }}" aria-label="Chọn {{ $debt['name'] }}" data-name="{{ $debt['name'] }}" data-key="{{ $debt['key'] }}" data-customer="{{ $debt['customer_id'] }}" data-balance="{{ $debt['balance'] }}" data-period-increase="{{ $debt['period_increase'] ?? '' }}" data-purchase="{{ $debt['last_purchase_date'] ? \Carbon\Carbon::parse($debt['last_purchase_date'])->format('j/n') : '' }}" data-purchase-days="{{ $debt['days_without_purchase'] }}" data-payment-days="{{ $debt['days_without_payment'] }}" data-request-id="{{ \Illuminate\Support\Str::uuid() }}" @disabled(!$canManageReport || !$debt['data_available'] || $debt['balance']<=0)></td><td class="collection-compact">{{ $rows->firstItem()+$loop->index }}</td><td class="collection-compact">{{ $debt['code'] ?: '—' }}</td><td class="collection-name">
             <strong>{{ $debt['name'] }}</strong>
             @if(!$debt['customer_id'])<div class="small text-muted">Khách nguồn · chưa ghép</div>@endif
-            @if($debt['recovery']['status'] !== 'normal')<span class="badge bg-warning text-dark">{{ $debt['recovery']['label'] }}</span>@endif
-            @if($debt['policy']['payment_mode'] === 'cycle')
-                <div class="collection-payment-cycle">
-                    @include('customer-debt.cycle-status', ['policy' => $debt['policy'], 'alerts' => $debt['alerts']])
-                </div>
-            @endif
         </td>
         @php($creditLimit = (int) $debt['policy']['credit_limit'])
         <td class="collection-negotiation" title="Trần công nợ và số ngày được phép nợ kể từ ngày giao hàng gần nhất"><strong>{{ number_format($creditLimit,0,',','.') }} đ</strong>, <strong>{{ $debt['policy']['due_days'] }} ngày</strong></td>
@@ -93,43 +88,60 @@
 
         <td class="collection-status">
             <div class="collection-status-items">
-                <span class="small text-muted">{{ \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[$debt['policy']['settlement_method']] }}</span>
                 @if(!$debt['data_available'])<span class="badge bg-light text-dark">Chưa có dữ liệu</span>@elseif($debt['balance']===0)<span class="badge bg-success">Đã cân đối</span>@elseif($debt['balance']<0)<span class="badge bg-info text-dark">Khách trả trước</span>@endif
-                @include('customer-debt.threshold-alert', ['alert' => $debt['alerts']])
-                @if(($debt['alerts']['overdue_days'] ?? 0)>0)<span class="badge bg-danger">Trễ {{ $debt['alerts']['overdue_days'] }} ngày</span>@endif
                 <span class="badge {{ in_array($debt['collection']['status'],['met','met_on_time'],true)?'bg-success':($debt['collection']['status']==='overdue'?'bg-danger':'bg-light text-dark') }}">{{ $debt['collection']['label'] }}</span>
             </div>
-            @if($latest)<div class="small text-muted mt-1">Nhắc {{ \Carbon\Carbon::parse($latest['record']->reminded_at)->format('d/m H:i') }} · Thu {{ number_format($latest['paid'],0,',','.') }} / {{ number_format($latest['target'],0,',','.') }} đ</div>@if($latest['follow_up_due'])<span class="small text-danger">Đến lần nhắc tiếp</span>@endif @endif
+            @if($latest)
+                <div class="text-muted">Nhắc {{ \Carbon\Carbon::parse($latest['record']->reminded_at)->format('d/m H:i') }} · Thu {{ number_format($latest['paid'],0,',','.') }} / {{ number_format($latest['target'],0,',','.') }} đ</div>
+                @if($latest['follow_up_due'])<div class="text-danger">Đến lần nhắc tiếp</div>@endif
+            @endif
+            @if($isPeriodic)
+                <div class="collection-payment-cycle">
+                    @include('customer-debt.cycle-status', ['policy' => $debt['policy'], 'alerts' => $debt['alerts'], 'showCycleBadge' => false])
+                </div>
+            @endif
         </td>
-        <td class="collection-tools"><div class="d-flex flex-wrap gap-1">
-            @if($canManageReport && $debt['data_available'] && $debt['balance']>0)<button type="button" class="btn btn-sm btn-primary collection-remind" data-reminder-note="{{ $reminderNote }}" title="Ghi nhận đã nhắc nợ" data-key="{{ $debt['key'] }}" data-customer="{{ $debt['customer_id'] }}" data-name="{{ $debt['name'] }}" data-balance="{{ $debt['balance'] }}" data-request-id="{{ \Illuminate\Support\Str::uuid() }}" data-report-source="{{ $reportSource }}">Đã nhắc</button>@endif
-            @if($canManageReport)<button type="button" class="btn btn-sm btn-light collection-history" data-key="{{ $debt['key'] }}" data-customer="{{ $debt['customer_id'] }}" data-name="{{ $debt['name'] }}" data-report-source="{{ $reportSource }}">Lịch sử</button>@endif
-            <details class="collection-more"><summary class="btn btn-sm btn-light" aria-label="Công cụ khác">⋯</summary><div>
-                @if($canManageReport)<div class="collection-priority-menu"><span class="small text-muted">Ưu tiên theo dõi</span><form class="collection-priority" method="POST" action="{{ route('customer-debt.report.priority') }}" data-collection-priority aria-label="Ưu tiên theo dõi {{ $debt['name'] }}">@csrf<input type="hidden" name="report_source" value="{{ $reportSource }}"><input type="hidden" name="source_key" value="{{ $debt['key'] }}"><input type="hidden" name="customer_id" value="{{ $debt['customer_id'] }}"><input type="hidden" name="priority_version" value="{{ $debt['priority']['version'] }}">@for($star=1;$star<=5;$star++)<button type="submit" name="stars" value="{{ $star }}" class="collection-star {{ $star<=$debt['priority']['stars']?'is-active':'' }}" title="Ưu tiên {{ $star }} sao" aria-label="Ưu tiên {{ $star }} sao" aria-pressed="{{ $star===$debt['priority']['stars']?'true':'false' }}">★</button>@endfor @if($debt['priority']['stars']>0)<button type="submit" name="stars" value="0" class="collection-star-clear" title="Bỏ ưu tiên" aria-label="Bỏ ưu tiên">×</button>@endif<span class="collection-priority-error" role="status"></span></form></div>@endif
-                @if($debt['data_available'])
-                    @if($canManageReport && $reportSource === 'sheet') @include('customer-debt.balance-button') @elseif($canManageReport)<a class="btn btn-sm btn-light" href="{{ accounting_route('customer-debts.show',$debt['customer_id']) }}">Cập nhật công nợ hệ thống</a>@endif
-                    @if($canManageReport)<button type="button" class="btn btn-sm btn-light debt-recovery-button" data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}" data-status="{{ $debt['recovery']['status'] }}" data-note="{{ $debt['recovery']['note'] }}" data-version="{{ $debt['recovery']['version'] }}" data-customer="{{ $debt['customer_id'] }}" data-report-source="{{ $reportSource }}">Khả năng thu hồi</button>@endif
-                    <a class="btn btn-sm btn-light" href="{{ $reportSource === 'system' ? accounting_route('customer-debts.show',$debt['customer_id']) : route('customer-debt.index',['tab'=>'all','customer'=>$debt['key'],'window'=>'all','recovery'=>'all']).'#debt-detail' }}">{{ $reportSource === 'sheet' ? 'Đối chiếu công nợ' : 'Chi tiết công nợ' }}</a>
-                @else<a class="btn btn-sm btn-light" href="{{ route('customer-debt.index',['tab'=>'all','search'=>$debt['name'],'recovery'=>'all']) }}">Kiểm tra nguồn / ghép khách</a>@endif
-                @if($canManageReport && ($debt['customer_id'] || ($reportSource === 'sheet' && $debt['key'] && empty($debt['manual_only']))))
-                    <button type="button" class="btn btn-sm btn-light debt-policy-button"
-                        data-policy-action="{{ $debt['customer_id'] ? route('customers.debt-policy.update', $debt['customer_id']) : route('customer-debt.policy') }}"
-                        data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}"
-                        @include('customer-debt.policy-cycle-values', ['policy' => $debt['policy']]) data-fixed="{{ $debt['policy']['fixed_debt'] }}" data-limit="{{ $debt['policy']['credit_limit'] }}"
-                        data-threshold-days="{{ $debt['policy']['threshold_days'] }}" data-version="{{ $debt['policy']['edit_version'] }}">Sửa tiêu chí công nợ</button>
-                    @if($debt['customer_id'] && $debt['policy']['staff_edit_locked'])
-                        <form method="POST" action="{{ route('customers.debt-policy.unlock', $debt['customer_id']) }}">
-                            @csrf
-                            <input type="hidden" name="policy_version" value="{{ $debt['policy']['edit_version'] }}">
-                            <input type="hidden" name="return_to_report" value="1">
-                            <button type="submit" class="btn btn-sm btn-light w-100">Mở khóa cho sale sửa 1 lần</button>
-                        </form>
+        <td class="collection-warnings">
+            <div class="collection-status-items">
+                <span class="text-muted">{{ \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[\App\Services\CustomerDebtPolicyService::currentSettlementMethod($debt['policy'])] }}</span>
+                @if($isPeriodic)<span class="badge bg-info text-dark">Định kỳ</span>@endif
+                @include('customer-debt.threshold-alert', ['alert' => $debt['alerts']])
+                @if(($debt['alerts']['overdue_days'] ?? 0)>0)<span class="badge bg-danger">Trễ {{ $debt['alerts']['overdue_days'] }} ngày</span>@endif
+                @if($debt['recovery']['status'] !== 'normal')<span class="badge bg-warning text-dark">{{ $debt['recovery']['label'] }}</span>@endif
+            </div>
+        </td>
+        <td class="collection-tools">
+            <details class="collection-more">
+                <summary class="btn btn-sm btn-light" aria-label="Thao tác cho {{ $debt['name'] }}">⋯</summary>
+                <div>
+                    @if($canManageReport && $debt['data_available'] && $debt['balance']>0)<button type="button" class="btn btn-sm btn-primary collection-remind" data-reminder-note="{{ $reminderNote }}" title="Ghi nhận đã nhắc nợ" data-key="{{ $debt['key'] }}" data-customer="{{ $debt['customer_id'] }}" data-name="{{ $debt['name'] }}" data-balance="{{ $debt['balance'] }}" data-request-id="{{ \Illuminate\Support\Str::uuid() }}" data-report-source="{{ $reportSource }}">Ghi nhận đã nhắc</button>@endif
+                    @if($canManageReport)<button type="button" class="btn btn-sm btn-light collection-history" data-key="{{ $debt['key'] }}" data-customer="{{ $debt['customer_id'] }}" data-name="{{ $debt['name'] }}" data-report-source="{{ $reportSource }}">Lịch sử nhắc nợ</button>@endif
+                    @if($canManageReport)<div class="collection-priority-menu"><span class="small text-muted">Ưu tiên theo dõi</span><form class="collection-priority" method="POST" action="{{ route('customer-debt.report.priority') }}" data-collection-priority aria-label="Ưu tiên theo dõi {{ $debt['name'] }}">@csrf<input type="hidden" name="report_source" value="{{ $reportSource }}"><input type="hidden" name="source_key" value="{{ $debt['key'] }}"><input type="hidden" name="customer_id" value="{{ $debt['customer_id'] }}"><input type="hidden" name="priority_version" value="{{ $debt['priority']['version'] }}">@for($star=1;$star<=5;$star++)<button type="submit" name="stars" value="{{ $star }}" class="collection-star {{ $star<=$debt['priority']['stars']?'is-active':'' }}" title="Ưu tiên {{ $star }} sao" aria-label="Ưu tiên {{ $star }} sao" aria-pressed="{{ $star===$debt['priority']['stars']?'true':'false' }}">★</button>@endfor @if($debt['priority']['stars']>0)<button type="submit" name="stars" value="0" class="collection-star-clear" title="Bỏ ưu tiên" aria-label="Bỏ ưu tiên">×</button>@endif<span class="collection-priority-error" role="status"></span></form></div>@endif
+                    @if($debt['data_available'])
+                        @if($canManageReport && $reportSource === 'sheet') @include('customer-debt.balance-button') @elseif($canManageReport)<a class="btn btn-sm btn-light" href="{{ accounting_route('customer-debts.show',$debt['customer_id']) }}">Cập nhật công nợ hệ thống</a>@endif
+                        @if($canManageReport)<button type="button" class="btn btn-sm btn-light debt-recovery-button" data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}" data-status="{{ $debt['recovery']['status'] }}" data-note="{{ $debt['recovery']['note'] }}" data-version="{{ $debt['recovery']['version'] }}" data-customer="{{ $debt['customer_id'] }}" data-report-source="{{ $reportSource }}">Khả năng thu hồi</button>@endif
+                        <a class="btn btn-sm btn-light" href="{{ $reportSource === 'system' ? accounting_route('customer-debts.show',$debt['customer_id']) : route('customer-debt.index',['tab'=>'all','customer'=>$debt['key'],'window'=>'all','recovery'=>'all']).'#debt-detail' }}">{{ $reportSource === 'sheet' ? 'Đối chiếu công nợ' : 'Chi tiết công nợ' }}</a>
+                    @else<a class="btn btn-sm btn-light" href="{{ route('customer-debt.index',['tab'=>'all','search'=>$debt['name'],'recovery'=>'all']) }}">Kiểm tra nguồn / ghép khách</a>@endif
+                    @if($canManageReport && ($debt['customer_id'] || ($reportSource === 'sheet' && $debt['key'] && empty($debt['manual_only']))))
+                        <button type="button" class="btn btn-sm btn-light debt-policy-button"
+                            data-policy-action="{{ $debt['customer_id'] ? route('customers.debt-policy.update', $debt['customer_id']) : route('customer-debt.policy') }}"
+                            data-key="{{ $debt['key'] }}" data-name="{{ $debt['name'] }}"
+                            @include('customer-debt.policy-cycle-values', ['policy' => $debt['policy']]) data-fixed="{{ $debt['policy']['fixed_debt'] }}" data-limit="{{ $debt['policy']['credit_limit'] }}"
+                            data-threshold-days="{{ $debt['policy']['threshold_days'] }}" data-version="{{ $debt['policy']['edit_version'] }}">Sửa tiêu chí công nợ</button>
+                        @if($debt['customer_id'] && $debt['policy']['staff_edit_locked'])
+                            <form method="POST" action="{{ route('customers.debt-policy.unlock', $debt['customer_id']) }}">
+                                @csrf
+                                <input type="hidden" name="policy_version" value="{{ $debt['policy']['edit_version'] }}">
+                                <input type="hidden" name="return_to_report" value="1">
+                                <button type="submit" class="btn btn-sm btn-light w-100">Mở khóa cho sale sửa 1 lần</button>
+                            </form>
+                        @endif
                     @endif
-                @endif
-                @if($debt['customer_id'])<a class="btn btn-sm btn-light" href="{{ route('customers.show',$debt['customer_id']) }}">Hồ sơ khách</a>@endif
-            </div></details>
-        </div></td></tr>
-        @empty<tr><td colspan="{{ $hasPeriodFilter?17:16 }}" class="text-center text-muted py-4">Không có khách phù hợp với bộ lọc.</td></tr>@endforelse
+                    @if($debt['customer_id'])<a class="btn btn-sm btn-light" href="{{ route('customers.show',$debt['customer_id']) }}">Hồ sơ khách</a>@endif
+                </div>
+            </details>
+        </td></tr>
+        @empty<tr><td colspan="{{ $hasPeriodFilter ? 18 : 17 }}" class="text-center text-muted py-4">Không có khách phù hợp với bộ lọc.</td></tr>@endforelse
         </tbody></table></div>
         <div class="card-body collection-pagination">{{ $rows->links() }}<form method="GET">@foreach(request()->except(['page','per_page']) as $key=>$value)@if(is_scalar($value))<input type="hidden" name="{{ $key }}" value="{{ $value }}">@endif @endforeach<select class="form-select form-select-sm" name="per_page" aria-label="Khách mỗi trang" onchange="this.form.submit()">@foreach([20,30,50,100,200,300] as $size)<option value="{{ $size }}" @selected((int)request('per_page',30)===$size)>{{ $size }} khách/trang</option>@endforeach</select></form></div>
     </div>

@@ -11,7 +11,7 @@
         @endif
     </div>
     <dl class="debt-detail-policy-values">
-        <div><dt>Hình thức thanh toán</dt><dd>{{ \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[$selected['policy']['settlement_method']] }}</dd></div>
+        <div><dt>Hình thức thanh toán</dt><dd>{{ \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[$currentSettlementMethod ?? $selected['policy']['settlement_method']] }}@if(!empty($changeDate)) từ {{ \Carbon\Carbon::parse($changeDate)->format('d/m/Y') }}@endif</dd></div>
         <div><dt>Công nợ cố định</dt><dd>{{ $selected['policy']['fixed_debt'] === null ? 'Chưa đặt' : number_format($selected['policy']['fixed_debt'], 0, ',', '.').' đ' }}</dd></div>
         <div><dt>Trần công nợ</dt><dd>{{ number_format($selected['policy']['credit_limit'], 0, ',', '.') }} đ</dd></div>
         <div><dt>Ngưỡng cảnh báo</dt><dd>{{ number_format($selected['policy']['warning_threshold'], 0, ',', '.') }} đ</dd></div>

@@ -71,14 +71,25 @@
         <div class="debt-report-metric"><span>Rủi ro công nợ</span><strong class="debt-report-risk {{ in_array($reportAlerts['risk'], ['high','very_high']) ? 'text-danger' : '' }}">{{ ['medium'=>'Trung bình','high'=>'Cao','very_high'=>'Rất cao'][$reportAlerts['risk']] ?? ($reportAlerts['balance'] > 0 ? 'Dưới 15 ngày' : 'Không còn nợ') }}</strong><small>Tuổi nợ {{ $reportAlerts['age_days'] }} ngày</small></div>
     </div>
     <div class="debt-report-reconciliation"><span>Dư đầu kỳ <strong>{{ number_format($opening, 0, ',', '.') }} đ</strong></span>@if($detailAdjustments != 0)<span>Điều chỉnh trong kỳ <strong>{{ number_format($detailAdjustments, 0, ',', '.') }} đ</strong></span>@endif<span>{{ \Carbon\Carbon::parse($reportFrom)->format('d/m/Y') }} – {{ \Carbon\Carbon::parse($reportTo)->format('d/m/Y') }} · Phát sinh theo kỳ; số dư, ngày giao dịch gần nhất và rủi ro tính đến cuối kỳ.</span></div>
-    <div class="debt-detail-notes{{ !isset($debtDetailAction) || ($saleDebtDetail ?? false) ? ' debt-detail-notes-with-policy' : '' }}">
+    @php($showDetailPolicy = !isset($debtDetailAction) || ($saleDebtDetail ?? false))
+    <div class="debt-detail-notes{{ ($showDetailPolicy || ($canManageAllocation ?? false)) ? ' debt-detail-notes-with-policy' : '' }}">
         <div>
             <div class="small text-muted mb-2">Nguồn @if($canLoad ?? false)<a href="https://docs.google.com/spreadsheets/d/{{ $snapshot['spreadsheet_id'] ?? config('services.google_sheets.debt_spreadsheet_id') }}/edit?gid=438108508" target="_blank" rel="noopener">nhatkybanhang</a>@else nhatkybanhang @endif trong kỳ: Thanh toán <strong>{{ number_format($detailSalesPayments, 0, ',', '.') }} đ</strong> · Tặng <strong>{{ number_format($detailGifts, 0, ',', '.') }} đ</strong>. Tặng được trừ riêng khỏi số phải thu.</div>
             @if(!empty($snapshot['issues']) || !empty($snapshot['has_unidentified_payments']))<div class="small text-warning mb-2">Cần đối chiếu các khoản thu chưa xác định khách hàng để bảo đảm công nợ đầy đủ.</div>@endif
             @if($allocation ?? null)
                 <div class="small">
-                    <strong>Hình thức thanh toán · {{ \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[$settlementMethod] }}</strong>
-                    @if($settlementMethod !== 'bill')
+                    @if($changeDate ?? null)
+                        <strong>{{ \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[$currentSettlementMethod] }} từ {{ \Carbon\Carbon::parse($changeDate)->format('d/m/Y') }}</strong>
+                        <div>Đơn trước ngày chuyển giữ cách đối chiếu của từng kỳ.</div>
+                        @php($openLines = collect($allocation['lines']))
+                        <div class="mt-1">Nợ cũ còn phải thu <strong>{{ number_format($openLines->where('legacy', true)->sum('remaining'), 0, ',', '.') }} đ</strong></div>
+                        <div>Đơn từ ngày chuyển còn phải thu <strong>{{ number_format($openLines->where('legacy', false)->sum('remaining'), 0, ',', '.') }} đ</strong></div>
+                        <div>Tiền đã thu chờ ghép <strong>{{ number_format(collect($allocation['unmatched'])->where('amount', '>', 0)->sum('amount'), 0, ',', '.') }} đ</strong></div>
+                        <div class="text-muted">Các số trên tính đến cuối kỳ đối chiếu và thể hiện phân bổ theo đơn. Số dư công nợ vẫn gồm thanh toán và điều chỉnh đã ghi nhận.</div>
+                    @else
+                        <strong>Hình thức thanh toán · {{ \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[$settlementMethod] }}</strong>
+                    @endif
+                    @if($settlementMethod !== 'bill' && empty($changeDate))
                         <div>Khoản theo đợt được phân bổ từ ngày giao cũ nhất. Kết quả tính đến cuối kỳ đối chiếu.</div>
                     @endif
                     @if($allocation['paidThrough'])
@@ -94,23 +105,38 @@
                         </div>
                     @endif
                     @if($allocation['unmatched'])
-                        <div class="text-danger">{{ count($allocation['unmatched']) }} khoản thu còn cần so khớp. Mở bảng Thanh toán để xem lý do.</div>
+                        <div class="text-danger">{{ count($allocation['unmatched']) }} khoản thu còn cần so khớp. Mở bảng Thanh toán để xem lý do và ghép khoản thu.</div>
                     @endif
                     @if($allocation['credit'] > 0)
                         <div>Tiền theo đợt chưa cần phân bổ <strong>{{ number_format($allocation['credit'], 0, ',', '.') }} đ</strong></div>
                     @elseif($allocation['credit'] < 0)
                         <div class="text-warning">Khoản thu âm theo đợt cần đối chiếu <strong>{{ number_format(abs($allocation['credit']), 0, ',', '.') }} đ</strong></div>
                     @endif
-                    @if($settlementMethod !== 'batch')
-                        <div class="text-muted">Khi thu theo Bill, ghi <strong>Bill 13/11/2026 | Mã đơn: DH123</strong> trong nội dung thanh toán. Khoản thiếu ngày hoặc mã khớp được giữ chờ đối chiếu.</div>
+                    @if($settlementMethod !== 'batch' || !empty($changeDate))
+                        @if(!empty($changeDate))
+                            <div class="text-muted">Ghi <strong>Nợ cũ</strong> cho khoản trả đơn trước kỳ hiện tại chưa có mã bill.
+                                @if($currentSettlementMethod !== 'bill') Khoản trả theo đợt trong kỳ hiện tại cấn từ đơn cũ nhất của kỳ đó. @endif
+                            </div>
+                        @endif
+                        <div class="text-muted">Khi thu theo Bill, ghi <strong>Bill 13/11/2026 | Mã đơn: DH123</strong> trong nội dung thanh toán. Khoản ghi trả Bill nhưng thiếu ngày hoặc mã khớp được giữ chờ đối chiếu.</div>
                     @endif
                 </div>
             @endif
         </div>
-        @if(!isset($debtDetailAction) || ($saleDebtDetail ?? false))
-            @include('customer-debt.detail-policy')
+        @if($showDetailPolicy || ($canManageAllocation ?? false))
+            <div class="d-grid gap-3">
+                @if($showDetailPolicy)
+                    @include('customer-debt.detail-policy')
+                @endif
+                @if($canManageAllocation ?? false)
+                    @include('customer-debt.settlement-transition')
+                @endif
+            </div>
         @endif
     </div>
+    @if($canManageAllocation ?? false)
+        @include('customer-debt.payment-allocation-tools')
+    @endif
     <div class="debt-report-columns{{ !isset($debtDetailAction) && ($reminderHistory ?? null) ? ' debt-report-columns-with-history' : '' }}">
         <article class="debt-report-ledger">
             <header>
@@ -129,7 +155,8 @@
             <div class="debt-report-scroll" tabindex="0" aria-label="Chi tiết mua hàng">
                 <table class="table debt-purchase-table"><colgroup><col class="debt-ledger-date"><col><col span="4" class="debt-ledger-money"></colgroup><thead><tr><th>Ngày mua</th><th>Nội dung</th><th class="text-end">Tiền hàng</th><th class="text-end">Phải thu</th><th class="text-end">Đã phân bổ</th><th class="text-end">Còn phải thu</th></tr></thead><tbody>
                 @forelse($purchases as $entry)
-                    <tr><td class="debt-ledger-date-cell"><time datetime="{{ $entry['date'] }}">{{ \Carbon\Carbon::parse($entry['date'])->format('d/m/Y') }}</time><small>{{ $entry['source_sheet'] ?? ($entry['type'] === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong') }} · Dòng {{ $entry['row'] }}</small></td><td>{{ $entry['note'] ?: 'Mua hàng' }} @if(!empty($entry['allocation']['code']))<small>Đơn {{ $entry['allocation']['code'] }}</small>@endif</td><td class="text-end">{{ number_format($entry['amount'], 0, ',', '.') }}</td><td class="text-end">{{ number_format($entry['amount'] - ($entry['gift'] ?? 0), 0, ',', '.') }}</td>
+                    <tr><td class="debt-ledger-date-cell"><time datetime="{{ $entry['date'] }}">{{ \Carbon\Carbon::parse($entry['date'])->format('d/m/Y') }}</time><small>{{ $entry['source_sheet'] ?? ($entry['type'] === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong') }} · Dòng {{ $entry['row'] }}</small></td><td>{{ $entry['note'] ?: 'Mua hàng' }} @if(!empty($entry['allocation']['code']))<small>Đơn {{ $entry['allocation']['code'] }}</small>@endif
+                        @if(!empty($changeDate) && isset($entry['allocation']))<small>{{ $entry['allocation']['legacy'] ? 'Nợ cũ' : \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[$currentSettlementMethod] }}</small>@endif</td><td class="text-end">{{ number_format($entry['amount'], 0, ',', '.') }}</td><td class="text-end">{{ number_format($entry['amount'] - ($entry['gift'] ?? 0), 0, ',', '.') }}</td>
                         <td class="text-end text-success">{{ isset($entry['allocation']) ? number_format($entry['allocation']['paid'], 0, ',', '.') : '—' }}</td>
                         <td class="text-end {{ ($entry['allocation']['remaining'] ?? 0) > 0 ? 'text-danger' : 'text-success' }}">{{ isset($entry['allocation']) ? number_format($entry['allocation']['remaining'], 0, ',', '.') : '—' }}</td></tr>
                 @empty<tr><td colspan="6" class="text-center text-muted py-4">Không có giao dịch mua hàng trong kỳ.</td></tr>@endforelse
@@ -154,7 +181,22 @@
                     @else
                         {{ $entry['note'] ?: 'Thanh toán' }}
                     @endif
-                    @if(!empty($entry['allocation_issue']))<div class="small text-danger">{{ $entry['allocation_issue']['reason'] }} · {{ number_format($entry['allocation_issue']['amount'], 0, ',', '.') }} đ</div>@endif</td><td class="text-end text-success">{{ number_format($entry['amount'], 0, ',', '.') }} đ</td></tr>
+                    @if(!empty($entry['allocation_automatic']) || !empty($entry['allocation_manual']))
+                        <ul class="small list-unstyled mb-1">
+                            @foreach($entry['allocation_automatic'] as $target => $amount)
+                                <li>Tự ghép · {{ $allocation['lines'][$target]['code'] ?: $target }} · {{ number_format($amount, 0, ',', '.') }} đ</li>
+                            @endforeach
+                            @foreach($entry['allocation_manual'] as $item)
+                                <li>Ghép tay · {{ str_starts_with($item['target'], 'legacy') ? 'Nợ cũ' : ($allocation['lines'][$item['target']]['code'] ?: $item['target']) }} · {{ number_format($item['amount'], 0, ',', '.') }} đ</li>
+                            @endforeach
+                        </ul>
+                    @endif
+                    @if(!empty($entry['allocation_issue']))<div class="small text-danger">{{ $entry['allocation_issue']['reason'] }} · {{ number_format($entry['allocation_issue']['amount'], 0, ',', '.') }} đ</div>@endif
+                    @if(!empty($entry['allocation_invalid']))<div class="small text-danger">{{ $entry['allocation_invalid'] }}</div>@endif
+                    @if(($canManageAllocation ?? false) && (!empty($entry['allocation_saved']) || ($entry['allocation_issue']['amount'] ?? 0) > 0))
+                        <a class="btn btn-sm btn-outline-primary mt-1" href="{{ request()->fullUrlWithQuery(['allocate' => $entry['allocation_key'], 'transition_preview' => null, 'transition_method' => null]) }}#debt-manual-allocation">{{ $entry['allocation_saved'] ? 'Sửa ghép' : 'Ghép khoản thu' }}</a>
+                    @endif
+                    </td><td class="text-end text-success">{{ number_format($entry['amount'], 0, ',', '.') }} đ</td></tr>
                 @empty<tr><td colspan="3" class="text-center text-muted py-4">Không có khoản thanh toán hoặc hàng tặng trong kỳ.</td></tr>@endforelse
                 </tbody><tfoot><tr><th colspan="2">Tổng thanh toán & hàng tặng</th><th class="text-end">{{ number_format($detailSettlementTotal, 0, ',', '.') }} đ</th></tr></tfoot></table>
             </div>

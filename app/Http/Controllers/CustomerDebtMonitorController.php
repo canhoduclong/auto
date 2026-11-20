@@ -6,9 +6,13 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\CustomerDebtBalanceService;
+use App\Services\CustomerDebtManualAllocationService;
+use App\Services\CustomerDebtPaymentAllocation;
 use App\Services\CustomerDebtPolicyService;
 use App\Services\CustomerDebtSheetService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
@@ -17,7 +21,7 @@ class CustomerDebtMonitorController extends Controller
     public function index(Request $request, CustomerDebtSheetService $service)
     {
         $purchasePageSizes = [20, 50, 100, 150, 200];
-        $data = $request->validate(['presentation' => 'nullable|in:customer,payment-request,receipt', 'from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d', 'tab' => 'nullable|in:orders,all', 'sort' => 'nullable|in:overdue_days', 'direction' => 'nullable|in:asc,desc', 'search' => 'nullable|string|max:150', 'sale' => ['nullable', 'string', 'regex:/^(user:[0-9]+|sheet:[a-f0-9]{16}|unassigned)$/'], 'recovery' => 'nullable|in:normal,difficult,unrecoverable,flagged,all', 'alert' => 'nullable|in:overdue,remind,medium,high,very_high', 'customer' => 'nullable|string|size:64', 'system_customer' => 'nullable|integer|min:1', 'window' => 'nullable|in:recent,all,custom', 'report_from' => 'nullable|required_with:report_to|date_format:Y-m-d', 'report_to' => 'nullable|required_with:report_from|date_format:Y-m-d|after_or_equal:report_from', 'purchase_page' => 'nullable|integer|min:1', 'purchase_per_page' => 'nullable|in:'.implode(',', $purchasePageSizes), 'payment_page' => 'nullable|integer|min:1', 'adjustment_page' => 'nullable|integer|min:1', 'detail_page' => 'nullable|integer|min:1', 'debt_page' => 'nullable|integer|min:1', 'issue_page' => 'nullable|integer|min:1']);
+        $data = $request->validate(['presentation' => 'nullable|in:customer,payment-request,receipt', 'from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d', 'tab' => 'nullable|in:orders,all', 'sort' => 'nullable|in:overdue_days', 'direction' => 'nullable|in:asc,desc', 'search' => 'nullable|string|max:150', 'sale' => ['nullable', 'string', 'regex:/^(user:[0-9]+|sheet:[a-f0-9]{16}|unassigned)$/'], 'recovery' => 'nullable|in:normal,difficult,unrecoverable,flagged,all', 'alert' => 'nullable|in:overdue,remind,medium,high,very_high', 'customer' => 'nullable|string|size:64', 'system_customer' => 'nullable|integer|min:1', 'window' => 'nullable|in:recent,all,custom', 'report_from' => 'nullable|required_with:report_to|date_format:Y-m-d', 'report_to' => 'nullable|required_with:report_from|date_format:Y-m-d|after_or_equal:report_from', 'transition_preview' => 'nullable|date_format:Y-m-d', 'transition_method' => 'nullable|required_with:transition_preview|in:batch,bill,mixed', 'allocate' => 'nullable|string|max:160', 'purchase_page' => 'nullable|integer|min:1', 'purchase_per_page' => 'nullable|in:'.implode(',', $purchasePageSizes), 'payment_page' => 'nullable|integer|min:1', 'adjustment_page' => 'nullable|integer|min:1', 'detail_page' => 'nullable|integer|min:1', 'debt_page' => 'nullable|integer|min:1', 'issue_page' => 'nullable|integer|min:1']);
         $from = $data['from'] ?? now()->toDateString();
         $to = $data['to'] ?? now()->toDateString();
         Validator::make(['from' => $from, 'to' => $to], ['to' => 'after_or_equal:from'])->validate();
@@ -89,10 +93,68 @@ class CustomerDebtMonitorController extends Controller
         $reportLastPurchase = collect($reportHistory)->where('type', 'sale')->where('amount', '>', 0)->max('date');
         $reportLastPayment = collect($reportHistory)->where('type', 'payment')->where('amount', '>', 0)->max('date');
         $settlementMethod = $selected['policy']['settlement_method'] ?? 'batch';
-        $allocationService = app(\App\Services\CustomerDebtPaymentAllocation::class);
-        $allocation = $selected ? $allocationService->reconcile($reportHistory, $settlementMethod, $selected['customer_id']) : null;
+        $allocationService = app(CustomerDebtPaymentAllocation::class);
+        $manualService = app(CustomerDebtManualAllocationService::class);
+        $settlementChanges = $selected['policy']['settlement_changes'] ?? [];
+        $changesInReport = array_filter($settlementChanges, fn ($date) => $date <= $reportTo, ARRAY_FILTER_USE_KEY);
+        $changeDate = array_key_last($changesInReport);
+        $currentSettlementMethod = $changesInReport[$changeDate] ?? $settlementMethod;
+        $manualRecords = $selected ? $manualService->records($selected) : [];
+        $allocation = $selected ? $allocationService->reconcile($reportHistory, $settlementMethod, $selected['customer_id'], $changesInReport, $manualRecords) : null;
+        $canManageAllocation = $selected && $snapshot && $request->user()->canManageCustomerDebt()
+            && ! $request->attributes->get('own_customer_debt', false);
+        $allocationRevision = $canManageAllocation ? $manualService->revision($selected, $manualRecords) : null;
+        $settlementPreview = $allocationForm = null;
+        $missingAllocationKeys = [];
+        if ($canManageAllocation && $manualRecords) {
+            $receiptKeys = collect($history)->where('type', 'payment')->map(fn ($entry) => $allocationService->key($entry))->flip()->all();
+            $missingAllocationKeys = array_keys(array_diff_key($manualRecords, $receiptKeys));
+        }
+        $latestChangeDate = array_key_last($settlementChanges);
+        $nextSettlementMethod = $settlementChanges[$latestChangeDate] ?? $settlementMethod;
+        if ($canManageAllocation && isset($data['transition_preview'])) {
+            $date = $data['transition_preview'];
+            $method = $data['transition_method'];
+            $settlementPreview = ['date' => $date, 'method' => $method];
+            if (($latestChangeDate && $date <= $latestChangeDate) || $method === $nextSettlementMethod) {
+                $settlementPreview['error'] = 'Chọn hình thức khác và ngày sau mốc chuyển gần nhất.';
+            } else {
+                $before = array_values(array_filter($history, fn ($entry) => $entry['date'] < $date && $entry['date'] <= $today));
+                $changesBefore = array_filter($settlementChanges, fn ($start) => $start <= $today, ARRAY_FILTER_USE_KEY);
+                $preview = $allocationService->reconcile($before, $settlementMethod, $selected['customer_id'], $changesBefore, $manualRecords);
+                $settlementPreview['remaining'] = array_sum(array_column($preview['lines'], 'remaining'));
+                $settlementPreview['pending'] = collect($preview['unmatched'])->where('amount', '>', 0)->sum('amount') + max(0, $preview['credit']);
+            }
+        }
+        if ($canManageAllocation && isset($data['allocate'])) {
+            $key = $data['allocate'];
+            $entries = array_values(array_filter($history, fn ($entry) => $entry['date'] <= $today));
+            $receipt = collect($entries)->first(fn ($entry) => $entry['type'] === 'payment' && $allocationService->key($entry) === $key);
+            $record = $manualRecords[$key] ?? null;
+            $changesToday = array_filter($settlementChanges, fn ($date) => $date <= $today, ARRAY_FILTER_USE_KEY);
+            $baseline = $allocationService->reconcile($entries, $settlementMethod, $selected['customer_id'], $changesToday, array_diff_key($manualRecords, [$key => true]));
+            $available = max(0, $baseline['unmatched'][$key]['amount'] ?? 0);
+            if (($receipt && $available > 0) || $record) {
+                $allocationForm = [
+                    'key' => $key, 'receipt' => $receipt, 'record' => $record, 'available' => $available,
+                    'targets' => collect($baseline['lines'])->where('remaining', '>', 0)->reverse(),
+                    'old_debt_dates' => array_keys($changesToday),
+                ];
+            }
+        }
         $saleEntries = $saleEntries->map(fn ($entry) => $entry + ['allocation' => $allocation['lines'][$allocationService->key($entry)] ?? null]);
-        $paymentEntries = $paymentEntries->map(fn ($entry) => $entry + ['allocation_issue' => $allocation['unmatched'][$allocationService->key($entry)] ?? null]);
+        $paymentEntries = $paymentEntries->map(function ($entry) use ($allocation, $allocationService, $manualRecords) {
+            $key = $allocationService->key($entry);
+
+            return $entry + [
+                'allocation_key' => $key,
+                'allocation_issue' => $allocation['unmatched'][$key] ?? null,
+                'allocation_invalid' => $allocation['invalidManual'][$key] ?? null,
+                'allocation_automatic' => $allocation['automatic'][$key] ?? [],
+                'allocation_manual' => $allocation['manualApplied'][$key] ?? [],
+                'allocation_saved' => isset($manualRecords[$key]),
+            ];
+        });
         $giftEntries = $saleEntries->filter(fn ($entry) => ($entry['gift'] ?? 0) != 0)
             ->map(fn ($entry) => [
                 'type' => 'gift', 'date' => $entry['date'], 'row' => $entry['row'], 'amount' => $entry['gift'],
@@ -197,7 +259,79 @@ class CustomerDebtMonitorController extends Controller
             }
         }
 
-        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'purchasePageSizes', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'detailSettlementTotal', 'detailSalesPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail', 'canCreateQuickCustomer', 'quickCustomerSales', 'settlementMethod', 'allocation', 'detailPolicyAction', 'detailPolicyKey', 'reminderHistory'));
+        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'purchasePageSizes', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'detailSettlementTotal', 'detailSalesPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail', 'canCreateQuickCustomer', 'quickCustomerSales', 'settlementMethod', 'allocation', 'changeDate', 'currentSettlementMethod', 'settlementChanges', 'nextSettlementMethod', 'latestChangeDate', 'canManageAllocation', 'allocationRevision', 'settlementPreview', 'allocationForm', 'missingAllocationKeys', 'detailPolicyAction', 'detailPolicyKey', 'reminderHistory'));
+    }
+
+    public function changeSettlementMethod(Request $request, CustomerDebtSheetService $sheets, CustomerDebtManualAllocationService $manual)
+    {
+        abort_unless($request->user()->canManageCustomerDebt(), 403);
+        $data = $request->validate($this->allocationCustomerRules() + ['transition_date' => 'required|date_format:Y-m-d', 'transition_method' => 'required|in:batch,bill,mixed']);
+        Cache::lock('customer-debt-load', 60)->block(5, function () use ($request, $sheets, $manual, $data) {
+            $customer = $this->allocationCustomer($request, $sheets, $data);
+            if (! hash_equals($manual->revision($customer, $manual->records($customer)), $data['revision'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['transition_date' => 'Dữ liệu đã thay đổi. Vui lòng xem trước lại kỳ chuyển.']);
+            }
+            app(CustomerDebtPolicyService::class)->changeSettlementMethod($customer, $data['transition_date'], $data['transition_method'], $customer['policy']['edit_version'], $request->user());
+        });
+
+        return redirect()->to(route('customer-debt.index', $this->allocationDetailQuery($data)).'#debt-detail')->with('success', 'Đã lưu ngày chuyển hình thức thanh toán.');
+    }
+
+    public function saveManualAllocation(Request $request, CustomerDebtSheetService $sheets, CustomerDebtManualAllocationService $manual, CustomerDebtPaymentAllocation $allocation)
+    {
+        abort_unless($request->user()->canManageCustomerDebt(), 403);
+        $request->merge(['items' => array_values(array_filter((array) $request->input('items', []), static fn ($item) =>
+            ! is_array($item) || ($item['target'] ?? null) !== null || ($item['amount'] ?? null) !== null))]);
+        $data = $request->validate($this->allocationCustomerRules() + [
+            'payment_key' => 'required|string|max:160',
+            'cancel' => 'nullable|boolean',
+            'items' => 'exclude_if:cancel,1|required|array|min:1|max:100',
+            'items.*.target' => 'required|string|max:160|distinct',
+            'items.*.amount' => 'required|integer|min:1|max:999999999999999',
+        ]);
+        Cache::lock('customer-debt-load', 60)->block(5, function () use ($request, $sheets, $manual, $allocation, $data) {
+            $customer = $this->allocationCustomer($request, $sheets, $data);
+            $policies = app(CustomerDebtPolicyService::class);
+            $policies->withWriteLock($customer, function () use ($policies, $customer, $manual, $data, $request, $allocation) {
+                $customer['policy'] = $policies->effective($customer, $policies->policies());
+                DB::transaction(fn () => $manual->save($customer, $data, $request->user(), $allocation));
+            });
+        });
+
+        return redirect()->to(route('customer-debt.index', $this->allocationDetailQuery($data)).'#debt-detail')->with('success',
+            ! empty($data['cancel']) ? 'Đã hủy ghép khoản thu.' : 'Đã lưu ghép khoản thu.');
+    }
+
+    private function allocationCustomerRules(): array
+    {
+        return [
+            'system_customer' => 'nullable|required_without:customer|integer|min:1',
+            'customer' => 'nullable|required_without:system_customer|string|size:64',
+            'revision' => 'required|string|size:64',
+        ];
+    }
+
+    private function allocationCustomer(Request $request, CustomerDebtSheetService $sheets, array $data): array
+    {
+        $context = $this->debtContext($request, $sheets);
+        abort_unless($context['snapshot'], 422, 'Cần cập nhật dữ liệu Google Sheet.');
+        if (isset($data['system_customer'])) {
+            $customer = $context['customerDebts'][(int) $data['system_customer']] ?? null;
+        } else {
+            $source = $context['groups'][$data['customer']] ?? null;
+            $customer = $context['customerDebts'][$source['customer_id'] ?? 0] ?? $source;
+            abort_if(! empty($source['customer_id']), 409, 'Liên kết khách đã thay đổi. Vui lòng mở lại trang đối chiếu.');
+        }
+        abort_unless($customer, 404);
+
+        return $customer;
+    }
+
+    private function allocationDetailQuery(array $data): array
+    {
+        return ['tab' => 'all', 'window' => 'all', 'recovery' => 'all',
+            'system_customer' => $data['system_customer'] ?? null, 'customer' => $data['customer'] ?? null,
+        ];
     }
 
     private function voucher(Request $request, string $presentation, array $selected, \Illuminate\Support\Collection $sales, string $reportFrom, string $reportTo)

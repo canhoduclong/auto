@@ -8,14 +8,10 @@
 .collection-table td { vertical-align:top; padding:10px 9px; }
 .collection-table .collection-name { min-width:180px; max-width:270px; }
 .collection-money { white-space:nowrap; font-variant-numeric:tabular-nums; }
-.collection-status { min-width:180px; max-width:240px; }
-.collection-status .badge { font-size:10px; margin-bottom:2px; }
-.collection-tools { min-width:190px; }
 .collection-more { position:relative; }
 .collection-more > summary { list-style:none; }
-.collection-more > div { display:flex; flex-direction:column; align-items:stretch; position:absolute; right:0; top:32px; min-width:220px; z-index:5; border:1px solid #dbe3ee; border-radius:8px; padding:6px; background:#fff; box-shadow:0 6px 20px #19324d26; }
-.collection-more[open] { padding-bottom:220px; }
-.collection-more[open]:has(.debt-policy-button) { padding-bottom:280px; }
+.collection-more > div { display:flex; flex-direction:column; align-items:stretch; gap:4px; position:absolute; right:0; top:32px; width:min(240px, 80vw); max-height:260px; overflow:auto; z-index:5; border:1px solid #dbe3ee; border-radius:8px; padding:6px; background:#fff; box-shadow:0 6px 20px #19324d26; }
+.collection-more[open] { padding-bottom:264px; }
 .collection-pagination { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; padding:12px 16px; }
 .collection-history-dialog { margin:auto; width:min(900px,96vw); max-height:90vh; overflow:auto; padding:24px; border:1px solid #dbe3ee; border-radius:12px; color:#19324d; }
 .collection-history-dialog::backdrop { background:#0f172a73; }
@@ -32,8 +28,7 @@
 @media(max-width:767px) { .collection-history-dialog { padding:16px; } .collection-filters .debt-filter-field { flex:1 1 calc(50% - 6px); min-width:0; } }
 
 .collection-table td { padding:8px 9px; }
-.collection-tools { min-width:175px; position:sticky; right:0; background:#fff; z-index:1; border-left:1px solid #e2e8f0; }
-.collection-tools > div { flex-wrap:nowrap!important; }
+.collection-tools { width:1%; min-width:44px; text-align:center; position:sticky; right:0; background:#fff; z-index:1; }
 .collection-tools .btn { padding:4px 7px; min-height:28px; font-size:11px; white-space:nowrap; }
 .collection-table thead th:last-child { right:0; z-index:3; background:#f6f8fc; }
 .collection-tools:has(.collection-more[open]) { z-index:4; }
@@ -54,24 +49,25 @@
 .collection-table .collection-reminded-today > td a,
 .collection-table .collection-reminded-today > td strong { color:#6b21a8!important; font-weight:700; }
 
-/* Reserve flexible space for customer names and collection history. */
 .collection-report-table { width:100%; table-layout:auto; }
 .collection-report-table > :not(caption) > * > * { padding-left:7px; padding-right:7px; }
 .collection-report-table .collection-select-column,
 .collection-report-table .collection-compact { width:1%; white-space:nowrap; text-align:center; }
 .collection-report-table .collection-select-column { padding-left:9px; padding-right:9px; }
-.collection-report-table .collection-negotiation { width:1%; min-width:90px; max-width:120px; white-space:normal; }
+.collection-report-table .collection-negotiation { width:1%; min-width:100px; max-width:120px; text-align:center; white-space:normal; }
 .collection-report-table .collection-negotiation strong { white-space:nowrap; }
 .collection-report-table .collection-days { width:1%; min-width:68px; max-width:90px; white-space:normal; }
 .collection-report-table .collection-days .debt-sort-link { white-space:normal; }
-.collection-report-table .collection-name { width:24%; min-width:240px; max-width:360px; white-space:normal; overflow-wrap:anywhere; }
-.collection-report-table .collection-payment-cycle { margin-top:4px; line-height:1.45; }
-.collection-report-table .collection-payment-cycle .badge { margin-bottom:2px; }
-.collection-report-table .collection-status { width:18%; min-width:200px; max-width:300px; white-space:normal; overflow-wrap:anywhere; }
+.collection-report-table .collection-name { width:21%; min-width:200px; max-width:310px; white-space:normal; overflow-wrap:anywhere; }
+.collection-report-table .collection-status,
+.collection-report-table .collection-warnings { font-size:11px; line-height:1.45; white-space:normal; overflow-wrap:anywhere; }
+.collection-report-table .collection-status { width:23%; min-width:245px; max-width:350px; }
+.collection-report-table .collection-warnings { width:17%; min-width:190px; max-width:275px; }
+.collection-report-table th.collection-warnings { text-align:center; }
+.collection-report-table td.collection-status > div + div { margin-top:2px; }
 .collection-report-table .collection-status-items { display:flex; flex-wrap:wrap; align-items:center; gap:3px 4px; }
-.collection-report-table .collection-status .badge { max-width:100%; margin-bottom:0; white-space:normal; text-align:left; line-height:1.4; }
-.collection-report-table .collection-tools,
-.collection-report-table .collection-tools-heading { width:1%; min-width:160px; }
+.collection-report-table .collection-warnings .collection-status-items { justify-content:flex-end; }
+.collection-report-table .collection-status-items .badge { max-width:100%; font-size:10px; white-space:normal; text-align:left; line-height:1.4; }
 
 .collection-recovery-tabs { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 14px; }
 .collection-recovery-tab { display:inline-block; padding:9px 14px; border:1px solid #dbe3ee; border-radius:7px; background:#fff; color:#19324d; font-size:13px; text-decoration:none; }

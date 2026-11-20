@@ -1,6 +1,8 @@
 @php($weekdays = [1 => 'thứ Hai', 2 => 'thứ Ba', 3 => 'thứ Tư', 4 => 'thứ Năm', 5 => 'thứ Sáu', 6 => 'thứ Bảy', 7 => 'Chủ nhật'])
-<div class="small mb-1">
-    <span class="badge bg-info text-dark">Thanh toán định kỳ</span>
+<div @class(['small mb-1' => $showCycleBadge ?? true])>
+    @if($showCycleBadge ?? true)
+        <span class="badge bg-info text-dark">Thanh toán định kỳ</span>
+    @endif
     @if($policy['cycle_type'] === 'monthly')
         <div>Chốt gửi ngày {{ $policy['cycle_close_monthday'] ?? $policy['cycle_monthday'] }} · Thanh toán ngày {{ $policy['cycle_monthday'] }} hằng tháng</div>
     @else
