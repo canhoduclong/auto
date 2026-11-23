@@ -1033,7 +1033,8 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame('2026-11-19', $first['through']);
         $print = $controller->printVoucher($this->request($query, 'accountant'), $first['id'], $sheets, $vouchers)->getContent();
         self::assertStringContainsString('Mua hàng ngày 19/11/2026', $print);
-        self::assertStringContainsString('Còn phải thu', $print);
+        self::assertStringContainsString('Số tiền Thu', $print);
+        self::assertStringContainsString('<span>Huy</span>', $print);
         foreach (['Chốt công nợ đến', 'Nợ chuyển từ phiếu trước', 'Đã thu theo phiếu', 'Số tiền thực thu', 'Bằng chữ'] as $hiddenLabel) {
             self::assertStringNotContainsString($hiddenLabel, $print);
         }

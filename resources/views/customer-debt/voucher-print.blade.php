@@ -50,7 +50,7 @@
                     </tbody>
                     @if($showTotals)
                         <tfoot>
-                            @foreach(['total' => 'Tổng phải thu', 'paid' => 'Đã thu theo phiếu', 'remaining' => 'Còn phải thu'] as $key => $label)
+                            @foreach(['total' => 'Tổng phải thu', 'paid' => 'Đã thu theo phiếu', 'remaining' => $receipt ? 'Số tiền Thu' : 'Còn phải thu'] as $key => $label)
                                 @if($visibleAmount($row[$key]))
                                     <tr><th scope="row">{{ $label }}</th><td>{{ $money($row[$key]) }}</td></tr>
                                 @endif
@@ -68,7 +68,7 @@
                 @if($row['note'])<p>{{ $row['note'] }}</p>@endif
                 <footer class="voucher-signatures">
                     @foreach(($receipt ? ['Người nộp tiền', 'Người thu tiền', 'Người lập phiếu'] : ['Người lập phiếu', 'Phòng Tài chính - Kế toán']) as $signature)
-                        <div><strong>{{ $signature }}</strong><span>(Ký, ghi rõ họ tên)</span></div>
+                        <div><strong>{{ $signature }}</strong><span>{{ $signature === 'Người lập phiếu' && $creatorName ? $creatorName : '(Ký, ghi rõ họ tên)' }}</span></div>
                     @endforeach
                 </footer>
             </div>

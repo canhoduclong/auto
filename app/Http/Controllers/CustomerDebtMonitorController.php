@@ -447,7 +447,10 @@ class CustomerDebtMonitorController extends Controller
         [$selected, $row, $query] = $this->storedVoucher($request, $voucher, $sheets, $vouchers);
         $company = Setting::get('company_legal_name', 'CÔNG TY CỔ PHẦN THỰC PHẨM HOÀNG LONG TNT');
 
-        return response()->view('customer-debt.voucher-print', compact('selected', 'row', 'query', 'company'))->header('Cache-Control', 'private, no-store');
+        $creator = User::query()->find($row['created_by'] ?? null, ['name', 'short_name']);
+        $creatorName = trim((string) $creator?->short_name) ?: $creator?->name;
+
+        return response()->view('customer-debt.voucher-print', compact('selected', 'row', 'query', 'company', 'creatorName'))->header('Cache-Control', 'private, no-store');
     }
 
     public function downloadVoucherDocument(Request $request, string $voucher, string $document, CustomerDebtSheetService $sheets, CustomerDebtVouchers $vouchers)
