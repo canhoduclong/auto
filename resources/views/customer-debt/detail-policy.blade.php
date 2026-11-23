@@ -1,17 +1,17 @@
 <aside class="debt-detail-policy" aria-label="Tiêu chí công nợ">
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-        <h3 class="h6 mb-0">Tiêu chí công nợ</h3>
+        <h3 class="h6 mb-0">{{ $detailPolicyTitle ?? 'Tiêu chí công nợ' }}</h3>
         @if($detailPolicyAction)
             <button type="button" class="btn btn-outline-primary btn-sm debt-policy-button"
                 data-policy-action="{{ $detailPolicyAction }}" data-key="{{ $detailPolicyKey }}" data-name="{{ $selected['name'] }}"
                 @include('customer-debt.policy-cycle-values', ['policy' => $selected['policy']])
                 data-fixed="{{ $selected['policy']['fixed_debt'] }}" data-limit="{{ $selected['policy']['credit_limit'] }}"
                 data-threshold-days="{{ $selected['policy']['threshold_days'] }}" data-version="{{ $selected['policy']['edit_version'] }}"
-                @disabled($selected['policy']['staff_edit_locked'] && !auth()->user()->canManageCustomerDebt())>Sửa tiêu chí</button>
+                @disabled($selected['policy']['staff_edit_locked'] && !auth()->user()->canManageCustomerDebt())>{{ $detailPolicyButtonLabel ?? 'Sửa tiêu chí' }}</button>
         @endif
     </div>
     <dl class="debt-detail-policy-values">
-        <div><dt>Hình thức thanh toán</dt><dd>{{ \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[$currentSettlementMethod ?? $selected['policy']['settlement_method']] }}@if(!empty($changeDate)) từ {{ \Carbon\Carbon::parse($changeDate)->format('d/m/Y') }}@endif</dd></div>
+        <div><dt>Hình thức thanh toán</dt><dd>{{ \App\Services\CustomerDebtPolicyService::PAYMENT_FORMS[$currentSettlementMethod ?? \App\Services\CustomerDebtPolicyService::currentSettlementMethod($selected['policy'])] }}@if(!empty($changeDate)) từ {{ \Carbon\Carbon::parse($changeDate)->format('d/m/Y') }}@endif</dd></div>
         <div><dt>Công nợ cố định</dt><dd>{{ $selected['policy']['fixed_debt'] === null ? 'Chưa đặt' : number_format($selected['policy']['fixed_debt'], 0, ',', '.').' đ' }}</dd></div>
         <div><dt>Trần công nợ</dt><dd>{{ number_format($selected['policy']['credit_limit'], 0, ',', '.') }} đ</dd></div>
         <div><dt>Ngưỡng cảnh báo</dt><dd>{{ number_format($selected['policy']['warning_threshold'], 0, ',', '.') }} đ</dd></div>
@@ -20,7 +20,7 @@
             <div><dt>Thời hạn thanh toán</dt><dd>{{ !empty($selected['policy']['rolling_only']) ? 'Gối đầu' : $selected['policy']['due_days'].' ngày' }}</dd></div>
         @endif
     </dl>
-    @if($selected['policy']['payment_mode'] === 'cycle')
+    @if(($currentSettlementMethod ?? \App\Services\CustomerDebtPolicyService::currentSettlementMethod($selected['policy'])) === 'cycle')
         @include('customer-debt.cycle-status', ['policy' => $selected['policy'], 'alerts' => $reportAlerts])
     @endif
     @if($selected['policy']['staff_edit_locked'] && !auth()->user()->canManageCustomerDebt())

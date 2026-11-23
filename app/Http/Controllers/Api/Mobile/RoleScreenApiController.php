@@ -496,37 +496,25 @@ class RoleScreenApiController extends BaseApiController
     private function ceoDailySales(Request $request): JsonResponse
     {
         [$from, $to] = $this->mobileDateRange($request, true);
-        $approvedAdjustmentItems = DB::table('order_adjustment_items as adjustment_item_source')
-            ->join('order_adjustments as adjustment_source', function ($join) {
-                $join->on('adjustment_source.id', '=', 'adjustment_item_source.order_adjustment_id')
-                    ->where('adjustment_source.status', OrderAdjustment::STATUS_APPROVED);
-            })
-            ->selectRaw('adjustment_item_source.order_item_id, MAX(adjustment_item_source.id) as adjustment_item_id')
-            ->groupBy('adjustment_item_source.order_item_id');
-
         $base = DB::table('order_items')
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->join('products', 'products.id', '=', 'order_items.product_id')
             ->leftJoin('product_variants', 'product_variants.id', '=', 'order_items.product_variant_id')
             ->leftJoin('customers', 'customers.id', '=', 'orders.customer_id')
             ->leftJoin('users', 'users.id', '=', 'orders.user_id')
-            ->leftJoinSub($approvedAdjustmentItems, 'latest_adjustment', 'latest_adjustment.order_item_id', '=', 'order_items.id')
-            ->leftJoin('order_adjustment_items as adjustment', 'adjustment.id', '=', 'latest_adjustment.adjustment_item_id')
             ->whereNotIn('orders.status', [Order::STATUS_REJECTED, Order::STATUS_CANCELLED])
             ->whereBetween('orders.created_at', [$from, $to]);
 
-        $effectiveTotal = "CASE WHEN adjustment.id IS NOT NULL THEN
-            CASE WHEN order_items.is_priced_by_kg = 1
-                THEN COALESCE(adjustment.adjusted_weight, order_items.total_weight) * COALESCE(adjustment.adjusted_price, order_items.price)
-                ELSE COALESCE(adjustment.adjusted_quantity, order_items.quantity) * COALESCE(adjustment.adjusted_price, order_items.price)
-            END
-            ELSE order_items.total
-        END";
+        $billableWeight = \App\Support\AccountingChargeAmounts::weightSql();
+        $effectiveTotal = "CASE WHEN order_items.is_priced_by_kg = 1
+            THEN COALESCE(ROUND(({$billableWeight}) * order_items.price, 2),
+                CASE WHEN orders.accounting_sales_import_batch_id IS NOT NULL THEN order_items.total END)
+            ELSE order_items.quantity * order_items.price END";
 
         $summary = (clone $base)->selectRaw('COUNT(DISTINCT orders.id) as order_count')
             ->selectRaw('COUNT(order_items.id) as item_count')
-            ->selectRaw('COALESCE(SUM(COALESCE(adjustment.adjusted_quantity, order_items.quantity)), 0) as total_qty')
-            ->selectRaw('COALESCE(SUM(COALESCE(adjustment.adjusted_weight, order_items.total_weight)), 0) as total_weight')
+            ->selectRaw('COALESCE(SUM(order_items.quantity), 0) as total_qty')
+            ->selectRaw("COALESCE(SUM({$billableWeight}), 0) as total_weight")
             ->selectRaw("COALESCE(SUM({$effectiveTotal}), 0) as total_amount")
             ->first();
 
@@ -541,9 +529,9 @@ class RoleScreenApiController extends BaseApiController
                 'product_variants.size',
                 'customers.name as customer_name',
                 'users.name as sale_name',
-                DB::raw('COALESCE(adjustment.adjusted_quantity, order_items.quantity) as effective_quantity'),
-                DB::raw('COALESCE(adjustment.adjusted_weight, order_items.total_weight) as effective_weight'),
-                DB::raw('COALESCE(adjustment.adjusted_price, order_items.price) as effective_price'),
+                'order_items.quantity as effective_quantity',
+                DB::raw("{$billableWeight} as effective_weight"),
+                'order_items.price as effective_price',
                 DB::raw("{$effectiveTotal} as effective_total"),
             ])
             ->orderByDesc('orders.created_at')

@@ -34,6 +34,28 @@ class OrderAdjustmentItem extends Model
         'warehouse_received_weight' => 'decimal:3',
     ];
 
+    public function changesWeight(): bool
+    {
+        return $this->adjusted_weight !== null
+            && ((int) $this->adjusted_quantity !== (int) $this->original_quantity
+                || round((float) $this->adjusted_weight, 3) !== round((float) $this->original_weight, 3));
+    }
+
+    public function weightAfterWarehouse(?string $status): ?float
+    {
+        if ($this->adjusted_weight === null) {
+            return null;
+        }
+        $weight = (float) $this->adjusted_weight;
+        $requestedDecrease = max(0, (int) $this->original_quantity - (int) $this->adjusted_quantity);
+        if ($status === 'confirmed_partial' && $requestedDecrease > 0) {
+            $confirmed = min($requestedDecrease, max(0, (int) $this->warehouse_received_quantity));
+            $weight += ((float) $this->original_weight - $weight) * ($requestedDecrease - $confirmed) / $requestedDecrease;
+        }
+
+        return round(max(0, $weight), 3);
+    }
+
     public function adjustment()
     {
         return $this->belongsTo(OrderAdjustment::class, 'order_adjustment_id');

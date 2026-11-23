@@ -5902,7 +5902,7 @@ public function apiTruckRoutes(Request $request)
             $newOrder->save();
 
             foreach ($oldOrder->items as $item) {
-                $newItem = $item->replicate();
+                $newItem = $item->replicate(['delivered_weight', 'accounting_adjusted_weight']);
                 $newItem->order_id = $newOrder->id;
                 $newItem->company_price_at_order = null;
                 $newItem->save();
@@ -6010,7 +6010,7 @@ public function apiTruckRoutes(Request $request)
 
             // Clone items, then immediately refresh them to the current selling price.
             foreach ($oldOrder->items as $item) {
-                $newItem = $item->replicate();
+                $newItem = $item->replicate(['delivered_weight', 'accounting_adjusted_weight']);
                 $newItem->order_id = $newOrder->id;
                 $newItem->company_price_at_order = null;
                 $newItem->save();

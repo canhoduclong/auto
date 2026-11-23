@@ -25,14 +25,18 @@ class OrderItem extends Model
         'total_weight',
         'packed_quantity',
         'actual_weight',
+        'delivered_weight',
         'packed_weight',
+        'accounting_adjusted_weight',
         'total',
     ];
 
     protected $casts = [
         'company_price_at_order' => 'decimal:2',
         'actual_weight'  => 'decimal:3',
+        'delivered_weight' => 'decimal:3',
         'packed_weight'  => 'decimal:3',
+        'accounting_adjusted_weight' => 'decimal:3',
         'is_priced_by_kg' => 'boolean',
     ];
 
@@ -132,6 +136,33 @@ class OrderItem extends Model
     {
         $weight = $this->packed_weight ?? $this->actual_weight;
         return $weight === null ? null : max(0, (float) $weight);
+    }
+
+    public function accountingWeights(Order $order, bool $hasPackingRecord = false): array
+    {
+        $delivered = $order->delivered_at !== null || in_array($order->status, $this->deliveryMeasuredStatuses(), true);
+        $packed = $this->packed_weight;
+        if ($packed === null && ! $delivered && ($hasPackingRecord || in_array($order->status, $this->warehouseMeasuredStatuses(), true))) {
+            $packed = $this->actual_weight;
+        }
+
+        return [
+            'packed_weight' => $packed === null ? null : max(0, (float) $packed),
+            'delivered_weight' => $delivered && $this->delivered_weight !== null ? max(0, (float) $this->delivered_weight) : null,
+        ];
+    }
+
+    public function accountingChargeQuantity(Order $order, bool $hasPackingRecord = false): ?float
+    {
+        if ((float) $this->quantity <= 0 || ! $this->effective_priced_by_kg) {
+            return max(0, (float) $this->quantity);
+        }
+
+        $weights = $this->accountingWeights($order, $hasPackingRecord);
+
+        return $this->accounting_adjusted_weight !== null
+            ? max(0, (float) $this->accounting_adjusted_weight)
+            : ($weights['delivered_weight'] ?? $weights['packed_weight']);
     }
 
     public function getRequiredPackingWeightAttribute(): float

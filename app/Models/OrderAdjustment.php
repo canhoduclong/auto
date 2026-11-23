@@ -41,6 +41,8 @@ class OrderAdjustment extends Model
         'warehouse_confirmation_note',
         'submitted_at',
         'approved_at',
+        'weight_confirmed_by',
+        'weight_confirmed_at',
         'rejected_at',
         'completed_at',
     ];
@@ -52,6 +54,7 @@ class OrderAdjustment extends Model
         'warehouse_confirmed_at' => 'datetime',
         'submitted_at' => 'datetime',
         'approved_at' => 'datetime',
+        'weight_confirmed_at' => 'datetime',
         'rejected_at' => 'datetime',
         'completed_at' => 'datetime',
     ];
@@ -177,6 +180,14 @@ class OrderAdjustment extends Model
         // Các bước tự động bỏ qua không có approved_by nên sale vẫn có thể
         // xóa yêu cầu gửi trùng trước khi một người thực sự xử lý.
         return ! $approvals->contains(fn ($approval) => $approval->approved_by !== null);
+    }
+
+    public function requiresAccountingWeightConfirmation(): bool
+    {
+        $this->loadMissing(['items.orderItem.variant.product', 'items.orderItem.product', 'items.variant.product']);
+
+        return $this->items->contains(fn (OrderAdjustmentItem $item) => $item->changesWeight()
+            && ($item->variant?->effective_priced_by_kg ?? $item->orderItem?->effective_priced_by_kg ?? false));
     }
 
     public function requiresWarehouseConfirmation(): bool

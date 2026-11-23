@@ -46,7 +46,7 @@
 @forelse($adjustments as $adjustment)
     @php
         $accountingReview = $adjustment->relationLoaded('accountingReview') ? $adjustment->accountingReview : null;
-        $isPendingAccounting = $accountingReview === null;
+        $isPendingAccounting = $accountingReview === null && $adjustment->status === \App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL;
     @endphp
     <article class="acc-card" id="adjustment-{{ $adjustment->id }}">
         <div class="card-body">

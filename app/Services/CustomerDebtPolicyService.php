@@ -51,12 +51,37 @@ class CustomerDebtPolicyService
 
     public const SETTLEMENT_METHODS = ['batch' => 'Theo Đợt', 'bill' => 'Theo Bill', 'mixed' => 'Hỗn hợp'];
 
-    public static function currentSettlementMethod(array $policy): string
-    {
-        $today = today()->toDateString();
-        $changes = array_filter($policy['settlement_changes'] ?? [], fn ($date) => $date <= $today, ARRAY_FILTER_USE_KEY);
+    public const PAYMENT_FORMS = self::SETTLEMENT_METHODS + ['cycle' => 'Theo chu kỳ'];
 
-        return $changes[array_key_last($changes)] ?? $policy['settlement_method'];
+    public static function basePaymentForm(array $policy): string
+    {
+        return $policy['settlement_base_method'] ?? (($policy['payment_mode'] ?? null) === 'cycle' ? 'cycle' : $policy['settlement_method']);
+    }
+
+    public static function currentSettlementMethod(array $policy, ?string $asOf = null): string
+    {
+        $asOf ??= today()->toDateString();
+        $changes = array_filter($policy['settlement_changes'] ?? [], fn ($date) => $date <= $asOf, ARRAY_FILTER_USE_KEY);
+
+        return $changes[array_key_last($changes)] ?? self::basePaymentForm($policy);
+    }
+
+    public static function settlementPeriods(array $policy, ?string $initialDate = null): array
+    {
+        $changes = $policy['settlement_changes'] ?? [];
+        $periods = [];
+        $from = $initialDate;
+        $method = self::basePaymentForm($policy);
+        foreach ($changes as $date => $next) {
+            if ($from === null || $from < $date) {
+                $periods[] = ['from' => $from, 'to' => CarbonImmutable::parse($date)->subDay()->toDateString(), 'method' => $method];
+            }
+            $from = $date;
+            $method = $next;
+        }
+        $periods[] = ['from' => $from, 'to' => null, 'method' => $method];
+
+        return $periods;
     }
 
     public function defaults(): array
@@ -159,25 +184,38 @@ class CustomerDebtPolicyService
                 'edit_version' => (int) ($current['edit_version'] ?? 0) + 1,
                 'staff_edit_count' => (int) ($current['staff_edit_count'] ?? 0) + ($canOverrideStaffLock ? 0 : 1),
             ]);
+            if (! empty($current['settlement_changes']) || ! empty($current['bill_from'])) {
+                $next['settlement_base_method'] = self::basePaymentForm($current + $this->defaults());
+            }
             Setting::set($key, json_encode($next, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
             $this->audit($this->identity($group), 'update', $userId, $current, $next);
         });
     }
 
-    public function changeSettlementMethod(array $group, string $date, string $method, int $version, User $actor): void
+    public function changeSettlementMethod(array $group, string $date, string $method, int $version, User $actor, ?string $end = null): void
     {
         abort_unless($actor->canManageCustomerDebt(), 403);
-        $this->change($group, function ($key, $current) use ($group, $date, $method, $version, $actor) {
+        $this->change($group, function ($key, $current) use ($group, $date, $method, $version, $actor, $end) {
             $policy = $this->applyDefaults($current + $group['policy']);
             $changes = $policy['settlement_changes'];
             $lastDate = array_key_last($changes);
-            $previousMethod = $changes[$lastDate] ?? $policy['settlement_method'];
-            if ($version !== $policy['edit_version'] || ($lastDate !== null && $date <= $lastDate) || $method === $previousMethod) {
-                throw ValidationException::withMessages(['transition_date' => 'Chọn hình thức khác và ngày sau mốc chuyển gần nhất. Nếu dữ liệu đã đổi, vui lòng tải lại trang.']);
+            $returnDate = $policy['settlement_return_date'] ?? null;
+            $previousMethod = $changes[$lastDate] ?? self::basePaymentForm($policy);
+            $replacesReturn = $date === $returnDate && $returnDate === $lastDate;
+            if ($version !== $policy['edit_version'] || ($lastDate !== null && $date <= $lastDate && ! $replacesReturn)
+                || ($method === $previousMethod) || ($end !== null && $end < $date)) {
+                throw ValidationException::withMessages(['transition_date' => 'Chọn hình thức khác và ngày bắt đầu sau giai đoạn đã cấu hình.']);
             }
             $changes[$date] = $method;
+            $nextReturn = null;
+            if ($end !== null) {
+                $nextReturn = CarbonImmutable::parse($end)->addDay()->toDateString();
+                $changes[$nextReturn] = $previousMethod;
+            }
             $next = array_replace($policy, [
-                'settlement_changes' => $changes, 'updated_by' => $actor->id, 'updated_at' => now()->toIso8601String(),
+                'settlement_base_method' => self::basePaymentForm($policy),
+                'settlement_changes' => $changes, 'settlement_return_date' => $nextReturn,
+                'updated_by' => $actor->id, 'updated_at' => now()->toIso8601String(),
                 'edit_version' => $version + 1,
             ]);
             unset($next['bill_from']);
@@ -208,6 +246,42 @@ class CustomerDebtPolicyService
         if (isset($policies['source_'.$sourceKey]) && ! isset($policies['customer_'.$customerId])) {
             Setting::set($this->prefix().'customer_'.$customerId, json_encode($policies['source_'.$sourceKey], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
         }
+    }
+
+    /** Return the first scheduled close on or after the anchor, and its payment due date. */
+    public function cycleDates(array $policy, CarbonImmutable $anchor): array
+    {
+        if ($policy['cycle_type'] === 'monthly') {
+            $closeDay = (int) ($policy['cycle_close_monthday'] ?? $policy['cycle_monthday']);
+            $month = $anchor->startOfMonth();
+            $close = $month->addDays(min($closeDay, $month->daysInMonth) - 1);
+            if ($close->lt($anchor)) {
+                $month = $month->addMonth();
+                $close = $month->addDays(min($closeDay, $month->daysInMonth) - 1);
+            }
+        } else {
+            $closeDay = (int) ($policy['cycle_close_weekday'] ?? $policy['cycle_weekday']);
+            $close = $anchor->addDays(($closeDay - $anchor->dayOfWeekIso + 7) % 7);
+        }
+
+        return [$close, $this->cycleDueDate($policy, $close)];
+    }
+
+    public function cycleDueDate(array $policy, CarbonImmutable $close): CarbonImmutable
+    {
+        if ($policy['cycle_type'] === 'monthly') {
+            $day = (int) $policy['cycle_monthday'];
+            $month = $close->startOfMonth();
+            $due = $month->addDays(min($day, $month->daysInMonth) - 1);
+            if ($due->lt($close)) {
+                $month = $month->addMonth();
+                $due = $month->addDays(min($day, $month->daysInMonth) - 1);
+            }
+
+            return $due;
+        }
+
+        return $close->addDays(((int) $policy['cycle_weekday'] - $close->dayOfWeekIso + 7) % 7);
     }
 
     /** Allocate receipts to the oldest sales. All lines for a customer/day form one sale. */
@@ -277,34 +351,17 @@ class CustomerDebtPolicyService
         $dueDays = $policy['due_days'] ?? null;
         $dueDate = $balance > 0 && ($latestDelivery ?? $oldest) !== null && $dueDays !== null ? CarbonImmutable::parse($latestDelivery ?? $oldest)->addDays((int) $dueDays)->toDateString() : null;
         $cycleCloseDate = null;
-        if ($policy['payment_mode'] === 'cycle') {
+        $usesCycle = self::currentSettlementMethod($policy, $today->toDateString()) === 'cycle';
+        if ($usesCycle) {
             // A new delivery must not postpone an existing unpaid cycle.
             $dueDate = null;
             if ($balance > 0 && $oldest) {
-                $anchor = CarbonImmutable::parse($oldest);
-                if ($policy['cycle_type'] === 'monthly') {
-                    $closeDay = (int) ($policy['cycle_close_monthday'] ?? $policy['cycle_monthday']);
-                    $month = $anchor->startOfMonth();
-                    $close = $month->addDays(min($closeDay, $month->daysInMonth) - 1);
-                    if ($close->lt($anchor)) {
-                        $month = $month->addMonth();
-                        $close = $month->addDays(min($closeDay, $month->daysInMonth) - 1);
-                    }
-                    $due = $month->addDays(min((int) $policy['cycle_monthday'], $month->daysInMonth) - 1);
-                    if ($due->lt($close)) {
-                        $month = $month->addMonth();
-                        $due = $month->addDays(min((int) $policy['cycle_monthday'], $month->daysInMonth) - 1);
-                    }
-                } else {
-                    $closeDay = (int) ($policy['cycle_close_weekday'] ?? $policy['cycle_weekday']);
-                    $close = $anchor->addDays(($closeDay - $anchor->dayOfWeekIso + 7) % 7);
-                    $due = $close->addDays(((int) $policy['cycle_weekday'] - $close->dayOfWeekIso + 7) % 7);
-                }
+                [$close, $due] = $this->cycleDates($policy, CarbonImmutable::parse($oldest));
                 $cycleCloseDate = $close->toDateString();
                 $dueDate = $due->toDateString();
             }
         }
-        $rolling = $policy['payment_mode'] === 'default' && ($policy['rolling_only'] ?? false);
+        $rolling = ! $usesCycle && ($policy['rolling_only'] ?? false);
         if ($rolling) {
             $dueDate = null;
         }

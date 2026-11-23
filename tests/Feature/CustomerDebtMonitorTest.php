@@ -945,6 +945,106 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame('normal', $row['recovery']['status']);
     }
 
+    public function test_saved_vouchers_roll_forward_unpaid_debt_and_require_proof_for_full_payment(): void
+    {
+        $this->collectionClock('2026-11-20 12:00:00');
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $sheets = $this->service([
+            array_replace($this->entry('CRM01', 'Chị Bình', 1), ['date' => '2026-11-19', 'amount' => 1000]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 2), ['date' => '2026-11-20', 'amount' => 300]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 3), ['date' => '2026-11-20', 'type' => 'payment', 'amount' => 400]),
+        ]);
+        $controller = new CustomerDebtMonitorController;
+        $vouchers = app(\App\Services\CustomerDebtVouchers::class);
+        $query = ['system_customer' => 1, 'debt_section' => 'vouchers', 'window' => 'all'];
+        $register = fn () => $controller->index($this->request($query, 'accountant'), $sheets)->getData()['voucherRegister'];
+        $save = function (array $data, array $files = []) use ($controller, $query, $sheets, $vouchers, $register) {
+            $request = $this->request($query + $data + ['revision' => $register()['revision']], 'accountant');
+            if ($files) {
+                $request->files->set('documents', $files);
+            }
+
+            return $controller->saveVoucher($request, $sheets, $vouchers);
+        };
+
+        $save(['type' => 'payment-request', 'through' => '2026-11-19', 'paid' => 400, 'number' => 'DN-001']);
+        $first = $register()['latest'];
+        self::assertSame('partial', $first['status']);
+        self::assertSame(600, $first['remaining']);
+
+        $response = $save(['type' => 'receipt', 'through' => '2026-11-20', 'paid' => 0]);
+        self::assertStringContainsString('debt_section=vouchers', $response->getTargetUrl());
+        $second = $register()['latest'];
+        self::assertSame('PT-0002', $second['number']);
+        self::assertSame(600, $second['carry']);
+        self::assertSame(300, $second['new_amount']);
+        self::assertSame(900, $second['total']);
+        self::assertSame('unpaid', $second['status']);
+
+        $save(['voucher_id' => $first['id'], 'new_amount' => 1000, 'paid' => 500]);
+        self::assertSame(800, $register()['latest']['total']);
+
+        $payment = ['voucher_id' => $second['id'], 'new_amount' => 300, 'paid' => 800];
+        try {
+            $save($payment);
+            self::fail('Full payment was accepted without proof');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            self::assertArrayHasKey('documents', $exception->errors());
+        }
+        $file = \Illuminate\Http\UploadedFile::fake()->createWithContent('chung-tu.pdf', "%PDF-1.4\n");
+        $save($payment, [$file]);
+        $settled = $register()['latest'];
+        self::assertSame('paid', $settled['status']);
+        self::assertSame(0, $settled['remaining']);
+        self::assertCount(1, $settled['documents']);
+        \Illuminate\Support\Facades\Storage::disk('local')->assertExists($settled['documents'][0]['path']);
+        $download = $controller->downloadVoucherDocument($this->request($query, 'accountant'), $settled['id'], $settled['documents'][0]['id'], $sheets, $vouchers);
+        self::assertStringContainsString('chung-tu.pdf', $download->headers->get('Content-Disposition'));
+    }
+
+    public function test_voucher_can_select_purchase_days_and_preserves_unselected_older_debt(): void
+    {
+        $this->collectionClock('2026-11-20 12:00:00');
+        $sheets = $this->service([
+            array_replace($this->entry('CRM01', 'Chị Bình', 1), ['date' => '2026-11-18', 'amount' => 1200]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 2), ['date' => '2026-11-19', 'amount' => 700]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 3), ['date' => '2026-11-19', 'amount' => 300]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 4), ['date' => '2026-11-19', 'type' => 'payment', 'amount' => 200]),
+        ]);
+        $controller = new CustomerDebtMonitorController;
+        $vouchers = app(\App\Services\CustomerDebtVouchers::class);
+        $query = ['system_customer' => 1, 'debt_section' => 'vouchers', 'window' => 'all'];
+        $register = fn (array $filters = []) => $controller->index($this->request($query + $filters, 'accountant'), $sheets)->getData()['voucherRegister'];
+        $save = fn (array $dates) => $controller->saveVoucher($this->request($query + [
+            'revision' => $register()['revision'], 'through' => '2026-11-20', 'type' => 'receipt',
+            'paid' => 0, 'purchase_dates' => $dates, 'new_amount' => 10,
+        ], 'accountant'), $sheets, $vouchers);
+
+        $before = $register(['voucher_purchases_size' => 50, 'voucher_selected' => ['2026-11-19']]);
+        self::assertSame(50, $before['purchases']->perPage());
+        self::assertSame(2, $before['purchases']->total());
+        self::assertSame(2, $before['purchases']->getCollection()->first()['count']);
+        self::assertSame(['2026-11-19' => 1000], $before['selectedPurchases']->all());
+
+        $save(['2026-11-19']);
+        $first = $register()['latest'];
+        self::assertSame(['2026-11-19' => 1000], $first['purchase_days']);
+        self::assertSame(1000, $first['new_amount']);
+        self::assertSame(1000, $register()['suggested']);
+        try {
+            $save(['2026-11-19']);
+            self::fail('The same purchase day could be added twice');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            self::assertArrayHasKey('purchase_dates', $exception->errors());
+        }
+
+        $save(['2026-11-18']);
+        $second = $register()['latest'];
+        self::assertSame(['2026-11-18' => 1000], $second['purchase_days']);
+        self::assertSame(1000, $second['carry']);
+        self::assertSame(2000, $second['total']);
+    }
+
     public function test_debt_vouchers_can_include_all_delivery_dates_beyond_the_manual_limit(): void
     {
         $this->collectionClock('2026-11-19 10:00:00');
@@ -1687,6 +1787,212 @@ class CustomerDebtMonitorTest extends TestCase
         (new \App\Http\Controllers\CustomerDebtReportController)->updatePriority($this->request(['customer_id' => 1, 'stars' => 5, 'priority_version' => str_repeat('0', 64)]), $this->service([]), new \App\Services\CustomerDebtPriorityService);
     }
 
+    public function test_cycle_statements_carry_balances_and_keep_closed_documents_frozen(): void
+    {
+        $this->collectionClock('2026-11-23 12:00:00');
+        $entries = [
+            array_replace($this->entry('CRM01', 'Chị Bình', 1), ['date' => '2026-11-12', 'amount' => 16000000]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 2), ['date' => '2026-11-18', 'type' => 'payment', 'amount' => 15000000]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 3), ['date' => '2026-11-19', 'amount' => 26000000]),
+        ];
+        $sheets = $this->service($entries);
+        $policies = app(\App\Services\CustomerDebtPolicyService::class);
+        $policies->save(['customer_id' => 1], [
+            'payment_mode' => 'cycle', 'cycle_type' => 'weekly', 'cycle_close_weekday' => 1, 'cycle_weekday' => 5,
+        ], 7, true, 0);
+        $controller = new CustomerDebtMonitorController;
+        $cycles = app(\App\Services\CustomerDebtCycleStatementService::class);
+        $query = ['system_customer' => 1, 'window' => 'all'];
+        $first = $controller->index($this->request($query + ['cycle_date' => '2026-11-16'], 'accountant'), $sheets)->getData()['cyclePreview'];
+        self::assertSame('2026-11-10', $first['from']);
+        self::assertSame('2026-11-20', $first['due']);
+        self::assertSame(16000000, $first['closing']);
+        $firstResponse = $controller->closeCycle($this->request($query + [
+            'cycle_date' => $first['to'], 'revision' => $first['revision'],
+        ], 'accountant'), $sheets, $cycles);
+        self::assertSame(303, $firstResponse->getStatusCode());
+
+        $next = $controller->index($this->request($query, 'accountant'), $sheets)->getData()['cyclePreview'];
+        self::assertSame('2026-11-17', $next['from']);
+        self::assertSame('2026-11-23', $next['to']);
+        self::assertSame(16000000, $next['opening']);
+        self::assertSame(15000000, $next['opening_paid']);
+        self::assertSame(1000000, $next['opening_remaining']);
+        self::assertSame(26000000, $next['net_new']);
+        self::assertSame(27000000, $next['closing']);
+        $controller->closeCycle($this->request($query + [
+            'cycle_date' => $next['to'], 'revision' => $next['revision'],
+        ], 'accountant'), $sheets, $cycles);
+
+        $entries[0]['amount'] += 100000;
+        $changed = $controller->index($this->request($query, 'accountant'), $this->service($entries))->getData();
+        $saved = $changed['cycleHistory']['2026-11-16'];
+        self::assertSame(16000000, $cycles->statement($saved['ledger'], $saved['to'])['closing']);
+        self::assertSame(100000, $changed['cyclePreview']['prior_correction']);
+        self::assertFalse($changed['cyclePreview']['can_close']);
+    }
+
+    public function test_custom_cycle_ranges_only_assign_selected_bills_and_carry_unselected_bills(): void
+    {
+        $this->collectionClock('2026-11-23 12:00:00');
+        $sheets = $this->service([
+            array_replace($this->entry('CRM01', 'Chị Bình', 1), ['date' => '2024-01-01', 'order_code' => 'A001', 'amount' => 16000000]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 2), ['date' => '2024-01-01', 'order_code' => 'A002', 'amount' => 2000000]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 3), ['date' => '2026-11-05', 'order_code' => 'A003', 'amount' => 26000000]),
+            array_replace($this->entry('CRM01', 'Chị Bình', 4), ['date' => '2026-11-06', 'type' => 'payment', 'amount' => 15000000]),
+        ]);
+        app(\App\Services\CustomerDebtPolicyService::class)->save(['customer_id' => 1], [
+            'payment_mode' => 'cycle', 'cycle_type' => 'weekly', 'cycle_close_weekday' => 2, 'cycle_weekday' => 5,
+        ], 7, true, 0);
+        $controller = new CustomerDebtMonitorController;
+        $cycles = app(\App\Services\CustomerDebtCycleStatementService::class);
+        $query = ['system_customer' => 1, 'window' => 'all'];
+        $first = $controller->index($this->request($query + [
+            'cycle_from' => '2024-01-01', 'cycle_date' => '2026-11-01',
+        ], 'accountant'), $sheets)->getData()['cyclePreview'];
+        self::assertCount(2, $first['bills']);
+        $chosen = array_key_first($first['bills']);
+        $controller->closeCycle($this->request($query + [
+            'cycle_from' => $first['from'], 'cycle_date' => $first['to'],
+            'cycle_bills' => json_encode([$chosen]), 'revision' => $first['revision'],
+        ], 'accountant'), $sheets, $cycles);
+
+        $detail = $controller->index($this->request($query + [
+            'cycle_from' => '2026-11-02', 'cycle_date' => '2026-11-09',
+        ], 'accountant'), $sheets)->getData();
+        $saved = $detail['cycleHistory']['2026-11-01'];
+        self::assertSame(16000000, $saved['closing']);
+        self::assertSame([$chosen], $saved['bill_keys']);
+        $next = $detail['cyclePreview'];
+        self::assertSame('2026-11-02', $next['from']);
+        self::assertSame(0, $next['prior_correction']);
+        self::assertSame(['A002', 'A003'], array_column($next['bills'], 'label'));
+        self::assertCount(3, $next['bill_catalog']);
+        self::assertSame('Đã gán vào kỳ đã chốt', $next['bill_catalog'][$chosen]['unavailable']);
+        self::assertSame(29000000, $next['closing']);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $controller->closeCycle($this->request($query + [
+            'cycle_from' => $next['from'], 'cycle_date' => $next['to'],
+            'cycle_bills' => json_encode([$chosen]), 'revision' => $next['revision'],
+        ], 'accountant'), $sheets, $cycles);
+    }
+
+    public function test_named_cycle_draft_starts_empty_and_saves_bills_before_closing(): void
+    {
+        $this->collectionClock('2026-11-23 12:00:00');
+        $sheets = $this->service([
+            array_replace($this->entry('CRM01', 'Chị Bình'), ['date' => '2026-11-22', 'order_code' => 'A001']),
+        ]);
+        app(\App\Services\CustomerDebtPolicyService::class)->save(['customer_id' => 1], [
+            'payment_mode' => 'cycle', 'cycle_type' => 'weekly', 'cycle_close_weekday' => 2, 'cycle_weekday' => 5,
+        ], 7, true, 0);
+        $controller = new CustomerDebtMonitorController;
+        $cycles = app(\App\Services\CustomerDebtCycleStatementService::class);
+        $query = ['system_customer' => 1, 'window' => 'all'];
+        $detail = fn (array $extra = []) => $controller->index($this->request($query + $extra, 'accountant'), $sheets)->getData();
+        $dates = ['cycle_from' => '2026-11-18', 'cycle_date' => '2026-11-24'];
+        $draftInput = $dates + ['cycle_name' => 'Kỳ công nợ 1'];
+        $preview = $detail($dates)['cyclePreview'];
+        $controller->closeCycle($this->request($query + $draftInput + [
+            'cycle_action' => 'create', 'revision' => $preview['revision'],
+        ], 'accountant'), $sheets, $cycles);
+        $afterCreate = $detail();
+        self::assertSame('Kỳ công nợ 1', $afterCreate['cycleDraft']['name']);
+        self::assertSame([], $afterCreate['cycleDraft']['bill_keys']);
+        self::assertFalse($afterCreate['cyclePreview']['can_close']);
+        self::assertSame(0, $afterCreate['cyclePreview']['closing']);
+
+        $bill = array_key_first($afterCreate['cyclePreview']['bills']);
+        $controller->closeCycle($this->request($query + $draftInput + [
+            'cycle_action' => 'save', 'draft_version' => $afterCreate['cycleDraft']['version'],
+            'revision' => $afterCreate['cyclePreview']['revision'], 'cycle_bills' => json_encode([$bill]),
+        ], 'accountant'), $sheets, $cycles);
+
+        $this->collectionClock('2026-11-24 12:00:00');
+        $saved = $detail();
+        self::assertSame([$bill], $saved['cycleDraft']['bill_keys']);
+        self::assertSame(1000, $saved['cyclePreview']['closing']);
+        $controller->closeCycle($this->request($query + $draftInput + [
+            'cycle_action' => 'close', 'draft_version' => $saved['cycleDraft']['version'],
+            'revision' => $saved['cyclePreview']['revision'], 'cycle_bills' => json_encode([$bill]),
+        ], 'accountant'), $sheets, $cycles);
+        $closed = $detail();
+        self::assertNull($closed['cycleDraft']);
+        self::assertSame('Kỳ công nợ 1', $closed['cycleHistory']['2026-11-24']['name']);
+        self::assertSame([$bill], $closed['cycleHistory']['2026-11-24']['bill_keys']);
+    }
+
+    public function test_automatic_cycle_collects_bills_preserves_manual_adjustment_and_accepts_evidence(): void
+    {
+        $this->collectionClock('2026-11-23 12:00:00');
+        $entries = [
+            array_replace($this->entry('CRM01', 'Chị Bình', 1), ['date' => '2026-11-19', 'order_code' => 'A001']),
+            array_replace($this->entry('CRM01', 'Chị Bình', 2), ['date' => '2026-11-23', 'order_code' => 'A002']),
+        ];
+        $sheets = $this->service($entries);
+        app(\App\Services\CustomerDebtPolicyService::class)->save(['customer_id' => 1], [
+            'payment_mode' => 'cycle', 'cycle_type' => 'weekly', 'cycle_close_weekday' => 1, 'cycle_weekday' => 5,
+        ], 7, true, 0);
+        $controller = new CustomerDebtMonitorController;
+        $cycles = app(\App\Services\CustomerDebtCycleStatementService::class);
+        $documents = app(\App\Services\CustomerDebtCycleDocuments::class);
+        $query = ['system_customer' => 1, 'window' => 'all', 'debt_section' => 'cycles'];
+        $controller->autoCycle($this->request($query, 'accountant'), $sheets, $cycles);
+        $auto = $controller->index($this->request($query, 'accountant'), $sheets)->getData();
+        self::assertTrue($auto['cycleDraft']['automatic']);
+        self::assertSame('2026-11-17', $auto['cyclePreview']['from']);
+        self::assertSame('2026-11-23', $auto['cyclePreview']['to']);
+        self::assertCount(2, $auto['cyclePreview']['bill_keys']);
+        self::assertSame(2000, $auto['cyclePreview']['closing']);
+
+        $data = $query + [
+            'cycle_name' => $auto['cycleDraft']['name'], 'draft_version' => $auto['cycleDraft']['version'],
+            'cycle_date' => $auto['cyclePreview']['to'], 'cycle_from' => $auto['cyclePreview']['from'],
+            'revision' => $auto['cyclePreview']['revision'], 'cycle_bills' => json_encode($auto['cyclePreview']['bill_keys']),
+            'cycle_adjustment' => 150, 'cycle_adjustment_reason' => 'Chênh lệch đối chiếu đã xác nhận',
+        ];
+        $controller->closeCycle($this->request($data + ['cycle_action' => 'save'], 'accountant'), $sheets, $cycles);
+        $draft = $controller->index($this->request($query, 'accountant'), $sheets)->getData();
+        self::assertSame(2150, $draft['cyclePreview']['closing']);
+        $controller->closeCycle($this->request(array_replace($data, [
+            'cycle_action' => 'close', 'draft_version' => $draft['cycleDraft']['version'],
+        ]), 'accountant'), $sheets, $cycles);
+        $after = $controller->index($this->request($query, 'accountant'), $sheets)->getData();
+        $closed = $after['cycleHistory']['2026-11-23'];
+        self::assertSame(2150, $closed['closing']);
+        self::assertSame(2150, $after['cyclePreview']['opening']);
+        self::assertSame(0, $after['cyclePreview']['prior_correction']);
+
+        $disk = \Illuminate\Support\Facades\Storage::fake('local');
+        $upload = $this->request([], 'accountant');
+        $upload->files->set('documents', [\Illuminate\Http\UploadedFile::fake()->create('signed.pdf', 4, 'application/pdf')]);
+        $controller->uploadCycleDocuments($upload, $closed['ledger'], $closed['to'], $cycles, $documents);
+        $document = $documents->forLedger($closed['ledger'])[$closed['to']][0];
+        $disk->assertExists($document['path']);
+        $response = $controller->downloadCycleDocument($this->request([], 'admin'), $closed['ledger'], $closed['to'], $document['id'], $documents);
+        self::assertStringContainsString('attachment', $response->headers->get('Content-Disposition'));
+        self::assertSame(2150, $cycles->statement($closed['ledger'], $closed['to'])['closing']);
+
+        $this->expectException(HttpException::class);
+        $controller->downloadCycleDocument($this->request([], 'sale'), $closed['ledger'], $closed['to'], $document['id'], $documents);
+    }
+
+    public function test_monthly_cycle_clamps_the_close_day_and_starts_after_the_previous_close(): void
+    {
+        $this->collectionClock('2026-02-28 12:00:00');
+        $policy = [
+            'payment_mode' => 'cycle', 'cycle_type' => 'monthly', 'cycle_close_monthday' => 31,
+            'cycle_monthday' => 5, 'edit_version' => 1,
+        ];
+        $preview = app(\App\Services\CustomerDebtCycleStatementService::class)->preview([
+            'customer_id' => 1, 'name' => 'Khách thử', 'policy' => $policy, 'entries' => [],
+        ], []);
+        self::assertSame('2026-02-01', $preview['from']);
+        self::assertSame('2026-02-28', $preview['to']);
+        self::assertSame('2026-03-05', $preview['due']);
+    }
+
     public function test_debt_notes_are_shared_by_accounting_and_admin_per_customer(): void
     {
         $sheets = $this->service([$this->entry('CRM01', 'Chị Bình'), $this->entry('KH02', 'Anh Hải', 2)]);
@@ -1745,13 +2051,14 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(200, $after['allocation']['unmatched']['Dongtienhoatdong:5']['amount']);
 
         $paymentKey = 'Dongtienhoatdong:6';
-        $form = $detail(['allocate' => $paymentKey]);
+        $form = $detail(['allocate' => $paymentKey, 'debt_section' => 'bill']);
         self::assertSame(750, $form['allocationForm']['available']);
         $allocation = [
             'payment_key' => $paymentKey, 'revision' => $form['allocationRevision'],
             'items' => [['target' => 'nhatkybanhang:2', 'amount' => 500], ['target' => 'nhatkybanhang:3', 'amount' => 200]],
         ];
-        $controller->saveManualAllocation($this->request($query + $allocation, 'accountant'), $sheets, $manual, $allocator);
+        $response = $controller->saveManualAllocation($this->request($query + $allocation + ['debt_section' => 'bill'], 'accountant'), $sheets, $manual, $allocator);
+        self::assertStringContainsString('debt_section=bill#debt-payment-periods', $response->getTargetUrl());
         $after = $detail();
         self::assertSame(50, $after['allocation']['unmatched'][$paymentKey]['amount']);
         self::assertSame(500, $after['allocation']['lines']['nhatkybanhang:2']['remaining']);
@@ -1776,6 +2083,231 @@ class CustomerDebtMonitorTest extends TestCase
         ], 'accountant'), $sheets, $manual, $allocator);
         self::assertSame(750, $detail()['allocation']['unmatched'][$paymentKey]['amount']);
         self::assertSame(2, DB::table('settings')->where('key', 'like', 'customer_debt_manual_allocation_audit_%')->count());
+    }
+
+    public function test_bill_reconciliation_confirms_both_grouping_directions_and_reserves_confirmed_amounts(): void
+    {
+        $this->collectionClock('2026-11-20 12:00:00');
+        $entries = [];
+        foreach ([1 => 'DH001', 2 => 'DH002', 3 => 'DH003'] as $row => $code) {
+            $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', $row), [
+                'date' => '2026-11-19', 'order_code' => $code,
+            ]);
+        }
+        foreach ([4 => 400, 5 => 600, 6 => 2000] as $row => $amount) {
+            $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', $row), [
+                'type' => 'payment', 'amount' => $amount, 'note' => 'Khách chuyển khoản',
+            ]);
+        }
+        $sheets = $this->service($entries);
+        $controller = new CustomerDebtMonitorController;
+        $manual = app(\App\Services\CustomerDebtManualAllocationService::class);
+        $bills = app(\App\Services\CustomerDebtBillReconciliation::class);
+        $allocator = app(\App\Services\CustomerDebtPaymentAllocation::class);
+        $query = ['system_customer' => 1, 'window' => 'all', 'debt_section' => 'bill'];
+        $detail = fn () => $controller->index($this->request($query, 'accountant'), $sheets)->getData();
+        $submit = fn (array $data) => $controller->confirmBillAllocations(
+            $this->request($query + $data, 'accountant'), $sheets, $manual, $bills, $allocator
+        );
+
+        $controller->changeSettlementMethod($this->request($query + [
+            'transition_date' => '2026-11-19', 'transition_method' => 'bill', 'revision' => $detail()['allocationRevision'],
+        ], 'accountant'), $sheets, $manual);
+
+        $period = $detail()['billPeriods']['2026-11-19'];
+        self::assertSame(3000, $period['bills']->sum('remaining'));
+        self::assertSame(3000, $period['payments']->sum('pending'));
+        $first = [
+            'period_from' => '2026-11-19', 'bill_keys' => ['2026-11-19|DH001'], 'revision' => $detail()['allocationRevision'],
+        ];
+        $submit($first + ['payment_keys' => ['Dongtienhoatdong:4', 'Dongtienhoatdong:5']]);
+        self::assertSame(2000, $detail()['billPeriods']['2026-11-19']['bills']->sum('remaining'));
+        $submit([
+            'period_from' => '2026-11-19', 'bill_keys' => ['2026-11-19|DH002', '2026-11-19|DH003'],
+            'payment_keys' => ['Dongtienhoatdong:6'], 'revision' => $detail()['allocationRevision'],
+        ]);
+        $after = $detail();
+        self::assertSame(0, $after['closing']);
+        self::assertSame(0, $after['billPeriods']['2026-11-19']['bills']->sum('remaining'));
+        self::assertSame(0, $after['billPeriods']['2026-11-19']['payments']->sum('pending'));
+        self::assertCount(2, $after['billGroups']);
+        $matched = $after['billPeriods']['2026-11-19']['payments']->where('matched', true);
+        self::assertCount(3, $matched);
+        self::assertSame(['DH002', 'DH003'], $matched['Dongtienhoatdong:6']['matched_bills']);
+
+        $extra = array_replace($entries[3], ['row' => 7, 'amount' => 1000, 'note' => 'Bill 19/11/2026 | Mã đơn: DH001']);
+        $refreshed = $controller->index($this->request($query, 'accountant'), $this->service([...$entries, $extra]))->getData();
+        self::assertSame(1000, $refreshed['allocation']['unmatched']['Dongtienhoatdong:7']['amount']);
+        self::assertTrue($refreshed['billGroups']->every('valid', true));
+        self::assertFalse($refreshed['billPeriods']['2026-11-19']['payments']['Dongtienhoatdong:7']['matched']);
+
+        $amended = $entries;
+        $amended[3]['amount'] = 500;
+        $refreshed = $controller->index($this->request($query, 'accountant'), $this->service($amended))->getData();
+        self::assertSame(1000, $refreshed['allocation']['lines']['nhatkybanhang:1']['remaining']);
+        self::assertArrayHasKey('Dongtienhoatdong:5', $refreshed['allocation']['invalidManual']);
+
+        $submit(['cancel_group' => $after['billGroups']->keys()->first(), 'revision' => $after['allocationRevision']]);
+        self::assertSame(1000, $detail()['billPeriods']['2026-11-19']['bills']->sum('remaining'));
+    }
+
+    public function test_bill_reconciliation_carries_surplus_and_shortfall_between_independent_allocations(): void
+    {
+        $this->collectionClock('2026-11-20 12:00:00');
+        $entries = [];
+        foreach ([1 => ['sale', 1000], 2 => ['sale', 1000], 3 => ['payment', 1200], 4 => ['payment', 800]] as $row => [$type, $amount]) {
+            $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', $row), [
+                'date' => '2026-11-20', 'type' => $type, 'amount' => $amount, 'order_code' => 'B'.$row,
+            ]);
+        }
+        $controller = new CustomerDebtMonitorController;
+        $sheets = $this->service($entries);
+        $manual = app(\App\Services\CustomerDebtManualAllocationService::class);
+        $bills = app(\App\Services\CustomerDebtBillReconciliation::class);
+        $allocator = app(\App\Services\CustomerDebtPaymentAllocation::class);
+        $query = ['system_customer' => 1, 'window' => 'all', 'debt_section' => 'bill'];
+        $detail = fn () => $controller->index($this->request($query, 'accountant'), $sheets)->getData();
+        $controller->changeSettlementMethod($this->request($query + [
+            'transition_date' => '2026-11-20', 'transition_method' => 'bill', 'revision' => $detail()['allocationRevision'],
+        ], 'accountant'), $sheets, $manual);
+        $submit = fn (array $data) => $controller->confirmBillAllocations(
+            $this->request($query + $data + ['revision' => $detail()['allocationRevision']], 'accountant'), $sheets, $manual, $bills, $allocator
+        );
+
+        $submit(['period_from' => '2026-11-20', 'bill_keys' => ['2026-11-20|B1'], 'payment_keys' => ['Dongtienhoatdong:3']]);
+        $after = $detail();
+        $first = $after['billGroups']->keys()->first();
+        self::assertSame(1, $after['billGroups'][$first]['number']);
+        self::assertSame(200, $after['billGroups'][$first]['surplus']);
+        self::assertSame(['2026-11-20|B1'], $after['billGroups'][$first]['bill_keys']);
+        self::assertSame(200, $after['allocation']['unmatched']['Dongtienhoatdong:3']['amount']);
+        self::assertSame(1000, $after['allocation']['lines']['nhatkybanhang:2']['remaining']);
+
+        $submit(['period_from' => '2026-11-20', 'bill_keys' => ['2026-11-20|B2'], 'payment_keys' => ['Dongtienhoatdong:3']]);
+        $after = $detail();
+        self::assertSame(800, $after['allocation']['lines']['nhatkybanhang:2']['remaining']);
+        self::assertSame(1200, $after['billPeriods']['2026-11-20']['payments']['Dongtienhoatdong:3']['allocated']);
+        $submit(['period_from' => '2026-11-20', 'bill_keys' => ['2026-11-20|B2'], 'payment_keys' => ['Dongtienhoatdong:4']]);
+        self::assertSame(0, $detail()['allocation']['lines']['nhatkybanhang:2']['remaining']);
+
+        $response = $submit(['cancel_group' => $first]);
+        self::assertStringEndsWith('#debt-bill-reopened', $response->getTargetUrl());
+        self::assertSame(['2026-11-20|B1'], session('bill_reopened.bill_keys'));
+        self::assertSame(['Dongtienhoatdong:3'], session('bill_reopened.payment_keys'));
+        $after = $detail();
+        self::assertSame(1000, $after['allocation']['lines']['nhatkybanhang:1']['remaining']);
+        self::assertSame(1000, $after['allocation']['unmatched']['Dongtienhoatdong:3']['amount']);
+        self::assertSame(0, $after['allocation']['lines']['nhatkybanhang:2']['remaining']);
+        self::assertCount(2, $after['billGroups']);
+        self::assertTrue($after['billGroups']->every('valid', true));
+        self::assertSame([2, 3], $after['billGroups']->pluck('number')->all());
+
+        $submit(['period_from' => '2026-11-20', 'bill_keys' => ['2026-11-20|B1'], 'payment_keys' => ['Dongtienhoatdong:3']]);
+        self::assertSame([2, 3, 4], $detail()['billGroups']->pluck('number')->all());
+    }
+
+    public function test_bill_tab_automatically_marks_only_fully_allocated_bill_payments(): void
+    {
+        $this->collectionClock('2026-11-20 12:00:00');
+        $entries = [];
+        foreach ([1 => 'A001', 2 => 'A002'] as $row => $code) {
+            $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', $row), [
+                'date' => '2026-11-19', 'order_code' => $code,
+            ]);
+        }
+        foreach ([3 => [1000, 'A001'], 4 => [1200, 'A002'], 5 => [300, 'A003']] as $row => [$amount, $code]) {
+            $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', $row), [
+                'type' => 'payment', 'amount' => $amount, 'note' => 'Bill 19/11/2026 | Mã đơn: '.$code,
+            ]);
+        }
+        $controller = new CustomerDebtMonitorController;
+        $sheets = $this->service($entries);
+        $query = ['system_customer' => 1, 'window' => 'all', 'debt_section' => 'bill'];
+        $detail = fn () => $controller->index($this->request($query, 'accountant'), $sheets)->getData();
+        $controller->changeSettlementMethod($this->request($query + [
+            'transition_date' => '2026-11-19', 'transition_method' => 'bill', 'revision' => $detail()['allocationRevision'],
+        ], 'accountant'), $sheets, app(\App\Services\CustomerDebtManualAllocationService::class));
+
+        $payments = $detail()['billPeriods']['2026-11-19']['payments'];
+        self::assertSame(['Dongtienhoatdong:3'], $payments->where('matched', true)->keys()->all());
+        self::assertSame(['A001'], $payments['Dongtienhoatdong:3']['matched_bills']);
+        self::assertSame(200, $payments['Dongtienhoatdong:4']['pending']);
+        self::assertSame(300, $payments['Dongtienhoatdong:5']['pending']);
+    }
+
+    public function test_bill_tab_bulk_confirms_unique_same_day_exact_pairs(): void
+    {
+        $this->collectionClock('2026-11-20 12:00:00');
+        $entries = [];
+        foreach ([1 => 1000, 2 => 700, 3 => 500, 4 => 500, 5 => 2964500] as $row => $amount) {
+            $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', $row), [
+                'date' => '2026-11-20', 'amount' => $amount, 'order_code' => 'B'.$row,
+            ]);
+        }
+        foreach ([6 => 700, 7 => 1000, 8 => 500, 9 => 2960000] as $row => $amount) {
+            $entries[] = array_replace($this->entry('CRM01', 'Chị Bình', $row), [
+                'date' => '2026-11-20', 'type' => 'payment', 'amount' => $amount,
+            ]);
+        }
+        $controller = new CustomerDebtMonitorController;
+        $sheets = $this->service($entries);
+        $manual = app(\App\Services\CustomerDebtManualAllocationService::class);
+        $query = ['system_customer' => 1, 'window' => 'all', 'debt_section' => 'bill'];
+        $detail = fn () => $controller->index($this->request($query, 'accountant'), $sheets)->getData();
+        $controller->changeSettlementMethod($this->request($query + [
+            'transition_date' => '2026-11-20', 'transition_method' => 'bill', 'revision' => $detail()['allocationRevision'],
+        ], 'accountant'), $sheets, $manual);
+        $before = $detail();
+        self::assertSame([
+            'Dongtienhoatdong:6' => '2026-11-20|B2',
+            'Dongtienhoatdong:7' => '2026-11-20|B1',
+        ], $before['billPeriods']['2026-11-20']['exact_pairs']);
+        $controller->confirmBillAllocations($this->request($query + [
+            'period_from' => '2026-11-20', 'match_exact' => '1', 'revision' => $before['allocationRevision'],
+        ], 'accountant'), $sheets, $manual, app(\App\Services\CustomerDebtBillReconciliation::class), app(\App\Services\CustomerDebtPaymentAllocation::class));
+        $after = $detail();
+        $period = $after['billPeriods']['2026-11-20'];
+        self::assertSame(['B2'], $period['payments']['Dongtienhoatdong:6']['matched_bills']);
+        self::assertSame(['B1'], $period['payments']['Dongtienhoatdong:7']['matched_bills']);
+        self::assertSame(500, $period['payments']['Dongtienhoatdong:8']['pending']);
+        self::assertSame(2960000, $period['payments']['Dongtienhoatdong:9']['pending']);
+        self::assertCount(1, $after['billGroups']);
+        self::assertSame(1700, $after['billGroups']->first()['amount']);
+        self::assertSame([], $period['exact_pairs']);
+    }
+
+    public function test_dated_payment_forms_switch_between_bill_cycle_and_batch(): void
+    {
+        $this->collectionClock('2026-11-26 12:00:00');
+        $sheets = $this->service([
+            array_replace($this->entry('CRM01', 'Chị Bình'), ['date' => '2026-11-12', 'order_code' => 'A001']),
+            array_replace($this->entry('CRM01', 'Chị Bình', 2), ['date' => '2026-11-24', 'order_code' => 'A002']),
+        ]);
+        $monitor = new CustomerDebtMonitorController;
+        $manual = app(\App\Services\CustomerDebtManualAllocationService::class);
+        $query = ['system_customer' => 1, 'window' => 'all'];
+        foreach ([['2026-11-17', '2026-11-20', 'bill'], ['2026-11-21', '2026-11-30', 'cycle']] as [$from, $to, $method]) {
+            $preview = $monitor->index($this->request($query + [
+                'transition_preview' => $from, 'transition_end' => $to, 'transition_method' => $method,
+            ], 'accountant'), $sheets)->getData();
+            self::assertArrayNotHasKey('error', $preview['settlementPreview']);
+            $monitor->changeSettlementMethod($this->request($query + [
+                'transition_date' => $from, 'transition_end' => $to, 'transition_method' => $method,
+                'revision' => $preview['allocationRevision'],
+            ], 'accountant'), $sheets, $manual);
+        }
+        $result = $monitor->index($this->request($query, 'accountant'), $sheets)->getData();
+        self::assertSame('cycle', $result['currentSettlementMethod']);
+        self::assertSame([
+            ['from' => '2026-11-12', 'to' => '2026-11-16', 'method' => 'batch'],
+            ['from' => '2026-11-17', 'to' => '2026-11-20', 'method' => 'bill'],
+            ['from' => '2026-11-21', 'to' => '2026-11-30', 'method' => 'cycle'],
+            ['from' => '2026-12-01', 'to' => null, 'method' => 'batch'],
+        ], $result['paymentPeriods']);
+        self::assertSame('batch', \App\Services\CustomerDebtPolicyService::currentSettlementMethod($result['selected']['policy'], '2026-12-01'));
+        self::assertNotNull($result['cyclePreview']);
+        self::assertGreaterThanOrEqual('2026-11-21', $result['cyclePreview']['from']);
+        self::assertLessThanOrEqual('2026-11-30', $result['cyclePreview']['to']);
     }
 
     public function test_settlement_changes_can_return_to_batch_and_keep_previous_bill_allocations(): void

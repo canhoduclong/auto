@@ -1,5 +1,5 @@
-data-settlement-method="{{ \App\Services\CustomerDebtPolicyService::currentSettlementMethod($policy) }}"
-data-payment-mode="{{ $policy['payment_mode'] }}"
+data-settlement-method="{{ $policy['settlement_method'] }}"
+data-payment-mode="{{ ($detailPolicyTitle ?? null) ? 'cycle' : $policy['payment_mode'] }}"
 data-cycle-type="{{ $policy['cycle_type'] }}"
 data-close-weekday="{{ $policy['cycle_close_weekday'] ?? $policy['cycle_weekday'] }}"
 data-pay-weekday="{{ $policy['cycle_weekday'] }}"

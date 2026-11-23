@@ -87,7 +87,12 @@ class ApprovalService
             ->whereHas('order', fn ($query) => $query->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED]))
             ->with($this->adjustmentQueueRelations())->get();
 
-        return $withWorkflow->concat($withoutWorkflow)->unique('id')->sortByDesc('submitted_at')->values();
+        $weightConfirmation = OrderAdjustment::query()
+            ->where('status', OrderAdjustment::STATUS_APPROVED)->whereNull('weight_confirmed_by')
+            ->with($this->adjustmentQueueRelations())->get()
+            ->filter(fn (OrderAdjustment $adjustment) => $adjustment->requiresAccountingWeightConfirmation());
+
+        return $withWorkflow->concat($withoutWorkflow)->concat($weightConfirmation)->unique('id')->sortByDesc('submitted_at')->values();
     }
 
     /**

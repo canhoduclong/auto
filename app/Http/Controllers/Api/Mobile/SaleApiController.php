@@ -178,7 +178,7 @@ class SaleApiController extends BaseApiController
                 'order_item_id' => (int) $item->id,
                 'adjusted_quantity' => (int) $item->quantity,
                 'adjusted_price' => (float) $item->price,
-                'adjusted_weight' => $item->actual_weight ?? $item->total_weight,
+                'adjusted_weight' => $item->effective_priced_by_kg ? $item->accountingChargeQuantity($order) : null,
             ])->values()->all(),
         ]);
 
@@ -602,7 +602,8 @@ class SaleApiController extends BaseApiController
     {
         $this->ensureSaleRole($request);
         $trash = $request->boolean('trash');
-        $query = Order::query()
+        $pickup = app(\App\Services\ShipperPickupStatus::class);
+        $query = $pickup->withDetails(Order::query())
             ->with(['user:id,name,team_id', 'customer:id,name,phone,address', 'items.product:id,name', 'items.variant:id,name,sku,size,product_id', 'approvals.step', 'histories.user:id,name', 'accountingReconciliation']);
         $this->applySaleOrderVisibility($request, $query);
         if (Schema::hasColumn('orders', 'trash_at')) {
@@ -611,7 +612,7 @@ class SaleApiController extends BaseApiController
         $this->applyOrderFilters($request, $query);
 
         $orders = $query->paginate(min(50, max(10, (int) $request->query('per_page', 20))));
-        $orders->getCollection()->transform(fn (Order $order) => $this->orderPayload($order, true));
+        $orders->getCollection()->transform(fn (Order $order) => $this->orderPayload($order, true) + ['pickup_issue' => $pickup->issue($order)]);
 
         return $this->salePaginated($orders, ['trash' => $trash]);
     }
@@ -629,7 +630,10 @@ class SaleApiController extends BaseApiController
         }
         $order->load(['user:id,name,team_id', 'customer', 'items.product', 'items.variant', 'approvals.step', 'approvals.approver', 'histories.user']);
 
-        return $this->ok($this->orderPayload($order, true));
+        $pickup = app(\App\Services\ShipperPickupStatus::class);
+        $pickupDetails = $pickup->withDetails(Order::query())->findOrFail($order->id);
+
+        return $this->ok($this->orderPayload($order, true) + ['pickup_issue' => $pickup->issue($pickupDetails)]);
     }
 
     public function updateOrder(Request $request, Order $order): JsonResponse

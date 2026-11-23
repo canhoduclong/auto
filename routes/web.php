@@ -1400,6 +1400,8 @@ Route::middleware(['auth', 'role:sale,leader,leader_sale,sale_manager,manager,ma
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/my-order-adjustments/{orderAdjustment}', [\App\Http\Controllers\OrderAdjustmentController::class, 'show'])->name('site.order-adjustments.show');
+    Route::post('/my-order-adjustments/{orderAdjustment}/confirm-weight', [\App\Http\Controllers\OrderAdjustmentController::class, 'confirmWeight'])
+        ->middleware('role:admin,account,accountant,accounting')->name('site.order-adjustments.confirm-weight');
     Route::post('/my-order-adjustments/{orderAdjustment}/approve', [\App\Http\Controllers\OrderAdjustmentController::class, 'approve'])->name('site.order-adjustments.approve');
     Route::post('/my-order-adjustments/{orderAdjustment}/reject', [\App\Http\Controllers\OrderAdjustmentController::class, 'reject'])->name('site.order-adjustments.reject');
     Route::post('/my-order-adjustments/{orderAdjustment}/warehouse-confirm', [\App\Http\Controllers\OrderAdjustmentController::class, 'warehouseConfirm'])->name('site.order-adjustments.warehouse-confirm');
@@ -1451,8 +1453,26 @@ Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,mana
     Route::post('/customer-debt/report/responses', [\App\Http\Controllers\CustomerDebtReportController::class, 'respond'])->middleware('role:admin,account,accountant,accounting')->name('customer-debt.report.respond');
     Route::post('/customer-debt/customers', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'createCustomer'])->name('customer-debt.customers.store');
     Route::patch('/customer-debt/recovery', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'updateRecovery'])->name('customer-debt.recovery');
+    Route::middleware('role:admin,account,accountant,accounting')->prefix('customer-debt/vouchers')->name('customer-debt.vouchers.')->group(function () {
+        Route::post('/', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'saveVoucher'])->name('save');
+        Route::get('/{voucher}', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'printVoucher'])->whereUuid('voucher')->name('print');
+        Route::get('/{voucher}/documents/{document}', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'downloadVoucherDocument'])
+            ->whereUuid(['voucher', 'document'])->name('documents.download');
+    });
+    Route::middleware('role:admin,account,accountant,accounting')->prefix('customer-debt/cycles')->name('customer-debt.cycles.')->group(function () {
+        Route::post('/', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'closeCycle'])->name('close');
+        Route::post('/reopen', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'reopenCycle'])->middleware('role:admin')->name('reopen');
+        Route::post('/auto', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'autoCycle'])->name('auto');
+        Route::post('/{ledger}/{date}/documents', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'uploadCycleDocuments'])
+            ->where(['ledger' => '[a-f0-9]{64}', 'date' => '[0-9]{4}-[0-9]{2}-[0-9]{2}'])->name('documents.upload');
+        Route::get('/{ledger}/{date}/documents/{document}', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'downloadCycleDocument'])
+            ->where(['ledger' => '[a-f0-9]{64}', 'date' => '[0-9]{4}-[0-9]{2}-[0-9]{2}'])->whereUuid('document')->name('documents.download');
+        Route::get('/{ledger}/{date}', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'printCycle'])
+            ->where(['ledger' => '[a-f0-9]{64}', 'date' => '[0-9]{4}-[0-9]{2}-[0-9]{2}'])->name('print');
+    });
     Route::post('/customer-debt/note', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'saveNote'])->middleware('role:admin,account,accountant,accounting')->name('customer-debt.note');
     Route::post('/customer-debt/settlement-transition', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'changeSettlementMethod'])->middleware('role:admin,account,accountant,accounting')->name('customer-debt.settlement-transition');
+    Route::post('/customer-debt/bill-allocations', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'confirmBillAllocations'])->middleware('role:admin,account,accountant,accounting')->name('customer-debt.bill-allocations');
     Route::post('/customer-debt/payment-allocations', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'saveManualAllocation'])->middleware('role:admin,account,accountant,accounting')->name('customer-debt.payment-allocations');
     Route::post('/customer-debt/balance-adjustments', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'adjustBalance'])->name('customer-debt.balance-adjustments');
     Route::get('/customer-debt', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'index'])->middleware('cache.headers:private;no_store;max_age=0')->name('customer-debt.index');

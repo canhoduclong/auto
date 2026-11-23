@@ -38,6 +38,49 @@
             <div class="mt-2"><strong>Google Sheet:</strong> Chưa có nguồn đã ghép</div>
         @endforelse
     </div>
+    @php
+        $hasCycleTab = ($cyclePreview ?? null) || ($cycleError ?? null) || !empty($cycleHistory) || !empty($cycleDraft) || isset($debtNote);
+        $hasVoucherTab = $canManageVouchers ?? false;
+        $debtSection = ($hasCycleTab || $hasVoucherTab) ? request('debt_section') : null;
+        $showCycleTab = $debtSection === 'cycles';
+        $showPaymentTab = in_array($debtSection, ['bill', 'mixed', 'batch'], true);
+    @endphp
+    @if($hasCycleTab || $hasVoucherTab)
+        <nav class="nav nav-tabs mx-3 mb-3" aria-label="Chi tiết công nợ">
+            <a class="nav-link{{ !$debtSection ? ' active' : '' }}" @if(!$debtSection) aria-current="page" @endif
+                href="{{ request()->fullUrlWithQuery(['debt_section' => null, 'cycle_from' => null, 'cycle_date' => null, 'load_cycle_bills' => null]) }}#debt-detail">Đối chiếu</a>
+            @if($hasVoucherTab)
+                <a class="nav-link{{ $debtSection === 'vouchers' ? ' active' : '' }}" @if($debtSection === 'vouchers') aria-current="page" @endif
+                    href="{{ request()->fullUrlWithQuery(['debt_section' => 'vouchers', 'allocate' => null, 'edit_voucher' => null, 'new_voucher' => null]) }}#debt-vouchers">Phiếu thu &amp; đề nghị thanh toán</a>
+            @endif
+            @if($hasCycleTab)
+            @foreach(['bill' => 'Thanh toán theo Bill', 'mixed' => 'Thanh toán hỗn hợp', 'batch' => 'Thanh toán theo đợt'] as $method => $label)
+                <a class="nav-link{{ $debtSection === $method ? ' active' : '' }}" @if($debtSection === $method) aria-current="page" @endif
+                    href="{{ request()->fullUrlWithQuery(['debt_section' => $method, 'allocate' => null]) }}#debt-payment-periods">{{ $label }}</a>
+            @endforeach
+            <a class="nav-link{{ $showCycleTab ? ' active' : '' }}" @if($showCycleTab) aria-current="page" @endif
+                href="{{ request()->fullUrlWithQuery(['debt_section' => 'cycles', 'allocate' => null]) }}#debt-cycles">Thanh toán theo chu kỳ</a>
+            @endif
+        </nav>
+    @endif
+    @if($debtSection === 'vouchers' && isset($voucherRegister))
+        <div class="mx-3 mb-3">@include('customer-debt.voucher-register')</div>
+    @elseif($showCycleTab)
+        <div class="mx-3 mb-3">
+            @include('customer-debt.payment-periods', ['paymentTabMethod' => 'cycle'])
+            @include('customer-debt.cycle-management')
+        </div>
+    @elseif($showPaymentTab)
+        <div class="mx-3 mb-3">
+            @include('customer-debt.payment-periods', ['paymentTabMethod' => $debtSection])
+            @if($debtSection === 'bill' && isset($billPeriods))
+                @if($canManageAllocation ?? false)
+                    @include('customer-debt.payment-allocation-tools', ['allocationInBillTab' => true])
+                @endif
+                @include('customer-debt.bill-reconciliation')
+            @endif
+        </div>
+    @else
     <form method="GET" action="{{ $debtDetailAction ?? route('customer-debt.index') }}#debt-detail" class="debt-report-filters">
         @foreach(['tab','from','to','customer','system_customer','search','sale','alert','recovery','sort','direction','debt_page','balance','min_debt','per_page','scope','range','page','payment_mode','payment_class','reminder'] as $queryKey)
             @if(request()->filled($queryKey))<input type="hidden" name="{{ $queryKey }}" value="{{ request($queryKey) }}">@endif
@@ -48,7 +91,12 @@
         <button class="btn btn-primary" type="submit">Xem báo cáo</button>
         <a class="btn btn-sm {{ $reportMode === 'recent' ? 'btn-primary' : 'btn-light' }}" href="{{ request()->fullUrlWithQuery(['window'=>'recent','report_from'=>null,'report_to'=>null,'purchase_page'=>1,'payment_page'=>1,'detail_page'=>null]) }}#debt-detail">14 ngày</a>
         <a class="btn btn-sm {{ $reportMode === 'all' ? 'btn-primary' : 'btn-light' }}" href="{{ request()->fullUrlWithQuery(['window'=>'all','report_from'=>null,'report_to'=>null,'purchase_page'=>1,'payment_page'=>1,'detail_page'=>null]) }}#debt-detail">Toàn bộ</a>
-        @if((!isset($debtDetailAction) || ($saleDebtDetail ?? false)) && $purchases->total() > 0)
+        @if($hasVoucherTab)
+            @foreach(['payment-request' => 'Tạo đề nghị thanh toán', 'receipt' => 'Tạo phiếu thu'] as $type => $label)
+                <a class="btn btn-outline-primary btn-sm"
+                    href="{{ request()->fullUrlWithQuery(['debt_section' => 'vouchers', 'edit_voucher' => null, 'new_voucher' => $type]) }}#debt-voucher-editor">{{ $label }}</a>
+            @endforeach
+        @elseif((!isset($debtDetailAction) || ($saleDebtDetail ?? false)) && $purchases->total() > 0)
             @foreach(['payment-request' => 'Tạo đề nghị thanh toán', 'receipt' => 'Tạo phiếu thu'] as $type => $label)
                 <a class="btn btn-outline-primary btn-sm" target="_blank" rel="noopener"
                     href="{{ request()->fullUrlWithQuery(['presentation' => $type, 'purchase_page' => null, 'payment_page' => null, 'detail_page' => null]) }}">{{ $label }}</a>
@@ -79,7 +127,7 @@
             @if($allocation ?? null)
                 <div class="small">
                     @if($changeDate ?? null)
-                        <strong>{{ \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[$currentSettlementMethod] }} từ {{ \Carbon\Carbon::parse($changeDate)->format('d/m/Y') }}</strong>
+                        <strong>{{ \App\Services\CustomerDebtPolicyService::PAYMENT_FORMS[$currentSettlementMethod] }} từ {{ \Carbon\Carbon::parse($changeDate)->format('d/m/Y') }}</strong>
                         <div>Đơn trước ngày chuyển giữ cách đối chiếu của từng kỳ.</div>
                         @php($openLines = collect($allocation['lines']))
                         <div class="mt-1">Nợ cũ còn phải thu <strong>{{ number_format($openLines->where('legacy', true)->sum('remaining'), 0, ',', '.') }} đ</strong></div>
@@ -87,7 +135,7 @@
                         <div>Tiền đã thu chờ ghép <strong>{{ number_format(collect($allocation['unmatched'])->where('amount', '>', 0)->sum('amount'), 0, ',', '.') }} đ</strong></div>
                         <div class="text-muted">Các số trên tính đến cuối kỳ đối chiếu và thể hiện phân bổ theo đơn. Số dư công nợ vẫn gồm thanh toán và điều chỉnh đã ghi nhận.</div>
                     @else
-                        <strong>Hình thức thanh toán · {{ \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[$settlementMethod] }}</strong>
+                        <strong>Hình thức thanh toán · {{ \App\Services\CustomerDebtPolicyService::PAYMENT_FORMS[$currentSettlementMethod] }}</strong>
                     @endif
                     @if($settlementMethod !== 'bill' && empty($changeDate))
                         <div>Khoản theo đợt được phân bổ từ ngày giao cũ nhất. Kết quả tính đến cuối kỳ đối chiếu.</div>
@@ -170,7 +218,7 @@
                 <table class="table debt-purchase-table"><colgroup><col class="debt-ledger-date"><col><col span="4" class="debt-ledger-money"></colgroup><thead><tr><th>Ngày mua</th><th>Nội dung</th><th class="text-end">Tiền hàng</th><th class="text-end">Phải thu</th><th class="text-end">Đã phân bổ</th><th class="text-end">Còn phải thu</th></tr></thead><tbody>
                 @forelse($purchases as $entry)
                     <tr><td class="debt-ledger-date-cell"><time datetime="{{ $entry['date'] }}">{{ \Carbon\Carbon::parse($entry['date'])->format('d/m/Y') }}</time><small>{{ $entry['source_sheet'] ?? ($entry['type'] === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong') }} · Dòng {{ $entry['row'] }}</small></td><td>{{ $entry['note'] ?: 'Mua hàng' }} @if(!empty($entry['allocation']['code']))<small>Đơn {{ $entry['allocation']['code'] }}</small>@endif
-                        @if(!empty($changeDate) && isset($entry['allocation']))<small>{{ $entry['allocation']['legacy'] ? 'Nợ cũ' : \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[$currentSettlementMethod] }}</small>@endif</td><td class="text-end">{{ number_format($entry['amount'], 0, ',', '.') }}</td><td class="text-end">{{ number_format($entry['amount'] - ($entry['gift'] ?? 0), 0, ',', '.') }}</td>
+                        @if(!empty($changeDate) && isset($entry['allocation']))<small>{{ $entry['allocation']['legacy'] ? 'Nợ cũ' : \App\Services\CustomerDebtPolicyService::PAYMENT_FORMS[$currentSettlementMethod] }}</small>@endif</td><td class="text-end">{{ number_format($entry['amount'], 0, ',', '.') }}</td><td class="text-end">{{ number_format($entry['amount'] - ($entry['gift'] ?? 0), 0, ',', '.') }}</td>
                         <td class="text-end text-success">{{ isset($entry['allocation']) ? number_format($entry['allocation']['paid'], 0, ',', '.') : '—' }}</td>
                         <td class="text-end {{ ($entry['allocation']['remaining'] ?? 0) > 0 ? 'text-danger' : 'text-success' }}">{{ isset($entry['allocation']) ? number_format($entry['allocation']['remaining'], 0, ',', '.') : '—' }}</td></tr>
                 @empty<tr><td colspan="6" class="text-center text-muted py-4">Không có giao dịch mua hàng trong kỳ.</td></tr>@endforelse
@@ -207,7 +255,9 @@
                     @endif
                     @if(!empty($entry['allocation_issue']))<div class="small text-danger">{{ $entry['allocation_issue']['reason'] }} · {{ number_format($entry['allocation_issue']['amount'], 0, ',', '.') }} đ</div>@endif
                     @if(!empty($entry['allocation_invalid']))<div class="small text-danger">{{ $entry['allocation_invalid'] }}</div>@endif
-                    @if(($canManageAllocation ?? false) && (!empty($entry['allocation_saved']) || ($entry['allocation_issue']['amount'] ?? 0) > 0))
+                    @if(!empty($entry['allocation_confirmed']))
+                        <a class="btn btn-sm btn-outline-primary mt-1" href="{{ request()->fullUrlWithQuery(['debt_section' => 'bill', 'allocate' => null]) }}#debt-payment-periods">Xem nhóm Bill</a>
+                    @elseif(($canManageAllocation ?? false) && (!empty($entry['allocation_saved']) || ($entry['allocation_issue']['amount'] ?? 0) > 0))
                         <a class="btn btn-sm btn-outline-primary mt-1" href="{{ request()->fullUrlWithQuery(['allocate' => $entry['allocation_key'], 'transition_preview' => null, 'transition_method' => null]) }}#debt-manual-allocation">{{ $entry['allocation_saved'] ? 'Sửa ghép' : 'Ghép khoản thu' }}</a>
                     @endif
                     </td><td class="text-end text-success">{{ number_format($entry['amount'], 0, ',', '.') }} đ</td></tr>
@@ -229,5 +279,6 @@
         @endforeach
         </tbody></table></div>{{ $balanceAdjustments->links() }}
     </details>
+    @endif
     @endif
 </section>

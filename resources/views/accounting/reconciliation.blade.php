@@ -268,14 +268,13 @@
         .recon-inline-detail-row .recon-detail-section { margin-bottom:10px; padding:0; }
         .recon-product-table,.recon-product-table tbody { display:block; width:100%; }
         .recon-product-table thead { display:none; }
-        .recon-product-table tbody tr { display:grid; grid-template-columns:minmax(0,.7fr) minmax(0,.5fr) minmax(0,.9fr) minmax(0,1.15fr) minmax(0,1.3fr); gap:8px 4px; border-bottom:1px solid #dbe3ec; padding:12px 0; }
+        .recon-product-table tbody tr { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px 4px; border-bottom:1px solid #dbe3ec; padding:12px 0; }
         .recon-product-table tbody td { display:block; padding:4px 0!important; min-width:0; border:0; font-size:13px; text-align:left!important; overflow-wrap:anywhere; }
         .recon-product-table tbody td:first-child { grid-column:1/-1; font-size:15px; padding-bottom:8px!important; }
-        .recon-product-table tbody td:nth-child(5) { display:none; }
         .recon-product-table tbody td:last-child { text-align:right!important; font-weight:700; }
         .recon-product-table tbody .recon-product-main-row:has(+ .recon-product-discount-row) { border-bottom:0; padding-bottom:4px; }
         .recon-product-table tbody .recon-product-discount-row { padding-top:4px; }
-        .recon-product-table td[data-product-label]::before { margin-bottom:4px; white-space:nowrap; }
+        .recon-product-table td[data-product-label]::before { margin-bottom:4px; }
         .recon-product-table td[data-product-label]:not(:first-child)::before { content:attr(data-product-label); display:block; font-size:11px; color:#64748b; }
         .recon-detail-totals { width:100%; font-size:14px; }
         .recon-detail-totals .recon-mini-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
@@ -756,16 +755,26 @@ document.addEventListener('DOMContentLoaded', function () {
     function renderDetail(data, row) {
         const order = data.order || {};
         const recon = data.reconciliation || {};
+        const weight = value => value == null ? 'Chưa có' : Number(value).toLocaleString('vi-VN', {maximumFractionDigits: 3}) + ' kg';
+        const chargeMoney = value => value == null ? 'Chờ xác nhận khối lượng' : money(value);
+        const difference = order.current_calculated_total == null ? 0 : Math.round((Number(order.current_calculated_total || 0) - Number(order.total || 0)) * 100) / 100;
         const items = (data.items || []).map(item => {
             const adjustmentType = item.discount_type === 'increase' ? 'increase' : 'decrease';
             const adjustmentAmount = Number(item.discount_total || 0);
+            const inUse = source => item.pricing_source === source ? '<div class="small text-success">Dùng tính tiền</div>' : '';
+            const adjustedWeight = item.adjusted_weight_pending
+                ? `${weight(item.adjusted_weight)}<div class="small text-muted">Chờ áp dụng</div>
+                    ${item.approved_adjusted_weight != null ? `<div class="small text-success">Đang tính theo ${weight(item.approved_adjusted_weight)}</div>` : ''}`
+                : `${weight(item.adjusted_weight)}${inUse('Khối lượng điều chỉnh đã xác nhận')}`;
             const adjustmentRow = adjustmentAmount > 0 ? `
             <tr class="recon-product-discount-row ${adjustmentType === 'increase' ? 'text-primary' : 'text-danger'}">
                 <td><span class="fw-semibold">${adjustmentType === 'increase' ? 'Điều chỉnh tăng:' : 'Giảm giá:'}</span></td>
                 <td>${esc(item.size || '-')}</td>
                 <td class="text-end">${Number(item.quantity || 0).toLocaleString('vi-VN')}</td>
-                <td class="text-end">${esc(item.total_label || '-')}</td>
-                <td class="text-end">${Number(item.weight || 0) > 0 ? Number(item.weight || 0).toLocaleString('vi-VN') + ' kg' : '-'}</td>
+                <td class="text-end">${esc(item.total_label || 'Chưa có')}</td>
+                <td class="text-end">${weight(item.packed_weight)}</td>
+                <td class="text-end">${weight(item.delivered_weight)}</td>
+                <td class="text-end">${weight(item.adjusted_weight)}</td>
                 <td class="text-end">${adjustmentType === 'increase' ? '+' : '-'}${money(item.unit_discount)}</td>
                 <td class="text-end fw-semibold">${adjustmentType === 'increase' ? '+' : '-'}${money(adjustmentAmount)}</td>
             </tr>` : '';
@@ -776,10 +785,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 </td>
                 <td>${esc(item.size || '-')}</td>
                 <td class="text-end">${Number(item.quantity || 0).toLocaleString('vi-VN')}</td>
-                <td class="text-end">${esc(item.total_label || '-')}</td>
-                <td class="text-end">${Number(item.weight || 0) > 0 ? Number(item.weight || 0).toLocaleString('vi-VN') + ' kg' : '-'}</td>
+                <td class="text-end">${esc(item.total_label || 'Chưa có')}</td>
+                <td class="text-end">${weight(item.packed_weight)}${inUse('Khối lượng tại kho')}</td>
+                <td class="text-end">${weight(item.delivered_weight)}${inUse('Khối lượng thực giao')}</td>
+                <td class="text-end">${adjustedWeight}</td>
                 <td class="text-end">${money(item.unit_price)}</td>
-                <td class="text-end fw-semibold">${money(item.line_total)}</td>
+                <td class="text-end fw-semibold">${item.pricing_quantity == null ? 'Chưa tính' : money(item.line_total)}</td>
             </tr>${adjustmentRow}`;
         }).join('');
         const returns = (data.returns || []).length
@@ -827,8 +838,12 @@ document.addEventListener('DOMContentLoaded', function () {
                         ['Tổng Giảm giá sản phẩm', `<span class="text-danger">-${money(order.current_item_discount_total)}</span>`],
                         ['Chiết khấu đơn hàng', `${Number(order.current_order_discount) < 0 ? '+' : '-'}${money(Math.abs(Number(order.current_order_discount || 0)))}`],
                         ['Tiền hàng sau chiết khấu', money(order.current_goods_after_discount)],
-                        ['Tổng giá trị tính lại', money(order.current_calculated_total)],
-                        ['Doanh thu ghi nhận', `<span class="text-success">${money(order.recognized_revenue)}</span>`],
+                        ['Tổng giá trị theo khối lượng tính tiền', chargeMoney(order.current_calculated_total)],
+                        ['Giá trị đơn đã lưu', money(order.total)],
+                        ...(difference ? [['Chênh lệch tính lại so với đã lưu', `<span class="text-warning">${difference > 0 ? '+' : '-'}${money(Math.abs(difference))}</span>`]] : []),
+                        ...(Number(data.payment?.internal_shipping_cost || 0) > 0 ? [['Phí giao hàng trừ vào doanh thu', money(data.payment.internal_shipping_cost)]] : []),
+                        ...(Number(order.return_amount || 0) > 0 ? [['Hoàn hàng trừ vào doanh thu', money(order.return_amount)]] : []),
+                        [recon.status === 'confirmed' ? 'Doanh thu ghi nhận' : 'Doanh thu dự kiến', `<span class="text-success">${chargeMoney(order.missing_billable_weight ? null : order.recognized_revenue)}</span>`],
                     ])}
                     <div class="recon-detail-section">
                         <div class="recon-detail-title">Danh sách sản phẩm</div>
@@ -839,13 +854,15 @@ document.addEventListener('DOMContentLoaded', function () {
                                         <th>Sản phẩm</th>
                                         <th>Size</th>
                                         <th class="text-end">SL</th>
-                                        <th class="text-end">Tổng</th>
-                                        <th class="text-end">Khối lượng</th>
+                                        <th class="text-end">Khối lượng theo đơn</th>
+                                        <th class="text-end">Khối lượng tại kho</th>
+                                        <th class="text-end">Khối lượng thực giao</th>
+                                        <th class="text-end">Khối lượng điều chỉnh</th>
                                         <th class="text-end">Đơn giá</th>
                                         <th class="text-end">Thành tiền</th>
                                     </tr>
                                 </thead>
-                                <tbody>${items || '<tr><td colspan="7" class="text-muted text-center">Không có sản phẩm.</td></tr>'}</tbody>
+                                <tbody>${items || '<tr><td colspan="9" class="text-muted text-center">Không có sản phẩm.</td></tr>'}</tbody>
                             </table>
                         </div>
                         <div class="d-flex justify-content-end"><div class="recon-detail-totals">
@@ -857,7 +874,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             <div class="recon-mini-row"><span>Phí giao hàng thu khách</span><span>${money(order.customer_shipping_fee)}</span></div>
                             ${Number(order.foam_box_fee || 0) > 0 ? `<div class="recon-mini-row"><span>Phí thùng xốp</span><span>${money(order.foam_box_fee)}</span></div>` : ''}
                             <div class="recon-mini-row"><span>VAT ${Number(order.vat_percent || 0) > 0 ? `(${Number(order.vat_percent).toLocaleString('vi-VN')}%)` : ''}</span><span>${money(order.current_vat_amount)}</span></div>
-                            <div class="recon-mini-row border-top mt-1 pt-2 fs-6"><strong>Tổng giá trị đơn hàng</strong><strong>${money(order.current_calculated_total)}</strong></div>
+                            <div class="recon-mini-row border-top mt-1 pt-2 fs-6"><strong>Tổng giá trị đơn hàng</strong><strong>${chargeMoney(order.current_calculated_total)}</strong></div>
                         </div></div>
                     </div>
                     <div class="recon-detail-section">
@@ -872,6 +889,7 @@ document.addEventListener('DOMContentLoaded', function () {
                             ${infoCard('Đóng gói', [
                                 ['Người đóng gói', esc(data.packing?.packed_by)],
                                 ['Thời gian', esc(data.packing?.packed_at)],
+                                ['Tổng KL đóng đã ghi nhận', weight(data.packing?.recorded_weight)],
                                 ['Kho xuất', esc(data.packing?.warehouse)],
                                 ['Ghi chú', esc(data.packing?.note)],
                             ])}
@@ -879,6 +897,7 @@ document.addEventListener('DOMContentLoaded', function () {
                                 ['Shipper', esc(data.delivery?.shipper)],
                                 ['Trạng thái', esc(data.delivery?.status)],
                                 ['Thời gian giao', esc(data.delivery?.delivered_at)],
+                                ['Tổng KL giao đã ghi nhận', weight(data.delivery?.recorded_weight)],
                                 ['Ghi chú', esc(data.delivery?.note)],
                             ])}
                         </div>
@@ -887,11 +906,11 @@ document.addEventListener('DOMContentLoaded', function () {
                         <div class="recon-detail-title">Thông tin thanh toán</div>
                         <div class="recon-info-grid">
                             ${infoCard('Đối soát thu tiền', [
-                                ['Tổng phải thu', money(data.payment?.total_due)],
+                                ['Tổng phải thu theo đối soát', chargeMoney(order.missing_billable_weight ? null : data.payment?.total_due)],
                                 ['Kế toán ghi nhận', money(data.payment?.accounting_paid_amount)],
                                 ['Shipper đã thu', money(data.payment?.shipper_collected_amount)],
                                 ['Đã thu hiệu lực', `<span class="text-success">${money(data.payment?.paid_amount)}</span>`],
-                                ['Còn thiếu', `<span class="${Number(data.payment?.amount_due || 0) > 0 ? 'text-danger' : 'text-success'}">${money(data.payment?.amount_due)}</span>`],
+                                ['Còn thiếu', `<span class="${Number(data.payment?.amount_due || 0) > 0 ? 'text-danger' : 'text-success'}">${chargeMoney(order.missing_billable_weight ? null : data.payment?.amount_due)}</span>`],
                             ])}
                             ${infoCard('Xác nhận thanh toán', [
                                 ['Phương thức', esc(data.payment?.method)],
@@ -909,7 +928,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const sections = detailBox.querySelectorAll('.js-detail-body > .recon-detail-section');
         [0, 2, 3, 4].forEach(index => sections[index]?.classList.add('recon-mobile-extra'));
         detailBox.querySelectorAll('.recon-product-table tbody tr').forEach(productRow => {
-            const labels = ['Sản phẩm', 'Size', 'SL', 'Tổng', 'Khối lượng', 'Đơn giá', 'Thành tiền'];
+            const labels = ['Sản phẩm', 'Size', 'SL', 'Khối lượng theo đơn', 'Khối lượng tại kho', 'Khối lượng thực giao', 'Khối lượng điều chỉnh', 'Đơn giá', 'Thành tiền'];
             productRow.querySelectorAll('td').forEach((cell, index) => cell.dataset.productLabel = labels[index] || '');
         });
         const detailPanel = detailBox.querySelector('.recon-panel');

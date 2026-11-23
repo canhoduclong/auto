@@ -172,7 +172,7 @@ class OrderAdjustmentController extends Controller
             'items.*.product_variant_id' => 'nullable|required_without:items.*.order_item_id|exists:product_variants,id',
             'items.*.adjusted_quantity' => 'required|integer|min:0',
             'items.*.adjusted_price' => 'required|numeric|min:0',
-            'items.*.adjusted_weight' => 'nullable|numeric|min:0',
+            'items.*.adjusted_weight' => 'nullable|numeric|min:0|max:999999999.999',
             'items.*.note' => 'nullable|string|max:1000',
             'evidence_images' => 'nullable|array|max:8',
             'evidence_images.*' => 'image|max:5120',
@@ -249,7 +249,9 @@ class OrderAdjustmentController extends Controller
 
                 $seenNewVariantIds[] = $variantId;
                 $requiresWarehouse = true;
-                $defaultWeight = (float) ($variant->effective_kg ?? 0) * (int) $itemData['adjusted_quantity'];
+                if ($variant->effective_priced_by_kg && ! isset($itemData['adjusted_weight'])) {
+                    throw ValidationException::withMessages(['items' => 'Nhập khối lượng điều chỉnh cho hàng tính theo kg được thêm vào đơn.']);
+                }
                 $preparedItems[] = [
                     'order_item_id' => null,
                     'product_id' => (int) $variant->product_id,
@@ -261,7 +263,7 @@ class OrderAdjustmentController extends Controller
                     'original_weight' => 0,
                     'adjusted_weight' => isset($itemData['adjusted_weight'])
                         ? (float) $itemData['adjusted_weight']
-                        : $defaultWeight,
+                        : null,
                     'note' => $itemData['note'] ?? 'Bổ sung hàng thiếu trong đơn',
                 ];
 
@@ -276,7 +278,12 @@ class OrderAdjustmentController extends Controller
                 $requiresWarehouse = true;
             }
 
-            $originalWeight = (float) ($orderItem->actual_weight ?? $orderItem->total_weight ?? $orderItem->display_total_value ?? 0);
+            $originalWeight = $orderItem->effective_priced_by_kg ? $orderItem->accountingChargeQuantity($order) : null;
+            if ($orderItem->effective_priced_by_kg && (int) $itemData['adjusted_quantity'] > 0
+                && (int) $itemData['adjusted_quantity'] !== (int) $orderItem->quantity
+                && ! isset($itemData['adjusted_weight'])) {
+                throw ValidationException::withMessages(['items' => 'Nhập khối lượng điều chỉnh khi thay đổi số lượng hàng tính theo kg.']);
+            }
             $preparedItems[] = [
                 'order_item_id' => (int) $orderItem->id,
                 'product_id' => $orderItem->product_id ? (int) $orderItem->product_id : null,
@@ -286,7 +293,9 @@ class OrderAdjustmentController extends Controller
                 'original_price' => (float) ($orderItem->price ?? 0),
                 'adjusted_price' => (float) $itemData['adjusted_price'],
                 'original_weight' => $originalWeight,
-                'adjusted_weight' => (int) $itemData['adjusted_quantity'] === 0 ? 0 : (isset($itemData['adjusted_weight']) ? (float) $itemData['adjusted_weight'] : $originalWeight),
+                'adjusted_weight' => (int) $itemData['adjusted_quantity'] === 0 ? 0 : (isset($itemData['adjusted_weight'])
+                    ? (float) $itemData['adjusted_weight']
+                    : null),
                 'note' => $itemData['note'] ?? null,
             ];
         }
@@ -439,6 +448,9 @@ class OrderAdjustmentController extends Controller
         $approvalActor = $user;
 
         DB::transaction(function () use ($orderAdjustment, $user, $note, $approvalService, $hasPendingStep, &$approvalActor): void {
+            if ($user->canManageCustomerDebt() && $orderAdjustment->requiresAccountingWeightConfirmation()) {
+                $orderAdjustment->update(['weight_confirmed_by' => $user->id, 'weight_confirmed_at' => now()]);
+            }
             if ($hasPendingStep) {
                 $allApproved = $approvalService->approveAdjustmentStep($orderAdjustment, $user, $note !== '' ? $note : null);
 
@@ -468,7 +480,9 @@ class OrderAdjustmentController extends Controller
             && $orderAdjustment->warehouse_confirmation_status === 'not_required') {
             $this->completeAdjustment($orderAdjustment, $approvalActor);
 
-            return back()->with('success', 'Da duyet va hoan tat dieu chinh don hang.');
+            return back()->with('success', $orderAdjustment->status === OrderAdjustment::STATUS_COMPLETED
+                ? 'Đã duyệt và hoàn tất điều chỉnh đơn hàng.'
+                : 'Đã duyệt yêu cầu. Khối lượng điều chỉnh đang chờ kế toán xác nhận.');
         }
 
         if ($orderAdjustment->status === OrderAdjustment::STATUS_APPROVED) {
@@ -476,6 +490,24 @@ class OrderAdjustmentController extends Controller
         }
 
         return back()->with('success', 'Da duyet buoc nay. Yeu cau chuyen sang buoc tiep theo.');
+    }
+
+    public function confirmWeight(OrderAdjustment $orderAdjustment): RedirectResponse
+    {
+        $user = auth()->user();
+        abort_unless($user?->canManageCustomerDebt(), 403);
+        DB::transaction(function () use ($orderAdjustment, $user) {
+            $locked = OrderAdjustment::query()->lockForUpdate()->findOrFail($orderAdjustment->id);
+            abort_unless($locked->status === OrderAdjustment::STATUS_APPROVED && $locked->requiresAccountingWeightConfirmation(), 422);
+            abort_if($locked->weight_confirmed_by, 409, 'Khối lượng điều chỉnh đã được xác nhận.');
+            $locked->update(['weight_confirmed_by' => $user->id, 'weight_confirmed_at' => now()]);
+
+            if ($locked->warehouse_confirmation_status !== 'pending') {
+                $this->completeAdjustment($locked, $user);
+            }
+        });
+
+        return back()->with('success', 'Đã xác nhận khối lượng điều chỉnh.');
     }
 
     public function finalizeAutoApprovedAdjustment(OrderAdjustment $orderAdjustment, User $approver): void
@@ -646,17 +678,21 @@ class OrderAdjustmentController extends Controller
                 }
             }
 
+            $resetWeightApproval = $data['mode'] === 'confirm_partial' && $orderAdjustment->requiresAccountingWeightConfirmation();
             $orderAdjustment->update([
                 'warehouse_confirmation_status' => $data['mode'] === 'confirm_full' ? 'confirmed_full' : 'confirmed_partial',
                 'warehouse_confirmed_by' => $user->id,
                 'warehouse_confirmed_at' => now(),
                 'warehouse_confirmation_note' => $data['note'] ?? null,
-            ]);
+            ] + ($resetWeightApproval ? ['weight_confirmed_by' => null, 'weight_confirmed_at' => null] : []));
         });
 
-        $this->completeAdjustment($orderAdjustment->fresh(['items', 'order.items.variant.product']), $user);
+        $orderAdjustment->refresh();
+        $this->completeAdjustment($orderAdjustment, $user);
 
-        return back()->with('success', 'Kho da xac nhan hang tra va he thong da hoan tat dieu chinh.');
+        return back()->with('success', $orderAdjustment->status === OrderAdjustment::STATUS_COMPLETED
+            ? 'Kho đã xác nhận và hoàn tất điều chỉnh.'
+            : 'Kho đã xác nhận. Khối lượng điều chỉnh đang chờ kế toán xác nhận.');
     }
 
     private function authorizeCreate(Order $order): void
@@ -834,17 +870,21 @@ class OrderAdjustmentController extends Controller
 
     private function completeAdjustment(OrderAdjustment $adjustment, User $actor): void
     {
-        if ($adjustment->status === OrderAdjustment::STATUS_COMPLETED) {
+        if ($adjustment->status === OrderAdjustment::STATUS_COMPLETED
+            || ($adjustment->requiresAccountingWeightConfirmation() && ! $adjustment->weight_confirmed_by)) {
             return;
         }
 
-        $adjustment->loadMissing(['order.items.variant.product', 'items.variant.product']);
-        $order = $adjustment->order;
-        if (! $order) {
-            return;
-        }
-
-        DB::transaction(function () use ($adjustment, $order, $actor): void {
+        DB::transaction(function () use ($adjustment, $actor): void {
+            $adjustment = OrderAdjustment::query()->lockForUpdate()->findOrFail($adjustment->id);
+            if ($adjustment->status !== OrderAdjustment::STATUS_APPROVED
+                || $adjustment->warehouse_confirmation_status === 'pending'
+                || ($adjustment->requiresAccountingWeightConfirmation() && ! $adjustment->weight_confirmed_by)) {
+                return;
+            }
+            $order = Order::query()->lockForUpdate()->findOrFail($adjustment->order_id);
+            $order->load('items.variant.product');
+            $adjustment->loadMissing('items.variant.product');
             $orderItems = $order->items->keyBy('id');
 
             foreach ($adjustment->items as $adjItem) {
@@ -858,10 +898,7 @@ class OrderAdjustmentController extends Controller
 
                     $unitWeight = (float) ($variant->effective_kg ?? 1);
                     $isPricedByKg = (bool) ($variant->effective_priced_by_kg ?? true);
-                    $finalWeight = (float) ($adjItem->adjusted_weight ?? 0);
-                    if ($finalWeight <= 0) {
-                        $finalWeight = $adjustedQty * max($unitWeight, 0);
-                    }
+                    $finalWeight = (float) ($adjItem->adjusted_weight ?? ($adjustedQty * max($unitWeight, 0)));
                     $finalPrice = (float) $adjItem->adjusted_price;
 
                     $order->items()->create([
@@ -875,9 +912,9 @@ class OrderAdjustmentController extends Controller
                         'discount_total' => 0,
                         'unit_weight' => $unitWeight,
                         'is_priced_by_kg' => $isPricedByKg,
-                        'actual_weight' => $finalWeight,
-                        'total_weight' => $finalWeight,
-                        'total' => round($finalPrice * ($isPricedByKg ? $finalWeight : $adjustedQty), 2),
+                        'accounting_adjusted_weight' => $isPricedByKg && $adjustment->weight_confirmed_by ? $finalWeight : null,
+                        'total_weight' => round($adjustedQty * max($unitWeight, 0), 3),
+                        'total' => round($finalPrice * ($isPricedByKg ? ($adjustment->weight_confirmed_by ? $finalWeight : 0) : $adjustedQty), 2),
                     ]);
 
                     continue;
@@ -899,14 +936,8 @@ class OrderAdjustmentController extends Controller
                 }
 
                 $finalPrice = (float) $adjItem->adjusted_price;
-                $finalWeight = (float) ($adjItem->adjusted_weight ?? $adjItem->original_weight ?? 0);
-                if ($expectedDecrease > 0 && $finalQty > $adjustedQty) {
-                    // Charge the goods actually kept when the warehouse accepts only
-                    // part of a return, including requests to remove the whole line.
-                    $originalWeight = max(0, (float) ($adjItem->original_weight ?? 0));
-                    $remainingRatio = ($finalQty - $adjustedQty) / $expectedDecrease;
-                    $finalWeight += ($originalWeight - $finalWeight) * $remainingRatio;
-                }
+                $finalWeight = $adjItem->weightAfterWarehouse($adjustment->warehouse_confirmation_status)
+                    ?? (float) ($adjItem->original_weight ?? 0);
                 $targetVariant = $adjItem->variant;
                 $isPricedByKg = $targetVariant
                     ? (bool) ($targetVariant->effective_priced_by_kg ?? true)
@@ -915,7 +946,9 @@ class OrderAdjustmentController extends Controller
                     ? (float) ($targetVariant->effective_kg ?? $orderItem->unit_weight ?? 1)
                     : (float) ($orderItem->unit_weight ?? 1);
 
-                $lineAmounts = \App\Support\OrderAdjustmentLine::amounts($finalQty, $finalWeight, $finalPrice, $isPricedByKg);
+                $changesWeight = $isPricedByKg && $adjItem->changesWeight() && $adjustment->weight_confirmed_by;
+                $billableWeight = $changesWeight ? $finalWeight : $orderItem->accountingChargeQuantity($order);
+                $lineAmounts = \App\Support\OrderAdjustmentLine::amounts($finalQty, (float) $billableWeight, $finalPrice, $isPricedByKg);
                 $finalWeight = $lineAmounts['weight'];
                 $lineTotal = $lineAmounts['total'];
 
@@ -926,9 +959,7 @@ class OrderAdjustmentController extends Controller
                     'price' => $finalPrice,
                     'unit_weight' => $unitWeight,
                     'is_priced_by_kg' => $isPricedByKg,
-                    'actual_weight' => $finalQty === 0 ? 0 : ($finalWeight > 0 ? $finalWeight : $orderItem->actual_weight),
-                    'total_weight' => $finalQty === 0 ? 0 : ($finalWeight > 0 ? $finalWeight : $orderItem->total_weight),
-                    'packed_weight' => $finalQty === 0 ? 0 : $orderItem->packed_weight,
+                    'accounting_adjusted_weight' => $changesWeight ? $finalWeight : $orderItem->accounting_adjusted_weight,
                     'total' => round($lineTotal, 2),
                 ]);
             }
@@ -946,7 +977,15 @@ class OrderAdjustmentController extends Controller
                 $order->update($approvedOrderChanges);
             }
 
-            $order->load('items');
+            $order->load(['items.product', 'items.variant.product']);
+            foreach ($order->items as $item) {
+                if ($item->effective_priced_by_kg) {
+                    $total = round(($item->accountingChargeQuantity($order) ?? 0) * (float) $item->price, 2);
+                    if ((float) $item->total !== $total) {
+                        $item->update(['total' => $total]);
+                    }
+                }
+            }
             $subtotal = (float) $order->items->sum(fn ($item) => (float) ($item->total ?? 0));
             $extraDiscount = (float) ($order->extra_discount_total ?? 0);
             $productTotal = max($subtotal - $extraDiscount, 0);
@@ -958,7 +997,8 @@ class OrderAdjustmentController extends Controller
                 ? max(0, (float) ($order->foam_box_price ?? 0))
                 : 0;
             $customFeeNet = $feeService->syncCustomFees($order, $feeChanges, $productTotal, $adjustment->id);
-            $newTotal = max(0, $productTotal + $vatAmount + $customerShippingFee + $foamBoxFee + $customFeeNet);
+            $internalShipping = $order->charge_shipping_fee ? max(0, (float) $order->shipping_fee) : 0;
+            $newTotal = max(0, $productTotal + $vatAmount + $customerShippingFee + $foamBoxFee + $customFeeNet + $internalShipping);
 
             $order->update([
                 'subtotal_amount' => round($subtotal, 2),
@@ -975,5 +1015,6 @@ class OrderAdjustmentController extends Controller
             ]);
             app(\App\Services\OrderAdjustmentSettlementService::class)->sync($order);
         });
+        $adjustment->refresh();
     }
 }

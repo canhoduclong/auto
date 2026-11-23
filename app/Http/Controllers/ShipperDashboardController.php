@@ -86,9 +86,9 @@ class ShipperDashboardController extends Controller
         return back()->with('success', $message);
     }
 
-    private function constrainAvailableReadyOrder($query): void
+    public function constrainAvailableReadyOrder($query, ?int $shipperId = null): void
     {
-        $query->where('shipper_id', Auth::id())
+        $query->where('shipper_id', $shipperId ?? Auth::id())
             ->where(function ($statusQuery) {
                 $statusQuery->whereIn('status', [Order::STATUS_READY_TO_SHIP, Order::STATUS_PACKED])
                     ->orWhere(function ($returnQuery) {
@@ -547,6 +547,18 @@ class ShipperDashboardController extends Controller
 
             $message = trim($exception->getMessage()) ?: 'Không thể nhận đơn do dữ liệu kho chưa hợp lệ.';
 
+            $action = match (true) {
+                str_starts_with($message, 'Không đủ tồn kho khả dụng') => 'shipper_pickup_stock_failed',
+                $message === 'Không xác định được kho xuất cho đơn hàng này.' => 'shipper_pickup_warehouse_failed',
+                default => null,
+            };
+            if ($action) {
+                OrderHistory::create([
+                    'order_id' => $order->id, 'action' => $action, 'user_id' => Auth::id(),
+                    'role' => 'shipper', 'note' => $message,
+                ]);
+            }
+
             if (request()->expectsJson()) {
                 return response()->json(['message' => $message], 422);
             }
@@ -555,13 +567,15 @@ class ShipperDashboardController extends Controller
         }
 
         if (! $accepted) {
+            $current = app(\App\Services\ShipperPickupStatus::class)->withDetails(Order::query())->find($order->id);
+            $message = $current && (int) $current->shipper_id === (int) Auth::id()
+                ? (app(\App\Services\ShipperPickupStatus::class)->blocker($current) ?? 'Đơn đã đổi trạng thái hoặc đã được nhận. Vui lòng tải lại.')
+                : 'Đơn chưa được gán cho bạn hoặc đã đổi shipper. Liên hệ điều phối.';
             if (request()->expectsJson()) {
-                return response()->json([
-                    'message' => 'Đơn hàng này không còn khả dụng để nhận.',
-                ], 409);
+                return response()->json(['message' => $message], 409);
             }
 
-            return back()->with('error', 'Đơn hàng này không còn khả dụng để nhận.');
+            return back()->with('error', $message);
         }
 
         if (request()->expectsJson()) {
@@ -1540,11 +1554,11 @@ class ShipperDashboardController extends Controller
             'truck_station_receipt_image' => 'nullable|image|max:5120',
             'weight_image' => 'nullable|image|max:5120',
             'actual_weight' => 'nullable|array',
-            'actual_weight.*' => 'nullable|numeric|min:0',
+            'actual_weight.*' => 'nullable|numeric|min:0|max:999999999.999',
             'delivered_qty' => 'nullable|array',
             'delivered_qty.*' => 'nullable|integer|min:0',
             'partial_weight' => 'nullable|array',
-            'partial_weight.*' => 'nullable|numeric|min:0',
+            'partial_weight.*' => 'nullable|numeric|min:0|max:999999999.999',
             'return_warehouse_id' => 'required_if:has_partial_return,1|nullable|exists:warehouses,id',
             'partial_return_reason' => 'required_if:has_partial_return,1|nullable|string',
         ];
@@ -1562,10 +1576,13 @@ class ShipperDashboardController extends Controller
             $actualWeightInput = $request->input('actual_weight', []);
             $weightErrors = [];
             foreach ($order->items as $item) {
-                if (! array_key_exists($item->id, $partialWeightInput)) {
+                $deliveredQty = (int) $request->input('delivered_qty.'.$item->id, $item->quantity);
+                $entered = $partialWeightInput[$item->id] ?? null;
+                if ($item->effective_priced_by_kg && $deliveredQty > 0 && $deliveredQty < (int) $item->quantity
+                    && ($entered === null || $entered === '')) {
+                    $weightErrors["partial_weight.{$item->id}"] = 'Nhập khối lượng thực giao khi giao một phần hàng tính theo kg.';
                     continue;
                 }
-                $entered = $partialWeightInput[$item->id];
                 if ($entered === null || $entered === '') {
                     continue;
                 }
@@ -1625,7 +1642,7 @@ class ShipperDashboardController extends Controller
 
                 // Cập nhật cân thực tế nếu shipper nhập
                 if (array_key_exists($item->id, $actualWeights) && $actualWeights[$item->id] !== null && $actualWeights[$item->id] !== '') {
-                    $updates['actual_weight'] = max(0, (float) $actualWeights[$item->id]);
+                    $updates['actual_weight'] = $updates['delivered_weight'] = max(0, (float) $actualWeights[$item->id]);
                 }
 
                 // Xử lý giao 1 phần
@@ -1647,13 +1664,9 @@ class ShipperDashboardController extends Controller
 
                         // Lưu cân thực tế phần thực giao (ghi đè nếu shipper nhập partial_weight)
                         if ((bool) $item->effective_priced_by_kg) {
-                            $deliveredWeight = array_key_exists($item->id, $partialWeights)
-                                && $partialWeights[$item->id] !== null
-                                && $partialWeights[$item->id] !== ''
-                                    ? max(0, (float) $partialWeights[$item->id])
-                                    : ($originalQty > 0 ? round($baseWeight * $deliveredQty / $originalQty, 3) : 0.0);
+                            $deliveredWeight = $deliveredQty === 0 ? 0.0 : max(0, (float) $partialWeights[$item->id]);
                             $returnedWeight = max(0, round($baseWeight - $deliveredWeight, 3));
-                            $updates['actual_weight'] = $deliveredWeight;
+                            $updates['actual_weight'] = $updates['delivered_weight'] = $deliveredWeight;
                         }
 
                         $noteSegment = ($item->variant?->name ?? 'SP').': giao '.$deliveredQty.'/'.$originalQty.' (trả '.$returnedQty.')';
@@ -1672,10 +1685,11 @@ class ShipperDashboardController extends Controller
 
                 if (! empty($updates)) {
                     $effectiveQuantity = (int) ($updates['quantity'] ?? $item->quantity);
-                    $effectiveWeight = (float) ($updates['actual_weight']
-                        ?? $item->actual_weight
+                    $effectiveWeight = (float) ($item->accounting_adjusted_weight
+                        ?? $updates['delivered_weight']
+                        ?? $item->delivered_weight
                         ?? $item->packed_weight
-                        ?? ((float) $item->effective_unit_weight * $effectiveQuantity));
+                        ?? 0);
                     $updates['total'] = (bool) $item->effective_priced_by_kg
                         ? round($effectiveWeight * (float) ($item->price ?? 0), 2)
                         : round($effectiveQuantity * (float) ($item->price ?? 0), 2);
@@ -1728,7 +1742,7 @@ class ShipperDashboardController extends Controller
         $order->loadMissing('items');
         $newSubtotal = (float) $order->items->sum(function ($item) {
             if ((bool) $item->effective_priced_by_kg) {
-                $weight = (float) ($item->actual_weight ?? ($item->effective_unit_weight * (int) $item->quantity));
+                $weight = (float) ($item->accounting_adjusted_weight ?? $item->delivered_weight ?? $item->packed_weight ?? 0);
 
                 return $weight * (float) ($item->price ?? 0);
             }

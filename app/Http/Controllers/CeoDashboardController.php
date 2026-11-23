@@ -1751,6 +1751,7 @@ class CeoDashboardController extends Controller
         };
 
         // ── Paginated list ────────────────────────────────────────────
+        $billableWeight = \App\Support\AccountingChargeAmounts::weightSql();
         $listQ = $makeBase()->select([
             'order_items.id',
             'orders.id as order_id_val',
@@ -1789,12 +1790,12 @@ class CeoDashboardController extends Controller
                 ELSE 0 END as actual_qty"),
             DB::raw("CASE
                 WHEN ar.status = 'confirmed' AND orders.status NOT IN ('cancelled','rejected','returned','returning','returned_completed')
-                    THEN COALESCE(order_items.actual_weight, order_items.packed_weight, adj.adjusted_weight, order_items.total_weight)
+                    THEN COALESCE(({$billableWeight}), 0)
                 ELSE 0 END as actual_weight"),
             DB::raw("CASE
                 WHEN ar.status = 'confirmed' AND orders.status NOT IN ('cancelled','rejected','returned','returning','returned_completed')
                     THEN CASE WHEN order_items.is_priced_by_kg = 1
-                        THEN COALESCE(order_items.actual_weight, order_items.packed_weight, adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price)
+                        THEN COALESCE(({$billableWeight}), 0) * COALESCE(adj.adjusted_price, order_items.price)
                         ELSE COALESCE(order_items.packed_quantity, adj.adjusted_quantity, order_items.quantity) * COALESCE(adj.adjusted_price, order_items.price)
                     END
                 ELSE 0 END as actual_total"),
@@ -1858,8 +1859,8 @@ class CeoDashboardController extends Controller
             DB::raw('SUM(COALESCE(adj.adjusted_weight,    order_items.total_weight))     as total_weight'),
             DB::raw("SUM({$effTotalExpr})                                                as total_amount"),
             DB::raw("SUM(CASE WHEN ar.status = 'confirmed' AND orders.status NOT IN ('cancelled','rejected','returned','returning','returned_completed') THEN COALESCE(order_items.packed_quantity, adj.adjusted_quantity, order_items.quantity) ELSE 0 END) as actual_qty"),
-            DB::raw("SUM(CASE WHEN ar.status = 'confirmed' AND orders.status NOT IN ('cancelled','rejected','returned','returning','returned_completed') THEN COALESCE(order_items.actual_weight, order_items.packed_weight, adj.adjusted_weight, order_items.total_weight) ELSE 0 END) as actual_weight"),
-            DB::raw("SUM(CASE WHEN ar.status = 'confirmed' AND orders.status NOT IN ('cancelled','rejected','returned','returning','returned_completed') THEN CASE WHEN order_items.is_priced_by_kg = 1 THEN COALESCE(order_items.actual_weight, order_items.packed_weight, adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price) ELSE COALESCE(order_items.packed_quantity, adj.adjusted_quantity, order_items.quantity) * COALESCE(adj.adjusted_price, order_items.price) END ELSE 0 END) as actual_amount"),
+            DB::raw("SUM(CASE WHEN ar.status = 'confirmed' AND orders.status NOT IN ('cancelled','rejected','returned','returning','returned_completed') THEN COALESCE(({$billableWeight}), 0) ELSE 0 END) as actual_weight"),
+            DB::raw("SUM(CASE WHEN ar.status = 'confirmed' AND orders.status NOT IN ('cancelled','rejected','returned','returning','returned_completed') THEN CASE WHEN order_items.is_priced_by_kg = 1 THEN COALESCE(({$billableWeight}), 0) * COALESCE(adj.adjusted_price, order_items.price) ELSE COALESCE(order_items.packed_quantity, adj.adjusted_quantity, order_items.quantity) * COALESCE(adj.adjusted_price, order_items.price) END ELSE 0 END) as actual_amount"),
         ])->groupBy('products.id', 'products.name', 'products.unit')
             ->orderByDesc('total_amount')
             ->get();

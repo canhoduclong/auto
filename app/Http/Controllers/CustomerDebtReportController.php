@@ -50,7 +50,7 @@ class CustomerDebtReportController extends Controller
             ];
         });
         $visible = $rows->filter(function ($row) use ($data, $sheets) {
-            if (($data['payment_mode'] ?? 'all') === 'cycle' && $row['policy']['payment_mode'] !== 'cycle') {
+            if (($data['payment_mode'] ?? 'all') === 'cycle' && \App\Services\CustomerDebtPolicyService::currentSettlementMethod($row['policy']) !== 'cycle') {
                 return false;
             }
 

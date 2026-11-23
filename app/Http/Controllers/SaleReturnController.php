@@ -106,7 +106,7 @@ class SaleReturnController extends Controller
                     }
                     $returned[$variant] = (int) ($returned[$variant] ?? 0) + $qty;
                     $lines[] = ['product_variant_id' => $variant, 'quantity' => $qty,
-                        'original_weight' => $item->effective_priced_by_kg ? $item->reconciliation_pricing_quantity * $qty / max(1, (float) $item->quantity) : null];
+                        'original_weight' => $item->effective_priced_by_kg ? ($item->accountingChargeQuantity($locked) ?? 0) * $qty / max(1, (float) $item->quantity) : null];
                 }
                 if (! $lines) {
                     throw ValidationException::withMessages(['items' => 'Chọn ít nhất một sản phẩm hoàn trả.']);
@@ -170,8 +170,8 @@ class SaleReturnController extends Controller
                     throw ValidationException::withMessages(['weights' => 'Nhập khối lượng thực nhận cho hàng tính theo kg.']);
                 }
                 $basis = $original->effective_priced_by_kg ? (float) $weight : (float) $item->quantity;
-                $orderedBasis = $orderItems->sum(fn ($line) => $line->reconciliation_pricing_quantity);
-                $lineTotal = $orderItems->sum(fn ($line) => $line->reconciliation_pricing_quantity * (float) $line->price);
+                $orderedBasis = $orderItems->sum(fn ($line) => $line->accountingChargeQuantity($order) ?? 0);
+                $lineTotal = $orderItems->sum(fn ($line) => ($line->accountingChargeQuantity($order) ?? 0) * (float) $line->price);
                 $amount += $orderedBasis > 0 ? $basis * $lineTotal / $orderedBasis : 0;
                 $item->update(['received_weight' => $weight, 'weight_confirmed_at' => now()]);
                 $inventory = Inventory::firstOrCreate(['warehouse_id' => $return->warehouse_id, 'product_variant_id' => $item->product_variant_id], ['quantity' => 0, 'reserved_quantity' => 0]);

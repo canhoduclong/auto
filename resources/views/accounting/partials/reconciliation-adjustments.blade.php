@@ -16,16 +16,22 @@
                 @include('site.orders.adjustments._product_comparison', ['adjustment' => $adjustment, 'comparisonSection' => 'both', 'comparisonShowOrderInformation' => true])
                 <div class="d-flex flex-wrap gap-2 mt-3">
                     <a href="{{ route('site.order-adjustments.show', $adjustment) }}" class="btn btn-outline-primary btn-sm">Chi tiết và bằng chứng</a>
+                    @if($adjustment->status === \App\Models\OrderAdjustment::STATUS_APPROVED)
+                        <span class="small align-self-center text-muted">Mở chi tiết để xác nhận khối lượng điều chỉnh.</span>
+                    @else
                     <form method="POST" action="{{ route('site.order-adjustments.approve', $adjustment) }}">
                         @csrf
                         <button class="btn btn-success btn-sm" onclick="return confirm('Duyệt yêu cầu điều chỉnh này?');">Duyệt điều chỉnh</button>
                     </form>
+                    @endif
                 </div>
+                @if($adjustment->status === \App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL)
                 <form method="POST" action="{{ route('site.order-adjustments.reject', $adjustment) }}" class="d-flex flex-wrap gap-2 mt-2">
                     @csrf
                     <input class="form-control form-control-sm" name="reason" required maxlength="2000" placeholder="Lý do từ chối">
                     <button class="btn btn-outline-danger btn-sm">Từ chối yêu cầu</button>
                 </form>
+                @endif
             </details>
         @empty
             <div class="text-muted small">Không có yêu cầu điều chỉnh đang chờ Kế toán.</div>

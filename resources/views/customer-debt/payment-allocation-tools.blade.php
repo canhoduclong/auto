@@ -1,6 +1,8 @@
 @php
     $detailQuery = $selected['customer_id'] ? ['system_customer' => $selected['customer_id']] : ['customer' => $selected['key']];
-    $fullDetailUrl = route('customer-debt.index', $detailQuery + ['tab' => 'all', 'window' => 'all', 'recovery' => 'all']);
+    $allocationInBillTab = $allocationInBillTab ?? false;
+    $fullDetailUrl = route('customer-debt.index', $detailQuery + ['tab' => 'all', 'window' => 'all', 'recovery' => 'all', 'debt_section' => $allocationInBillTab ? 'bill' : null]);
+    $closeAnchor = $allocationInBillTab ? 'debt-payment-periods' : 'debt-detail';
 @endphp
 @if($missingAllocationKeys)
     <div class="small text-danger my-2">
@@ -26,7 +28,7 @@
     <section id="debt-manual-allocation" class="card card-body my-3" aria-labelledby="debt-manual-allocation-title">
         <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
             <h3 class="h6 mb-0" id="debt-manual-allocation-title">Ghép khoản thu</h3>
-            <a class="btn btn-sm btn-light" href="{{ $fullDetailUrl }}#debt-detail">Đóng</a>
+            <a class="btn btn-sm btn-light" href="{{ $fullDetailUrl }}#{{ $closeAnchor }}">Đóng</a>
         </div>
         @if($receipt)
             <p class="small mb-2">{{ \Carbon\Carbon::parse($receipt['date'])->format('d/m/Y') }} · {{ $allocationForm['key'] }} · {{ number_format($receipt['amount'], 0, ',', '.') }} đ<br>{{ $receipt['note'] ?? '' }}</p>
@@ -55,6 +57,8 @@
                 <button type="button" class="btn btn-sm btn-outline-secondary" data-allocation-add>Thêm bill</button>
                 <button class="btn btn-sm btn-primary">Lưu ghép</button>
             </form>
+        @elseif($receipt && $allocationForm['available'] > 0)
+            <p class="small text-muted mb-2">Không còn Bill để phân bổ khoản thu này.</p>
         @endif
         @if($allocationForm['record'])
             <form class="mt-2" method="POST" action="{{ route('customer-debt.payment-allocations') }}">

@@ -300,7 +300,7 @@
                                 $variant = $item->variant;
                                 $product = $item->product ?? $variant?->product;
                                 $productName = $variant?->name ?? $product?->name ?? 'Sản phẩm';
-                                $originalWeight = (float) ($item->actual_weight ?? $item->total_weight ?? $item->display_total_value ?? 0);
+                                $originalWeight = $item->effective_priced_by_kg ? $item->accountingChargeQuantity($order) : null;
                                 $imagePath = $variant?->avatar?->media?->file_path ?? $product?->avatar?->media?->file_path ?? null;
                                 $variantSize = $variant?->size;
                                 $formattedVariantSize = (!is_null($variantSize) && $variantSize !== '') ? rtrim(rtrim(number_format((float) $variantSize, 2, '.', ''), '0'), '.') : '-';
@@ -332,9 +332,8 @@
                                         class="form-control form-control-sm text-center"
                                         value="{{ old('items.' . $idx . '.adjusted_weight', $originalWeight) }}"
                                         aria-label="Khối lượng điều chỉnh của {{ $productName }}"
-                                        required
                                     >
-                                    <div class="text-muted text-center mt-1" style="font-size:.7rem;">Gốc: {{ rtrim(rtrim(number_format($originalWeight, 3, '.', ''), '0'), '.') }} kg</div>
+                                    <div class="text-muted text-center mt-1" style="font-size:.7rem;">Đang tính: {{ $originalWeight === null ? 'Chưa có' : format_kg($originalWeight) }}</div>
                                 </div>
                                 <div>
                                     <input type="number" min="0" step="0.01" name="items[{{ $idx }}][adjusted_price]" class="form-control form-control-sm text-end" value="{{ old('items.' . $idx . '.adjusted_price', (float) ($item->price ?? 0)) }}" required>

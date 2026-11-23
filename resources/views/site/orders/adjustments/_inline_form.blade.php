@@ -31,7 +31,7 @@
                     @php
                         $variant = $item->variant;
                         $product = $item->product ?? $variant?->product;
-                        $weight = (float) ($item->actual_weight ?? $item->total_weight ?? $item->display_total_value ?? 0);
+                        $weight = $item->effective_priced_by_kg ? $item->accountingChargeQuantity($order) : null;
                         $lineTotal = (float) ($item->total ?: ((float) $item->quantity * (float) $item->price));
                     @endphp
                     <tr data-adjustment-item data-variant-id="{{ $variant?->id }}" data-original-qty="{{ (int) $item->quantity }}" data-priced-by-kg="{{ $item->effective_priced_by_kg ? 1 : 0 }}">
@@ -41,7 +41,7 @@
                         </td>
                         <td><input type="number" min="0" class="form-control form-control-sm adjustment-qty" name="items[{{ $index }}][adjusted_quantity]" value="{{ (int) $item->quantity }}" required></td>
                         <td>{{ $variant?->size ?: '—' }}</td>
-                        <td><input type="number" min="0" step="0.001" class="form-control form-control-sm adjustment-weight" name="items[{{ $index }}][adjusted_weight]" value="{{ $weight }}" required></td>
+                        <td><input type="number" min="0" step="0.001" class="form-control form-control-sm adjustment-weight" name="items[{{ $index }}][adjusted_weight]" value="{{ $weight }}"></td>
                         <td><input type="number" min="0" step="0.01" class="form-control form-control-sm adjustment-price" name="items[{{ $index }}][adjusted_price]" value="{{ (float) $item->price }}" required></td>
                         <td class="text-end fw-bold adjustment-line-total">{{ number_format($lineTotal, 0, ',', '.') }}đ</td><td></td>
                     </tr>

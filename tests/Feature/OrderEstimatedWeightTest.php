@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Order;
 use App\Models\OrderItem;
 use App\Support\OrderEstimatedLine;
 use PHPUnit\Framework\TestCase;
@@ -52,6 +53,24 @@ class OrderEstimatedWeightTest extends TestCase
         self::assertSame(405.0, $item->displayValueForStage('packed'));
         self::assertSame(404.0, $item->displayValueForStage('delivered'));
     }
+    public function test_accounting_keeps_factory_delivery_and_pricing_weights_separate(): void
+    {
+        $order = new Order;
+        $order->status = Order::STATUS_APPROVED;
+        $item = new OrderItem(['quantity' => 30, 'total_weight' => 82.5, 'actual_weight' => 83.4, 'is_priced_by_kg' => true]);
+        self::assertSame(['packed_weight' => null, 'delivered_weight' => null], $item->accountingWeights($order));
+        self::assertSame(['packed_weight' => 83.4, 'delivered_weight' => null], $item->accountingWeights($order, true));
+        self::assertSame(83.4, $item->reconciliation_pricing_quantity);
+
+        $order->status = Order::STATUS_DELIVERED;
+        self::assertSame(['packed_weight' => null, 'delivered_weight' => null], $item->accountingWeights($order, true));
+        $item->packed_weight = 83.4;
+        $item->delivered_weight = 82.5;
+        $item->actual_weight = 82.5;
+        self::assertSame(['packed_weight' => 83.4, 'delivered_weight' => 82.5], $item->accountingWeights($order, true));
+        self::assertSame(82.5, $item->reconciliation_pricing_quantity);
+    }
+
     public function test_piece_units_ignore_legacy_kg_flag_and_price_by_count(): void
     {
         foreach (['cai', 'cái', 'bo', 'banh'] as $unit) {

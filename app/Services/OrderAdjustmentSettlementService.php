@@ -22,14 +22,15 @@ class OrderAdjustmentSettlementService
             ->whereIn('status', ['warehouse_received', 'warehouse_confirmed', 'completed'])
             ->whereDoesntHave('adjustment', fn ($query) => $query->where('status', OrderAdjustment::STATUS_COMPLETED))
             ->sum('refund_amount');
+        $internalShipping = $order->charge_shipping_fee ? max(0, (float) $order->shipping_fee) : 0;
         $amounts = OrderSettlement::amounts((float) $order->total,
             (float) $order->transactions()->where('type', 'payment')->sum('amount'),
             (float) $order->transactions()->where('type', 'refund')->sum('amount'),
-            (float) ($order->collected_amount ?? 0), (float) $returns);
+            (float) ($order->collected_amount ?? 0), (float) $returns + $internalShipping);
         $reconciliation = $order->accountingReconciliation()->first();
         if ($reconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED) {
             // Save reconciliation first: Order's saving hook reads its revenue.
-            $reconciliation->update(['total_amount' => round((float) $order->total, 2),
+            $reconciliation->update(['total_amount' => $amounts['recognized'],
                 'paid_amount' => $amounts['effective_paid'], 'return_amount' => (float) $returns,
                 'recognized_revenue' => $amounts['recognized']]);
         }

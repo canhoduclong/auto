@@ -280,7 +280,7 @@
                             $packedWeight = $item->packed_weight !== null
                                 ? (float) $item->packed_weight
                                 : ($item->actual_weight !== null ? (float) $item->actual_weight : null);
-                            $lineTotal = $pricedByKg ? $defaultWeight * $unitPrice : $qty * $unitPrice;
+                            $lineTotal = $pricedByKg ? (float) ($item->accounting_adjusted_weight ?? $packedWeight ?? 0) * $unitPrice : $qty * $unitPrice;
                         @endphp
                         <li class="sp-my-item-row">
                             <div class="sp-my-table-row">
@@ -312,7 +312,8 @@
                                             <input type="number"
                                                    name="actual_weight[{{ $item->id }}]"
                                                    id="wt-{{ $item->id }}"
-                                                   value="{{ old('actual_weight.'.$item->id, $packedWeight ?? $defaultWeight) }}"
+                                                   value="{{ old('actual_weight.'.$item->id) }}"
+                                                   placeholder="Nhập nếu cân khi giao"
                                                    step="0.001" min="0"
                                                    data-item-id="{{ $item->id }}">
                                             <span class="unit-label">kg</span>
@@ -713,7 +714,8 @@
             originalQty:   {{ (int) $item->quantity }},
             unitWeight:    {{ round((float) $item->effective_unit_weight, 3) }},
             defaultWeight: {{ round($item->effective_unit_weight * $item->quantity, 3) }},
-            baseWeight:    {{ round(($item->packed_weight ?? $item->actual_weight ?? ($item->effective_unit_weight * $item->quantity)), 3) }},
+            baseWeight:    {{ round(($item->packed_weight ?? $item->actual_weight ?? 0), 3) }},
+            adjustedWeight: @json($item->accounting_adjusted_weight === null ? null : (float) $item->accounting_adjusted_weight),
             name:          '{{ $item->variant?->name ?? $item->variant?->sku ?? 'Sản phẩm' }}',
             sku:           '{{ $item->variant?->sku ?? '' }}',
         },
@@ -763,17 +765,13 @@
         const d = itemData[id];
         const deliveredQty = getDeliveredQty(id);
         if (d.pricedByKg) {
-            // Use partial_weight if partial return section is open, else use actual_weight
+            if (deliveredQty === 0) return 0;
             const partialCheck = document.getElementById('hasPartialReturn');
-            if (partialCheck && partialCheck.checked) {
-                const pw = getPartialWeight(id);
-                return (pw !== null ? pw : 0) * d.price;
-            }
-            const weight = getActualWeight(id);
-            return weight * d.price;
-        } else {
-            return deliveredQty * d.price;
+            const weight = partialCheck?.checked && deliveredQty < d.originalQty ? getPartialWeight(id) : getActualWeight(id);
+            return (d.adjustedWeight ?? weight ?? 0) * d.price;
         }
+
+        return deliveredQty * d.price;
     }
 
     function getCurrentBaseWeight(id) {
@@ -950,7 +948,7 @@
         }
     });
 
-    // Delivered qty input: auto-scale partial_weight proportionally
+    // Changing the delivered quantity requires a new measurement for a partial delivery.
     document.querySelectorAll('.delivered-qty-input').forEach(function (inp) {
         inp.addEventListener('input', function () {
             const id  = parseInt(this.dataset.itemId, 10);
@@ -960,12 +958,11 @@
             if (v > max) v = max;
             this.value = v;
 
-            // Auto-scale partial_weight if kg item
             const pwInp = document.getElementById('pw-' + id);
             if (pwInp) {
-                const defaultW = getCurrentBaseWeight(id);
-                const scaled = max > 0 ? Math.round(defaultW * (v / max) * 1000) / 1000 : 0;
-                pwInp.value = scaled;
+                pwInp.value = v === 0 ? '0' : (v === max ? getCurrentBaseWeight(id) : '');
+                validatePartialWeight(pwInp);
+                updateContinueBtnState();
             }
             recalc();
         });
@@ -1212,7 +1209,7 @@
                 }
             });
             if (!valid) {
-                alert('Vui lòng nhập số kg trả về cho tất cả sản phẩm');
+                alert('Vui lòng nhập khối lượng thực giao cho hàng giao một phần');
                 return;
             }
             

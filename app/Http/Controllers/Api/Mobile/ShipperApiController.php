@@ -15,6 +15,7 @@ use App\Models\Warehouse;
 use App\Models\WarehouseDispatchSlip;
 use App\Models\WarehouseTransfer;
 use App\Services\ShipperAssignmentService;
+use App\Services\ShipperPickupStatus;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -59,27 +60,15 @@ class ShipperApiController extends BaseApiController
         $userId = (int) $request->user()->id;
         $selectedDate = $this->scheduleDate($request);
 
-        $orders = Order::query()
+        $orders = app(ShipperPickupStatus::class)->withDetails(Order::query())
             ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
-            ->where(function ($query) {
-                $query->where('status', Order::STATUS_READY_TO_SHIP)
-                    ->orWhere(function ($returnQuery) {
-                        $returnQuery->where('status', Order::STATUS_APPROVED)->where('is_return_order', true);
-                    });
-            })
-            ->where('shipper_id', $userId)
-            ->whereNotIn('status', ['cancelled', 'canceled'])
-            ->where(function ($query) {
-                $this->constrainConfirmedDeliverySchedule($query);
-            })
+            ->tap(fn ($query) => app(ShipperDashboardController::class)->constrainAvailableReadyOrder($query, $userId))
             ->forWorkflowDate($selectedDate)
-            ->tap(function ($query) {
-                $this->constrainNoActiveWarehouseTransfer($query);
-            })
             ->latest('updated_at')
             ->paginate(20);
 
         $this->attachDeliveryScheduleMetadata($orders->getCollection());
+        $this->attachPickupStatus($orders->getCollection());
 
         return $this->paginated($orders);
     }
@@ -594,20 +583,27 @@ class ShipperApiController extends BaseApiController
         $this->ensureShipperRole($request);
         $userId = (int) $request->user()->id;
 
-        $orders = Order::query()
+        $pickup = app(ShipperPickupStatus::class);
+        $orders = $pickup->withDetails(Order::query())
             ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
             ->where('shipper_id', $userId)
-            ->where(function ($query) {
-                $query->whereIn('status', [Order::STATUS_DELIVERING, 'delivered', Order::STATUS_RETURNING, 'completed'])
-                    ->orWhere(function ($readyQuery) {
-                        $readyQuery->where('status', Order::STATUS_READY_TO_SHIP);
-                        $this->constrainConfirmedDeliverySchedule($readyQuery);
-                    });
-            })
+            ->whereIn('status', [...ShipperPickupStatus::WAITING_STATUSES, Order::STATUS_DELIVERING, 'delivered', Order::STATUS_RETURNING, 'completed'])
             ->latest('updated_at')
             ->paginate(20);
 
+        $this->attachPickupStatus($orders->getCollection());
+
         return $this->paginated($orders);
+    }
+
+    private function attachPickupStatus(\Illuminate\Support\Collection $orders): void
+    {
+        $pickup = app(ShipperPickupStatus::class);
+        $orders->each(function (Order $order) use ($pickup) {
+            $order->setAttribute('pickup_issue', $pickup->issue($order));
+            $order->setAttribute('can_accept_pickup', $pickup->canAccept($order));
+            $order->makeHidden(['pickup_schedule_action', 'pickup_latest_failure', 'pickup_transfer_pending', 'pickup_transfer_received', 'pickup_delivery_completed']);
+        });
     }
 
     public function history(Request $request): JsonResponse
@@ -721,6 +717,8 @@ class ShipperApiController extends BaseApiController
         $validated = $request->validate([
             'status' => ['required', 'in:delivered,returning'],
             'collected_amount' => ['nullable', 'numeric', 'min:0'],
+            'actual_weight' => ['nullable', 'array'],
+            'actual_weight.*' => ['nullable', 'numeric', 'min:0', 'max:999999999.999'],
             'return_reason' => ['nullable', 'string', 'max:500'],
             'shipper_note' => ['nullable', 'string', 'max:1000'],
             'lat' => ['nullable', 'numeric'],
@@ -733,23 +731,38 @@ class ShipperApiController extends BaseApiController
             return $this->fail('Đơn đã được kế toán xác nhận, không thể trả hàng.', 422);
         }
 
-        $order->update([
-            'status' => $nextStatus,
-            'collected_amount' => $validated['collected_amount'] ?? $order->collected_amount,
-            'return_reason' => $validated['return_reason'] ?? $order->return_reason,
-            'shipper_note' => $validated['shipper_note'] ?? $order->shipper_note,
-            'delivered_at' => $nextStatus === 'delivered' ? now() : $order->delivered_at,
-        ]);
+        DB::transaction(function () use ($order, $validated, $nextStatus, $before, $user) {
+            $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+            abort_if($order->status !== $before, 409, 'Trạng thái giao hàng đã thay đổi.');
+            if ($nextStatus === Order::STATUS_DELIVERED && ! empty($validated['actual_weight'])) {
+                $items = $order->items()->whereIn('id', array_keys($validated['actual_weight']))->get()->keyBy('id');
+                foreach ($validated['actual_weight'] as $itemId => $weight) {
+                    if ($weight === null) {
+                        continue;
+                    }
+                    $item = $items->get($itemId);
+                    abort_unless($item && $item->effective_priced_by_kg, 422, 'Sản phẩm này không có khối lượng thực giao.');
+                    $item->update(['delivered_weight' => $weight, 'actual_weight' => $weight]);
+                }
+            }
+            $order->update([
+                'status' => $nextStatus,
+                'collected_amount' => $validated['collected_amount'] ?? $order->collected_amount,
+                'return_reason' => $validated['return_reason'] ?? $order->return_reason,
+                'shipper_note' => $validated['shipper_note'] ?? $order->shipper_note,
+                'delivered_at' => $nextStatus === 'delivered' ? now() : $order->delivered_at,
+            ]);
 
-        OrderHistory::query()->create([
-            'order_id' => $order->id,
-            'action' => 'mobile_update_delivery_status',
-            'user_id' => $user->id,
-            'role' => 'shipper',
-            'status_before' => $before,
-            'status_after' => $nextStatus,
-            'note' => 'Mobile update status. GPS: '.($validated['lat'] ?? '-').','.($validated['lng'] ?? '-'),
-        ]);
+            OrderHistory::query()->create([
+                'order_id' => $order->id,
+                'action' => 'mobile_update_delivery_status',
+                'user_id' => $user->id,
+                'role' => 'shipper',
+                'status_before' => $before,
+                'status_after' => $nextStatus,
+                'note' => 'Mobile update status. GPS: '.($validated['lat'] ?? '-').','.($validated['lng'] ?? '-'),
+            ]);
+        });
 
         return $this->ok([
             'order_id' => (int) $order->id,
@@ -771,6 +784,7 @@ class ShipperApiController extends BaseApiController
             abort_if($reconciliations->contains('status', 'confirmed'), 422, 'Đơn đã chốt đối soát. Vui lòng liên hệ kế toán để điều chỉnh.');
             abort_if($order->returnRecords()->exists(), 422, 'Đơn đã có phiếu trả hàng. Vui lòng liên hệ kho để kiểm tra phiếu hiện có.');
             $before = $order->status;
+            $order->items()->whereNotNull('delivered_weight')->update(['delivered_weight' => null]);
             $order->update(['status' => Order::STATUS_DELIVERING, 'delivered_at' => null]);
             // Pending reconciliation snapshots must be rebuilt after the corrected delivery.
             foreach ($reconciliations as $reconciliation) {

@@ -101,12 +101,12 @@ class MyCustomerDebtController extends Controller
                 return false;
             }
             if ($accountingDebt) {
-                $classification = $row['policy']['payment_mode'] === 'cycle' ? 'cycle' : ((int) $row['policy']['allowed_orders'] >= 2 ? 'multi' : 'default');
+                $classification = \App\Services\CustomerDebtPolicyService::currentSettlementMethod($row['policy']) === 'cycle' ? 'cycle' : ((int) $row['policy']['allowed_orders'] >= 2 ? 'multi' : 'default');
                 if (($filters['payment_class'] ?? 'all') !== 'all' && $classification !== $filters['payment_class']) {
                     return false;
                 }
             }
-            if (! empty($filters['payment_mode']) && $row['policy']['payment_mode'] !== $filters['payment_mode']) {
+            if (! empty($filters['payment_mode']) && (\App\Services\CustomerDebtPolicyService::currentSettlementMethod($row['policy']) === 'cycle' ? 'cycle' : 'default') !== $filters['payment_mode']) {
                 return false;
             }
             if (! empty($filters['reminder']) && ! $row['alerts'][$filters['reminder']]) {

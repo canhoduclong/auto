@@ -34,6 +34,9 @@ button { border: 0; border-radius: 6px; padding: 9px 15px; background: var(--vou
 .voucher th, .voucher td { padding: 8px 12px; text-align: left; }
 .voucher th { background: #e8d7be; }
 .voucher :is(th, td):first-child { width: 12%; text-align: center; }
+.cycle-statement :is(th, td):first-child { width: auto; text-align: left; }
+.cycle-daily :is(th, td):not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.cycle-daily tbody th { background: transparent; font-weight: normal; }
 .voucher :is(th, td):last-child { text-align: right; font-variant-numeric: tabular-nums; }
 .voucher tbody tr { background: #fffdf8; }
 .voucher tbody tr:nth-child(even) { background: #eee7db; }

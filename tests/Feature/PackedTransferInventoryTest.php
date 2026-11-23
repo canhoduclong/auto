@@ -55,6 +55,34 @@ class PackedTransferInventoryTest extends TestCase
         $t = new WarehouseTransfer(['source_warehouse_id'=>1,'target_warehouse_id'=>2,'export_document_id'=>$exportId]); $t->id=9;
         DB::transaction(fn()=>(new PackedInventoryService)->receiveTransfer($o,$t));
     }
+    public function test_pickup_reason_distinguishes_packing_overdue_and_revoked_schedules(): void
+    {
+        $pickup = new \App\Services\ShipperPickupStatus;
+        $order = $this->order();
+        $order->shipper_id = 7;
+        $order->status = Order::STATUS_PACKING;
+        self::assertStringContainsString('Kho đang đóng hàng', $pickup->issue($order));
+        self::assertFalse($pickup->canAccept($order));
+
+        $order->status = Order::STATUS_OVERDUE_DELIVERY;
+        self::assertStringContainsString('Quá giờ giao hàng', $pickup->issue($order));
+        self::assertFalse($pickup->canAccept($order));
+
+        $order->status = Order::STATUS_READY_TO_SHIP;
+        $order->pickup_schedule_action = 'schedule_revoked';
+        self::assertStringContainsString('thu hồi', $pickup->issue($order));
+        self::assertFalse($pickup->canAccept($order));
+
+        $order->pickup_schedule_action = 'schedule_confirmed';
+        $order->pickup_latest_failure = 'shipper_pickup_stock_failed';
+        self::assertStringContainsString('thiếu tồn kho', $pickup->issue($order));
+        self::assertTrue($pickup->canAccept($order));
+
+        $order->pickup_transfer_pending = true;
+        self::assertStringContainsString('điều chuyển kho', $pickup->issue($order));
+        self::assertFalse($pickup->canAccept($order));
+    }
+
     public function test_legacy_reserved_transfer_is_moved_once_and_can_be_picked_up(): void
     {
         $o=$this->order(); $this->receive($o);

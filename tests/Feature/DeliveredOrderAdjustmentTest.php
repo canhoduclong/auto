@@ -3,6 +3,7 @@ namespace Tests\Feature;
 
 use App\Models\{Order, User};
 use App\Http\Controllers\OrderAdjustmentController;
+use App\Support\AccountingChargeAmounts;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
@@ -62,6 +63,48 @@ class DeliveredOrderAdjustmentTest extends TestCase
                 catch(HttpException $e) { self::assertSame(403,$e->getStatusCode()); }
             }
         }
+    }
+
+    public function test_accounting_prices_approved_adjustment_then_delivery_then_warehouse_and_never_estimate(): void
+    {
+        $order = new Order;
+        $order->forceFill(['status' => Order::STATUS_PACKED, 'total' => 4867500, 'subtotal_amount' => 4867500]);
+        $item = new \App\Models\OrderItem(['quantity' => 30, 'total_weight' => 82.5, 'price' => 59000, 'total' => 4867500, 'is_priced_by_kg' => true]);
+        $item->id = 1;
+        $item->setRelation('product', null)->setRelation('variant', null);
+        $order->setRelation('items', new \Illuminate\Database\Eloquent\Collection([$item]));
+        $order->setRelation('additionalFees', collect());
+
+        self::assertNull(AccountingChargeAmounts::forOrder($order));
+        $item->packed_weight = 83.4;
+        $item->total = 4920600;
+        self::assertSame(4920600.0, AccountingChargeAmounts::forOrder($order)['total']);
+
+        $order->status = Order::STATUS_DELIVERED;
+        $item->actual_weight = 83.4;
+        self::assertNull($item->accountingWeights($order)['delivered_weight']);
+        self::assertSame(4920600.0, AccountingChargeAmounts::forOrder($order)['total']);
+        $item->delivered_weight = 82;
+        self::assertSame(4838000.0, AccountingChargeAmounts::forOrder($order)['total']);
+
+        $item->accounting_adjusted_weight = 81.5;
+        self::assertSame(4808500.0, AccountingChargeAmounts::forOrder($order)['total']);
+        self::assertSame(['packed_weight' => 83.4, 'delivered_weight' => 82.0], $item->accountingWeights($order));
+        self::assertSame(82.5, $item->display_total_value);
+
+        $item->accounting_adjusted_weight = 0;
+        self::assertSame(0.0, AccountingChargeAmounts::forOrder($order)['total']);
+    }
+
+    public function test_partial_warehouse_confirmation_changes_the_weight_that_accounting_must_review(): void
+    {
+        $item = new \App\Models\OrderAdjustmentItem([
+            'original_quantity' => 30, 'adjusted_quantity' => 20, 'warehouse_received_quantity' => 5,
+            'original_weight' => 83.4, 'adjusted_weight' => 55.6,
+        ]);
+        self::assertTrue($item->changesWeight());
+        self::assertSame(55.6, $item->weightAfterWarehouse('confirmed_full'));
+        self::assertSame(69.5, $item->weightAfterWarehouse('confirmed_partial'));
     }
 
 }

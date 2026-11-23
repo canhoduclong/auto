@@ -459,9 +459,12 @@ class AccountingDashboardController extends Controller
         $effectivePaid = $this->effectivePaidForOrder($order);
         $effectiveDue = max(0, $recognizedRevenue - $effectivePaid);
 
+        $hasPackingRecord = $order->histories->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])->isNotEmpty();
+
         return view('accounting.order_detail', [
             'order' => $order,
             'returnAmount' => $returnAmount,
+            'itemWeights' => $order->items->mapWithKeys(fn ($item) => [$item->id => $item->accountingWeights($order, $hasPackingRecord)]),
             'recognizedRevenue' => $recognizedRevenue,
             'effectivePaid' => $effectivePaid,
             'effectiveDue' => $effectiveDue,
@@ -1019,11 +1022,14 @@ class AccountingDashboardController extends Controller
                 'shipper:id,name',
                 'returnRecords:id,order_id,order_adjustment_id,status,refund_amount',
                 'returnRecords.adjustment:id,status',
+                'items.product', 'items.variant.product', 'additionalFees',
                 'accountingReconciliation.confirmer:id,name',
             ])
             ->withSum('items as total_item_quantity', 'quantity')
             ->withSum('returnRecords as return_amount_sum', 'refund_amount')
             ->withExists([
+                'histories as has_accounting_packing_record' => fn ($historyQuery) => $historyQuery
+                    ->whereIn('action', ['complete_packing', 'warehouse_complete_packing']),
                 'histories as is_restored_order' => fn ($historyQuery) => $historyQuery
                     ->where('action', 'restore_cancelled_order'),
             ])
@@ -2202,15 +2208,12 @@ class AccountingDashboardController extends Controller
         // Compare the applied sale price with the company's price for this order,
         // not today's catalogue price or a cached discount from before weighing.
         $companyPriceExpr = 'COALESCE(order_items.company_price_at_order, order_items.base_price, order_items.price, 0)';
-        $effectivePriceExpr = 'COALESCE(adj.adjusted_price, order_items.price, 0)';
-        $effectiveWeightExpr = "CASE WHEN COALESCE(adj.adjusted_quantity, order_items.quantity, 0) = 0 THEN 0 ELSE COALESCE(adj.adjusted_weight, CASE
-            WHEN orders.status IN ('delivered', 'completed', 'returning', 'returned', 'returned_completed')
-                THEN COALESCE(order_items.actual_weight, order_items.packed_weight, order_items.total_weight)
-            WHEN orders.status IN ('packing', 'packed', 'packed_waiting_pickup', 'delivering', 'in_delivery', 'shipping', 'picked_up')
-                THEN COALESCE(order_items.packed_weight, order_items.actual_weight, order_items.total_weight)
-            ELSE order_items.total_weight END, 0) END";
+        $effectivePriceExpr = 'COALESCE(order_items.price, 0)';
+        $effectiveWeightExpr = \App\Support\AccountingChargeAmounts::weightSql();
         $pricingQuantityExpr = "CASE WHEN order_items.is_priced_by_kg = 1 THEN {$effectiveWeightExpr}
-            ELSE COALESCE(adj.adjusted_quantity, order_items.quantity, 0) END";
+            ELSE COALESCE(order_items.quantity, 0) END";
+        $effTotalExpr = "CASE WHEN orders.accounting_sales_import_batch_id IS NOT NULL AND ({$pricingQuantityExpr}) IS NULL
+            THEN order_items.total ELSE ROUND(({$pricingQuantityExpr}) * ({$effectivePriceExpr}), 2) END";
         $priceAdjustmentExpr = "ROUND(({$effectivePriceExpr} - {$companyPriceExpr}) * ({$pricingQuantityExpr}), 2)";
 
         // Attach the customer delivery fee to one visible product line per order.
@@ -2256,17 +2259,12 @@ class AccountingDashboardController extends Controller
             'orders.total_discount as order_total_discount',
             'orders.item_discount_total as order_item_discount_total',
             'orders.extra_discount_total as order_extra_discount_total',
-            DB::raw('COALESCE(adj.adjusted_quantity, order_items.quantity) as eff_qty'),
-            DB::raw('COALESCE(adj.adjusted_price,    order_items.price)    as eff_price'),
+            'order_items.quantity as eff_qty',
+            'order_items.price as eff_price',
             DB::raw("{$effectiveWeightExpr} as eff_weight"),
-            DB::raw('CASE WHEN COALESCE(adj.adjusted_quantity, order_items.quantity, 0) = 0 THEN 0 WHEN adj.id IS NOT NULL THEN 1 ELSE 0 END as has_adj'),
+            DB::raw('CASE WHEN COALESCE(order_items.quantity, 0) = 0 THEN 0 WHEN adj.id IS NOT NULL THEN 1 ELSE 0 END as has_adj'),
             'adj.order_adjustment_id as adjustment_id',
-            DB::raw('CASE WHEN COALESCE(adj.adjusted_quantity, order_items.quantity, 0) = 0 THEN 0 WHEN adj.id IS NOT NULL THEN
-                        CASE WHEN order_items.is_priced_by_kg = 1
-                            THEN COALESCE(adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price)
-                            ELSE COALESCE(adj.adjusted_quantity, order_items.quantity)   * COALESCE(adj.adjusted_price, order_items.price)
-                        END
-                     ELSE order_items.total END as eff_total'),
+            DB::raw("{$effTotalExpr} as eff_total"),
         ]);
 
         $orderByDateAndPriority = static function ($query, string $direction) use ($businessDateExpression) {
@@ -2309,17 +2307,10 @@ class AccountingDashboardController extends Controller
         $items = $listQ->paginate($perPage)->appends($request->query());
 
         // ── Grand summary (all pages) ──────────────────────────────────
-        $effTotalExpr = 'CASE WHEN COALESCE(adj.adjusted_quantity, order_items.quantity, 0) = 0 THEN 0 WHEN adj.id IS NOT NULL THEN
-            CASE WHEN order_items.is_priced_by_kg = 1
-                THEN COALESCE(adj.adjusted_weight, order_items.total_weight) * COALESCE(adj.adjusted_price, order_items.price)
-                ELSE COALESCE(adj.adjusted_quantity, order_items.quantity)   * COALESCE(adj.adjusted_price, order_items.price)
-            END
-         ELSE order_items.total END';
-
         $summary = $makeBase()->selectRaw("
             COUNT(DISTINCT order_items.id)                                                          as item_count,
             COUNT(DISTINCT order_items.order_id)                                                    as order_count,
-            SUM(COALESCE(adj.adjusted_quantity,  order_items.quantity))                             as grand_qty,
+            SUM(order_items.quantity)                             as grand_qty,
             SUM(CASE WHEN LOWER(COALESCE(products.unit, 'cai')) IN ('bo','bộ','cai','cái') THEN 0 ELSE ({$effectiveWeightExpr}) END) as grand_weight,
             COALESCE(SUM({$priceAdjustmentExpr}), 0) as item_adjustment,
             COALESCE(SUM(CASE WHEN ({$priceAdjustmentExpr}) < 0 THEN -({$priceAdjustmentExpr}) ELSE 0 END), 0) as item_discount,
@@ -2928,12 +2919,6 @@ class AccountingDashboardController extends Controller
             'accountingReconciliation.confirmer:id,name',
         ]);
 
-        $returnAmount = $this->returnAmountForOrder($order);
-        $recognizedRevenue = $this->recognizedRevenueForOrder($order);
-        $effectivePaid = $this->effectivePaidForOrder($order);
-        $effectiveDue = $this->effectiveDueForOrder($order);
-        [$canConfirm, $blockReason] = $this->canAccountingConfirmOrder($order);
-
         $approvedHistory = $order->histories
             ->whereIn('action', ['approve_order', 'order_approved', 'approve'])
             ->sortByDesc('id')
@@ -2942,6 +2927,18 @@ class AccountingDashboardController extends Controller
             ->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
             ->sortByDesc('id')
             ->first();
+        $hasPackingRecord = $packingHistory !== null;
+        $returnAmount = $this->returnAmountForOrder($order);
+        $recognizedRevenue = $this->recognizedRevenueForOrder($order, $hasPackingRecord);
+        $effectivePaid = $this->effectivePaidForOrder($order);
+        $effectiveDue = max(0, $recognizedRevenue - $effectivePaid);
+        [$canConfirm, $blockReason] = $this->canAccountingConfirmOrder($order);
+        $requestedWeights = $order->adjustments()
+            ->whereIn('status', [OrderAdjustment::STATUS_PENDING_APPROVAL, OrderAdjustment::STATUS_APPROVED])
+            ->with('items')->latest('id')->get()->flatMap->items
+            ->filter(fn ($item) => $item->order_item_id && $item->changesWeight())
+            ->groupBy('order_item_id')->map->first();
+
         $deliveryHistory = $order->histories
             ->whereIn('action', ['mark_delivered', 'delivered', 'mobile_update_status'])
             ->sortByDesc('id')
@@ -2966,8 +2963,17 @@ class AccountingDashboardController extends Controller
             ])->values();
         $discountReason = trim((string) ($pricingChanges->first()['note'] ?? ''));
         $orderPriceDate = ($order->created_at ?: now())->toDateString();
-        $reconciliationItems = $order->items->map(function ($item) use ($orderPriceDate): array {
-            $pricingQuantity = $item->reconciliation_pricing_quantity;
+        $reconciliationItems = $order->items->map(function ($item) use ($orderPriceDate, $order, $hasPackingRecord, $requestedWeights): array {
+            $pricingQuantity = $item->accountingChargeQuantity($order, $hasPackingRecord);
+            $weights = $item->accountingWeights($order, $hasPackingRecord);
+            $requested = $requestedWeights->get($item->id);
+            $pricingSource = match (true) {
+                ! $item->effective_priced_by_kg => 'Theo số lượng',
+                $pricingQuantity === null => 'Chưa có khối lượng tính tiền',
+                $item->accounting_adjusted_weight !== null => 'Khối lượng điều chỉnh đã xác nhận',
+                $weights['delivered_weight'] !== null => 'Khối lượng thực giao',
+                default => 'Khối lượng tại kho',
+            };
             $applicablePriceRule = $item->variant?->priceRules
                 ?->first(fn ($rule) => ($rule->start_date === null || $rule->start_date <= $orderPriceDate)
                     && ($rule->end_date === null || $rule->end_date >= $orderPriceDate));
@@ -3001,9 +3007,15 @@ class AccountingDashboardController extends Controller
                 'sku' => $item->variant?->sku,
                 'size' => $item->variant?->size,
                 'quantity' => (float) ($item->quantity ?? 0),
-                'total_label' => $item->display_total_label,
+                'total_label' => $item->effective_priced_by_kg ? $item->display_total_label : '—',
                 'weight' => (float) ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight ?? 0),
                 'pricing_quantity' => $pricingQuantity,
+                'pricing_unit' => $item->display_total_unit,
+                'pricing_source' => $pricingSource,
+                'adjusted_weight' => $requested ? (float) $requested->adjusted_weight
+                    : ($item->accounting_adjusted_weight === null ? null : (float) $item->accounting_adjusted_weight),
+                'approved_adjusted_weight' => $item->accounting_adjusted_weight === null ? null : (float) $item->accounting_adjusted_weight,
+                'adjusted_weight_pending' => $requested !== null,
                 'unit_price' => $currentUnitPrice,
                 'price_effective_date' => $orderPriceDate,
                 'company_price_at_order' => $item->company_price_at_order !== null ? (float) $item->company_price_at_order : null,
@@ -3012,7 +3024,7 @@ class AccountingDashboardController extends Controller
                 'discount_type' => $discountType,
                 'discount_total' => $currentDiscountTotal,
                 'line_total' => $currentLineTotal,
-            ];
+            ] + $weights;
         })->values();
         $currentGoodsTotal = round((float) $reconciliationItems->sum('line_total'), 2);
         $currentItemDiscountTotal = round((float) $reconciliationItems
@@ -3025,7 +3037,8 @@ class AccountingDashboardController extends Controller
             $order,
             $currentGoodsTotal - $currentItemDiscountTotal + $currentItemIncreaseTotal
         );
-        $currentOrderTotal = $currentAmounts['total'];
+        $chargeAmounts = \App\Support\AccountingChargeAmounts::forOrder($order, $hasPackingRecord);
+        $currentOrderTotal = $chargeAmounts['total'] ?? null;
 
         return response()->json([
             'order' => [
@@ -3042,7 +3055,7 @@ class AccountingDashboardController extends Controller
                 'current_calculated_total' => $currentOrderTotal,
                 'current_order_discount' => $currentAmounts['order_discount'],
                 'current_goods_after_discount' => $currentAmounts['goods_after_discount'],
-                'current_vat_amount' => $currentAmounts['vat_amount'],
+                'current_vat_amount' => $chargeAmounts['vat'] ?? null,
                 'subtotal_amount' => (float) ($order->subtotal_amount ?? $order->total ?? 0),
                 'total_discount' => (float) ($order->total_discount ?? 0),
                 'item_discount_total' => (float) ($order->item_discount_total ?? 0),
@@ -3061,6 +3074,8 @@ class AccountingDashboardController extends Controller
                 'foam_box_fee' => (float) (($order->charge_foam_box_fee ?? false) ? ($order->foam_box_price ?? 0) : 0),
                 'return_amount' => $returnAmount,
                 'recognized_revenue' => $recognizedRevenue,
+                'missing_billable_weight' => $chargeAmounts === null && ! $order->accounting_sales_import_batch_id
+                    && $order->accountingReconciliation?->status !== AccountingReconciliation::STATUS_CONFIRMED,
                 'delivered_at' => optional($order->delivered_at)->format('d/m/Y H:i'),
                 'customer' => [
                     'name' => $order->customer?->name ?? '-',
@@ -3086,15 +3101,18 @@ class AccountingDashboardController extends Controller
                 'packed_at' => optional($packingHistory?->created_at)->format('d/m/Y H:i'),
                 'warehouse' => $order->warehouse?->name ?? '-',
                 'note' => $packingHistory?->note,
+                'recorded_weight' => $this->recordedItemWeight($reconciliationItems, 'packed_weight'),
             ],
             'delivery' => [
                 'shipper' => $order->shipper?->name ?? '-',
                 'status' => $order->status,
                 'delivered_at' => optional($order->delivered_at)->format('d/m/Y H:i'),
                 'note' => $deliveryHistory?->note ?? $order->shipper_note,
+                'recorded_weight' => $this->recordedItemWeight($reconciliationItems, 'delivered_weight'),
             ],
             'payment' => [
-                'total_due' => (float) $order->total,
+                'total_due' => $recognizedRevenue,
+                'internal_shipping_cost' => $this->internalShippingCostForOrder($order),
                 'paid_amount' => $effectivePaid,
                 'accounting_paid_amount' => (float) ($order->amount_paid ?? 0),
                 'shipper_collected_amount' => (float) ($order->collected_amount ?? 0),
@@ -3129,6 +3147,11 @@ class AccountingDashboardController extends Controller
         ]);
     }
 
+    private function recordedItemWeight(\Illuminate\Support\Collection $items, string $field): ?float
+    {
+        return $items->whereNotNull($field)->isEmpty() ? null : round($items->sum($field), 3);
+    }
+
     public function confirmReconciliation(Request $request, Order $order)
     {
         if (! Schema::hasTable('accounting_reconciliations')) {
@@ -3149,11 +3172,15 @@ class AccountingDashboardController extends Controller
             return response()->json(['message' => 'Don hang da duoc ke toan xac nhan.'], 422);
         }
 
-        $reconciliation = $this->confirmReconciliationOrder(
-            $order,
-            (int) $request->user()->id,
-            $validated['note'] ?? null
-        );
+        try {
+            $reconciliation = $this->confirmReconciliationOrder(
+                $order,
+                (int) $request->user()->id,
+                $validated['note'] ?? null
+            );
+        } catch (\DomainException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
 
         $reconciliation?->load(['order', 'sale']);
         if ($reconciliation?->sale) {
@@ -3396,6 +3423,24 @@ class AccountingDashboardController extends Controller
     private function confirmReconciliationOrder(Order $order, int $confirmedBy, ?string $note = null): AccountingReconciliation
     {
         return DB::transaction(function () use ($order, $confirmedBy, $note): AccountingReconciliation {
+            $order = Order::query()->lockForUpdate()->findOrFail($order->id);
+            $order->load(['returnRecords.returnItems', 'accountingReconciliation', 'user']);
+            [$canConfirm, $blockReason] = $this->canAccountingConfirmOrder($order);
+            if (! $canConfirm || $order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED) {
+                throw new \DomainException($blockReason ?? 'Đơn đã được kế toán xác nhận.');
+            }
+            if (! $order->accounting_sales_import_batch_id) {
+                $amounts = \App\Support\AccountingChargeAmounts::forOrder($order, $this->hasAccountingPackingRecord($order));
+                if ($amounts === null) {
+                    throw new \DomainException('Đơn chưa có đủ khối lượng tại kho, thực giao hoặc điều chỉnh đã xác nhận.');
+                }
+                foreach ($order->items as $item) {
+                    if (array_key_exists($item->id, $amounts['lines']) && (float) $item->total !== $amounts['lines'][$item->id]) {
+                        $item->update(['total' => $amounts['lines'][$item->id]]);
+                    }
+                }
+                $order->forceFill(['total' => $amounts['total'], 'subtotal_amount' => $amounts['subtotal'], 'vat_amount' => $amounts['vat']]);
+            }
             $returnAmount = $this->returnAmountForOrder($order);
             $recognizedRevenue = $this->recognizedRevenueForOrder($order);
             $effectivePaid = $this->effectivePaidForOrder($order);
@@ -3756,6 +3801,10 @@ class AccountingDashboardController extends Controller
             return [false, 'Đơn có yêu cầu điều chỉnh chưa xử lý xong. Vui lòng duyệt hoặc từ chối yêu cầu trước khi xác nhận doanh thu.'];
         }
 
+        if (! $order->accounting_sales_import_batch_id && \App\Support\AccountingChargeAmounts::forOrder($order) === null) {
+            return [false, 'Đơn chưa có đủ khối lượng tại kho, thực giao hoặc điều chỉnh đã xác nhận.'];
+        }
+
         $pendingReturn = $order->returnRecords
             ->filter(fn ($return) => ! in_array((string) $return->status, ['warehouse_confirmed', 'completed', 'cancelled', 'rejected'], true))
             ->first();
@@ -3793,14 +3842,28 @@ class AccountingDashboardController extends Controller
         return max(0, $this->recognizedRevenueForOrder($order) - $this->effectivePaidForOrder($order));
     }
 
-    private function recognizedRevenueForOrder(Order $order): float
+    private function hasAccountingPackingRecord(Order $order): bool
     {
-        $orderTotal = (float) ($order->total ?? 0);
-        $internalShippingCost = (bool) ($order->charge_shipping_fee ?? false)
-            ? max(0, (float) ($order->shipping_fee ?? 0))
-            : 0;
+        return (bool) $order->has_accounting_packing_record || ($order->relationLoaded('histories')
+            && $order->histories->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])->isNotEmpty());
+    }
 
-        return max(0, $orderTotal - $internalShippingCost - $this->returnAmountForOrder($order));
+    private function recognizedRevenueForOrder(Order $order, ?bool $hasPackingRecord = null): float
+    {
+        if ($order->accountingReconciliation?->status === AccountingReconciliation::STATUS_CONFIRMED) {
+            return (float) $order->accountingReconciliation->recognized_revenue;
+        }
+
+        $total = $order->accounting_sales_import_batch_id
+            ? (float) $order->total
+            : (\App\Support\AccountingChargeAmounts::forOrder($order, $hasPackingRecord ?? $this->hasAccountingPackingRecord($order))['total'] ?? 0);
+
+        return max(0, $total - $this->internalShippingCostForOrder($order) - $this->returnAmountForOrder($order));
+    }
+
+    private function internalShippingCostForOrder(Order $order): float
+    {
+        return $order->charge_shipping_fee ? max(0, (float) ($order->shipping_fee ?? 0)) : 0;
     }
 
     private function customerDeliveryFeeForOrder(Order $order): float

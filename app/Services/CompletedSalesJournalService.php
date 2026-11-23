@@ -147,22 +147,17 @@ class CompletedSalesJournalService
 
         foreach ($order->items as $item) {
             $adjustmentEntry = $itemAdjustments->get($item->id);
-            $adjustment = $adjustmentEntry['item'] ?? null;
-            $quantity = (float) ($adjustment?->adjusted_quantity ?? $item->quantity ?? 0);
-            $totalQuantity = (float) ($adjustment?->adjusted_weight
-                ?? $item->actual_weight
-                ?? $item->packed_weight
-                ?? $item->total_weight
-                ?? $item->display_total_value);
+            $quantity = (float) ($item->quantity ?? 0);
             $pricedByKg = (bool) $item->effective_priced_by_kg;
-            if (! $pricedByKg) {
-                $totalQuantity = $quantity;
-            }
+            $billableQuantity = $item->accountingChargeQuantity($order);
+            $totalQuantity = $billableQuantity ?? 0;
             $unitWeight = $pricedByKg && abs($quantity) > 0.0001
                 ? $totalQuantity / $quantity
                 : 1.0;
-            $unitPrice = (float) ($adjustment?->adjusted_price ?? $item->price ?? 0);
-            $calculatedAmount = ($pricedByKg ? $totalQuantity : $quantity) * $unitPrice;
+            $unitPrice = (float) ($item->price ?? 0);
+            $calculatedAmount = $billableQuantity === null && $order->accounting_sales_import_batch_id
+                ? (float) $item->total
+                : round($totalQuantity * $unitPrice, 2);
             $product = $item->product ?: $item->variant?->product;
 
             $rows->push((object) array_merge($base, [

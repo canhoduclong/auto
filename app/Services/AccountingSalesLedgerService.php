@@ -51,7 +51,7 @@ class AccountingSalesLedgerService
                 'unit' => $this->ledgerUnit($product?->name, $product?->unit_label),
                 'quantity' => (float) ($item->quantity ?? 0),
                 'unit_weight' => (float) $item->effective_unit_weight,
-                'total_quantity' => (float) ($item->actual_weight ?? $item->packed_weight ?? $item->total_weight ?? $item->display_total_value),
+                'total_quantity' => $item->accountingChargeQuantity($order) ?? 0,
                 'unit_price' => (float) ($item->price ?? 0),
                 'total_amount' => $amount,
             ]));

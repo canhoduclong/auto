@@ -75,7 +75,7 @@
         @forelse($rows as $debt)
         @php($reminderNote = \App\Services\DebtCollectionService::reminderNote((int) $debt['balance'], $debt['last_payment_date'], $debt['last_purchase_date']))
         @php($latest = $debt['collection']['latest'])
-        @php($isPeriodic = $debt['policy']['payment_mode'] === 'cycle')
+        @php($isPeriodic = \App\Services\CustomerDebtPolicyService::currentSettlementMethod($debt['policy']) === 'cycle')
         <tr class="{{ $debt['reminded_today'] ? 'collection-reminded-today' : '' }}"><td class="collection-select-column"><input type="checkbox" data-collection-select data-reminder-note="{{ $reminderNote }}" data-sale-key="{{ $debt['sale_key'] }}" data-sale-label="{{ $debt['sale_label'] }}" aria-label="Chọn {{ $debt['name'] }}" data-name="{{ $debt['name'] }}" data-key="{{ $debt['key'] }}" data-customer="{{ $debt['customer_id'] }}" data-balance="{{ $debt['balance'] }}" data-period-increase="{{ $debt['period_increase'] ?? '' }}" data-purchase="{{ $debt['last_purchase_date'] ? \Carbon\Carbon::parse($debt['last_purchase_date'])->format('j/n') : '' }}" data-purchase-days="{{ $debt['days_without_purchase'] }}" data-payment-days="{{ $debt['days_without_payment'] }}" data-request-id="{{ \Illuminate\Support\Str::uuid() }}" @disabled(!$canManageReport || !$debt['data_available'] || $debt['balance']<=0)></td><td class="collection-compact">{{ $rows->firstItem()+$loop->index }}</td><td class="collection-compact">{{ $debt['code'] ?: '—' }}</td><td class="collection-name">
             <strong>{{ $debt['name'] }}</strong>
             @if(!$debt['customer_id'])<div class="small text-muted">Khách nguồn · chưa ghép</div>@endif
@@ -103,7 +103,7 @@
         </td>
         <td class="collection-warnings">
             <div class="collection-status-items">
-                <span class="text-muted">{{ \App\Services\CustomerDebtPolicyService::SETTLEMENT_METHODS[\App\Services\CustomerDebtPolicyService::currentSettlementMethod($debt['policy'])] }}</span>
+                <span class="text-muted">{{ \App\Services\CustomerDebtPolicyService::PAYMENT_FORMS[\App\Services\CustomerDebtPolicyService::currentSettlementMethod($debt['policy'])] }}</span>
                 @if($isPeriodic)<span class="badge bg-info text-dark">Định kỳ</span>@endif
                 @include('customer-debt.threshold-alert', ['alert' => $debt['alerts']])
                 @if(($debt['alerts']['overdue_days'] ?? 0)>0)<span class="badge bg-danger">Trễ {{ $debt['alerts']['overdue_days'] }} ngày</span>@endif

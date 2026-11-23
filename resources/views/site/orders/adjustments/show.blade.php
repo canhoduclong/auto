@@ -229,6 +229,27 @@
                     </div>
                 </section>
 
+                @if($adjustment->status === \App\Models\OrderAdjustment::STATUS_APPROVED && !$adjustment->weight_confirmed_by && $adjustment->requiresAccountingWeightConfirmation())
+                    <section class="adjustment-card">
+                        <div class="adjustment-card-head"><h2 class="adjustment-card-title">Chờ kế toán xác nhận khối lượng điều chỉnh</h2></div>
+                        @if(auth()->user()?->canManageCustomerDebt())
+                            <div class="adjustment-card-body">
+                                @if($adjustment->warehouse_confirmation_status === 'confirmed_partial')
+                                    <ul class="small">
+                                        @foreach($adjustment->items->filter(fn ($item) => $item->changesWeight()) as $item)
+                                            <li>{{ $item->variant?->name ?? $item->orderItem?->display_name ?? 'Sản phẩm' }} · {{ format_kg($item->weightAfterWarehouse('confirmed_partial')) }} sau xác nhận của kho</li>
+                                        @endforeach
+                                    </ul>
+                                @endif
+                                <form method="POST" action="{{ route('site.order-adjustments.confirm-weight', $adjustment) }}">
+                                    @csrf
+                                    <button class="btn btn-success" type="submit">Xác nhận khối lượng điều chỉnh</button>
+                                </form>
+                            </div>
+                        @endif
+                    </section>
+                @endif
+
                 @if($canApprove)
                     <section class="adjustment-card adjustment-action-card">
                         <div class="adjustment-card-head"><h2 class="adjustment-card-title"><i class="bi bi-shield-check"></i>Thao tác phê duyệt</h2></div>

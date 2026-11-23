@@ -262,3 +262,44 @@
 
 .sale-debt-detail-page { width:100%; max-width:1440px; margin:auto; padding:0 20px 24px; }
 @media (max-width:767.98px) { .sale-debt-detail-page { padding:0 10px 16px; } }
+
+.debt-cycle-workspace { max-width: 1320px; margin-inline: auto; }
+.debt-cycle-card { min-width: 0; padding: 16px; border: 1px solid #dbe3ef; border-radius: 9px; background: #fff; }
+.debt-bill-history-title { cursor: pointer; }
+.debt-bill-history-table { min-width: 48rem; font-variant-numeric: tabular-nums; }
+.debt-bill-history-table > :not(caption) > * > * { padding: .65rem .8rem; }
+.debt-bill-history-table thead th { background: #f5f8fc; color: #334155; font-size: .8125rem; white-space: nowrap; }
+.debt-bill-history-table tbody tr:hover > * { background: #f8fafc; }
+.debt-bill-history-table tbody tr:last-child > * { border-bottom: 0; }
+.debt-bill-history-references { min-width: 7.5rem; overflow-wrap: anywhere; }
+.debt-bill-history-references summary { cursor: pointer; }
+.debt-cycle-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; cursor: pointer; list-style: none; }
+.debt-cycle-heading::-webkit-details-marker { display: none; }
+.debt-cycle-heading::before { content: '›'; color: #475569; font-size: 18px; line-height: 1; }
+details[open] > .debt-cycle-heading::before { transform: rotate(90deg); }
+.debt-cycle-heading small { display: block; margin-top: 2px; color: #64748b; font-size: 12px; }
+.debt-cycle-balance { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.debt-cycle-balance strong { color: #19324d; font-size: 16px; }
+.debt-cycle-edit-name { max-width: 32rem; margin: 0 0 12px; }
+details > form > .debt-cycle-edit-name { margin-top: 14px; }
+.debt-cycle-grid { display: grid; grid-template-columns: minmax(0, 1.85fr) minmax(0, 1fr); align-items: start; gap: 14px; margin-top: 14px; }
+.debt-cycle-panel { min-width: 0; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+.debt-cycle-panel table th[scope="row"] { font-weight: 500; }
+.debt-cycle-panel table th[scope="row"] + td { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.debt-cycle-panel tr:last-child th[data-cycle-closing-label] { font-weight: 700; }
+.debt-cycle-panel .caption-top { padding-top: 0; font-weight: 600; color: #19324d; }
+.debt-cycle-picker > summary { color: #0d6efd; cursor: pointer; font-size: 13px; }
+.debt-cycle-picker-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(9rem, auto); gap: 8px; margin: 10px 0 8px; }
+.debt-cycle-picker-scroll { max-height: 18rem; }
+.debt-cycle-picker tr[hidden] { display: none; }
+.debt-cycle-picker [data-cycle-unavailable] { color: #64748b; }
+.debt-cycle-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 14px; }
+@container (max-width: 750px) {
+    .debt-cycle-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+    .debt-cycle-card { padding: 12px; }
+    .debt-cycle-picker-controls { grid-template-columns: minmax(0, 1fr); }
+    .debt-cycle-heading { gap: 8px; }
+    .debt-cycle-balance strong { font-size: 14px; }
+}

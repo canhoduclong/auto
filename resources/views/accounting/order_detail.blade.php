@@ -123,7 +123,10 @@
                         <th>Phân loại/Size</th>
                         <th>SKU</th>
                         <th class="text-end">Số lượng</th>
-                        <th class="text-end">Khối lượng</th>
+                        <th class="text-end">Khối lượng theo đơn</th>
+                        <th class="text-end">Khối lượng tại kho</th>
+                        <th class="text-end">Khối lượng thực giao</th>
+                        <th class="text-end">Khối lượng điều chỉnh</th>
                         <th class="text-end">Đơn giá</th>
                         <th class="text-end">Thành tiền</th>
                     </tr>
@@ -135,12 +138,16 @@
                             <td>{{ $item->variant?->size ?: ($item->variant?->name ?? '-') }}</td>
                             <td>{{ $item->variant?->sku ?? '-' }}</td>
                             <td class="text-end">{{ number_format((float) $item->quantity, 0, ',', '.') }}</td>
-                            <td class="text-end">{{ number_format((float) ($item->actual_weight ?? $item->total_weight ?? 0), 3, ',', '.') }} kg</td>
+                            <td class="text-end">{{ $item->effective_priced_by_kg ? $item->display_total_label : '—' }}</td>
+                            @foreach(['packed_weight', 'delivered_weight'] as $field)
+                                <td class="text-end">{{ $itemWeights[$item->id][$field] === null ? 'Chưa có' : number_format($itemWeights[$item->id][$field], 3, ',', '.').' kg' }}</td>
+                            @endforeach
+                            <td class="text-end">{{ $item->accounting_adjusted_weight === null ? 'Chưa có' : number_format((float) $item->accounting_adjusted_weight, 3, ',', '.').' kg' }}</td>
                             <td class="text-end">{{ $money($item->price) }}</td>
                             <td class="text-end fw-semibold">{{ $money($item->total ?? ((float) $item->quantity * (float) $item->price)) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="text-center text-muted py-4">Đơn hàng chưa có sản phẩm.</td></tr>
+                        <tr><td colspan="10" class="text-center text-muted py-4">Đơn hàng chưa có sản phẩm.</td></tr>
                     @endforelse
                 </tbody>
             </table>

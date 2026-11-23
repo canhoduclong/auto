@@ -21,7 +21,7 @@ class CustomerDebtPaymentAllocation
             $earlierEntries = array_values(array_filter($entries, fn ($entry) => $entry['date'] < $changeDate));
             $earlierManual = array_filter($manual, fn ($record) => ($record['date'] ?? $changeDate) < $changeDate);
             $previous = $this->reconcile($earlierEntries, $method, $customerId, $changes, $earlierManual, $firstChangeDate);
-            $manual = array_diff_key($manual, $previous['manualApplied']);
+            $manual = array_diff_key($manual, $previous['confirmedApplied'], $previous['manualApplied']);
             $payments = $payments->where('date', '>=', $changeDate);
         }
         $systemCodes = ($changeDate || $method !== 'batch') && $customerId ? $this->knownOrderCodes($sales, $customerId) : [];
@@ -42,13 +42,54 @@ class CustomerDebtPaymentAllocation
             }
         }
 
+        $manualApplied = $previous['manualApplied'] ?? [];
+        $invalidManual = $previous['invalidManual'] ?? [];
+        $confirmed = [];
+        $confirmedApplied = $previous['confirmedApplied'] ?? [];
+        $receipts = $payments->keyBy(fn ($entry) => $this->key($entry));
+        // Confirmed groups reserve their allocations before new receipts are matched automatically.
+        $groups = collect($manual)->filter(fn ($record) => isset($record['confirmed_group']))
+            ->groupBy('confirmed_group', true);
+        $asOf = collect($entries)->max('date');
+        foreach ($groups as $group) {
+            $date = $group->first()['date'];
+            if ($date > $asOf || ($changeDate && $date < $changeDate)) {
+                continue;
+            }
+            $trial = $lines;
+            foreach ($group as $key => $record) {
+                $paymentKey = $record['payment_key'] ?? $key;
+                $receipt = $receipts->get($paymentKey);
+                $total = array_sum(array_column($record['items'], 'amount'));
+                $valid = $receipt && $record['signature'] === $this->signature($receipt) && $total + ($confirmed[$paymentKey] ?? 0) <= $receipt['amount'];
+                foreach ($record['items'] as $item) {
+                    $target = $item['target'];
+                    $valid = $valid && isset($trial[$target]) && $trial[$target]['signature'] === $item['signature']
+                        && $this->apply($item['amount'], [$target], $trial) === 0;
+                }
+                if (! $valid) {
+                    foreach ($group as $recordKey => $member) {
+                        $invalidManual[$member['payment_key'] ?? $recordKey] = 'Dữ liệu nguồn của nhóm Bill đã thay đổi. Cần kiểm tra lại.';
+                    }
+                    continue 2;
+                }
+            }
+            $lines = $trial;
+            foreach ($group as $key => $record) {
+                $paymentKey = $record['payment_key'] ?? $key;
+                $manualApplied[$paymentKey] = array_merge($manualApplied[$paymentKey] ?? [], $record['items']);
+                $confirmed[$paymentKey] = ($confirmed[$paymentKey] ?? 0) + array_sum(array_column($record['items'], 'amount'));
+                $confirmedApplied[$key] = true;
+            }
+        }
+
         $unmatched = $previous['unmatched'] ?? [];
         $automatic = $previous['automatic'] ?? [];
         $batchReceipts = $oldDebtReceipts = [];
         $batch = 0;
         foreach ($payments as $payment) {
             $key = $this->key($payment);
-            $amount = $payment['amount'];
+            $amount = $payment['amount'] - ($confirmed[$key] ?? 0);
             if ($amount === 0) {
                 continue;
             }
@@ -70,7 +111,7 @@ class CustomerDebtPaymentAllocation
                     $oldDebtReceipts[$key] = $amount;
                     continue;
                 }
-                if ($currentMethod === 'batch' || ($currentMethod === 'mixed' && $paysByBatch)) {
+                if (in_array($currentMethod, ['batch', 'cycle'], true) || ($currentMethod === 'mixed' && $paysByBatch)) {
                     $batchReceipts[$key] = $amount;
                     continue;
                 }
@@ -130,9 +171,10 @@ class CustomerDebtPaymentAllocation
         }
 
         $receipts = collect($entries)->where('type', 'payment')->keyBy(fn ($entry) => $this->key($entry));
-        $manualApplied = $previous['manualApplied'] ?? [];
-        $invalidManual = [];
         foreach ($manual as $key => $record) {
+            if (isset($record['confirmed_group'])) {
+                continue;
+            }
             $receipt = $receipts->get($key);
             if (! $receipt) {
                 continue;
@@ -158,6 +200,7 @@ class CustomerDebtPaymentAllocation
                 $available -= $item['amount'];
             }
             $lines = $trial;
+            unset($invalidManual[$key]);
             $manualApplied[$key] = $record['items'];
             if ($available > 0) {
                 $unmatched[$key]['amount'] = $available;
@@ -177,7 +220,7 @@ class CustomerDebtPaymentAllocation
             $paidThrough = $line;
         }
 
-        return compact('lines', 'unmatched', 'credit', 'paidThrough', 'firstOpen', 'automatic', 'manualApplied', 'invalidManual', 'batchSurplus');
+        return compact('lines', 'unmatched', 'credit', 'paidThrough', 'firstOpen', 'automatic', 'manualApplied', 'confirmedApplied', 'invalidManual', 'batchSurplus');
     }
 
     public function key(array $entry): string
