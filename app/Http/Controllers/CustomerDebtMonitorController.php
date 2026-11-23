@@ -442,15 +442,42 @@ class CustomerDebtMonitorController extends Controller
         ]).'#debt-vouchers')->with('success', 'Đã lưu phiếu '.$voucher['number'].'.');
     }
 
+    public function voidVoucher(Request $request, string $voucher, CustomerDebtSheetService $sheets, CustomerDebtVouchers $vouchers)
+    {
+        abort_unless($request->user()->canManageCustomerDebt(), 403);
+        $data = $request->validate($this->detailCustomerRules());
+        $voided = Cache::lock('customer-debt-load', 60)->block(5, function () use ($request, $sheets, $vouchers, $data, $voucher) {
+            $customer = $this->detailCustomer($this->debtContext($request, $sheets), $data);
+
+            return app(CustomerDebtPolicyService::class)->withWriteLock($customer, fn () =>
+                $vouchers->void($customer, $voucher, $data['revision'], $request->user()->id));
+        });
+
+        return redirect()->to(route('customer-debt.index', $this->allocationDetailQuery($data) + [
+            'debt_section' => 'vouchers', 'new_voucher' => $voided['type'],
+            'voucher_selected' => array_keys($voided['purchase_days'] ?? []),
+        ]).'#debt-voucher-editor')->with('success', 'Đã gỡ phiếu '.$voided['number'].'.');
+    }
+
     public function printVoucher(Request $request, string $voucher, CustomerDebtSheetService $sheets, CustomerDebtVouchers $vouchers)
     {
         [$selected, $row, $query] = $this->storedVoucher($request, $voucher, $sheets, $vouchers);
         $company = Setting::get('company_legal_name', 'CÔNG TY CỔ PHẦN THỰC PHẨM HOÀNG LONG TNT');
 
+        $customer = isset($selected['customer_id'])
+            ? Customer::query()->find($selected['customer_id'], ['id', 'address', 'phone'])
+            : null;
+        $sourceEntries = collect($selected['entries'])->sortByDesc('date');
+        $address = trim((string) $customer?->address)
+            ?: trim((string) $customer?->addresses()->where('is_default', true)->value('note'))
+            ?: trim((string) ($selected['address'] ?? $sourceEntries->first(fn ($entry) => filled($entry['address'] ?? null))['address'] ?? ''));
+        $phone = trim((string) $customer?->phone)
+            ?: trim((string) ($selected['phone'] ?? $sourceEntries->first(fn ($entry) => filled($entry['phone'] ?? null))['phone'] ?? ''));
+
         $creator = User::query()->find($row['created_by'] ?? null, ['name', 'short_name']);
         $creatorName = trim((string) $creator?->short_name) ?: $creator?->name;
 
-        return response()->view('customer-debt.voucher-print', compact('selected', 'row', 'query', 'company', 'creatorName'))->header('Cache-Control', 'private, no-store');
+        return response()->view('customer-debt.voucher-print', compact('selected', 'row', 'query', 'company', 'creatorName', 'address', 'phone'))->header('Cache-Control', 'private, no-store');
     }
 
     public function downloadVoucherDocument(Request $request, string $voucher, string $document, CustomerDebtSheetService $sheets, CustomerDebtVouchers $vouchers)

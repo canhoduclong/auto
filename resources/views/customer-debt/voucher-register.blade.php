@@ -150,6 +150,16 @@
                     <td class="text-nowrap">
                         <a class="btn btn-sm btn-outline-primary" href="{{ request()->fullUrlWithQuery(['edit_voucher' => $row['id'], 'new_voucher' => null]) }}#debt-voucher-editor">Cập nhật</a>
                         <a class="btn btn-sm btn-light" target="_blank" rel="noopener" href="{{ route('customer-debt.vouchers.print', $voucherUrl($row)) }}">In phiếu</a>
+                        <form class="d-inline" method="POST" action="{{ route('customer-debt.vouchers.void', ['voucher' => $row['id']]) }}"
+                            onsubmit="return confirm('Gỡ phiếu này khỏi sổ phiếu? Các ngày mua đủ điều kiện sẽ được chọn lại để lập phiếu mới.')">
+                            @csrf
+                            @method('DELETE')
+                            @foreach($identity as $field => $value)
+                                <input type="hidden" name="{{ $field }}" value="{{ $value }}">
+                            @endforeach
+                            <input type="hidden" name="revision" value="{{ $voucherRegister['revision'] }}">
+                            <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Gỡ phiếu {{ $row['number'] }}">Gỡ phiếu</button>
+                        </form>
                     </td>
                 </tr>
             @empty

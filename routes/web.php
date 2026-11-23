@@ -1455,6 +1455,7 @@ Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,mana
     Route::patch('/customer-debt/recovery', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'updateRecovery'])->name('customer-debt.recovery');
     Route::middleware('role:admin,account,accountant,accounting')->prefix('customer-debt/vouchers')->name('customer-debt.vouchers.')->group(function () {
         Route::post('/', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'saveVoucher'])->name('save');
+        Route::delete('/{voucher}', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'voidVoucher'])->whereUuid('voucher')->name('void');
         Route::get('/{voucher}', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'printVoucher'])->whereUuid('voucher')->name('print');
         Route::get('/{voucher}/documents/{document}', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'downloadVoucherDocument'])
             ->whereUuid(['voucher', 'document'])->name('documents.download');

@@ -28,6 +28,12 @@
                 <span><strong>Ngày lập</strong> {{ \Carbon\Carbon::parse($row['created_at'])->timezone(config('app.display_timezone'))->format('d/m/Y') }}</span>
             </div>
             <h2><span>Khách hàng</span> {{ $selected['name'] }}</h2>
+            @if($address || $phone)
+                <dl class="voucher-record-contact">
+                    @if($address)<div><dt>Địa chỉ</dt><dd>{{ $address }}</dd></div>@endif
+                    @if($phone)<div><dt>Số điện thoại</dt><dd>{{ $phone }}</dd></div>@endif
+                </dl>
+            @endif
             @if(!$receipt && empty($row['purchase_days']))
                 <p>Chốt công nợ đến {{ \Carbon\Carbon::parse($row['through'])->format('d/m/Y') }}</p>
             @endif
@@ -58,6 +64,9 @@
                         </tfoot>
                     @endif
                 </table>
+                @if($receipt && $visibleAmount($row['remaining']))
+                    <p class="voucher-record-words"><strong>Bằng chữ</strong> {{ \App\Support\VietnameseMoneyWords::format($row['remaining']) }}</p>
+                @endif
             @endif
             <div class="voucher-at-end">
                 @if($visibleAmount($printedAmount))

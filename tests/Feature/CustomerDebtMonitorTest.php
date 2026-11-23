@@ -1031,11 +1031,15 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(['2026-11-19' => 1000], $first['purchase_days']);
         self::assertSame(1000, $first['new_amount']);
         self::assertSame('2026-11-19', $first['through']);
+        DB::table('customers')->where('id', 1)->update(['address' => '12 Đường Bình Minh', 'phone' => '0901234567']);
         $print = $controller->printVoucher($this->request($query, 'accountant'), $first['id'], $sheets, $vouchers)->getContent();
+        self::assertStringContainsString('<dt>Địa chỉ</dt><dd>12 Đường Bình Minh</dd>', $print);
+        self::assertStringContainsString('<dt>Số điện thoại</dt><dd>0901234567</dd>', $print);
         self::assertStringContainsString('Mua hàng ngày 19/11/2026', $print);
         self::assertStringContainsString('Số tiền Thu', $print);
+        self::assertStringContainsString('<strong>Bằng chữ</strong> '.\App\Support\VietnameseMoneyWords::format(1000), $print);
         self::assertStringContainsString('<span>Huy</span>', $print);
-        foreach (['Chốt công nợ đến', 'Nợ chuyển từ phiếu trước', 'Đã thu theo phiếu', 'Số tiền thực thu', 'Bằng chữ'] as $hiddenLabel) {
+        foreach (['Chốt công nợ đến', 'Nợ chuyển từ phiếu trước', 'Đã thu theo phiếu', 'Số tiền thực thu'] as $hiddenLabel) {
             self::assertStringNotContainsString($hiddenLabel, $print);
         }
         self::assertSame(1000, $register()['suggested']);
@@ -1051,6 +1055,18 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(['2026-11-18' => 1000], $second['purchase_days']);
         self::assertSame(1000, $second['carry']);
         self::assertSame(2000, $second['total']);
+
+        $response = $controller->voidVoucher($this->request($query + [
+            'revision' => $register()['revision'],
+        ], 'accountant'), $second['id'], $sheets, $vouchers);
+        parse_str((string) parse_url($response->getTargetUrl(), PHP_URL_QUERY), $reopened);
+        self::assertSame(['2026-11-18'], $reopened['voucher_selected']);
+        self::assertSame(1, $register()['rows']->total());
+        self::assertSame(['2026-11-18' => 1000], $register(['voucher_selected' => $reopened['voucher_selected']])['selectedPurchases']->all());
+
+        $save(['2026-11-18']);
+        self::assertSame('PT-0003', $register()['latest']['number']);
+        self::assertSame(2000, $register()['latest']['total']);
     }
 
     public function test_debt_vouchers_can_include_all_delivery_dates_beyond_the_manual_limit(): void

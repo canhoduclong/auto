@@ -25,12 +25,17 @@ class CustomerDebtVouchers
 
     public function rows(array $customer): Collection
     {
+        return $this->balances($this->storedRows($customer)->whereNull('voided_at'));
+    }
+
+    private function storedRows(array $customer): Collection
+    {
         $prefix = $this->prefix($customer);
 
-        return $this->balances(Setting::query()->where('key', 'like', $prefix.'%')->get(['key', 'value'])
+        return Setting::query()->where('key', 'like', $prefix.'%')->get(['key', 'value'])
             ->filter(fn ($setting) => str_starts_with($setting->key, $prefix))
             ->map(fn ($setting) => json_decode($setting->value, true, flags: JSON_THROW_ON_ERROR))
-            ->keyBy('id')->sortBy('sequence'));
+            ->keyBy('id')->sortBy('sequence');
     }
 
     private function balances(Collection $rows): Collection
@@ -112,7 +117,8 @@ class CustomerDebtVouchers
     /** The caller holds the customer debt write lock. */
     public function save(array $customer, array $data, int $actor): array
     {
-        $rows = $this->rows($customer);
+        $stored = $this->storedRows($customer);
+        $rows = $this->balances($stored->whereNull('voided_at'));
         if (! hash_equals($this->revision($customer, $rows), $data['revision'])) {
             throw ValidationException::withMessages(['revision' => 'Dữ liệu phiếu hoặc công nợ đã thay đổi. Vui lòng tải lại trang.']);
         }
@@ -121,7 +127,7 @@ class CustomerDebtVouchers
         $existing = $rows->get($id);
         abort_if(isset($data['voucher_id']) && ! $existing, 404);
         $previous = $rows->last();
-        $sequence = $existing['sequence'] ?? (($previous['sequence'] ?? 0) + 1);
+        $sequence = $existing['sequence'] ?? ((int) $stored->max('sequence') + 1);
         $dates = $data['purchase_dates'] ?? [];
         // Keep the register's running cutoff while a selected voucher can include older, uncovered dates.
         $through = $existing['through'] ?? ($dates === [] ? $data['through'] : max(max($dates), $previous['through'] ?? ''));
@@ -134,7 +140,7 @@ class CustomerDebtVouchers
         if ($number === '') {
             $number = $existing['number'] ?? sprintf('%s-%04d', $type === 'receipt' ? 'PT' : 'DNTT', $sequence);
         }
-        if ($rows->except($id)->contains(fn ($row) => mb_strtoupper($row['number']) === $number)) {
+        if ($stored->except($id)->contains(fn ($row) => mb_strtoupper($row['number']) === $number)) {
             throw ValidationException::withMessages(['number' => 'Số phiếu này đã được sử dụng cho khách hàng.']);
         }
 
@@ -188,4 +194,32 @@ class CustomerDebtVouchers
 
         return $voucher;
     }
+
+    /** The caller holds the customer debt write lock. */
+    public function void(array $customer, string $id, string $revision, int $actor): array
+    {
+        $stored = $this->storedRows($customer);
+        $active = $stored->whereNull('voided_at');
+        $voucher = $active->get($id);
+        abort_unless($voucher, 404);
+        if (! hash_equals($this->revision($customer, $this->balances($active)), $revision)) {
+            throw ValidationException::withMessages(['revision' => 'Dữ liệu phiếu đã thay đổi. Vui lòng tải lại trang trước khi gỡ.']);
+        }
+
+        $laterCutoff = $active->where('sequence', '>', $voucher['sequence'])
+            ->contains(fn ($row) => empty($row['purchase_days']) && $row['new_amount'] > 0);
+        if ($laterCutoff && ($voucher['new_amount'] > 0 || ! empty($voucher['purchase_days']))) {
+            throw ValidationException::withMessages(['voucher' => 'Phiếu kế tiếp đã chốt công nợ dựa trên phiếu này. Hãy gỡ phiếu chốt sau trước để các ngày mua được mở lại đúng.']);
+        }
+        $remaining = $this->balances($active->except($id));
+        if ($remaining->contains(fn ($row) => $row['remaining'] < 0 || ($row['status'] === 'paid' && empty($row['documents'])))) {
+            throw ValidationException::withMessages(['voucher' => 'Gỡ phiếu sẽ làm số tiền thu hoặc chứng từ của phiếu kế tiếp không còn khớp. Kiểm tra phiếu kế tiếp trước.']);
+        }
+        $voucher['voided_at'] = now()->toIso8601String();
+        $voucher['voided_by'] = $actor;
+        Setting::set($this->prefix($customer).$id, json_encode($voucher, JSON_THROW_ON_ERROR));
+
+        return $voucher;
+    }
+
 }

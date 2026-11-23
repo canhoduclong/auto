@@ -59,6 +59,10 @@ button { border: 0; border-radius: 6px; padding: 9px 15px; background: var(--vou
 .voucher-record-meta strong { margin-right: 4px; }
 .voucher-record h2 { margin: 22px 0 10px; padding-bottom: 10px; border-bottom: 1px solid #dfd4ca; }
 .voucher-record h2 span { margin-right: 8px; color: #765749; font-size: .75em; }
+.voucher-record-contact { margin: 0 0 14px; font-size: .9em; }
+.voucher-record-contact div { display: grid; grid-template-columns: 8em minmax(0, 1fr); gap: 6px 12px; padding: 2px 0; }
+.voucher-record-contact dt { font-weight: bold; }
+.voucher-record-contact dd { margin: 0; overflow-wrap: anywhere; }
 .voucher-record .voucher-record-table { margin: 12px 0 14px; }
 .voucher-record-table :is(th, td):first-child { width: auto; text-align: left; }
 .voucher-record-table :is(th, td):last-child { width: 1%; white-space: nowrap; }
