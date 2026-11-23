@@ -54,6 +54,21 @@ button { border: 0; border-radius: 6px; padding: 9px 15px; background: var(--vou
 .voucher-write-in { display: inline-block; width: min(100%, 16em); height: 1.15em; border-bottom: 1px dotted currentColor; }
 .voucher-receipt .voucher-signatures { gap: 10px; padding-bottom: 36px; }
 
+.voucher-record .voucher-brand { justify-content: center; text-align: center; }
+.voucher-record .voucher-record-meta { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 24px; font-size: .9em; }
+.voucher-record-meta strong { margin-right: 4px; }
+.voucher-record h2 { margin: 22px 0 10px; padding-bottom: 10px; border-bottom: 1px solid #dfd4ca; }
+.voucher-record h2 span { margin-right: 8px; color: #765749; font-size: .75em; }
+.voucher-record .voucher-record-table { margin: 12px 0 14px; }
+.voucher-record-table :is(th, td):first-child { width: auto; text-align: left; }
+.voucher-record-table :is(th, td):last-child { width: 1%; white-space: nowrap; }
+.voucher-record-table tbody td { border-bottom: 1px solid #e4d9ca; }
+.voucher-record-table tfoot :is(th, td) { background: #e8d7be; border-bottom: 1px solid #f6f0e9; font-weight: bold; }
+.voucher-record .voucher-record-words strong { margin-right: 4px; }
+.voucher-record .voucher-signatures { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding-top: 14px; border-top: 1px solid #dfd4ca; }
+.voucher-record.voucher-receipt .voucher-signatures { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.voucher-record .voucher-signatures span { margin-top: 3px; }
+
 @media screen and (max-width: 550px) {
     main, .voucher { padding: 10px; }
     .voucher-body { padding: 0; }

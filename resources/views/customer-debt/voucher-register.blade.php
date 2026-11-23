@@ -33,7 +33,7 @@
             <input type="hidden" name="revision" value="{{ $voucherRegister['revision'] }}">
             @if($editing)
                 <input type="hidden" name="voucher_id" value="{{ $editing['id'] }}">
-                <p class="small mb-0">{{ $types[$editing['type']] }} · Chốt đến {{ \Carbon\Carbon::parse($editing['through'])->format('d/m/Y') }} · Nợ chuyển sang {{ $currency($editing['carry']) }}</p>
+                <p class="small mb-0">{{ $types[$editing['type']] }} @if(empty($editing['purchase_days'])) · Chốt đến {{ \Carbon\Carbon::parse($editing['through'])->format('d/m/Y') }} @endif · Nợ chuyển sang {{ $currency($editing['carry']) }}</p>
             @else
                 <label class="col-sm-6">
                     <span class="form-label">Loại phiếu</span>
@@ -43,9 +43,9 @@
                         @endforeach
                     </select>
                 </label>
-                <label class="col-sm-6">
+                <label class="col-sm-6" data-voucher-cutoff @if($selectedPurchases->isNotEmpty()) hidden @endif>
                     <span class="form-label">Chốt công nợ đến ngày</span>
-                    <input name="through" type="date" class="form-control" value="{{ old('through', $today) }}" min="{{ $latest['through'] ?? '' }}" data-previous-through="{{ $latest['through'] ?? '' }}" max="{{ $today }}" required>
+                    <input name="through" type="date" class="form-control" value="{{ old('through', $today) }}" min="{{ $latest['through'] ?? '' }}" max="{{ $today }}" required @disabled($selectedPurchases->isNotEmpty())>
                 </label>
             @endif
             <div class="col-12">
@@ -116,7 +116,7 @@
     <div class="table-responsive">
         <table class="table table-sm align-middle">
             <thead><tr>
-                <th scope="col">Số phiếu</th><th scope="col">Ngày chốt</th><th scope="col">Trạng thái</th>
+                <th scope="col">Số phiếu</th><th scope="col">Ngày mua / chốt</th><th scope="col">Trạng thái</th>
                 <th scope="col" class="text-end">Nợ chuyển sang</th><th scope="col" class="text-end">Phải thu</th>
                 <th scope="col" class="text-end">Đã thu</th><th scope="col" class="text-end">Còn lại</th>
                 <th scope="col">Chứng từ</th><th scope="col">Thao tác</th>
@@ -125,7 +125,13 @@
             @forelse($rows as $row)
                 <tr>
                     <td><strong>{{ $row['number'] }}</strong><div class="small text-muted">{{ $types[$row['type']] }}</div></td>
-                    <td class="text-nowrap">{{ \Carbon\Carbon::parse($row['through'])->format('d/m/Y') }}</td>
+                    <td class="text-nowrap">
+                        @if(count($row['purchase_days'] ?? []) > 1)
+                            {{ count($row['purchase_days']) }} ngày mua
+                        @else
+                            {{ \Carbon\Carbon::parse(empty($row['purchase_days']) ? $row['through'] : array_key_first($row['purchase_days']))->format('d/m/Y') }}
+                        @endif
+                    </td>
                     <td>
                         <span class="badge {{ ['paid' => 'bg-success', 'partial' => 'bg-warning text-dark', 'settled' => 'bg-secondary'][$row['status']] ?? 'bg-light text-dark' }}">{{ $statuses[$row['status']] }}</span>
                         @if($row['id'] !== $latest['id'] && $row['remaining'] > 0)<div class="small text-muted">Số dư đã chuyển tiếp</div>@endif

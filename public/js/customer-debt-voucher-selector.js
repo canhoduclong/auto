@@ -18,7 +18,8 @@ document.querySelectorAll('[data-voucher-workspace]').forEach(workspace => {
     const fields = form?.querySelector('[data-voucher-purchase-fields]');
     const totalLabel = form?.querySelector('[data-voucher-purchase-total]');
     const amountInput = form?.querySelector('[data-voucher-amount]');
-    const dateInput = form?.querySelector('[name="through"]');
+    const cutoff = form?.querySelector('[data-voucher-cutoff]');
+    const dateInput = cutoff?.querySelector('input');
     let manualAmount = days.size ? '' : amountInput?.value;
     amountInput?.addEventListener('input', () => { manualAmount = amountInput.value; });
 
@@ -46,14 +47,13 @@ document.querySelectorAll('[data-voucher-workspace]').forEach(workspace => {
             remove.addEventListener('click', () => {
                 days.delete(date);
                 render();
-                (findButtons().find(button => button.dataset.voucherDate === date) ?? dateInput).focus();
+                (findButtons().find(button => button.dataset.voucherDate === date) ?? amountInput).focus();
             });
             row.append(remove);
             list.append(row);
         }
-        const latestDay = [...days.keys()].sort().pop();
-        dateInput.min = [dateInput.dataset.previousThrough || '', latestDay || ''].sort().pop();
-        if (latestDay && dateInput.value < latestDay) dateInput.value = latestDay;
+        cutoff.hidden = days.size > 0;
+        dateInput.disabled = days.size > 0;
         amountInput.readOnly = days.size > 0;
         amountInput.value = days.size ? total : manualAmount;
         totalLabel.textContent = days.size ? `${days.size} ngày · Còn phải thu ${money.format(total)} đ` : 'Chưa chọn ngày mua.';

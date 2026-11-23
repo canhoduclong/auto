@@ -415,7 +415,11 @@ class CustomerDebtMonitorController extends Controller
         $data = $request->validate($this->detailCustomerRules() + [
             'voucher_id' => 'nullable|uuid',
             'type' => 'required_without:voucher_id|in:receipt,payment-request',
-            'through' => 'required_without:voucher_id|date_format:Y-m-d|before_or_equal:today',
+            'through' => [
+                Rule::excludeIf($request->filled('purchase_dates')),
+                Rule::requiredIf(! $request->filled('voucher_id') && ! $request->filled('purchase_dates')),
+                'nullable', 'date_format:Y-m-d', 'before_or_equal:today',
+            ],
             'number' => 'nullable|string|max:50',
             'new_amount' => 'nullable|required_with:voucher_id|integer|min:0|max:999999999999999',
             'purchase_dates' => ['nullable', 'array', 'list', 'max:100', Rule::prohibitedIf($request->filled('voucher_id'))],

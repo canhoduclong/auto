@@ -122,7 +122,9 @@ class CustomerDebtVouchers
         abort_if(isset($data['voucher_id']) && ! $existing, 404);
         $previous = $rows->last();
         $sequence = $existing['sequence'] ?? (($previous['sequence'] ?? 0) + 1);
-        $through = $existing['through'] ?? $data['through'];
+        $dates = $data['purchase_dates'] ?? [];
+        // Keep the register's running cutoff while a selected voucher can include older, uncovered dates.
+        $through = $existing['through'] ?? ($dates === [] ? $data['through'] : max(max($dates), $previous['through'] ?? ''));
         if (! $existing && $previous && $through < $previous['through']) {
             throw ValidationException::withMessages(['through' => 'Ngày chốt phải từ ngày chốt phiếu gần nhất trở đi.']);
         }
@@ -137,11 +139,10 @@ class CustomerDebtVouchers
         }
 
         $purchaseDays = $existing['purchase_days'] ?? [];
-        if (! $existing && ! empty($data['purchase_dates'])) {
-            $days = $this->purchaseDays($customer, $rows)->only($data['purchase_dates'])
-                ->where('selectable', true)->where('date', '<=', $through);
-            if ($days->count() !== count($data['purchase_dates'])) {
-                throw ValidationException::withMessages(['purchase_dates' => 'Có ngày đã đưa vào phiếu, hết số phải thu hoặc nằm sau ngày chốt. Vui lòng kiểm tra lại.']);
+        if (! $existing && $dates !== []) {
+            $days = $this->purchaseDays($customer, $rows)->only($dates)->where('selectable', true);
+            if ($days->count() !== count($dates)) {
+                throw ValidationException::withMessages(['purchase_dates' => 'Có ngày đã đưa vào phiếu, hết số phải thu hoặc không còn trong danh sách mua hàng. Vui lòng kiểm tra lại.']);
             }
             $purchaseDays = $days->sortKeys()->pluck('remaining', 'date')->all();
         }

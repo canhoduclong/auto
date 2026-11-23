@@ -1016,7 +1016,7 @@ class CustomerDebtMonitorTest extends TestCase
         $query = ['system_customer' => 1, 'debt_section' => 'vouchers', 'window' => 'all'];
         $register = fn (array $filters = []) => $controller->index($this->request($query + $filters, 'accountant'), $sheets)->getData()['voucherRegister'];
         $save = fn (array $dates) => $controller->saveVoucher($this->request($query + [
-            'revision' => $register()['revision'], 'through' => '2026-11-20', 'type' => 'receipt',
+            'revision' => $register()['revision'], 'type' => 'receipt',
             'paid' => 0, 'purchase_dates' => $dates, 'new_amount' => 10,
         ], 'accountant'), $sheets, $vouchers);
 
@@ -1030,6 +1030,13 @@ class CustomerDebtMonitorTest extends TestCase
         $first = $register()['latest'];
         self::assertSame(['2026-11-19' => 1000], $first['purchase_days']);
         self::assertSame(1000, $first['new_amount']);
+        self::assertSame('2026-11-19', $first['through']);
+        $print = $controller->printVoucher($this->request($query, 'accountant'), $first['id'], $sheets, $vouchers)->getContent();
+        self::assertStringContainsString('Mua hàng ngày 19/11/2026', $print);
+        self::assertStringContainsString('Còn phải thu', $print);
+        foreach (['Chốt công nợ đến', 'Nợ chuyển từ phiếu trước', 'Đã thu theo phiếu', 'Số tiền thực thu', 'Bằng chữ'] as $hiddenLabel) {
+            self::assertStringNotContainsString($hiddenLabel, $print);
+        }
         self::assertSame(1000, $register()['suggested']);
         try {
             $save(['2026-11-19']);
