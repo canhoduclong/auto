@@ -14,6 +14,7 @@ use App\Models\User;
 use Exception;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ApprovalService
 {
@@ -87,12 +88,16 @@ class ApprovalService
             ->whereHas('order', fn ($query) => $query->whereIn('status', [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED]))
             ->with($this->adjustmentQueueRelations())->get();
 
-        $weightConfirmation = OrderAdjustment::query()
-            ->where('status', OrderAdjustment::STATUS_APPROVED)->whereNull('weight_confirmed_by')
-            ->with($this->adjustmentQueueRelations())->get()
-            ->filter(fn (OrderAdjustment $adjustment) => $adjustment->requiresAccountingWeightConfirmation());
+        $pending = $withWorkflow->concat($withoutWorkflow);
+        if (Schema::hasColumn('order_adjustments', 'weight_confirmed_by')) {
+            $weightConfirmation = OrderAdjustment::query()
+                ->where('status', OrderAdjustment::STATUS_APPROVED)->whereNull('weight_confirmed_by')
+                ->with($this->adjustmentQueueRelations())->get()
+                ->filter(fn (OrderAdjustment $adjustment) => $adjustment->requiresAccountingWeightConfirmation());
+            $pending = $pending->concat($weightConfirmation);
+        }
 
-        return $withWorkflow->concat($withoutWorkflow)->concat($weightConfirmation)->unique('id')->sortByDesc('submitted_at')->values();
+        return $pending->unique('id')->sortByDesc('submitted_at')->values();
     }
 
     /**
