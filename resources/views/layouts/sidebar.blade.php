@@ -218,6 +218,11 @@
 							<div class="text-uppercase fs-sm lh-sm opacity-50 sidebar-resize-hide">Tài chính</div>
 							<i class="ph-dots-three sidebar-resize-show"></i>
 						</li>
+                        <li class="nav-item">
+                            <a href="{{ route('admin.accounting.assets.index') }}" class="nav-link{{ request()->routeIs('admin.accounting.assets.*') ? ' active' : '' }}">
+                                <i class="ph-package"></i><span>Quản lý tài sản</span>
+                            </a>
+                        </li>
 						<li class="nav-item">
 							<a href="{{ route('admin.accounting.cashflow') }}" class="nav-link{{ request()->routeIs('admin.accounting.cashflow') || request()->routeIs('admin.accounting.cashflow.*') || request()->routeIs('admin.accounting.refresh-history') ? ' active' : '' }}">
 								<i class="ph-currency-circle-dollar"></i>

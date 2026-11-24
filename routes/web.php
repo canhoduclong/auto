@@ -274,6 +274,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 });
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:account,accountant,accounting,admin')->group(function () {
+        require __DIR__.'/company-assets.php';
         Route::get('/tax-settings/products', [\App\Http\Controllers\ProductTaxSettingController::class, 'index'])->name('tax-settings.products');
         Route::patch('/tax-settings/products/{product}', [\App\Http\Controllers\ProductTaxSettingController::class, 'update'])->name('tax-settings.products.update');
         Route::get('/tax-settings/products/{product}', [\App\Http\Controllers\ProductTaxSettingController::class, 'show'])->name('tax-settings.products.show');
@@ -395,6 +396,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 });
 
     Route::prefix('admin/accounting')->name('admin.accounting.')->middleware('role:admin')->group(function () {
+        require __DIR__.'/company-assets.php';
         Route::get('/finance-requests', [DepartmentFinanceRequestController::class, 'adminIndex'])->name('finance-requests.index');
         Route::get('/finance-requests/{transaction}/edit', [DepartmentFinanceRequestController::class, 'adminEdit'])->name('finance-requests.edit');
         Route::put('/finance-requests/{transaction}', [DepartmentFinanceRequestController::class, 'adminUpdate'])->name('finance-requests.update');

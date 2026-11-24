@@ -453,6 +453,10 @@ body.acc-sidebar-collapsed .acc-task-group>summary{justify-content:center;paddin
                 <i class="bi bi-diagram-3"></i> Quản trị danh mục giao dịch
             </a>
 
+            <a href="{{ route('accounting.assets.index') }}" class="{{ request()->routeIs('accounting.assets.*') ? 'active' : '' }}">
+                <i class="bi bi-box-seam"></i> Quản lý tài sản
+            </a>
+
             <div class="nav-section">Công nợ</div>
             <a href="{{ route('customer-debt.index', ['tab' => 'all']) }}" class="{{ request()->routeIs('customer-debt.index') ? 'active' : '' }}"><i class="bi bi-wallet2"></i> Đối chiếu công nợ</a>
             <a href="{{ route('customer-debt.report') }}" class="{{ request()->routeIs('customer-debt.report') ? 'active' : '' }}"><i class="bi bi-bar-chart"></i> Báo cáo công nợ</a>
