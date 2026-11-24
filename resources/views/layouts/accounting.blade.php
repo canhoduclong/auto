@@ -375,6 +375,9 @@ body.acc-sidebar-collapsed .acc-task-group>summary{justify-content:center;paddin
             <a href="{{ route('accounting.dashboard') }}" class="{{ request()->routeIs('accounting.dashboard') ? 'active' : '' }}">
                 <i class="bi bi-speedometer2"></i> Dashboard
             </a>
+            <a href="{{ route('accounting.assets.index') }}" class="{{ request()->routeIs('accounting.assets.*') ? 'active' : '' }}" data-label="Quản lý tài sản">
+                <i class="bi bi-box-seam"></i> Quản lý tài sản
+            </a>
             <a href="{{ route('accounting.order-adjustments') }}" class="{{ request()->routeIs('accounting.order-adjustments') ? 'active' : '' }}" data-label="Duyệt điều chỉnh đơn">
                 <i class="bi bi-clipboard-check-fill"></i> Duyệt điều chỉnh đơn
                 @if(($pendingAccountingAdjustmentCount ?? 0) > 0)
@@ -451,10 +454,6 @@ body.acc-sidebar-collapsed .acc-task-group>summary{justify-content:center;paddin
             </a>
             <a href="{{ route('accounting.transaction-categories.index') }}" class="{{ request()->routeIs('accounting.transaction-categories.*') ? 'active' : '' }}">
                 <i class="bi bi-diagram-3"></i> Quản trị danh mục giao dịch
-            </a>
-
-            <a href="{{ route('accounting.assets.index') }}" class="{{ request()->routeIs('accounting.assets.*') ? 'active' : '' }}">
-                <i class="bi bi-box-seam"></i> Quản lý tài sản
             </a>
 
             <div class="nav-section">Công nợ</div>
