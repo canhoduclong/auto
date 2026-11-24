@@ -47,6 +47,9 @@
     @php
         $accountingReview = $adjustment->relationLoaded('accountingReview') ? $adjustment->accountingReview : null;
         $isPendingAccounting = $accountingReview === null && $adjustment->status === \App\Models\OrderAdjustment::STATUS_PENDING_APPROVAL;
+        $isPendingWeightConfirmation = $accountingReview === null
+            && $adjustment->status === \App\Models\OrderAdjustment::STATUS_APPROVED
+            && ! $adjustment->weight_confirmed_by;
     @endphp
     <article class="acc-card" id="adjustment-{{ $adjustment->id }}">
         <div class="card-body">
@@ -65,13 +68,18 @@
                     @if($isPendingAccounting)
                         <span class="badge text-bg-warning">Chờ Kế toán duyệt</span>
                         <div class="small text-muted mt-1">Gửi {{ optional($adjustment->submitted_at)->format('d/m/Y H:i') }}</div>
-                    @else
+                    @elseif($isPendingWeightConfirmation)
+                        <span class="badge text-bg-warning">Chờ xác nhận khối lượng</span>
+                        <div class="small text-muted mt-1">Duyệt {{ optional($adjustment->approved_at)->format('d/m/Y H:i') }}</div>
+                    @elseif($accountingReview !== null)
                         <span class="badge {{ $accountingReview->status === 'approved' ? 'text-bg-success' : 'text-bg-danger' }}">
                             {{ $accountingReview->status === 'approved' ? 'Kế toán đã duyệt' : 'Kế toán đã từ chối' }}
                         </span>
                         <div class="small text-muted mt-1">
                             {{ $accountingReview->approver?->name ?? 'Kế toán' }} · {{ optional($accountingReview->approved_at)->format('d/m/Y H:i') }}
                         </div>
+                    @else
+                        <span class="badge text-bg-secondary">{{ $adjustment->status }}</span>
                     @endif
                 </div>
             </div>
