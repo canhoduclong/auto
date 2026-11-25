@@ -48,7 +48,7 @@
             @if(!$receipt && !($row['by_purchase_days'] ?? !empty($row['purchase_days'])))
                 <p>Chốt công nợ đến {{ \Carbon\Carbon::parse($row['through'])->format('d/m/Y') }}</p>
             @endif
-            @if(!$linkedReceipt && ($showTotals || $visibleAmount($row['carry']) || $visibleAmount($row['new_amount'])))
+            @if(!$paymentConfirmation && ($showTotals || $visibleAmount($row['carry']) || $visibleAmount($row['new_amount'])))
                 <table class="voucher-record-table">
                     <thead><tr><th scope="col">Nội dung</th><th scope="col">Số tiền</th></tr></thead>
                     <tbody>
@@ -67,7 +67,7 @@
                     </tbody>
                     @if($showTotals)
                         <tfoot>
-                            @foreach(['total' => 'Tổng phải thu', 'paid' => 'Đã thu theo phiếu', 'remaining' => $receipt ? 'Số tiền Thu' : 'Còn phải thu'] as $key => $label)
+                            @foreach(['total' => 'Tổng phải thu', 'paid' => 'Đã thu theo phiếu', 'remaining' => $receipt && !$collectionReceipt ? 'Số tiền Thu' : 'Còn phải thu'] as $key => $label)
                                 @if($visibleAmount($row[$key]))
                                     <tr><th scope="row">{{ $label }}</th><td>{{ $money($row[$key]) }}</td></tr>
                                 @endif
@@ -75,7 +75,7 @@
                         </tfoot>
                     @endif
                 </table>
-                @if($receipt && $visibleAmount($row['remaining']))
+                @if($receipt && !$collectionReceipt && $visibleAmount($row['remaining']))
                     <p class="voucher-record-words"><strong>Bằng chữ</strong> {{ \App\Support\VietnameseMoneyWords::format($row['remaining']) }}</p>
                 @endif
             @endif
