@@ -21,6 +21,22 @@
     @endif
 
     <div class="row g-3 mb-4" data-voucher-workspace>
+        @unless($editing)
+            <dialog class="border rounded shadow p-3" style="width:min(36rem, 95vw); max-height:85vh" data-voucher-picker aria-labelledby="debt-voucher-picker-title">
+                <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
+                    <h4 class="h6 mb-0" id="debt-voucher-picker-title">Chọn Bill theo ngày</h4>
+                    <form method="dialog"><button class="btn btn-sm btn-outline-secondary">Đóng</button></form>
+                </div>
+                <p class="small text-muted" data-voucher-picker-context></p>
+                <label class="d-block mb-2">
+                    <span class="form-label">Tìm theo ngày mua</span>
+                    <input type="search" class="form-control form-control-sm" placeholder="dd/mm/yyyy" data-voucher-picker-search>
+                </label>
+                <div class="list-group" data-voucher-picker-results></div>
+            </dialog>
+            <script type="application/json" data-voucher-picker-data>@json($voucherRegister['purchaseChoices'])</script>
+        @endunless
+
         <div class="col-xl-6">@include('customer-debt.voucher-purchases')</div>
         <div class="col-xl-6">
     <details class="border rounded p-3" id="debt-voucher-editor" open>

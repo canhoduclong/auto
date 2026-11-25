@@ -20,6 +20,55 @@ document.querySelectorAll('[data-voucher-workspace]').forEach(workspace => {
     const amountInput = form?.querySelector('[data-voucher-amount]');
     const cutoff = form?.querySelector('[data-voucher-cutoff]');
     const dateInput = cutoff?.querySelector('input');
+    const picker = workspace.querySelector('[data-voucher-picker]');
+    const choices = JSON.parse(workspace.querySelector('[data-voucher-picker-data]')?.textContent || '[]');
+    const search = picker?.querySelector('[data-voucher-picker-search]');
+    const results = picker?.querySelector('[data-voucher-picker-results]');
+    const formatDate = date => date.split('-').reverse().join('/');
+    let swapDate;
+    let pickerSource;
+
+    function renderChoices() {
+        const query = search.value.trim();
+        results.replaceChildren();
+        for (const {date, count, remaining} of choices) {
+            const label = formatDate(date);
+            if (days.has(date) || date === pickerSource || (!label.includes(query) && !date.includes(query))) continue;
+
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'list-group-item list-group-item-action d-flex justify-content-between gap-2';
+            const description = document.createElement('span');
+            description.textContent = `${label} · ${count} Bill`;
+            const amount = document.createElement('strong');
+            amount.textContent = `${money.format(remaining)} đ`;
+            button.append(description, amount);
+            button.addEventListener('click', () => {
+                if (swapDate) days.delete(swapDate);
+                days.set(date, Number(remaining));
+                picker.close();
+                render();
+                list.querySelector(`[data-voucher-swap-date="${date}"]`)?.focus();
+            });
+            results.append(button);
+        }
+        if (!results.childElementCount) results.textContent = 'Không tìm thấy ngày mua còn phải thu để chọn.';
+    }
+
+    function openPicker(date) {
+        swapDate = days.has(date) ? date : null;
+        if (!swapDate && days.size >= 100) return;
+        pickerSource = date;
+        picker.querySelector('[data-voucher-picker-context]').textContent = swapDate
+            ? `Chọn ngày thay cho ${formatDate(swapDate)}. Các ngày đã chọn khác vẫn được giữ.`
+            : 'Chọn ngày mua còn phải thu để thêm vào phiếu.';
+        search.value = '';
+        renderChoices();
+        picker.showModal();
+        search.focus();
+    }
+
+    search?.addEventListener('input', renderChoices);
     let manualAmount = days.size ? '' : amountInput?.value;
     amountInput?.addEventListener('input', () => { manualAmount = amountInput.value; });
 
@@ -30,7 +79,7 @@ document.querySelectorAll('[data-voucher-workspace]').forEach(workspace => {
         let total = 0;
         for (const [date, amount] of [...days].sort()) {
             total += Number(amount);
-            const label = date.split('-').reverse().join('/');
+            const label = formatDate(date);
             const hidden = document.createElement('input');
             hidden.type = 'hidden';
             hidden.name = 'purchase_dates[]';
@@ -49,7 +98,14 @@ document.querySelectorAll('[data-voucher-workspace]').forEach(workspace => {
                 render();
                 (findButtons().find(button => button.dataset.voucherDate === date) ?? amountInput).focus();
             });
-            row.append(remove);
+            const change = document.createElement('button');
+            change.type = 'button';
+            change.className = 'btn btn-sm btn-link py-0';
+            change.textContent = 'Chọn Bill khác';
+            change.dataset.voucherSwapDate = date;
+            change.setAttribute('aria-label', `Đổi ngày mua ${label}`);
+            change.addEventListener('click', () => openPicker(date));
+            row.append(change, remove);
             list.append(row);
         }
         cutoff.hidden = days.size > 0;
@@ -58,11 +114,16 @@ document.querySelectorAll('[data-voucher-workspace]').forEach(workspace => {
         amountInput.value = days.size ? total : manualAmount;
         totalLabel.textContent = days.size ? `${days.size} ngày · Còn phải thu ${money.format(total)} đ` : 'Chưa chọn ngày mua.';
         for (const button of findButtons()) {
-            const selected = days.has(button.dataset.voucherDate);
+            const date = button.dataset.voucherDate;
+            const selected = days.has(date);
             button.textContent = selected ? 'Bỏ' : 'Thêm';
+            button.setAttribute('aria-label', `${button.textContent} ngày ${formatDate(date)}`);
             button.setAttribute('aria-pressed', String(selected));
             button.disabled = !selected && days.size >= 100;
         }
+        workspace.querySelectorAll('[data-voucher-open-picker]').forEach(button => {
+            button.disabled = days.size >= 100 && !days.has(button.dataset.voucherOpenPicker);
+        });
         workspace.querySelectorAll('[data-voucher-purchase-pagination] a').forEach(link => {
             link.href = purchaseUrl(link.href);
         });
@@ -99,6 +160,11 @@ document.querySelectorAll('[data-voucher-workspace]').forEach(workspace => {
         if (event.target.matches('[data-voucher-purchase-size]')) loadPurchases(event.target.value);
     });
     workspace.addEventListener('click', event => {
+        const pickerTrigger = event.target.closest('[data-voucher-open-picker]');
+        if (pickerTrigger) {
+            openPicker(pickerTrigger.dataset.voucherOpenPicker);
+            return;
+        }
         const button = event.target.closest('[data-voucher-date]');
         if (button) {
             const date = button.dataset.voucherDate;

@@ -136,6 +136,8 @@ class CustomerDebtMonitorController extends Controller
                     $purchaseDays->forPage($purchasePage, $purchaseSize)->values(), $purchaseDays->count(), $purchaseSize, $purchasePage,
                     ['path' => $request->url(), 'pageName' => 'voucher_purchases_page', 'query' => $request->except('voucher_purchases_page'), 'fragment' => 'debt-voucher-purchases']
                 ),
+                'purchaseChoices' => $editing ? [] : $purchaseDays->where('selectable', true)
+                    ->map(fn ($day) => array_intersect_key($day, array_flip(['date', 'count', 'remaining'])))->values(),
                 'selectedPurchases' => $purchaseDays->only($selectedDates)->where('selectable', true)->pluck('remaining', 'date'),
                 'editing' => $editing,
                 'revision' => $vouchers->revision($selected, $rows),

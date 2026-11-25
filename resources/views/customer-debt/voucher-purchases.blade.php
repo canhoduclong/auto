@@ -36,6 +36,7 @@
                             <button type="button" class="btn btn-sm btn-outline-primary"
                                 data-voucher-date="{{ $day['date'] }}" data-amount="{{ $day['remaining'] }}"
                                 aria-label="Thêm ngày {{ $label }} vào phiếu" aria-pressed="false">Thêm</button>
+                            <button type="button" class="btn btn-sm btn-link" data-voucher-open-picker="{{ $day['date'] }}">Chọn Bill khác</button>
                         @elseif(!$day['selectable'])
                             <span class="small text-muted">Đã đủ</span>
                         @endif
