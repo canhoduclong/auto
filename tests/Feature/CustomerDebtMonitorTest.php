@@ -945,6 +945,54 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame('normal', $row['recovery']['status']);
     }
 
+    public function test_warehouse_can_list_and_filter_payment_requests_from_the_voucher_register(): void
+    {
+        $sheets = $this->service([]);
+        $vouchers = app(\App\Services\CustomerDebtVouchers::class);
+        $customer = ['customer_id' => 1, 'balance_revision' => 'test', 'policy' => ['edit_version' => 0]];
+        $save = function (string $date, string $type, string $number) use ($vouchers, $customer) {
+            $this->collectionClock($date.' 12:00:00');
+
+            return $vouchers->save($customer, [
+                'type' => $type, 'through' => $date, 'number' => $number, 'new_amount' => 1000, 'paid' => 0,
+                'revision' => $vouchers->revision($customer, $vouchers->rows($customer)),
+            ], 7);
+        };
+        $save('2026-11-16', 'payment-request', 'DN-01');
+        $save('2026-11-18', 'receipt', 'PT-02');
+        $newest = $save('2026-11-19', 'payment-request', 'DN-03');
+        $this->collectionClock('2026-11-20 12:00:00');
+
+        $controller = new CustomerDebtMonitorController;
+        $list = fn (array $filters) => $controller->paymentRequests($this->request($filters, 'warehouse'), $sheets, $vouchers)->getData()['rows'];
+        self::assertSame(['DN-03', 'DN-01'], $list([])->pluck('number')->all());
+        self::assertSame(['DN-03'], $list(['period' => 'yesterday'])->pluck('number')->all());
+        self::assertSame(['DN-03'], $list(['period' => 'last3', 'q' => 'chi binh'])->pluck('number')->all());
+        self::assertSame(0, $list(['from' => '2026-11-17', 'to' => '2026-11-18'])->total());
+        self::assertSame(0, $list(['q' => 'Khách khác'])->total());
+        $print = $controller->printVoucher($this->request(['system_customer' => 1], 'warehouse'), $newest['id'], $sheets, $vouchers);
+        self::assertSame('DN-03', $print->original->getData()['row']['number']);
+        $receiptRequest = $this->request(['system_customer' => 1], 'warehouse');
+        $receiptRequest->setRouteResolver(fn () => app('router')->getRoutes()->getByName('customer-debt.vouchers.print-receipt'));
+        $receipt = $controller->printVoucher($receiptRequest, $newest['id'], $sheets, $vouchers);
+        self::assertSame('PT-DN-03', $newest['collection_receipt_number']);
+        self::assertStringContainsString('Số tiền cần thu', $receipt->getContent());
+        self::assertStringContainsString('3.000 đ', $receipt->getContent());
+        self::assertStringContainsString('Shipper thu tiền', $receipt->getContent());
+        self::assertSame(0, $vouchers->rows($customer)[$newest['id']]['paid']);
+
+        $vouchers->save($customer, [
+            'voucher_id' => $newest['id'], 'new_amount' => 1000, 'paid' => 600,
+            'revision' => $vouchers->revision($customer, $vouchers->rows($customer)),
+        ], 7);
+        $confirmationRequest = $this->request(['system_customer' => 1], 'accountant');
+        $confirmationRequest->setRouteResolver(fn () => app('router')->getRoutes()->getByName('customer-debt.vouchers.print-payment-confirmation'));
+        $confirmation = $controller->printVoucher($confirmationRequest, $newest['id'], $sheets, $vouchers);
+        self::assertStringContainsString('Số tiền công ty đã nhận', $confirmation->getContent());
+        self::assertStringContainsString('600 đ', $confirmation->getContent());
+
+    }
+
     public function test_saved_vouchers_roll_forward_unpaid_debt_and_require_proof_for_full_payment(): void
     {
         $this->collectionClock('2026-11-20 12:00:00');

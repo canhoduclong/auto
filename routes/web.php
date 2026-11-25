@@ -1435,6 +1435,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/shipping-expenses/{claim}/payment', [\App\Http\Controllers\ShippingExpenseController::class,'payment'])->name('shipping-expenses.payment');
 });
 
+Route::middleware(['auth', 'role:admin,account,accountant,accounting,warehouse'])->group(function () {
+    Route::get('/customer-debt/payment-requests', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'paymentRequests'])->name('customer-debt.payment-requests');
+    Route::prefix('customer-debt/vouchers')->name('customer-debt.vouchers.')->group(function () {
+        Route::get('/{voucher}', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'printVoucher'])->whereUuid('voucher')->name('print');
+        Route::get('/{voucher}/receipt', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'printVoucher'])->whereUuid('voucher')->name('print-receipt');
+    });
+});
+
 // Sales debt monitoring: sheet-derived balances are separate from order accounting.
 Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,manager,manager_sale,account,accountant,accounting,director,ceo'])->group(function () {
     Route::middleware('role:admin,account,accountant,accounting,director,ceo')->prefix('customer-debt/suppliers')->name('customer-debt.suppliers.')->group(function () {
@@ -1456,12 +1464,11 @@ Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,mana
     Route::post('/customer-debt/customers', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'createCustomer'])->name('customer-debt.customers.store');
     Route::patch('/customer-debt/recovery', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'updateRecovery'])->name('customer-debt.recovery');
     Route::middleware('role:admin,account,accountant,accounting')->prefix('customer-debt/vouchers')->name('customer-debt.vouchers.')->group(function () {
+        Route::get('/{voucher}/payment-confirmation', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'printVoucher'])->whereUuid('voucher')->name('print-payment-confirmation');
         Route::post('/transfer-differences/{difference}', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'classifyVoucherTransferDifference'])->whereUuid('difference')->name('classify-difference');
         Route::post('/transfer-payment', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'transferVoucherPayment'])->name('transfer-payment');
         Route::post('/', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'saveVoucher'])->name('save');
         Route::delete('/{voucher}', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'voidVoucher'])->whereUuid('voucher')->name('void');
-        Route::get('/{voucher}', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'printVoucher'])->whereUuid('voucher')->name('print');
-        Route::get('/{voucher}/receipt', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'printVoucher'])->whereUuid('voucher')->name('print-receipt');
         Route::get('/{voucher}/documents/{document}', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'downloadVoucherDocument'])
             ->whereUuid(['voucher', 'document'])->name('documents.download');
     });

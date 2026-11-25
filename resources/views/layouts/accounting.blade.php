@@ -460,6 +460,7 @@ body.acc-sidebar-collapsed .acc-task-group>summary{justify-content:center;paddin
             </a>
 
             <div class="nav-section">Công nợ</div>
+            <a href="{{ route('customer-debt.payment-requests') }}" class="{{ request()->routeIs('customer-debt.payment-requests') ? 'active' : '' }}"><i class="bi bi-receipt"></i> Đề nghị Thanh toán, Thu</a>
             <a href="{{ route('customer-debt.index', ['tab' => 'all']) }}" class="{{ request()->routeIs('customer-debt.index') ? 'active' : '' }}"><i class="bi bi-wallet2"></i> Đối chiếu công nợ</a>
             <a href="{{ route('customer-debt.report') }}" class="{{ request()->routeIs('customer-debt.report') ? 'active' : '' }}"><i class="bi bi-bar-chart"></i> Báo cáo công nợ</a>
             <a href="{{ route('customer-debt.negotiation') }}" class="{{ request()->routeIs('customer-debt.negotiation') ? 'active' : '' }}"><i class="bi bi-sliders"></i> Đàm phán công nợ</a>

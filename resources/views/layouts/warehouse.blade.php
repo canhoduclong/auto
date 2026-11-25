@@ -416,6 +416,9 @@
             </a-->
 
             <div class="wh-nav-section">Tài chính</div>
+            <a href="{{ route('customer-debt.payment-requests') }}" class="wh-nav-link {{ request()->routeIs('customer-debt.payment-requests') ? 'active' : '' }}">
+                <i class="bi bi-receipt"></i><span class="wh-nav-label">Đề nghị Thanh toán, Thu</span>
+            </a>
             <a href="{{ route('warehouse.finance-requests.index') }}" class="wh-nav-link {{ request()->routeIs('warehouse.finance-requests.*') ? 'active' : '' }}">
                 <i class="bi bi-file-earmark-text"></i><span class="wh-nav-label">Phiếu yêu cầu</span>@if(($warehouseMenuCounts['unread']['warehouse.finance-requests.index']??0)>0)<span class="badge bg-danger" title="Có cập nhật chưa xem">Mới {{ $warehouseMenuCounts['unread']['warehouse.finance-requests.index'] }}</span>@endif
             </a>

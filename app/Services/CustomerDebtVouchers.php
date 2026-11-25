@@ -28,6 +28,27 @@ class CustomerDebtVouchers
         return $this->balances($this->storedRows($customer)->whereNull('voided_at'));
     }
 
+    public function paymentRequests(Collection $customers): Collection
+    {
+        $byPrefix = $customers->keyBy(fn ($customer) => $this->prefix($customer));
+        return Setting::query()->where('key', 'like', 'debt_voucher_%')->get(['key', 'value'])
+            ->groupBy(fn ($setting) => substr($setting->key, 0, -36))
+            ->flatMap(function ($settings, $prefix) use ($byPrefix) {
+                $customer = $byPrefix->get($prefix);
+                if (! $customer) {
+                    return [];
+                }
+
+                $rows = $settings->map(fn ($setting) => json_decode($setting->value, true, flags: JSON_THROW_ON_ERROR))
+                    ->whereNull('voided_at')->sortBy('sequence');
+
+                return $this->balances($rows)->where('type', 'payment-request')->map(fn ($row) => $row + [
+                    'customer_name' => $customer['name'],
+                    'customer_query' => $customer['customer_id'] ? ['system_customer' => $customer['customer_id']] : ['customer' => $customer['key']],
+                ])->values();
+            });
+    }
+
     private function storedRows(array $customer): Collection
     {
         $prefix = $this->prefix($customer);
@@ -174,6 +195,9 @@ class CustomerDebtVouchers
             'documents' => $existing['documents'] ?? [], 'created_at' => $existing['created_at'] ?? now()->toIso8601String(),
             'created_by' => $existing['created_by'] ?? $actor, 'updated_at' => now()->toIso8601String(), 'updated_by' => $actor,
         ];
+        if ($type === 'payment-request') {
+            $voucher['collection_receipt_number'] = $existing['collection_receipt_number'] ?? 'PT-'.($existing['number'] ?? $number);
+        }
         if ($type === 'payment-request' && $voucher['paid'] > 0) {
             $changedPayment = $voucher['paid'] !== ($existing['paid'] ?? 0);
             $voucher['payment_recorded_at'] = $changedPayment ? now()->toIso8601String() : ($existing['payment_recorded_at'] ?? null);

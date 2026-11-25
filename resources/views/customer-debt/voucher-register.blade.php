@@ -100,7 +100,7 @@
                     value="{{ old('new_amount', $editing['new_amount'] ?? '') }}" @required($editing) @readonly($editPurchases) placeholder="{{ $voucherRegister['suggested'] }}" data-voucher-amount>
             </label>
             <label class="col-sm-6">
-                <span class="form-label">Tiền đã thu cho phiếu này (đ)</span>
+                <span class="form-label">Tổng tiền công ty đã nhận cho phiếu này (đ)</span>
                 <input id="debt-voucher-paid" name="paid" type="number" min="0" max="999999999999999" step="1" class="form-control" value="{{ old('paid', $editing['paid'] ?? 0) }}" required>
             </label>
             <label class="col-sm-6">
@@ -180,10 +180,10 @@
                         <a class="btn btn-sm btn-outline-primary" href="{{ request()->fullUrlWithQuery(['edit_voucher' => $row['id'], 'new_voucher' => null]) }}#debt-voucher-editor">Cập nhật</a>
                         <a class="btn btn-sm btn-light" target="_blank" rel="noopener" href="{{ route('customer-debt.vouchers.print', $voucherUrl($row)) }}">In phiếu</a>
                         @if($row['type'] === 'payment-request')
+                            <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="{{ route('customer-debt.vouchers.print-receipt', $voucherUrl($row)) }}">In phiếu thu</a>
+                            <a class="btn btn-sm btn-outline-secondary" href="{{ request()->fullUrlWithQuery(['edit_voucher' => $row['id'], 'new_voucher' => null]) }}#debt-voucher-paid">Ghi nhận tiền về</a>
                             @if($row['paid'] > 0)
-                                <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="{{ route('customer-debt.vouchers.print-receipt', $voucherUrl($row)) }}">In phiếu thu</a>
-                            @else
-                                <a class="btn btn-sm btn-outline-primary" href="{{ request()->fullUrlWithQuery(['edit_voucher' => $row['id'], 'new_voucher' => null]) }}#debt-voucher-paid">Ghi nhận thu</a>
+                                <a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener" href="{{ route('customer-debt.vouchers.print-payment-confirmation', $voucherUrl($row)) }}">In xác nhận đã nhận tiền</a>
                             @endif
                         @endif
                         <form class="d-inline" method="POST" action="{{ route('customer-debt.vouchers.void', ['voucher' => $row['id']]) }}"

@@ -522,14 +522,54 @@ class CustomerDebtMonitorController extends Controller
         ]).'#debt-voucher-editor')->with('success', 'Đã gỡ phiếu '.$voided['number'].'.');
     }
 
+    public function paymentRequests(Request $request, CustomerDebtSheetService $sheets, CustomerDebtVouchers $vouchers)
+    {
+        $filters = $request->validate([
+            'period' => 'nullable|in:all,yesterday,last3',
+            'from' => 'nullable|date_format:Y-m-d',
+            'to' => ['nullable', 'date_format:Y-m-d', Rule::when($request->filled('from'), 'after_or_equal:from')],
+            'q' => 'nullable|string|max:150',
+        ]);
+        $timezone = config('app.display_timezone') ?: config('app.timezone');
+        $today = today($timezone);
+        $period = $filters['period'] ?? 'all';
+        [$from, $to] = match ($period) {
+            'yesterday' => array_fill(0, 2, $today->copy()->subDay()->toDateString()),
+            'last3' => [$today->copy()->subDays(2)->toDateString(), $today->toDateString()],
+            default => [$filters['from'] ?? null, $filters['to'] ?? null],
+        };
+        $search = trim($filters['q'] ?? '');
+        $searchTerm = \Illuminate\Support\Str::ascii($sheets->customerName($search));
+        $context = $this->resolveGroups($request, $sheets, voucherRead: true);
+        $customers = $context['customers']->map(fn ($customer) => ['customer_id' => $customer->id, 'name' => $customer->name])
+            ->concat(collect($context['groups'])->map(fn ($group) => array_replace($group, ['customer_id' => null])));
+        $matches = $vouchers->paymentRequests($customers)->map(fn ($row) => $row + [
+            'issued_date' => \Carbon\Carbon::parse($row['created_at'])->timezone($timezone)->toDateString(),
+        ])->filter(fn ($row) => (! $from || $row['issued_date'] >= $from)
+            && (! $to || $row['issued_date'] <= $to)
+            && ($searchTerm === '' || str_contains(\Illuminate\Support\Str::ascii($sheets->customerName($row['customer_name'])), $searchTerm)))
+            ->sortByDesc(fn ($row) => [$row['issued_date'], $row['created_at'], $row['id']])->values();
+        $page = \Illuminate\Pagination\LengthAwarePaginator::resolveCurrentPage();
+        $rows = new \Illuminate\Pagination\LengthAwarePaginator(
+            $matches->forPage($page, 25), $matches->count(), 25, $page, ['path' => $request->url(), 'query' => $filters]
+        );
+
+        return view('customer-debt.payment-requests', compact('rows', 'period', 'from', 'to', 'search'));
+    }
+
     public function printVoucher(Request $request, string $voucher, CustomerDebtSheetService $sheets, CustomerDebtVouchers $vouchers)
     {
-        [$selected, $row, $query] = $this->storedVoucher($request, $voucher, $sheets, $vouchers);
-        $linkedReceipt = $request->routeIs('customer-debt.vouchers.print-receipt');
-        if ($linkedReceipt) {
-            abort_unless($row['type'] === 'payment-request' && $row['paid'] > 0, 404);
+        [$selected, $row, $query] = $this->storedVoucher($request, $voucher, $sheets, $vouchers, printing: true);
+        $collectionReceipt = $request->routeIs('customer-debt.vouchers.print-receipt');
+        $paymentConfirmation = $request->routeIs('customer-debt.vouchers.print-payment-confirmation');
+        if ($paymentConfirmation) {
+            abort_unless($request->user()->canManageCustomerDebt(), 403);
+            abort_unless($row['paid'] > 0, 404);
+        }
+        if ($collectionReceipt || $paymentConfirmation) {
+            abort_unless($row['type'] === 'payment-request', 404);
             $row['request_number'] = $row['number'];
-            $row['number'] = 'PT-'.$row['number'];
+            $row['number'] = $row['collection_receipt_number'] ?? 'PT-'.$row['number'];
             $row['type'] = 'receipt';
         }
         $company = Setting::get('company_legal_name', 'CÔNG TY CỔ PHẦN THỰC PHẨM HOÀNG LONG TNT');
@@ -544,11 +584,11 @@ class CustomerDebtMonitorController extends Controller
         $phone = trim((string) $customer?->phone)
             ?: trim((string) ($selected['phone'] ?? $sourceEntries->first(fn ($entry) => filled($entry['phone'] ?? null))['phone'] ?? ''));
 
-        $creatorId = $linkedReceipt ? ($row['payment_recorded_by'] ?? $row['updated_by'] ?? $row['created_by']) : ($row['created_by'] ?? null);
+        $creatorId = $paymentConfirmation ? ($row['payment_recorded_by'] ?? $row['updated_by'] ?? $row['created_by']) : ($row['created_by'] ?? null);
         $creator = User::query()->find($creatorId, ['name', 'short_name']);
         $creatorName = trim((string) $creator?->short_name) ?: $creator?->name;
 
-        return response()->view('customer-debt.voucher-print', compact('selected', 'row', 'query', 'company', 'creatorName', 'address', 'phone'))->header('Cache-Control', 'private, no-store');
+        return response()->view('customer-debt.voucher-print', compact('selected', 'row', 'query', 'company', 'creatorName', 'address', 'phone', 'collectionReceipt', 'paymentConfirmation'))->header('Cache-Control', 'private, no-store');
     }
 
     public function downloadVoucherDocument(Request $request, string $voucher, string $document, CustomerDebtSheetService $sheets, CustomerDebtVouchers $vouchers)
@@ -561,13 +601,28 @@ class CustomerDebtMonitorController extends Controller
         return $disk->download($file['path'], $file['name'], ['Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff']);
     }
 
-    private function storedVoucher(Request $request, string $id, CustomerDebtSheetService $sheets, CustomerDebtVouchers $vouchers): array
+    private function storedVoucher(Request $request, string $id, CustomerDebtSheetService $sheets, CustomerDebtVouchers $vouchers, bool $printing = false): array
     {
-        abort_unless($request->user()->canManageCustomerDebt(), 403);
+        $canManage = $request->user()->canManageCustomerDebt();
+        abort_unless($canManage || ($printing && $request->user()->hasRole('warehouse')), 403);
         $query = $request->validate(array_diff_key($this->detailCustomerRules(), ['revision' => true]));
-        $customer = $this->detailCustomer($this->debtContext($request, $sheets), $query);
+        if ($printing) {
+            $context = $this->resolveGroups($request, $sheets, voucherRead: true);
+            if (isset($query['system_customer'])) {
+                $system = $context['customers']->firstWhere('id', (int) $query['system_customer']);
+                abort_unless($system, 404);
+                $entries = collect($context['groups'])->where('customer_id', $system->id)->pluck('entries')->collapse()->all();
+                $customer = ['customer_id' => $system->id, 'name' => $system->name, 'entries' => $entries];
+            } else {
+                $source = $context['groups'][$query['customer']] ?? null;
+                abort_unless($source, 404);
+                $customer = array_replace($source, ['customer_id' => null]);
+            }
+        } else {
+            $customer = $this->detailCustomer($this->debtContext($request, $sheets), $query);
+        }
         $voucher = $vouchers->rows($customer)->get($id);
-        abort_unless($voucher, 404);
+        abort_unless($voucher && ($canManage || $voucher['type'] === 'payment-request'), 404);
 
         return [$customer, $voucher, $this->allocationDetailQuery($query)];
     }
@@ -1015,10 +1070,11 @@ class CustomerDebtMonitorController extends Controller
         return compact('canLoad', 'customers', 'allowedIds', 'snapshot', 'groups', 'customerDebts', 'canAdjust', 'policyService', 'policies');
     }
 
-    private function resolveGroups(Request $request, CustomerDebtSheetService $service): array
+    private function resolveGroups(Request $request, CustomerDebtSheetService $service, bool $voucherRead = false): array
     {
         $canLoad = ! $request->attributes->get('own_customer_debt', false)
-            && $request->user()->hasRole(['admin', 'account', 'accountant', 'accounting', 'director', 'ceo']);
+            && ($request->user()->hasRole(['admin', 'account', 'accountant', 'accounting', 'director', 'ceo'])
+                || ($voucherRead && $request->user()->hasRole('warehouse')));
         $customers = Customer::query()->with(['currentOwner:id,name,short_name', 'assignedTo:id,name,short_name'])->get(['id', 'name', 'customer_code', 'current_owner_sale_id', 'assigned_to', 'phone', 'address', 'company_name']);
         $allowedIds = $canLoad ? $customers->pluck('id') : Customer::query()->managedBySale($request->user()->id)->pluck('id');
         $snapshot = $service->snapshot();

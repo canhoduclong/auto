@@ -219,6 +219,11 @@
 							<i class="ph-dots-three sidebar-resize-show"></i>
 						</li>
                         <li class="nav-item">
+                            <a href="{{ route('customer-debt.payment-requests') }}" class="nav-link{{ request()->routeIs('customer-debt.payment-requests') ? ' active' : '' }}">
+                                <i class="ph-receipt"></i><span>Đề nghị Thanh toán, Thu</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
                             <a href="{{ route('admin.accounting.assets.index') }}" class="nav-link{{ request()->routeIs('admin.accounting.assets.*') && ! request()->routeIs('admin.accounting.assets.report') ? ' active' : '' }}">
                                 <i class="ph-package"></i><span>Quản lý tài sản</span>
                             </a>
