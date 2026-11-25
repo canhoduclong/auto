@@ -114,58 +114,43 @@ class CustomerDebtManualAllocationService
         }
         $payments = $entries->where('type', 'payment')->keyBy(fn ($entry) => $allocation->key($entry));
         $remaining = $target->where('remaining', '>', 0)->map(fn ($line) => $line['remaining'])->all();
-        $moved = [];
-        $created = [];
-        $received = [];
+        $moves = [];
         $left = $amount;
         foreach ($before['automatic'] as $paymentKey => $applied) {
             $receipt = $payments->get($paymentKey);
             if (! $receipt || $left === 0) {
                 continue;
             }
-            $items = [];
             foreach (array_intersect_key($applied, $source->all()) as $line => $available) {
                 while ($available > 0 && $left > 0) {
                     $destination = array_key_first($remaining);
                     $value = min($available, $remaining[$destination], $left);
-                    $items[] = ['target' => $destination, 'amount' => $value, 'signature' => $target[$destination]['signature']];
+                    $moves[] = [
+                        'receipt' => $paymentKey, 'receipt_signature' => $allocation->signature($receipt),
+                        'source' => $line, 'source_signature' => $source[$line]['signature'],
+                        'target' => $destination, 'signature' => $target[$destination]['signature'], 'amount' => $value,
+                    ];
                     $available -= $value;
                     $left -= $value;
-                    $received[$destination] = ($received[$destination] ?? 0) + $value;
                     $remaining[$destination] -= $value;
-                    $moved[$line] = ($moved[$line] ?? 0) + $value;
                     if ($remaining[$destination] === 0) {
                         unset($remaining[$destination]);
                     }
                 }
             }
-            if ($items !== []) {
-                $group = (string) Str::uuid();
-                $created[$paymentKey.'@'.$group] = [
-                    'payment_key' => $paymentKey, 'confirmed_group' => $group, 'date' => $receipt['date'],
-                    'signature' => $allocation->signature($receipt), 'items' => $items, 'updated_by' => $actor->id,
-                    'updated_at' => now()->toIso8601String(),
-                ];
-            }
         }
         if ($left !== 0) {
             $fail('Khoản thu tự phân bổ không đủ. Kiểm tra các lần đã ghép trong tab Thanh toán theo Bill.');
         }
+        $transferId = (string) Str::uuid();
+        $recordKey = 'transfer:'.$transferId;
+        $created = [$recordKey => ['transfer_moves' => $moves]];
         $after = $reconcile($records + $created);
-        foreach ($before['lines'] as $key => $line) {
-            $expected = $line['remaining'] + ($moved[$key] ?? 0) - ($received[$key] ?? 0);
-            if (($after['lines'][$key]['remaining'] ?? null) !== $expected) {
-                $fail('Hoán đổi sẽ ảnh hưởng đến phân bổ khác. Vui lòng kiểm tra khoản thu trong tab Thanh toán theo Bill.');
-            }
-        }
-        if ($before['unmatched'] !== $after['unmatched'] || $before['credit'] !== $after['credit']
-            || array_diff_key($created, $after['confirmedApplied'])
-            || array_diff_key($before['confirmedApplied'], $after['confirmedApplied'])
-            || collect($before['manualApplied'])->contains(fn ($items, $key) => array_slice($after['manualApplied'][$key] ?? [], 0, count($items)) !== $items)) {
-            $fail('Hoán đổi sẽ ảnh hưởng đến khoản thu khác. Vui lòng kiểm tra lại.');
+        if (! isset($after['transfersApplied'][$recordKey])
+            || array_diff_key($before['transfersApplied'], $after['transfersApplied'])) {
+            $fail('Khoản thu đã thay đổi. Vui lòng tải lại trang và chọn lại ngày hoán đổi.');
         }
         Setting::set($this->key($customer), json_encode($records + $created, JSON_THROW_ON_ERROR));
-        $transferId = (string) Str::uuid();
         $transfer = [
             'id' => $transferId, 'actor_id' => $actor->id, 'at' => now()->toIso8601String(),
             'paid_date' => $data['paid_date'], 'open_date' => $data['open_date'], 'transferred' => $amount,

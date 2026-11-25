@@ -8,7 +8,7 @@ use Illuminate\Support\Str;
 
 class CustomerDebtPaymentAllocation
 {
-    public function reconcile(array $entries, string $method, ?int $customerId = null, array $changes = [], array $manual = [], ?string $firstChangeDate = null): array
+    public function reconcile(array $entries, string $method, ?int $customerId = null, array $changes = [], array $manual = [], ?string $firstChangeDate = null, bool $applyTransfers = true): array
     {
         $sales = collect($entries)->where('type', 'sale')->sortBy([['date', 'asc'], ['row', 'asc']]);
         $payments = collect($entries)->where('type', 'payment')->sortBy([['date', 'asc'], ['row', 'asc']]);
@@ -20,7 +20,7 @@ class CustomerDebtPaymentAllocation
             unset($changes[$changeDate]);
             $earlierEntries = array_values(array_filter($entries, fn ($entry) => $entry['date'] < $changeDate));
             $earlierManual = array_filter($manual, fn ($record) => ($record['date'] ?? $changeDate) < $changeDate);
-            $previous = $this->reconcile($earlierEntries, $method, $customerId, $changes, $earlierManual, $firstChangeDate);
+            $previous = $this->reconcile($earlierEntries, $method, $customerId, $changes, $earlierManual, $firstChangeDate, false);
             $manual = array_diff_key($manual, $previous['confirmedApplied'], $previous['manualApplied']);
             $payments = $payments->where('date', '>=', $changeDate);
         }
@@ -180,7 +180,7 @@ class CustomerDebtPaymentAllocation
 
         $receipts = collect($entries)->where('type', 'payment')->keyBy(fn ($entry) => $this->key($entry));
         foreach ($manual as $key => $record) {
-            if (isset($record['confirmed_group'])) {
+            if (isset($record['confirmed_group']) || isset($record['transfer_moves'])) {
                 continue;
             }
             $receipt = $receipts->get($key);
@@ -216,6 +216,9 @@ class CustomerDebtPaymentAllocation
                 unset($unmatched[$key]);
             }
         }
+        $transfersApplied = $applyTransfers
+            ? $this->applyPaymentTransfers($manual, $receipts, $lines, $automatic, $manualApplied)
+            : [];
         $paidThrough = $firstOpen = null;
         foreach ($lines as $line) {
             if ($line['amount'] <= 0) {
@@ -228,7 +231,50 @@ class CustomerDebtPaymentAllocation
             $paidThrough = $line;
         }
 
-        return compact('lines', 'unmatched', 'credit', 'paidThrough', 'firstOpen', 'automatic', 'manualApplied', 'confirmedApplied', 'invalidManual', 'batchSurplus');
+        return compact('lines', 'unmatched', 'credit', 'paidThrough', 'firstOpen', 'automatic', 'manualApplied', 'confirmedApplied', 'invalidManual', 'batchSurplus', 'transfersApplied');
+    }
+
+    private function applyPaymentTransfers(array $records, Collection $receipts, array &$lines, array &$automatic, array &$manualApplied): array
+    {
+        $applied = [];
+        foreach ($records as $key => $record) {
+            if (empty($record['transfer_moves'])) {
+                continue;
+            }
+            $trialLines = $lines;
+            $trialAutomatic = $automatic;
+            foreach ($record['transfer_moves'] as $move) {
+                $receipt = $move['receipt'];
+                $source = $move['source'];
+                $target = $move['target'];
+                $amount = $move['amount'];
+                $entry = $receipts->get($receipt);
+                if (! $entry || $this->signature($entry) !== $move['receipt_signature']
+                    || ($trialLines[$source]['signature'] ?? null) !== $move['source_signature']
+                    || ($trialLines[$target]['signature'] ?? null) !== $move['signature']
+                    || ($trialAutomatic[$receipt][$source] ?? 0) < $amount
+                    || $trialLines[$source]['paid'] < $amount || $trialLines[$target]['remaining'] < $amount) {
+                    continue 2;
+                }
+
+                $trialAutomatic[$receipt][$source] -= $amount;
+                if ($trialAutomatic[$receipt][$source] === 0) {
+                    unset($trialAutomatic[$receipt][$source]);
+                }
+                $trialLines[$source]['paid'] -= $amount;
+                $trialLines[$source]['remaining'] += $amount;
+                $this->apply($amount, [$target], $trialLines);
+            }
+
+            $lines = $trialLines;
+            $automatic = $trialAutomatic;
+            foreach ($record['transfer_moves'] as $move) {
+                $manualApplied[$move['receipt']][] = array_intersect_key($move, array_flip(['target', 'signature', 'amount']));
+            }
+            $applied[$key] = true;
+        }
+
+        return $applied;
     }
 
     public function key(array $entry): string

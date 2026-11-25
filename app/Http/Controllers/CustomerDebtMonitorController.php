@@ -161,7 +161,7 @@ class CustomerDebtMonitorController extends Controller
         $missingAllocationKeys = [];
         if ($canManageAllocation && $manualRecords) {
             $receiptKeys = collect($history)->where('type', 'payment')->map(fn ($entry) => $allocationService->key($entry))->flip()->all();
-            $missingAllocationKeys = array_keys(array_filter(array_diff_key($manualRecords, $receiptKeys), fn ($record) => ! isset($record['confirmed_group'])));
+            $missingAllocationKeys = array_keys(array_filter(array_diff_key($manualRecords, $receiptKeys), fn ($record) => ! isset($record['confirmed_group']) && ! isset($record['transfer_moves'])));
         }
         $latestChangeDate = array_key_last($settlementChanges);
         $nextSettlementMethod = $settlementChanges[$latestChangeDate] ?? ($selected ? CustomerDebtPolicyService::basePaymentForm($selected['policy']) : $settlementMethod);

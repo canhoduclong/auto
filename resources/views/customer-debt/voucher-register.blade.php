@@ -25,9 +25,6 @@
     @error('purchase_dates')
         <p class="alert alert-warning" role="alert">{{ $message }}</p>
     @enderror
-    @error('payment_transfer')
-        <p class="alert alert-warning" role="alert">{{ $message }}</p>
-    @enderror
     <div class="row g-3 mb-4" data-voucher-workspace>
         @if($selectPurchases)
             <dialog class="border rounded shadow p-3" style="width:min(36rem, 95vw); max-height:85vh; margin:auto" data-voucher-picker aria-labelledby="debt-voucher-picker-title">

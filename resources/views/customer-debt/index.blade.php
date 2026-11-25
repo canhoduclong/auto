@@ -21,7 +21,7 @@
         @include('customer-debt.connection-info')
     @endif
     @if(session('payment_update_id'))<div class="small mb-3"><a href="{{ route('customer-debt.payments',['batch'=>session('payment_update_id'),'change'=>'all']) }}">Xem danh sách thanh toán của lần cập nhật vừa xong →</a></div>@endif
-    @if($errors->any())<div class="alert alert-danger py-2">{{ $errors->first() }}</div>@endif
+    @if($errors->any() && !$errors->has('payment_transfer'))<div class="alert alert-danger py-2">{{ $errors->first() }}</div>@endif
     @if($canLoad && $snapshot && array_diff(\App\Services\CustomerDebtSheetService::SETTLEMENT_TABS, $snapshot['payment_tabs'] ?? []))<div class="small text-muted mb-2">Chưa tải đủ 6 nguồn thanh toán / giảm trừ. Bấm <strong>Cập nhật Google Sheet</strong> để đồng bộ công nợ.</div>@endif
     @if(!$snapshot)<div class="alert alert-warning py-2">Chưa có dữ liệu Google Sheet để xác định công nợ.</div>@endif
     @if($selected)
