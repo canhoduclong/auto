@@ -158,7 +158,15 @@ class CustomerDebtPaymentAllocation
                 }
             }
         } else {
-            $credit = $batch > 0 ? $this->apply($batch, array_keys($lines), $lines) : $batch;
+            $credit = min(0, $batch);
+            $availableBatch = max(0, $batch);
+            foreach ($batchReceipts as $key => $amount) {
+                $amount = min($amount, $availableBatch);
+                $availableBatch -= $amount;
+                $applied = [];
+                $credit += $this->apply($amount, array_keys($lines), $lines, $applied);
+                $automatic[$key] = $applied;
+            }
             // Aggregate batch allocation consumes the oldest receipts first.
             $surplus = $credit;
             foreach (array_reverse($batchReceipts, true) as $key => $amount) {

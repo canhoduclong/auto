@@ -20,6 +20,9 @@
         <p class="small">Số còn phải thu theo phiếu mới nhất <strong>{{ $currency($latest['remaining']) }}</strong> · {{ $latest['number'] }}</p>
     @endif
 
+    @error('payment_transfer')
+        <p class="alert alert-warning" role="alert">{{ $message }}</p>
+    @enderror
     <div class="row g-3 mb-4" data-voucher-workspace>
         @unless($editing)
             <dialog class="border rounded shadow p-3" style="width:min(36rem, 95vw); max-height:85vh" data-voucher-picker aria-labelledby="debt-voucher-picker-title">
@@ -33,6 +36,15 @@
                     <input type="search" class="form-control form-control-sm" placeholder="dd/mm/yyyy" data-voucher-picker-search>
                 </label>
                 <div class="list-group" data-voucher-picker-results></div>
+                <form method="POST" action="{{ route('customer-debt.vouchers.transfer-payment') }}" data-voucher-transfer-form hidden>
+                    @csrf
+                    @foreach($identity as $field => $value)
+                        <input type="hidden" name="{{ $field }}" value="{{ $value }}">
+                    @endforeach
+                    <input type="hidden" name="revision" value="{{ $voucherRegister['revision'] }}">
+                    <input type="hidden" name="paid_date">
+                    <input type="hidden" name="open_date">
+                </form>
             </dialog>
             <script type="application/json" data-voucher-picker-data>@json($voucherRegister['purchaseChoices'])</script>
         @endunless

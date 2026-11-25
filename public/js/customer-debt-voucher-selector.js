@@ -27,13 +27,16 @@ document.querySelectorAll('[data-voucher-workspace]').forEach(workspace => {
     const formatDate = date => date.split('-').reverse().join('/');
     let swapDate;
     let pickerSource;
+    let transferLimit = null;
+    const transferForm = picker?.querySelector('[data-voucher-transfer-form]');
 
     function renderChoices() {
         const query = search.value.trim();
         results.replaceChildren();
         for (const {date, count, remaining} of choices) {
             const label = formatDate(date);
-            if (days.has(date) || date === pickerSource || (!label.includes(query) && !date.includes(query))) continue;
+            if ((!label.includes(query) && !date.includes(query)) || date === pickerSource) continue;
+            if (transferLimit === null ? days.has(date) : remaining > transferLimit) continue;
 
             const button = document.createElement('button');
             button.type = 'button';
@@ -44,6 +47,14 @@ document.querySelectorAll('[data-voucher-workspace]').forEach(workspace => {
             amount.textContent = `${money.format(remaining)} đ`;
             button.append(description, amount);
             button.addEventListener('click', () => {
+                if (transferLimit !== null) {
+                    if (window.confirm(`Chuyển ${money.format(remaining)} đ đã phân bổ từ ngày ${formatDate(pickerSource)} sang ngày ${label}?`)) {
+                        transferForm.elements.paid_date.value = pickerSource;
+                        transferForm.elements.open_date.value = date;
+                        transferForm.requestSubmit();
+                    }
+                    return;
+                }
                 if (swapDate) days.delete(swapDate);
                 days.set(date, Number(remaining));
                 picker.close();
@@ -55,11 +66,14 @@ document.querySelectorAll('[data-voucher-workspace]').forEach(workspace => {
         if (!results.childElementCount) results.textContent = 'Không tìm thấy ngày mua còn phải thu để chọn.';
     }
 
-    function openPicker(date) {
+    function openPicker(date, paid = null) {
+        transferLimit = paid;
         swapDate = days.has(date) ? date : null;
-        if (!swapDate && days.size >= 100) return;
+        if (paid === null && !swapDate && days.size >= 100) return;
         pickerSource = date;
-        picker.querySelector('[data-voucher-picker-context]').textContent = swapDate
+        picker.querySelector('[data-voucher-picker-context]').textContent = paid !== null
+            ? `Chọn ngày nhận khoản thu đã phân bổ cho ngày ${formatDate(date)}.`
+            : swapDate
             ? `Chọn ngày thay cho ${formatDate(swapDate)}. Các ngày đã chọn khác vẫn được giữ.`
             : 'Chọn ngày mua còn phải thu để thêm vào phiếu.';
         search.value = '';
@@ -160,6 +174,11 @@ document.querySelectorAll('[data-voucher-workspace]').forEach(workspace => {
         if (event.target.matches('[data-voucher-purchase-size]')) loadPurchases(event.target.value);
     });
     workspace.addEventListener('click', event => {
+        const transferTrigger = event.target.closest('[data-voucher-transfer]');
+        if (transferTrigger) {
+            openPicker(transferTrigger.dataset.voucherTransfer, Number(transferTrigger.dataset.paid));
+            return;
+        }
         const pickerTrigger = event.target.closest('[data-voucher-open-picker]');
         if (pickerTrigger) {
             openPicker(pickerTrigger.dataset.voucherOpenPicker);

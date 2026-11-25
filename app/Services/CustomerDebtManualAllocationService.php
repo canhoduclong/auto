@@ -46,6 +46,78 @@ class CustomerDebtManualAllocationService
         });
     }
 
+    public function transferAutomaticPayment(array $customer, array $data, User $actor, CustomerDebtPaymentAllocation $allocation): void
+    {
+        abort_unless($actor->canManageCustomerDebt(), 403);
+        $records = $this->records($customer);
+        $today = today()->toDateString();
+        $entries = collect($customer['entries'])->where('date', '<=', $today)->values();
+        $policy = $customer['policy'];
+        $changes = array_filter($policy['settlement_changes'], fn ($date) => $date <= $today, ARRAY_FILTER_USE_KEY);
+        $reconcile = fn ($saved) => $allocation->reconcile($entries->all(), $policy['settlement_method'], $customer['customer_id'], $changes, $saved);
+        $before = $reconcile($records);
+        $source = collect($before['lines'])->where('date', $data['paid_date']);
+        $target = collect($before['lines'])->where('date', $data['open_date']);
+        $amount = $target->sum('remaining');
+        $fail = static fn ($message) => throw ValidationException::withMessages(['payment_transfer' => $message]);
+        if ($source->sum('remaining') !== 0 || $amount <= 0 || $source->sum('paid') < $amount) {
+            $fail('Ngày đã đủ phải có số đã phân bổ đủ để thanh toán hết cho ngày nhận.');
+        }
+        $payments = $entries->where('type', 'payment')->keyBy(fn ($entry) => $allocation->key($entry));
+        $remaining = $target->where('remaining', '>', 0)->map(fn ($line) => $line['remaining'])->all();
+        $moved = [];
+        $created = [];
+        foreach ($before['automatic'] as $paymentKey => $applied) {
+            $receipt = $payments->get($paymentKey);
+            if (! $receipt || $remaining === []) {
+                continue;
+            }
+            $items = [];
+            foreach (array_intersect_key($applied, $source->all()) as $line => $available) {
+                while ($available > 0 && $remaining !== []) {
+                    $destination = array_key_first($remaining);
+                    $value = min($available, $remaining[$destination]);
+                    $items[] = ['target' => $destination, 'amount' => $value, 'signature' => $target[$destination]['signature']];
+                    $available -= $value;
+                    $remaining[$destination] -= $value;
+                    $moved[$line] = ($moved[$line] ?? 0) + $value;
+                    if ($remaining[$destination] === 0) {
+                        unset($remaining[$destination]);
+                    }
+                }
+            }
+            if ($items !== []) {
+                $group = (string) Str::uuid();
+                $created[$paymentKey.'@'.$group] = [
+                    'payment_key' => $paymentKey, 'confirmed_group' => $group, 'date' => $receipt['date'],
+                    'signature' => $allocation->signature($receipt), 'items' => $items, 'updated_by' => $actor->id,
+                    'updated_at' => now()->toIso8601String(),
+                ];
+            }
+        }
+        if ($remaining !== []) {
+            $fail('Khoản thu tự phân bổ không đủ. Kiểm tra các lần đã ghép trong tab Thanh toán theo Bill.');
+        }
+        $after = $reconcile($records + $created);
+        foreach ($before['lines'] as $key => $line) {
+            $expected = $target->has($key) ? 0 : $line['remaining'] + ($moved[$key] ?? 0);
+            if (($after['lines'][$key]['remaining'] ?? null) !== $expected) {
+                $fail('Hoán đổi sẽ ảnh hưởng đến phân bổ khác. Vui lòng kiểm tra khoản thu trong tab Thanh toán theo Bill.');
+            }
+        }
+        if ($before['unmatched'] !== $after['unmatched'] || $before['credit'] !== $after['credit']
+            || array_diff_key($created, $after['confirmedApplied'])
+            || array_diff_key($before['confirmedApplied'], $after['confirmedApplied'])
+            || collect($before['manualApplied'])->contains(fn ($items, $key) => array_slice($after['manualApplied'][$key] ?? [], 0, count($items)) !== $items)) {
+            $fail('Hoán đổi sẽ ảnh hưởng đến khoản thu khác. Vui lòng kiểm tra lại.');
+        }
+        Setting::set($this->key($customer), json_encode($records + $created, JSON_THROW_ON_ERROR));
+        Setting::set('customer_debt_manual_allocation_audit_'.Str::uuid(), json_encode([
+            'identity' => $this->key($customer), 'actor_id' => $actor->id, 'at' => now()->toIso8601String(),
+            'paid_date' => $data['paid_date'], 'open_date' => $data['open_date'], 'after' => $created,
+        ], JSON_THROW_ON_ERROR));
+    }
+
     /** The caller holds the Sheet refresh lock and a database transaction. */
     public function confirmBills(array $customer, array $data, User $actor, CustomerDebtBillReconciliation $bills, CustomerDebtPaymentAllocation $allocation): ?array
     {

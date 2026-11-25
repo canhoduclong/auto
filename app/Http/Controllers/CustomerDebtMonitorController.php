@@ -411,6 +411,34 @@ class CustomerDebtMonitorController extends Controller
             ! empty($data['cancel']) ? 'Đã hủy ghép khoản thu.' : 'Đã lưu ghép khoản thu.');
     }
 
+    public function transferVoucherPayment(Request $request, CustomerDebtSheetService $sheets, CustomerDebtVouchers $vouchers, CustomerDebtManualAllocationService $manual, CustomerDebtPaymentAllocation $allocation)
+    {
+        abort_unless($request->user()->canManageCustomerDebt(), 403);
+        $data = $request->validate($this->detailCustomerRules() + [
+            'paid_date' => 'required|date_format:Y-m-d',
+            'open_date' => 'required|date_format:Y-m-d|different:paid_date',
+        ]);
+        Cache::lock('customer-debt-load', 60)->block(5, function () use ($request, $sheets, $vouchers, $manual, $allocation, $data) {
+            $customer = $this->allocationCustomer($request, $sheets, $data);
+            $policies = app(CustomerDebtPolicyService::class);
+            $policies->withWriteLock($customer, function () use ($customer, $policies, $vouchers, $manual, $allocation, $data, $request) {
+                $customer['policy'] = $policies->effective($customer, $policies->policies());
+                $rows = $vouchers->rows($customer);
+                $days = $vouchers->purchaseDays($customer, $rows);
+                if (! hash_equals($vouchers->revision($customer, $rows), $data['revision'])
+                    || ($days[$data['paid_date']]['covered'] ?? true)
+                    || ! ($days[$data['open_date']]['selectable'] ?? false)) {
+                    throw \Illuminate\Validation\ValidationException::withMessages(['payment_transfer' => 'Dữ liệu đã thay đổi hoặc ngày mua đã vào phiếu. Vui lòng kiểm tra lại.']);
+                }
+                DB::transaction(fn () => $manual->transferAutomaticPayment($customer, $data, $request->user(), $allocation));
+            });
+        });
+
+        return redirect()->to(route('customer-debt.index', $this->allocationDetailQuery($data) + [
+            'debt_section' => 'vouchers', 'voucher_selected' => [$data['paid_date']], 'new_voucher' => 'payment-request',
+        ]).'#debt-vouchers')->with('success', 'Đã chuyển khoản phân bổ. Ngày mua còn phải thu đã được chọn vào đề nghị thanh toán.');
+    }
+
     public function saveVoucher(Request $request, CustomerDebtSheetService $sheets, CustomerDebtVouchers $vouchers)
     {
         abort_unless($request->user()->canManageCustomerDebt(), 403);

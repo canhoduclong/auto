@@ -39,6 +39,9 @@
                             <button type="button" class="btn btn-sm btn-link" data-voucher-open-picker="{{ $day['date'] }}">Chọn Bill khác</button>
                         @elseif(!$day['selectable'])
                             <span class="small text-muted">Đã đủ</span>
+                            @if(!$editing && $day['paid'] > 0)
+                                <button type="button" class="btn btn-sm btn-link" data-voucher-transfer="{{ $day['date'] }}" data-paid="{{ $day['paid'] }}">Hoán đổi</button>
+                            @endif
                         @endif
                     </td>
                 </tr>
