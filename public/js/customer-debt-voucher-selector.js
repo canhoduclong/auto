@@ -36,7 +36,7 @@ document.querySelectorAll('[data-voucher-workspace]').forEach(workspace => {
         for (const {date, count, remaining} of choices) {
             const label = formatDate(date);
             if ((!label.includes(query) && !date.includes(query)) || date === pickerSource) continue;
-            if (transferLimit === null ? days.has(date) : remaining > transferLimit) continue;
+            if (transferLimit === null && days.has(date)) continue;
 
             const button = document.createElement('button');
             button.type = 'button';
@@ -48,7 +48,9 @@ document.querySelectorAll('[data-voucher-workspace]').forEach(workspace => {
             button.append(description, amount);
             button.addEventListener('click', () => {
                 if (transferLimit !== null) {
-                    if (window.confirm(`Chuyển ${money.format(remaining)} đ đã phân bổ từ ngày ${formatDate(pickerSource)} sang ngày ${label}?`)) {
+                    const moved = Math.min(remaining, transferLimit);
+                    const shortfall = remaining - moved;
+                    if (window.confirm(`Chuyển ${money.format(moved)} đ từ ngày ${formatDate(pickerSource)} sang ngày ${label}? Ngày nhận còn phải thu ${money.format(shortfall)} đ.`)) {
                         transferForm.elements.paid_date.value = pickerSource;
                         transferForm.elements.open_date.value = date;
                         transferForm.requestSubmit();
@@ -122,10 +124,12 @@ document.querySelectorAll('[data-voucher-workspace]').forEach(workspace => {
             row.append(change, remove);
             list.append(row);
         }
-        cutoff.hidden = days.size > 0;
-        dateInput.disabled = days.size > 0;
-        amountInput.readOnly = days.size > 0;
-        amountInput.value = days.size ? total : manualAmount;
+        if (cutoff) {
+            cutoff.hidden = days.size > 0;
+            dateInput.disabled = days.size > 0;
+        }
+        amountInput.readOnly = !cutoff || days.size > 0;
+        amountInput.value = !cutoff || days.size ? total : manualAmount;
         totalLabel.textContent = days.size ? `${days.size} ngày · Còn phải thu ${money.format(total)} đ` : 'Chưa chọn ngày mua.';
         for (const button of findButtons()) {
             const date = button.dataset.voucherDate;

@@ -5,6 +5,8 @@
     $identity = $selected['customer_id'] ? ['system_customer' => $selected['customer_id']] : ['customer' => $selected['key']];
     $voucherUrl = fn ($row, $extra = []) => ['voucher' => $row['id']] + $extra + $identity;
     $editing = $voucherRegister['editing'];
+    $editPurchases = $voucherRegister['editPurchases'];
+    $selectPurchases = !$editing || $editPurchases;
     $latest = $voucherRegister['latest'];
     $rows = $voucherRegister['rows'];
     $purchases = $voucherRegister['purchases'];
@@ -20,12 +22,15 @@
         <p class="small">Số còn phải thu theo phiếu mới nhất <strong>{{ $currency($latest['remaining']) }}</strong> · {{ $latest['number'] }}</p>
     @endif
 
+    @error('purchase_dates')
+        <p class="alert alert-warning" role="alert">{{ $message }}</p>
+    @enderror
     @error('payment_transfer')
         <p class="alert alert-warning" role="alert">{{ $message }}</p>
     @enderror
     <div class="row g-3 mb-4" data-voucher-workspace>
-        @unless($editing)
-            <dialog class="border rounded shadow p-3" style="width:min(36rem, 95vw); max-height:85vh" data-voucher-picker aria-labelledby="debt-voucher-picker-title">
+        @if($selectPurchases)
+            <dialog class="border rounded shadow p-3" style="width:min(36rem, 95vw); max-height:85vh; margin:auto" data-voucher-picker aria-labelledby="debt-voucher-picker-title">
                 <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
                     <h4 class="h6 mb-0" id="debt-voucher-picker-title">Chọn Bill theo ngày</h4>
                     <form method="dialog"><button class="btn btn-sm btn-outline-secondary">Đóng</button></form>
@@ -47,13 +52,13 @@
                 </form>
             </dialog>
             <script type="application/json" data-voucher-picker-data>@json($voucherRegister['purchaseChoices'])</script>
-        @endunless
+        @endif
 
         <div class="col-xl-6">@include('customer-debt.voucher-purchases')</div>
         <div class="col-xl-6">
     <details class="border rounded p-3" id="debt-voucher-editor" open>
         <summary class="fw-semibold">{{ $editing ? 'Cập nhật '.$editing['number'] : 'Lập phiếu mới' }}</summary>
-        <form method="POST" action="{{ route('customer-debt.vouchers.save') }}" enctype="multipart/form-data" class="row g-3 mt-1" @unless($editing) data-voucher-create @endunless>
+        <form method="POST" action="{{ route('customer-debt.vouchers.save') }}" enctype="multipart/form-data" class="row g-3 mt-1" @if($selectPurchases) data-voucher-create @endif>
             @csrf
             @foreach($identity as $field => $value)
                 <input type="hidden" name="{{ $field }}" value="{{ $value }}">
@@ -61,7 +66,7 @@
             <input type="hidden" name="revision" value="{{ $voucherRegister['revision'] }}">
             @if($editing)
                 <input type="hidden" name="voucher_id" value="{{ $editing['id'] }}">
-                <p class="small mb-0">{{ $types[$editing['type']] }} @if(empty($editing['purchase_days'])) · Chốt đến {{ \Carbon\Carbon::parse($editing['through'])->format('d/m/Y') }} @endif · Nợ chuyển sang {{ $currency($editing['carry']) }}</p>
+                <p class="small mb-0">{{ $types[$editing['type']] }} @unless($editPurchases) · Chốt đến {{ \Carbon\Carbon::parse($editing['through'])->format('d/m/Y') }} @endunless · Nợ chuyển sang {{ $currency($editing['carry']) }}</p>
             @else
                 <label class="col-sm-6">
                     <span class="form-label">Loại phiếu</span>
@@ -77,14 +82,11 @@
                 </label>
             @endif
             <div class="col-12">
-                @if($editing && !empty($editing['purchase_days']))
-                    <strong class="small">Ngày mua trên phiếu</strong>
-                    <ul class="small mb-0">
-                        @foreach($editing['purchase_days'] as $date => $amount)
-                            <li>{{ \Carbon\Carbon::parse($date)->format('d/m/Y') }} · {{ $currency($amount) }}</li>
-                        @endforeach
-                    </ul>
-                @elseif(!$editing)
+                @if($selectPurchases)
+                    @if($editPurchases)
+                        <input type="hidden" name="edit_purchase_days" value="1">
+                        <p class="small text-muted mb-1">Bạn có thể bỏ hết các Bill rồi lưu cập nhật. Phiếu vẫn giữ số phiếu và chứng từ.</p>
+                    @endif
                     <strong class="small">Ngày mua đã chọn</strong>
                     <ul class="list-unstyled small mb-0 mt-1" data-voucher-selected-list></ul>
                     <div data-voucher-purchase-fields></div>
@@ -98,7 +100,7 @@
             <label class="col-sm-6">
                 <span class="form-label">{{ $latest && (!$editing || $editing['sequence'] > 1) ? 'Công nợ phát sinh mới (đ)' : 'Công nợ đưa vào phiếu (đ)' }}</span>
                 <input name="new_amount" type="number" min="0" max="999999999999999" step="1" class="form-control"
-                    value="{{ old('new_amount', $editing['new_amount'] ?? '') }}" @required($editing) @readonly(!empty($editing['purchase_days'])) placeholder="{{ $voucherRegister['suggested'] }}" data-voucher-amount>
+                    value="{{ old('new_amount', $editing['new_amount'] ?? '') }}" @required($editing) @readonly($editPurchases) placeholder="{{ $voucherRegister['suggested'] }}" data-voucher-amount>
             </label>
             <label class="col-sm-6">
                 <span class="form-label">Tiền đã thu cho phiếu này (đ)</span>
@@ -137,9 +139,9 @@
     </details>
         </div>
     </div>
-    @unless($editing)
+    @if($selectPurchases)
         <script type="application/json" data-voucher-selected-data>{!! json_encode($selectedPurchases, JSON_HEX_TAG | JSON_THROW_ON_ERROR) !!}</script>
-    @endunless
+    @endif
 
     <div class="table-responsive">
         <table class="table table-sm align-middle">
@@ -154,14 +156,16 @@
                 <tr>
                     <td><strong>{{ $row['number'] }}</strong><div class="small text-muted">{{ $types[$row['type']] }}</div></td>
                     <td class="text-nowrap">
-                        @if(count($row['purchase_days'] ?? []) > 1)
+                        @if(($row['by_purchase_days'] ?? false) && empty($row['purchase_days']))
+                            Chưa có Bill
+                        @elseif(count($row['purchase_days'] ?? []) > 1)
                             {{ count($row['purchase_days']) }} ngày mua
                         @else
                             {{ \Carbon\Carbon::parse(empty($row['purchase_days']) ? $row['through'] : array_key_first($row['purchase_days']))->format('d/m/Y') }}
                         @endif
                     </td>
                     <td>
-                        <span class="badge {{ ['paid' => 'bg-success', 'partial' => 'bg-warning text-dark', 'settled' => 'bg-secondary'][$row['status']] ?? 'bg-light text-dark' }}">{{ $statuses[$row['status']] }}</span>
+                        <span class="badge {{ ['paid' => 'bg-success', 'partial' => 'bg-warning text-dark', 'settled' => 'bg-secondary'][$row['status']] ?? 'bg-light text-dark' }}">{{ $row['status'] === 'settled' && ($row['by_purchase_days'] ?? false) && empty($row['purchase_days']) ? 'Chờ bổ sung Bill' : $statuses[$row['status']] }}</span>
                         @if($row['id'] !== $latest['id'] && $row['remaining'] > 0)<div class="small text-muted">Số dư đã chuyển tiếp</div>@endif
                     </td>
                     <td class="text-end text-nowrap">{{ $currency($row['carry']) }}</td>

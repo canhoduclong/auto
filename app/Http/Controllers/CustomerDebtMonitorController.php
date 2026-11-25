@@ -121,10 +121,21 @@ class CustomerDebtMonitorController extends Controller
             $editing = isset($data['edit_voucher']) ? $rows->get($data['edit_voucher']) : null;
             abort_if(isset($data['edit_voucher']) && ! $editing, 404);
             $latest = $rows->last();
-            $purchaseDays = $vouchers->purchaseDays($selected, $rows);
+            $editPurchases = $editing && ($editing['by_purchase_days'] ?? !empty($editing['purchase_days']));
+            $purchaseDays = $vouchers->purchaseDays($selected, $editPurchases ? $rows->except($editing['id']) : $rows);
+            if ($editPurchases) {
+                foreach ($editing['purchase_days'] as $date => $amount) {
+                    if ($day = $purchaseDays->get($date)) {
+                        $purchaseDays->put($date, array_replace($day, ['covered' => false, 'selectable' => true, 'remaining' => $amount]));
+                    }
+                }
+            }
             $purchaseSize = (int) ($data['voucher_purchases_size'] ?? 20);
             $purchasePage = (int) ($data['voucher_purchases_page'] ?? 1);
-            $selectedDates = array_filter((array) $request->old('purchase_dates', $data['voucher_selected'] ?? []), 'is_string');
+            $selectedDates = array_filter((array) $request->old('purchase_dates', $data['voucher_selected'] ?? array_keys($editing['purchase_days'] ?? [])), 'is_string');
+            if ($editPurchases && $request->old('edit_purchase_days')) {
+                $selectedDates = array_filter((array) $request->old('purchase_dates', []), 'is_string');
+            }
             $voucherRegister = [
                 'rows' => new \Illuminate\Pagination\LengthAwarePaginator(
                     $rows->reverse()->forPage($page, 15)->values(), $rows->count(), 15, $page,
@@ -136,9 +147,10 @@ class CustomerDebtMonitorController extends Controller
                     $purchaseDays->forPage($purchasePage, $purchaseSize)->values(), $purchaseDays->count(), $purchaseSize, $purchasePage,
                     ['path' => $request->url(), 'pageName' => 'voucher_purchases_page', 'query' => $request->except('voucher_purchases_page'), 'fragment' => 'debt-voucher-purchases']
                 ),
-                'purchaseChoices' => $editing ? [] : $purchaseDays->where('selectable', true)
+                'editPurchases' => $editPurchases,
+                'purchaseChoices' => $editing && ! $editPurchases ? [] : $purchaseDays->where('selectable', true)
                     ->map(fn ($day) => array_intersect_key($day, array_flip(['date', 'count', 'remaining'])))->values(),
-                'selectedPurchases' => $purchaseDays->only($selectedDates)->where('selectable', true)->pluck('remaining', 'date'),
+                'selectedPurchases' => $purchaseDays->only($selectedDates)->where('selectable', true)->pluck('remaining', 'date')->union($editPurchases ? array_intersect_key($editing['purchase_days'], array_flip($selectedDates)) : []),
                 'editing' => $editing,
                 'revision' => $vouchers->revision($selected, $rows),
             ];
@@ -452,7 +464,8 @@ class CustomerDebtMonitorController extends Controller
             ],
             'number' => 'nullable|string|max:50',
             'new_amount' => 'nullable|required_with:voucher_id|integer|min:0|max:999999999999999',
-            'purchase_dates' => ['nullable', 'array', 'list', 'max:100', Rule::prohibitedIf($request->filled('voucher_id'))],
+            'edit_purchase_days' => 'nullable|boolean',
+            'purchase_dates' => ['nullable', 'array', 'list', 'max:100', Rule::prohibitedIf($request->filled('voucher_id') && ! $request->boolean('edit_purchase_days'))],
             'purchase_dates.*' => 'required|date_format:Y-m-d|distinct',
             'paid' => 'required|integer|min:0|max:999999999999999',
             'method' => 'nullable|in:cash,transfer',

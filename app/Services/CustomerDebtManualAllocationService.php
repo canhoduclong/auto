@@ -58,27 +58,31 @@ class CustomerDebtManualAllocationService
         $before = $reconcile($records);
         $source = collect($before['lines'])->where('date', $data['paid_date']);
         $target = collect($before['lines'])->where('date', $data['open_date']);
-        $amount = $target->sum('remaining');
+        $amount = min($target->sum('remaining'), $source->sum('paid'));
         $fail = static fn ($message) => throw ValidationException::withMessages(['payment_transfer' => $message]);
-        if ($source->sum('remaining') !== 0 || $amount <= 0 || $source->sum('paid') < $amount) {
-            $fail('Ngày đã đủ phải có số đã phân bổ đủ để thanh toán hết cho ngày nhận.');
+        if ($source->sum('remaining') !== 0 || $amount <= 0) {
+            $fail('Ngày nguồn phải đã được phân bổ đủ và ngày nhận phải còn công nợ.');
         }
         $payments = $entries->where('type', 'payment')->keyBy(fn ($entry) => $allocation->key($entry));
         $remaining = $target->where('remaining', '>', 0)->map(fn ($line) => $line['remaining'])->all();
         $moved = [];
         $created = [];
+        $received = [];
+        $left = $amount;
         foreach ($before['automatic'] as $paymentKey => $applied) {
             $receipt = $payments->get($paymentKey);
-            if (! $receipt || $remaining === []) {
+            if (! $receipt || $left === 0) {
                 continue;
             }
             $items = [];
             foreach (array_intersect_key($applied, $source->all()) as $line => $available) {
-                while ($available > 0 && $remaining !== []) {
+                while ($available > 0 && $left > 0) {
                     $destination = array_key_first($remaining);
-                    $value = min($available, $remaining[$destination]);
+                    $value = min($available, $remaining[$destination], $left);
                     $items[] = ['target' => $destination, 'amount' => $value, 'signature' => $target[$destination]['signature']];
                     $available -= $value;
+                    $left -= $value;
+                    $received[$destination] = ($received[$destination] ?? 0) + $value;
                     $remaining[$destination] -= $value;
                     $moved[$line] = ($moved[$line] ?? 0) + $value;
                     if ($remaining[$destination] === 0) {
@@ -95,12 +99,12 @@ class CustomerDebtManualAllocationService
                 ];
             }
         }
-        if ($remaining !== []) {
+        if ($left !== 0) {
             $fail('Khoản thu tự phân bổ không đủ. Kiểm tra các lần đã ghép trong tab Thanh toán theo Bill.');
         }
         $after = $reconcile($records + $created);
         foreach ($before['lines'] as $key => $line) {
-            $expected = $target->has($key) ? 0 : $line['remaining'] + ($moved[$key] ?? 0);
+            $expected = $line['remaining'] + ($moved[$key] ?? 0) - ($received[$key] ?? 0);
             if (($after['lines'][$key]['remaining'] ?? null) !== $expected) {
                 $fail('Hoán đổi sẽ ảnh hưởng đến phân bổ khác. Vui lòng kiểm tra khoản thu trong tab Thanh toán theo Bill.');
             }

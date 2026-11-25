@@ -32,7 +32,7 @@
                     <td class="text-nowrap">
                         @if($day['covered'])
                             <span class="small text-muted">Đã đưa vào phiếu</span>
-                        @elseif($day['selectable'] && !$editing)
+                        @elseif($day['selectable'] && $selectPurchases)
                             <button type="button" class="btn btn-sm btn-outline-primary"
                                 data-voucher-date="{{ $day['date'] }}" data-amount="{{ $day['remaining'] }}"
                                 aria-label="Thêm ngày {{ $label }} vào phiếu" aria-pressed="false">Thêm</button>

@@ -145,19 +145,31 @@ class CustomerDebtVouchers
         }
 
         $purchaseDays = $existing['purchase_days'] ?? [];
-        if (! $existing && $dates !== []) {
-            $days = $this->purchaseDays($customer, $rows)->only($dates)->where('selectable', true);
-            if ($days->count() !== count($dates)) {
+        $byPurchaseDays = $existing['by_purchase_days'] ?? ($purchaseDays !== []);
+        $editPurchaseDays = $existing && !empty($data['edit_purchase_days']);
+        if ($editPurchaseDays && ! $byPurchaseDays) {
+            throw ValidationException::withMessages(['purchase_dates' => 'Phiếu chốt theo ngày chỉ cho cập nhật số tiền công nợ.']);
+        }
+        if ($editPurchaseDays || (! $existing && $dates !== [])) {
+            $retained = array_intersect_key($purchaseDays, array_flip($dates));
+            $addedDates = array_diff($dates, array_keys($retained));
+            $added = $this->purchaseDays($customer, $rows->except($id))->only($addedDates)->where('selectable', true);
+            if ($added->count() !== count($addedDates)) {
                 throw ValidationException::withMessages(['purchase_dates' => 'Có ngày đã đưa vào phiếu, hết số phải thu hoặc không còn trong danh sách mua hàng. Vui lòng kiểm tra lại.']);
             }
-            $purchaseDays = $days->sortKeys()->pluck('remaining', 'date')->all();
+            $purchaseDays = $retained + $added->pluck('remaining', 'date')->all();
+            ksort($purchaseDays);
+            $byPurchaseDays = true;
+            if ($dates !== []) {
+                $through = max($through, max($dates));
+            }
         }
-        $newAmount = $purchaseDays !== [] ? array_sum($purchaseDays)
+        $newAmount = $byPurchaseDays ? array_sum($purchaseDays)
             : (int) ($data['new_amount'] ?? $this->suggestedAmount($customer, $rows, $through));
 
         $voucher = [
             'id' => $id, 'sequence' => $sequence, 'type' => $type, 'number' => $number, 'through' => $through,
-            'new_amount' => $newAmount, 'purchase_days' => $purchaseDays,
+            'new_amount' => $newAmount, 'purchase_days' => $purchaseDays, 'by_purchase_days' => $byPurchaseDays,
             'paid' => (int) $data['paid'], 'method' => $data['method'] ?? null, 'note' => $data['note'] ?? null,
             'documents' => $existing['documents'] ?? [], 'created_at' => $existing['created_at'] ?? now()->toIso8601String(),
             'created_by' => $existing['created_by'] ?? $actor, 'updated_at' => now()->toIso8601String(), 'updated_by' => $actor,

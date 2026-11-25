@@ -34,7 +34,7 @@
                     @if($phone)<div><dt>Số điện thoại</dt><dd>{{ $phone }}</dd></div>@endif
                 </dl>
             @endif
-            @if(!$receipt && empty($row['purchase_days']))
+            @if(!$receipt && !($row['by_purchase_days'] ?? !empty($row['purchase_days'])))
                 <p>Chốt công nợ đến {{ \Carbon\Carbon::parse($row['through'])->format('d/m/Y') }}</p>
             @endif
             @if($showTotals || $visibleAmount($row['carry']) || $visibleAmount($row['new_amount']))
