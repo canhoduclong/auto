@@ -148,6 +148,7 @@ class CustomerDebtMonitorController extends Controller
                     ['path' => $request->url(), 'pageName' => 'voucher_purchases_page', 'query' => $request->except('voucher_purchases_page'), 'fragment' => 'debt-voucher-purchases']
                 ),
                 'editPurchases' => $editPurchases,
+                'transferDifferences' => $manualService->transferDifferences($selected),
                 'purchaseChoices' => $editing && ! $editPurchases ? [] : $purchaseDays->where('selectable', true)
                     ->map(fn ($day) => array_intersect_key($day, array_flip(['date', 'count', 'remaining'])))->values(),
                 'selectedPurchases' => $purchaseDays->only($selectedDates)->where('selectable', true)->pluck('remaining', 'date')->union($editPurchases ? array_intersect_key($editing['purchase_days'], array_flip($selectedDates)) : []),
@@ -421,6 +422,25 @@ class CustomerDebtMonitorController extends Controller
 
         return redirect()->to(route('customer-debt.index', $query).'#'.$anchor)->with('success',
             ! empty($data['cancel']) ? 'Đã hủy ghép khoản thu.' : 'Đã lưu ghép khoản thu.');
+    }
+
+    public function classifyVoucherTransferDifference(Request $request, string $difference, CustomerDebtSheetService $sheets, CustomerDebtManualAllocationService $manual, CustomerDebtPaymentAllocation $allocation)
+    {
+        abort_unless($request->user()->canManageCustomerDebt(), 403);
+        $data = $request->validate(array_diff_key($this->detailCustomerRules(), ['revision' => true]) + [
+            'handling' => ['required', Rule::in(array_keys(CustomerDebtManualAllocationService::TRANSFER_DIFFERENCE_TYPES))],
+            'bill_key' => 'nullable|required_if:handling,bill|string|max:160',
+            'note' => 'nullable|string|max:500',
+        ]);
+        Cache::lock('customer-debt-load', 60)->block(5, function () use ($request, $difference, $sheets, $manual, $allocation, $data) {
+            $customer = $this->allocationCustomer($request, $sheets, $data);
+            app(CustomerDebtPolicyService::class)->withWriteLock($customer, fn () =>
+                $manual->classifyTransferDifference($customer, $difference, $data, $request->user(), $allocation));
+        });
+
+        return redirect()->to(route('customer-debt.index', $this->allocationDetailQuery($data) + [
+            'debt_section' => 'vouchers',
+        ]).'#debt-voucher-differences')->with('success', 'Đã ghi nhận cách xử lý chênh lệch.');
     }
 
     public function transferVoucherPayment(Request $request, CustomerDebtSheetService $sheets, CustomerDebtVouchers $vouchers, CustomerDebtManualAllocationService $manual, CustomerDebtPaymentAllocation $allocation)

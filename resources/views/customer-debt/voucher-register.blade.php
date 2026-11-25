@@ -201,6 +201,7 @@
         </table>
     </div>
     {{ $rows->links() }}
+    @include('customer-debt.voucher-transfer-differences')
 </section>
 
 @once

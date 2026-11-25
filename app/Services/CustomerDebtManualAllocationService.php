@@ -46,6 +46,55 @@ class CustomerDebtManualAllocationService
         });
     }
 
+    public const TRANSFER_DIFFERENCE_TYPES = [
+        'bill' => 'Gán vào đơn',
+        'discount' => 'Chiết khấu',
+        'gift' => 'Tặng',
+        'bonus' => 'Thưởng',
+        'other' => 'Khác',
+    ];
+
+    private function transferDifferencePrefix(array $customer): string
+    {
+        return $this->key($customer).'_transfer_difference_';
+    }
+
+    public function transferDifferences(array $customer): Collection
+    {
+        $prefix = $this->transferDifferencePrefix($customer);
+
+        return Setting::query()->where('key', 'like', $prefix.'%')->get(['key', 'value'])
+            ->filter(fn ($setting) => str_starts_with($setting->key, $prefix))
+            ->map(fn ($setting) => json_decode($setting->value, true, flags: JSON_THROW_ON_ERROR))
+            ->sortByDesc('at')->values();
+    }
+
+    public function classifyTransferDifference(array $customer, string $id, array $data, User $actor, CustomerDebtPaymentAllocation $allocation): void
+    {
+        abort_unless($actor->canManageCustomerDebt(), 403);
+        $key = $this->transferDifferencePrefix($customer).$id;
+        $value = Setting::query()->where('key', $key)->value('value');
+        abort_if($value === null, 404);
+        $row = json_decode($value, true, flags: JSON_THROW_ON_ERROR);
+        if (! empty($row['handling'])) {
+            throw ValidationException::withMessages(['difference' => 'Chênh lệch này đã được ghi nhận cách xử lý.']);
+        }
+
+        $bill = $data['bill_key'] ?? null;
+        if ($data['handling'] === 'bill' && ! collect($customer['entries'])->contains(
+            fn ($entry) => $entry['type'] === 'sale' && $allocation->key($entry) === $bill
+        )) {
+            throw ValidationException::withMessages(['difference' => 'Hãy chọn một đơn trong danh sách của khách hàng này.']);
+        }
+
+        $row['handling'] = $data['handling'];
+        $row['bill_key'] = $data['handling'] === 'bill' ? $bill : null;
+        $row['note'] = $data['note'] ?? null;
+        $row['handled_by'] = $actor->id;
+        $row['handled_at'] = now()->toIso8601String();
+        Setting::set($key, json_encode($row, JSON_THROW_ON_ERROR));
+    }
+
     public function transferAutomaticPayment(array $customer, array $data, User $actor, CustomerDebtPaymentAllocation $allocation): void
     {
         abort_unless($actor->canManageCustomerDebt(), 403);
@@ -116,10 +165,18 @@ class CustomerDebtManualAllocationService
             $fail('Hoán đổi sẽ ảnh hưởng đến khoản thu khác. Vui lòng kiểm tra lại.');
         }
         Setting::set($this->key($customer), json_encode($records + $created, JSON_THROW_ON_ERROR));
-        Setting::set('customer_debt_manual_allocation_audit_'.Str::uuid(), json_encode([
-            'identity' => $this->key($customer), 'actor_id' => $actor->id, 'at' => now()->toIso8601String(),
-            'paid_date' => $data['paid_date'], 'open_date' => $data['open_date'], 'after' => $created,
-        ], JSON_THROW_ON_ERROR));
+        $transferId = (string) Str::uuid();
+        $transfer = [
+            'id' => $transferId, 'actor_id' => $actor->id, 'at' => now()->toIso8601String(),
+            'paid_date' => $data['paid_date'], 'open_date' => $data['open_date'], 'transferred' => $amount,
+            'difference' => $source->sum('paid') - $target->sum('remaining'),
+        ];
+        Setting::set('customer_debt_manual_allocation_audit_'.$transferId, json_encode(
+            $transfer + ['identity' => $this->key($customer), 'after' => $created], JSON_THROW_ON_ERROR
+        ));
+        if ($transfer['difference'] !== 0) {
+            Setting::set($this->transferDifferencePrefix($customer).$transferId, json_encode($transfer, JSON_THROW_ON_ERROR));
+        }
     }
 
     /** The caller holds the Sheet refresh lock and a database transaction. */

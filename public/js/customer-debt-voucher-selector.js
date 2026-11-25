@@ -49,8 +49,9 @@ document.querySelectorAll('[data-voucher-workspace]').forEach(workspace => {
             button.addEventListener('click', () => {
                 if (transferLimit !== null) {
                     const moved = Math.min(remaining, transferLimit);
-                    const shortfall = remaining - moved;
-                    if (window.confirm(`Chuyển ${money.format(moved)} đ từ ngày ${formatDate(pickerSource)} sang ngày ${label}? Ngày nhận còn phải thu ${money.format(shortfall)} đ.`)) {
+                    const difference = transferLimit - remaining;
+                    const differenceNote = difference === 0 ? '' : ` Chênh lệch ${difference > 0 ? 'dư' : 'thiếu'} ${money.format(Math.abs(difference))} đ sẽ được lưu riêng.`;
+                    if (window.confirm(`Chuyển ${money.format(moved)} đ từ ngày ${formatDate(pickerSource)} sang ngày ${label}?${differenceNote}`)) {
                         transferForm.elements.paid_date.value = pickerSource;
                         transferForm.elements.open_date.value = date;
                         transferForm.requestSubmit();
