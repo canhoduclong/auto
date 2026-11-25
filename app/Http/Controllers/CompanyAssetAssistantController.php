@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -174,7 +176,8 @@ class CompanyAssetAssistantController extends Controller
     {
         $drafts = DB::table('asset_assistant_drafts')->latest('id')->paginate(20);
         $keys = $request->user()->isAdmin()
-            ? DB::table('asset_assistant_keys')->latest('id')->get(['id', 'label', 'created_at', 'revoked_at'])
+            ? DB::table('asset_assistant_keys')->select('id', 'label', 'created_at', 'revoked_at')
+                ->selectRaw('CASE WHEN encrypted_secret IS NULL THEN 0 ELSE 1 END as copyable')->latest('id')->get()
             : collect();
 
         return response()->view('accounting.assets.ai.index', compact('drafts', 'keys'))->header('Cache-Control', 'private, no-store');
@@ -197,8 +200,38 @@ class CompanyAssetAssistantController extends Controller
         $secret = 'asset_'.bin2hex(random_bytes(32));
         DB::table('asset_assistant_keys')->insert([
             'label' => $data['label'], 'token_hash' => hash('sha256', $secret),
+            'encrypted_secret' => Crypt::encryptString($secret),
             'created_by' => $request->user()->id, 'created_at' => now(), 'updated_at' => now(),
         ]);
+
+        return response()->view('accounting.assets.ai.key', compact('secret'))->header('Cache-Control', 'private, no-store');
+    }
+
+    public function copyKey(Request $request, int $key)
+    {
+        abort_unless($request->user()->isAdmin(), 403);
+        $record = DB::table('asset_assistant_keys')->whereNull('revoked_at')->find($key);
+        abort_unless($record, 404);
+        abort_unless($record->encrypted_secret, 409, 'Khóa này cần được tạo lại để sao chép.');
+        try {
+            $secret = Crypt::decryptString($record->encrypted_secret);
+        } catch (DecryptException) {
+            abort(409, 'Không thể khôi phục khóa. Hãy thu hồi và tạo khóa mới.');
+        }
+        if ($request->expectsJson()) {
+            return response()->json(['secret' => $secret])->header('Cache-Control', 'private, no-store');
+        }
+
+        return response()->view('accounting.assets.ai.key', compact('secret'))->header('Cache-Control', 'private, no-store');
+    }
+
+    public function rotateLegacyKey(Request $request, int $key)
+    {
+        abort_unless($request->user()->isAdmin(), 403);
+        $secret = 'asset_'.bin2hex(random_bytes(32));
+        $changed = DB::table('asset_assistant_keys')->where('id', $key)->whereNull('revoked_at')->whereNull('encrypted_secret')
+            ->update(['token_hash' => hash('sha256', $secret), 'encrypted_secret' => Crypt::encryptString($secret), 'updated_at' => now()]);
+        abort_unless($changed, 409, 'Khóa đã thay đổi. Vui lòng tải lại danh sách.');
 
         return response()->view('accounting.assets.ai.key', compact('secret'))->header('Cache-Control', 'private, no-store');
     }
@@ -207,7 +240,7 @@ class CompanyAssetAssistantController extends Controller
     {
         abort_unless($request->user()->isAdmin(), 403);
         DB::table('asset_assistant_keys')->where('id', $key)->whereNull('revoked_at')
-            ->update(['revoked_at' => now(), 'updated_at' => now()]);
+            ->update(['revoked_at' => now(), 'encrypted_secret' => null, 'updated_at' => now()]);
 
         return redirect()->to(accounting_route('assets.ai.index'))->with('success', 'Đã thu hồi khóa kết nối.');
     }

@@ -10,6 +10,8 @@ Route::prefix('assets/assistant')->name('assets.ai.')->controller(\App\Http\Cont
     Route::get('/', 'index')->name('index');
     Route::get('/drafts/{draft}', 'show')->whereNumber('draft')->name('show');
     Route::post('/keys', 'createKey')->name('keys.create');
+    Route::post('/keys/{key}/copy', 'copyKey')->middleware('throttle:20,1')->whereNumber('key')->name('keys.copy');
+    Route::post('/keys/{key}/rotate', 'rotateLegacyKey')->middleware('throttle:10,1')->whereNumber('key')->name('keys.rotate');
     Route::delete('/keys/{key}', 'revokeKey')->whereNumber('key')->name('keys.revoke');
 });
 

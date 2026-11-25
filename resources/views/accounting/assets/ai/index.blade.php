@@ -33,9 +33,26 @@
         <div class="card-body">
             <div class="d-flex gap-2 justify-content-between flex-wrap">
                 <h2 class="h5">Khóa kết nối</h2>
-                <a href="{{ route('asset-assistant.schema') }}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">Mở cấu hình OpenAPI</a>
+                <div class="d-flex gap-2 flex-wrap">
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-asset-copy-text="{{ route('asset-assistant.schema') }}">Sao chép URL OpenAPI</button>
+                    <a href="{{ route('asset-assistant.schema') }}" class="btn btn-sm btn-light" target="_blank" rel="noopener">Xem JSON</a>
+                </div>
             </div>
-            <p class="small text-muted">Khóa cấp quyền tìm hồ sơ và lưu bản nháp. Nhập khóa trong cấu hình Actions của GPT nội bộ.</p>
+            <details class="mb-3" open>
+                <summary class="fw-semibold">Cách kết nối trong ChatGPT</summary>
+                <ol class="small mt-2 mb-1">
+                    <li>Mở GPT nội bộ trong trình chỉnh sửa, vào <strong>Configure → Actions → Create new action</strong>.</li>
+                    <li>Chọn <strong>Import from URL</strong> và dán URL OpenAPI. Bạn cũng có thể dán nội dung JSON vào ô <strong>Schema</strong>.</li>
+                    <li>Trong <strong>Authentication</strong>, chọn <strong>API Key → Bearer</strong> và dán khóa kết nối tài sản bên dưới. Dán khóa nguyên vẹn, bắt đầu bằng <code>asset_</code>.</li>
+                    <li>Lưu rồi bấm <strong>Test</strong> ở thao tác <strong>searchAssetRecords</strong> để thử tìm một mã tài sản.</li>
+                </ol>
+                <p class="small text-muted mb-0">JSON mô tả các thao tác được phép. Khóa được nhập riêng trong phần xác thực của GPT.</p>
+            </details>
+            <p class="small" role="status" data-asset-copy-status></p>
+            <label class="mb-3" data-asset-copy-fallback hidden>
+                <span class="form-label">Sao chép thủ công</span>
+                <input class="form-control font-monospace" readonly autocomplete="off">
+            </label>
             <form method="POST" action="{{ accounting_route('assets.ai.keys.create') }}" class="d-flex align-items-end gap-2 flex-wrap mb-3">
                 @csrf
                 <label><span class="form-label">Tên kết nối</span><input class="form-control" name="label" maxlength="100" required placeholder="GPT hồ sơ tài sản"></label>
@@ -46,11 +63,25 @@
                     <li class="list-group-item d-flex align-items-center justify-content-between gap-2 px-0">
                         <span>{{ $key->label }} @if($key->revoked_at)<span class="small text-muted">· Đã thu hồi</span>@endif</span>
                         @unless($key->revoked_at)
-                            <form method="POST" action="{{ accounting_route('assets.ai.keys.revoke', ['key' => $key->id]) }}" onsubmit="return confirm('Thu hồi khóa kết nối này?')">
-                                @csrf
-                                @method('DELETE')
-                                <button class="btn btn-sm btn-outline-danger">Thu hồi</button>
-                            </form>
+                            <div class="d-flex flex-wrap gap-2">
+                                @if($key->copyable)
+                                    <form method="POST" action="{{ accounting_route('assets.ai.keys.copy', ['key' => $key->id]) }}" data-asset-copy-key>
+                                        @csrf
+                                        <button class="btn btn-sm btn-outline-primary">Sao chép khóa</button>
+                                    </form>
+                                @else
+                                    <form method="POST" action="{{ accounting_route('assets.ai.keys.rotate', ['key' => $key->id]) }}"
+                                        onsubmit="return confirm('Tạo lại khóa này? Khóa cũ sẽ hết hiệu lực và bạn cần cập nhật khóa mới trong GPT.')">
+                                        @csrf
+                                        <button class="btn btn-sm btn-outline-primary">Tạo lại để sao chép</button>
+                                    </form>
+                                @endif
+                                <form method="POST" action="{{ accounting_route('assets.ai.keys.revoke', ['key' => $key->id]) }}" onsubmit="return confirm('Thu hồi khóa kết nối này?')">
+                                    @csrf
+                                    @method('DELETE')
+                                    <button class="btn btn-sm btn-outline-danger">Thu hồi</button>
+                                </form>
+                            </div>
                         @endunless
                     </li>
                 @empty
@@ -61,3 +92,7 @@
     </section>
 @endif
 @endsection
+
+@push('scripts')
+    <script src="{{ asset('js/company-asset-assistant-keys.js') }}?v={{ filemtime(public_path('js/company-asset-assistant-keys.js')) }}"></script>
+@endpush
