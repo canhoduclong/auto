@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class CompanyAssetController extends Controller
 {
@@ -161,36 +162,114 @@ class CompanyAssetController extends Controller
             ->orderByDesc('id')->paginate(15, ['*'], 'document_page')->withQueryString()->fragment('asset-documents');
     }
 
-    public function showContract(int $contract)
+    public function showContract(int $contract, ?Request $request = null)
     {
+        $request ??= request();
+        $selection = $request->validate([
+            'edit_payment' => 'nullable|integer|min:1',
+            'edit_installment' => 'nullable|integer|min:1',
+            'pay_installment' => 'nullable|integer|min:1',
+        ]);
         $row = DB::table('asset_contracts as c')->join('asset_partners as p', 'p.id', '=', 'c.partner_id')
             ->select('c.*', 'p.name as partner_name', 'p.phone as partner_phone', 'p.email as partner_email')
             ->where('c.id', $contract)->first();
         abort_unless($row, 404);
-        $paymentQuery = DB::table('asset_contract_payments')->where('contract_id', $contract);
+        $paymentQuery = $this->contractEntries('asset_contract_payments', $contract);
         $paid = (int) (clone $paymentQuery)->sum('amount');
-        $payments = $paymentQuery->orderByDesc('paid_on')->orderByDesc('id')->paginate(15, ['*'], 'payment_page')->withQueryString()->fragment('asset-payments');
+        $allocated = (clone $paymentQuery)->whereNotNull('installment_id')->groupBy('installment_id')
+            ->selectRaw('installment_id, SUM(amount) as paid')->pluck('paid', 'installment_id');
+        $installments = $this->contractEntries('asset_contract_installments', $contract)
+            ->orderByRaw("CASE WHEN kind = 'deposit' THEN 0 ELSE 1 END")->orderBy('due_on')->orderBy('id')->get()
+            ->map(function ($entry) use ($allocated) {
+                $entry->paid = (int) ($allocated[$entry->id] ?? 0);
+                $entry->remaining = (int) $entry->amount - $entry->paid;
+
+                return $entry;
+            })->keyBy('id');
+        $deposit = $installments->firstWhere('kind', 'deposit');
+        $editInstallment = isset($selection['edit_installment']) ? $installments->get($selection['edit_installment']) : null;
+        $editPayment = isset($selection['edit_payment']) ? (clone $paymentQuery)->find($selection['edit_payment']) : null;
+        $payInstallment = isset($selection['pay_installment']) ? $installments->get($selection['pay_installment']) : null;
+        abort_if((isset($selection['edit_installment']) && ! $editInstallment)
+            || (isset($selection['edit_payment']) && ! $editPayment)
+            || (isset($selection['pay_installment']) && ! $payInstallment), 404);
+        $payments = $paymentQuery->orderByDesc('paid_on')->orderByDesc('id')->paginate(15, ['*'], 'payment_page')
+            ->appends($request->except(['edit_payment', 'pay_installment', 'payment_page']))->fragment('asset-payments');
         $documents = $this->documents('contract_id', $contract);
         $assets = DB::table('company_assets')->where('contract_id', $contract)->orderBy('code')
             ->paginate(15, ['*'], 'asset_page')->withQueryString()->fragment('contract-assets');
+        $unallocated = $paid - (int) $allocated->sum();
 
-        return view('accounting.assets.contract', compact('row', 'paid', 'payments', 'documents', 'assets'));
+        return view('accounting.assets.contract', compact(
+            'row', 'paid', 'payments', 'documents', 'assets', 'installments', 'deposit', 'editInstallment', 'editPayment', 'payInstallment', 'unallocated'
+        ));
     }
 
-    public function storePayment(Request $request, int $contract)
+    public function saveInstallment(Request $request, int $contract, ?int $installment = null)
     {
-        $this->record('asset_contracts', $contract);
-        $data = $request->validate([
+        $data = $request->validateWithBag('installment', [
+            'kind' => 'required|in:deposit,installment',
+            'label' => 'nullable|required_if:kind,installment|string|max:150',
+            'amount' => 'required|integer|min:1|max:999999999999999',
+            'due_on' => 'nullable|date_format:Y-m-d',
+            'milestone' => 'nullable|string|max:500',
+        ]);
+        $data['label'] = $data['kind'] === 'deposit' ? 'Tiền cọc' : $data['label'];
+        DB::transaction(function () use ($contract, $installment, $data) {
+            $this->lockContract($contract);
+            $entries = $this->contractEntries('asset_contract_installments', $contract);
+            if ($installment !== null) {
+                abort_unless((clone $entries)->find($installment), 404);
+            }
+            if ($data['kind'] === 'deposit' && (clone $entries)->where('kind', 'deposit')
+                ->when($installment, fn ($query) => $query->where('id', '<>', $installment))->exists()) {
+                throw ValidationException::withMessages(['kind' => 'Hợp đồng đã có mục Tiền cọc. Hãy cập nhật mục đó.'])->errorBag('installment');
+            }
+            $data['updated_at'] = now();
+            if ($installment === null) {
+                $entries->insert($data + ['contract_id' => $contract, 'created_at' => now()]);
+            } else {
+                $entries->where('id', $installment)->update($data);
+            }
+        });
+
+        return $this->backToContract($contract, 'asset-installments', 'Đã lưu đợt thanh toán.');
+    }
+
+    public function storePayment(Request $request, int $contract, ?int $payment = null)
+    {
+        $data = $request->validateWithBag('payment', [
             'paid_on' => 'required|date_format:Y-m-d|before_or_equal:today',
             'amount' => 'required|integer|min:1|max:999999999999999',
             'method' => ['required', Rule::in(array_keys(self::PAYMENT_METHODS))],
+            'installment_id' => ['nullable', 'integer', Rule::exists('asset_contract_installments', 'id')->where('contract_id', $contract)],
             'reference' => 'nullable|string|max:100', 'note' => 'nullable|string|max:4000',
         ]);
-        DB::table('asset_contract_payments')->insert($data + [
-            'contract_id' => $contract, 'created_by' => $request->user()->id, 'created_at' => now(), 'updated_at' => now(),
-        ]);
+        DB::transaction(function () use ($request, $contract, $payment, $data) {
+            $this->lockContract($contract);
+            $entries = $this->contractEntries('asset_contract_payments', $contract);
+            $data['updated_at'] = now();
+            if ($payment === null) {
+                $entries->insert($data + [
+                    'contract_id' => $contract, 'created_by' => $request->user()->id, 'created_at' => now(),
+                ]);
+            } else {
+                abort_unless((clone $entries)->find($payment), 404);
+                $entries->where('id', $payment)->update($data);
+            }
+        });
 
-        return $this->backToContract($contract, 'asset-payments', 'Đã ghi nhận thanh toán.');
+        return $this->backToContract($contract, 'asset-payments', $payment === null ? 'Đã ghi nhận thanh toán.' : 'Đã cập nhật thanh toán.');
+    }
+
+    private function contractEntries(string $table, int $contract)
+    {
+        return DB::table($table)->where('contract_id', $contract);
+    }
+
+    private function lockContract(int $contract): void
+    {
+        abort_unless(DB::table('asset_contracts')->lockForUpdate()->find($contract), 404);
     }
 
     public function storeDocuments(Request $request, int $contract)

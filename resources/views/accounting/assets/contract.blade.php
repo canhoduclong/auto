@@ -9,6 +9,10 @@
     $date = fn ($value) => $value ? \Carbon\Carbon::parse($value)->format('d/m/Y') : '—';
     $methods = \App\Http\Controllers\CompanyAssetController::PAYMENT_METHODS;
     $remaining = (int) $row->value - $paid;
+    $paymentErrors = $errors->getBag('payment');
+    $paymentInput = fn ($key, $default = null) => $paymentErrors->any() ? old($key, $default) : $default;
+    $contractUrl = accounting_route('assets.contracts.show', ['contract' => $row->id]);
+    $paymentRoute = ['contract' => $row->id] + ($editPayment ? ['payment' => $editPayment->id] : []);
 @endphp
 @include('accounting.assets.feedback')
 
@@ -47,47 +51,67 @@
     @endforeach
 </div>
 
+@include('accounting.assets.installments')
+
 <div class="row g-3">
     <div class="col-xl-7" id="asset-payments">
         <section class="card rounded-3 h-100">
             <div class="card-body">
                 <h3 class="h5 mb-3">Thanh toán</h3>
-                <details class="border rounded p-3 mb-3" @if(old('paid_on') || old('amount')) open @endif>
-                    <summary class="fw-semibold">Ghi nhận thanh toán</summary>
-                    <form method="POST" action="{{ accounting_route('assets.payments.store', ['contract' => $row->id]) }}" class="row g-2 mt-2">
+                <details class="border rounded p-3 mb-3" @if($editPayment || $payInstallment || $paymentErrors->any()) open @endif>
+                    <summary class="fw-semibold">{{ $editPayment ? 'Cập nhật thanh toán' : 'Ghi nhận thanh toán' }}</summary>
+                    @if($paymentErrors->any())
+                        <div class="alert alert-danger mt-2 mb-0" role="alert">{{ $paymentErrors->first() }}</div>
+                    @endif
+                    <form method="POST" action="{{ accounting_route($editPayment ? 'assets.payments.update' : 'assets.payments.store', $paymentRoute) }}" class="row g-2 mt-2">
                         @csrf
+                        @if($editPayment) @method('PATCH') @endif
+                        <label class="col-12"><span class="form-label">Thanh toán cho</span>
+                            <select class="form-select" name="installment_id">
+                                <option value="">Chưa phân đợt</option>
+                                @foreach($installments as $entry)
+                                    <option value="{{ $entry->id }}" @selected((int) $paymentInput('installment_id', $editPayment->installment_id ?? $payInstallment->id ?? 0) === (int) $entry->id)>{{ $entry->label }} · Còn {{ $money(max(0, $entry->remaining)) }}</option>
+                                @endforeach
+                            </select>
+                        </label>
                         <label class="col-sm-6"><span class="form-label">Ngày thanh toán</span>
-                            <input class="form-control" name="paid_on" type="date" value="{{ old('paid_on', today()->toDateString()) }}" max="{{ today()->toDateString() }}" required>
+                            <input class="form-control" name="paid_on" type="date" value="{{ $paymentInput('paid_on', $editPayment->paid_on ?? today()->toDateString()) }}" max="{{ today()->toDateString() }}" required>
                         </label>
                         <label class="col-sm-6"><span class="form-label">Số tiền (đ)</span>
-                            <input class="form-control" name="amount" type="number" min="1" max="999999999999999" value="{{ old('amount') }}" required>
+                            <input class="form-control" name="amount" type="number" min="1" max="999999999999999" value="{{ $paymentInput('amount', $editPayment->amount ?? ($payInstallment && $payInstallment->remaining > 0 ? $payInstallment->remaining : '')) }}" required>
                         </label>
                         <label class="col-sm-6"><span class="form-label">Hình thức</span>
                             <select class="form-select" name="method" required>
-                                @foreach($methods as $key => $label)<option value="{{ $key }}" @selected(old('method') === $key)>{{ $label }}</option>@endforeach
+                                @foreach($methods as $key => $label)<option value="{{ $key }}" @selected($paymentInput('method', $editPayment->method ?? null) === $key)>{{ $label }}</option>@endforeach
                             </select>
                         </label>
                         <label class="col-sm-6"><span class="form-label">Mã tham chiếu</span>
-                            <input class="form-control" name="reference" maxlength="100" value="{{ old('reference') }}">
+                            <input class="form-control" name="reference" maxlength="100" value="{{ $paymentInput('reference', $editPayment->reference ?? '') }}">
                         </label>
                         <label class="col-12"><span class="form-label">Ghi chú thanh toán</span>
-                            <textarea name="note" class="form-control" maxlength="4000" rows="2">{{ old('note') }}</textarea>
+                            <textarea name="note" class="form-control" maxlength="4000" rows="2">{{ $paymentInput('note', $editPayment->note ?? '') }}</textarea>
                         </label>
-                        <div class="col-12"><button class="btn btn-primary btn-sm">Lưu thanh toán</button></div>
+                        <div class="col-12 d-flex gap-2">
+                            <button class="btn btn-primary btn-sm">Lưu thanh toán</button>
+                            @if($editPayment)<a class="btn btn-light btn-sm" href="{{ $contractUrl }}#asset-payments">Hủy cập nhật</a>@endif
+                        </div>
                     </form>
                 </details>
                 <div class="table-responsive">
                     <table class="table table-sm align-middle mb-0">
-                        <thead class="table-light"><tr><th scope="col">Ngày thanh toán</th><th scope="col">Hình thức</th><th scope="col">Tham chiếu / ghi chú</th><th scope="col" class="text-end">Số tiền</th></tr></thead>
+                        <thead class="table-light"><tr><th scope="col">Ngày thanh toán</th><th scope="col">Đợt</th><th scope="col">Hình thức</th><th scope="col">Tham chiếu / ghi chú</th><th scope="col" class="text-end">Số tiền</th><th scope="col" class="text-end">Thao tác</th></tr></thead>
                         <tbody>
                         @forelse($payments as $payment)
                             <tr>
-                                <td class="text-nowrap">{{ $date($payment->paid_on) }}</td><td>{{ $methods[$payment->method] }}</td>
+                                <td class="text-nowrap">{{ $date($payment->paid_on) }}</td>
+                                <td>{{ $installments->get((int) $payment->installment_id)?->label ?? 'Chưa phân đợt' }}</td>
+                                <td>{{ $methods[$payment->method] }}</td>
                                 <td>{{ $payment->reference ?: '—' }}@if($payment->note)<div class="small text-muted">{{ $payment->note }}</div>@endif</td>
                                 <td class="text-end text-nowrap fw-semibold">{{ $money($payment->amount) }}</td>
+                                <td class="text-end text-nowrap"><a class="btn btn-sm btn-light" href="{{ accounting_route('assets.contracts.show', ['contract' => $row->id, 'edit_payment' => $payment->id]) }}#asset-payments">Cập nhật</a></td>
                             </tr>
                         @empty
-                            <tr><td colspan="4" class="text-muted text-center py-3">Chưa ghi nhận thanh toán.</td></tr>
+                            <tr><td colspan="6" class="text-muted text-center py-3">Chưa ghi nhận thanh toán.</td></tr>
                         @endforelse
                         </tbody>
                     </table>

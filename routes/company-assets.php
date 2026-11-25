@@ -14,6 +14,9 @@ Route::prefix('assets')->name('assets.')->controller(CompanyAssetController::cla
     Route::post('/{kind}', 'save')->whereIn('kind', ['assets', 'partners', 'contracts'])->name('store');
     Route::patch('/{kind}/{record}', 'save')->whereIn('kind', ['assets', 'partners', 'contracts'])->whereNumber('record')->name('update');
     Route::get('/contracts/{contract}', 'showContract')->whereNumber('contract')->name('contracts.show');
+    Route::post('/contracts/{contract}/installments', 'saveInstallment')->whereNumber('contract')->name('installments.store');
+    Route::patch('/contracts/{contract}/installments/{installment}', 'saveInstallment')->whereNumber(['contract', 'installment'])->name('installments.update');
+    Route::patch('/contracts/{contract}/payments/{payment}', 'storePayment')->whereNumber(['contract', 'payment'])->name('payments.update');
     Route::post('/contracts/{contract}/payments', 'storePayment')->whereNumber('contract')->name('payments.store');
     Route::post('/contracts/{contract}/documents', 'storeDocuments')->whereNumber('contract')->name('documents.store');
     Route::get('/contracts/{contract}/documents/{document}', 'downloadDocument')->whereNumber(['contract', 'document'])->name('documents.download');
