@@ -1461,6 +1461,7 @@ Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,mana
         Route::post('/', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'saveVoucher'])->name('save');
         Route::delete('/{voucher}', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'voidVoucher'])->whereUuid('voucher')->name('void');
         Route::get('/{voucher}', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'printVoucher'])->whereUuid('voucher')->name('print');
+        Route::get('/{voucher}/receipt', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'printVoucher'])->whereUuid('voucher')->name('print-receipt');
         Route::get('/{voucher}/documents/{document}', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'downloadVoucherDocument'])
             ->whereUuid(['voucher', 'document'])->name('documents.download');
     });

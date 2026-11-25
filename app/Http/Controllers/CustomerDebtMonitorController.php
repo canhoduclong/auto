@@ -149,7 +149,7 @@ class CustomerDebtMonitorController extends Controller
                 ),
                 'editPurchases' => $editPurchases,
                 'transferDifferences' => $manualService->transferDifferences($selected),
-                'purchaseChoices' => $editing && ! $editPurchases ? [] : $purchaseDays->where('selectable', true)
+                'purchaseChoices' => $editing ? [] : $purchaseDays->where('selectable', true)
                     ->map(fn ($day) => array_intersect_key($day, array_flip(['date', 'count', 'remaining'])))->values(),
                 'selectedPurchases' => $purchaseDays->only($selectedDates)->where('selectable', true)->pluck('remaining', 'date')->union($editPurchases ? array_intersect_key($editing['purchase_days'], array_flip($selectedDates)) : []),
                 'editing' => $editing,
@@ -525,6 +525,13 @@ class CustomerDebtMonitorController extends Controller
     public function printVoucher(Request $request, string $voucher, CustomerDebtSheetService $sheets, CustomerDebtVouchers $vouchers)
     {
         [$selected, $row, $query] = $this->storedVoucher($request, $voucher, $sheets, $vouchers);
+        $linkedReceipt = $request->routeIs('customer-debt.vouchers.print-receipt');
+        if ($linkedReceipt) {
+            abort_unless($row['type'] === 'payment-request' && $row['paid'] > 0, 404);
+            $row['request_number'] = $row['number'];
+            $row['number'] = 'PT-'.$row['number'];
+            $row['type'] = 'receipt';
+        }
         $company = Setting::get('company_legal_name', 'CÔNG TY CỔ PHẦN THỰC PHẨM HOÀNG LONG TNT');
 
         $customer = isset($selected['customer_id'])
@@ -537,7 +544,8 @@ class CustomerDebtMonitorController extends Controller
         $phone = trim((string) $customer?->phone)
             ?: trim((string) ($selected['phone'] ?? $sourceEntries->first(fn ($entry) => filled($entry['phone'] ?? null))['phone'] ?? ''));
 
-        $creator = User::query()->find($row['created_by'] ?? null, ['name', 'short_name']);
+        $creatorId = $linkedReceipt ? ($row['payment_recorded_by'] ?? $row['updated_by'] ?? $row['created_by']) : ($row['created_by'] ?? null);
+        $creator = User::query()->find($creatorId, ['name', 'short_name']);
         $creatorName = trim((string) $creator?->short_name) ?: $creator?->name;
 
         return response()->view('customer-debt.voucher-print', compact('selected', 'row', 'query', 'company', 'creatorName', 'address', 'phone'))->header('Cache-Control', 'private, no-store');

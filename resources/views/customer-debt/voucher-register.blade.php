@@ -26,7 +26,7 @@
         <p class="alert alert-warning" role="alert">{{ $message }}</p>
     @enderror
     <div class="row g-3 mb-4" data-voucher-workspace>
-        @if($selectPurchases)
+        @unless($editing)
             <dialog class="border rounded shadow p-3" style="width:min(36rem, 95vw); max-height:85vh; margin:auto" data-voucher-picker aria-labelledby="debt-voucher-picker-title">
                 <div class="d-flex justify-content-between align-items-center gap-2 mb-3">
                     <h4 class="h6 mb-0" id="debt-voucher-picker-title">Chọn Bill theo ngày</h4>
@@ -49,7 +49,7 @@
                 </form>
             </dialog>
             <script type="application/json" data-voucher-picker-data>@json($voucherRegister['purchaseChoices'])</script>
-        @endif
+        @endunless
 
         <div class="col-xl-6">@include('customer-debt.voucher-purchases')</div>
         <div class="col-xl-6">
@@ -101,7 +101,7 @@
             </label>
             <label class="col-sm-6">
                 <span class="form-label">Tiền đã thu cho phiếu này (đ)</span>
-                <input name="paid" type="number" min="0" max="999999999999999" step="1" class="form-control" value="{{ old('paid', $editing['paid'] ?? 0) }}" required>
+                <input id="debt-voucher-paid" name="paid" type="number" min="0" max="999999999999999" step="1" class="form-control" value="{{ old('paid', $editing['paid'] ?? 0) }}" required>
             </label>
             <label class="col-sm-6">
                 <span class="form-label">Hình thức thu</span>
@@ -179,6 +179,13 @@
                     <td class="text-nowrap">
                         <a class="btn btn-sm btn-outline-primary" href="{{ request()->fullUrlWithQuery(['edit_voucher' => $row['id'], 'new_voucher' => null]) }}#debt-voucher-editor">Cập nhật</a>
                         <a class="btn btn-sm btn-light" target="_blank" rel="noopener" href="{{ route('customer-debt.vouchers.print', $voucherUrl($row)) }}">In phiếu</a>
+                        @if($row['type'] === 'payment-request')
+                            @if($row['paid'] > 0)
+                                <a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="{{ route('customer-debt.vouchers.print-receipt', $voucherUrl($row)) }}">In phiếu thu</a>
+                            @else
+                                <a class="btn btn-sm btn-outline-primary" href="{{ request()->fullUrlWithQuery(['edit_voucher' => $row['id'], 'new_voucher' => null]) }}#debt-voucher-paid">Ghi nhận thu</a>
+                            @endif
+                        @endif
                         <form class="d-inline" method="POST" action="{{ route('customer-debt.vouchers.void', ['voucher' => $row['id']]) }}"
                             onsubmit="return confirm('Gỡ phiếu này khỏi sổ phiếu? Các ngày mua đủ điều kiện sẽ được chọn lại để lập phiếu mới.')">
                             @csrf

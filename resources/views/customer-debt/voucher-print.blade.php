@@ -8,6 +8,7 @@
 </head>
 <body>
 @php
+    $linkedReceipt = isset($row['request_number']);
     $receipt = $row['type'] === 'receipt';
     $money = fn ($value) => number_format($value, 0, ',', '.').' đ';
     $printedAmount = $receipt ? $row['paid'] : $row['remaining'];
@@ -25,7 +26,14 @@
             <h1>{{ \App\Services\CustomerDebtVouchers::TYPES[$row['type']] }}</h1>
             <div class="voucher-record-meta">
                 <span><strong>Số phiếu</strong> {{ $row['number'] }}</span>
-                <span><strong>Ngày lập</strong> {{ \Carbon\Carbon::parse($row['created_at'])->timezone(config('app.display_timezone'))->format('d/m/Y') }}</span>
+                @if($linkedReceipt)
+                    <span><strong>Đề nghị thanh toán</strong> {{ $row['request_number'] }}</span>
+                    @if(!empty($row['payment_recorded_at']))
+                        <span><strong>Ngày ghi nhận thu</strong> {{ \Carbon\Carbon::parse($row['payment_recorded_at'])->timezone(config('app.display_timezone'))->format('d/m/Y') }}</span>
+                    @endif
+                @else
+                    <span><strong>Ngày lập</strong> {{ \Carbon\Carbon::parse($row['created_at'])->timezone(config('app.display_timezone'))->format('d/m/Y') }}</span>
+                @endif
             </div>
             <h2><span>Khách hàng</span> {{ $selected['name'] }}</h2>
             @if($address || $phone)
@@ -37,7 +45,7 @@
             @if(!$receipt && !($row['by_purchase_days'] ?? !empty($row['purchase_days'])))
                 <p>Chốt công nợ đến {{ \Carbon\Carbon::parse($row['through'])->format('d/m/Y') }}</p>
             @endif
-            @if($showTotals || $visibleAmount($row['carry']) || $visibleAmount($row['new_amount']))
+            @if(!$linkedReceipt && ($showTotals || $visibleAmount($row['carry']) || $visibleAmount($row['new_amount'])))
                 <table class="voucher-record-table">
                     <thead><tr><th scope="col">Nội dung</th><th scope="col">Số tiền</th></tr></thead>
                     <tbody>

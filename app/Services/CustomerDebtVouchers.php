@@ -174,6 +174,11 @@ class CustomerDebtVouchers
             'documents' => $existing['documents'] ?? [], 'created_at' => $existing['created_at'] ?? now()->toIso8601String(),
             'created_by' => $existing['created_by'] ?? $actor, 'updated_at' => now()->toIso8601String(), 'updated_by' => $actor,
         ];
+        if ($type === 'payment-request' && $voucher['paid'] > 0) {
+            $changedPayment = $voucher['paid'] !== ($existing['paid'] ?? 0);
+            $voucher['payment_recorded_at'] = $changedPayment ? now()->toIso8601String() : ($existing['payment_recorded_at'] ?? null);
+            $voucher['payment_recorded_by'] = $changedPayment ? $actor : ($existing['payment_recorded_by'] ?? $existing['updated_by'] ?? null);
+        }
         $updated = $this->balances($rows->put($id, $voucher)->sortBy('sequence'));
         if ($updated->contains(fn ($row) => $row['remaining'] < 0) || (! $existing && $updated[$id]['total'] <= 0)) {
             throw ValidationException::withMessages(['paid' => 'Tổng phải thu phải lớn hơn 0. Số tiền đã thu không được vượt số phải thu của phiếu này hoặc phiếu kế tiếp.']);
