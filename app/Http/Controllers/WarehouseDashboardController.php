@@ -4794,7 +4794,6 @@ class WarehouseDashboardController extends Controller
         DB::transaction(function () use ($order, $packingWarehouseId): void {
         Order::whereKey($order->id)->lockForUpdate()->firstOrFail();
         if (! ($order->skip_auto_cancel && Carbon::parse($order->created_at)->startOfDay()->lt(Carbon::today()))) {
-            $this->reserveOrderStockAtWarehouse($order, $packingWarehouseId);
             app(\App\Services\PackedInventoryService::class)->seal($order, $packingWarehouseId);
         }
         app(\App\Services\WarehousePackedOrderService::class)->recalculate($order);

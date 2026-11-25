@@ -2,6 +2,7 @@
 namespace App\Services;
 
 use App\Models\{Order, Inventory, InventoryDocument, InventoryMovement, InventoryReservation, WarehouseTransfer};
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Schema;
 
@@ -73,18 +74,20 @@ class PackedInventoryService
         $order->loadMissing('items.packingSizeAllocations');
         foreach ($order->items as $item) {
             if (! $item->product_variant_id) continue;
-            $rows = InventoryReservation::where('order_item_id', $item->id)
-                ->whereHas('inventory', fn($query) => $query->where('warehouse_id', $warehouseId))
-                ->lockForUpdate()->get();
-            $requirements = $item->packingSizeAllocations->sum('quantity') === (int)$item->quantity
-                ? $item->packingSizeAllocations->groupBy('product_variant_id')->map(fn($group) => $group->sum('quantity'))
-                : collect([$item->product_variant_id => $item->quantity]);
-            foreach ($requirements as $variantId => $quantity) {
-                $reserved = $rows->filter(fn($row) => (int)$row->inventory->product_variant_id === (int)$variantId)->sum('quantity');
-                if ((float)$reserved !== (float)$quantity) {
-                    $name = $this->variantLabel((int) $variantId);
-                    throw new \RuntimeException('Chưa giữ đủ tồn kho riêng cho mặt hàng '.$name.'. Không thể chốt đóng hàng.');
+            $allRows = InventoryReservation::where('order_item_id', $item->id)
+                ->with('inventory')->lockForUpdate()->get();
+            $requirements = ($item->packingSizeAllocations->sum('quantity') === (int) $item->quantity
+                ? $item->packingSizeAllocations->groupBy('product_variant_id')->map(fn ($group) => $group->sum('quantity'))
+                : collect([$item->product_variant_id => $item->quantity]))
+                ->filter(fn ($quantity) => $quantity > 0)->map(fn ($quantity) => (float) $quantity)->sortKeys();
+            $rows = $allRows->filter(fn ($row) => (int) $row->inventory->warehouse_id === $warehouseId);
+            $held = $rows->groupBy(fn ($row) => $row->inventory->product_variant_id)
+                ->map(fn ($group) => (float) $group->sum('quantity'))->sortKeys();
+            if ($held->all() !== $requirements->all() || $rows->count() !== $allRows->count()) {
+                if ($allRows->contains(fn ($row) => $row->packed_at || $row->received_transfer_id)) {
+                    throw new \RuntimeException('Lượng giữ riêng của hàng đã đóng hoặc đã nhận điều chuyển bị lệch. Cần đối soát trước khi chốt.');
                 }
+                $rows = $this->replaceUnsealedReservations($item->id, $warehouseId, $allRows, $requirements);
             }
             foreach ($rows->pluck('inventory_id')->unique() as $inventoryId) {
                 $inventory = Inventory::whereKey($inventoryId)->lockForUpdate()->firstOrFail();
@@ -100,6 +103,50 @@ class PackedInventoryService
                 $row->forceFill(['packed_at' => now(), 'packed_weight_kg' => $item->quantity > 0 ? round($weight*$row->quantity/$item->quantity,3) : 0])->save();
             }
         }
+    }
+
+    private function replaceUnsealedReservations(int $itemId, int $warehouseId, Collection $oldRows, Collection $requirements): Collection
+    {
+        $inventories = Inventory::query()->where(function ($query) use ($oldRows, $warehouseId, $requirements) {
+            $query->whereIn('id', $oldRows->pluck('inventory_id'))
+                ->orWhere(fn ($query) => $query->where('warehouse_id', $warehouseId)
+                    ->whereIn('product_variant_id', $requirements->keys()));
+        })->orderBy('id')->lockForUpdate()->get();
+        $oldByInventory = $oldRows->groupBy('inventory_id');
+        $plan = [];
+        foreach ($inventories as $inventory) {
+            $otherReserved = (float) $inventory->reservations()->where('order_item_id', '<>', $itemId)->sum('quantity');
+            $variantId = $inventory->product_variant_id;
+            $quantity = (int) $inventory->warehouse_id === $warehouseId
+                ? min((float) $requirements->get($variantId, 0), max(0, (float) $inventory->quantity - $otherReserved))
+                : 0.0;
+            if ($quantity > 0) {
+                $requirements->put($variantId, (float) $requirements[$variantId] - $quantity);
+            }
+            $plan[$inventory->id] = [$otherReserved, $quantity];
+        }
+        foreach ($requirements as $variantId => $remaining) {
+            if ($remaining > 0.0001) {
+                throw new \RuntimeException('Kho đóng hàng chưa đủ tồn khả dụng để giữ riêng cho '.$this->variantLabel((int) $variantId).'. Còn thiếu '.number_format($remaining, 3, ',', '.').'.');
+            }
+        }
+
+        $rows = collect();
+        foreach ($inventories as $inventory) {
+            foreach ($oldByInventory->get($inventory->id, []) as $row) {
+                $row->delete();
+            }
+            [$otherReserved, $quantity] = $plan[$inventory->id];
+            if ($quantity > 0) {
+                $rows->push(InventoryReservation::create([
+                    'order_item_id' => $itemId, 'inventory_id' => $inventory->id,
+                    'quantity' => $quantity, 'reserved_at' => now(),
+                ]));
+            }
+            $inventory->update(['reserved_quantity' => $otherReserved + $quantity]);
+        }
+
+        return $rows;
     }
 
     private function variantLabel(int $variantId): string

@@ -162,6 +162,31 @@ class PackedTransferInventoryTest extends TestCase
         $this->expectException(\RuntimeException::class);
         DB::transaction(fn()=>(new PackedInventoryService)->seal($o,1));
     }
+    public function test_sealing_rebuilds_stale_unpacked_holds_without_changing_physical_stock(): void
+    {
+        DB::table('inventories')->where('id', 1)->update(['quantity' => 35, 'reserved_quantity' => 28]);
+        DB::table('inventories')->where('id', 2)->update(['quantity' => 20, 'reserved_quantity' => 10]);
+        DB::table('inventory_reservations')->where('order_item_id', 10)->update(['quantity' => 25, 'packed_at' => null]);
+        DB::table('inventory_reservations')->insert([
+            ['inventory_id' => 1, 'order_item_id' => 11, 'quantity' => 3, 'packed_at' => now()],
+            ['inventory_id' => 2, 'order_item_id' => 10, 'quantity' => 10, 'packed_at' => null],
+        ]);
+        $order = $this->order();
+        $order->items->first()->setRelation('packingSizeAllocations', collect());
+
+        DB::transaction(fn () => (new PackedInventoryService)->seal($order, 1));
+
+        $orderHold = InventoryReservation::where('order_item_id', 10)->sole();
+        self::assertEquals(1, $orderHold->inventory_id);
+        self::assertEquals(5, $orderHold->quantity);
+        self::assertEquals(12, $orderHold->packed_weight_kg);
+        self::assertEquals(8, Inventory::find(1)->reserved_quantity);
+        self::assertEquals(0, Inventory::find(2)->reserved_quantity);
+        self::assertEquals(35, Inventory::find(1)->quantity);
+        self::assertEquals(20, Inventory::find(2)->quantity);
+        self::assertEquals(3, InventoryReservation::where('order_item_id', 11)->sum('quantity'));
+    }
+
     public function test_sealing_preserves_packed_weight_and_refreshes_reserved_total(): void
     {
         DB::table('inventories')->where('id',1)->update(['reserved_quantity'=>0]);
