@@ -9,6 +9,14 @@ use App\Http\Controllers\Api\Mobile\SaleApiController;
 use App\Http\Controllers\Api\Mobile\WarehouseApiController;
 use Illuminate\Support\Facades\Route;
 
+Route::prefix('company-assets/assistant')->name('asset-assistant.')->controller(\App\Http\Controllers\CompanyAssetAssistantController::class)->group(function () {
+    Route::get('/openapi.json', 'schema')->middleware('throttle:30,1')->name('schema');
+    Route::middleware(['throttle:60,1', \App\Http\Middleware\AuthenticateAssetAssistant::class])->group(function () {
+        Route::get('/records', 'search')->name('search');
+        Route::post('/drafts', 'storeDraft')->name('drafts.store');
+    });
+});
+
 // Isolated task capabilities: deliberately outside all account/mobile authentication.
 Route::prefix('task-links')->middleware('throttle:30,1')->group(function () {
     Route::get('/{token}', [\App\Http\Controllers\TaskAiLinkController::class, 'show'])->where('token', '[a-f0-9]{64}')->name('task-ai.show');

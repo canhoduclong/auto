@@ -219,8 +219,13 @@
 							<i class="ph-dots-three sidebar-resize-show"></i>
 						</li>
                         <li class="nav-item">
-                            <a href="{{ route('admin.accounting.assets.index') }}" class="nav-link{{ request()->routeIs('admin.accounting.assets.*') ? ' active' : '' }}">
+                            <a href="{{ route('admin.accounting.assets.index') }}" class="nav-link{{ request()->routeIs('admin.accounting.assets.*') && ! request()->routeIs('admin.accounting.assets.report') ? ' active' : '' }}">
                                 <i class="ph-package"></i><span>Quản lý tài sản</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a href="{{ route('admin.accounting.assets.report') }}" class="nav-link{{ request()->routeIs('admin.accounting.assets.report') ? ' active' : '' }}">
+                                <i class="ph-chart-bar"></i><span>Báo cáo tài sản</span>
                             </a>
                         </li>
 						<li class="nav-item">

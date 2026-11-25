@@ -375,8 +375,11 @@ body.acc-sidebar-collapsed .acc-task-group>summary{justify-content:center;paddin
             <a href="{{ route('accounting.dashboard') }}" class="{{ request()->routeIs('accounting.dashboard') ? 'active' : '' }}">
                 <i class="bi bi-speedometer2"></i> Dashboard
             </a>
-            <a href="{{ route('accounting.assets.index') }}" class="{{ request()->routeIs('accounting.assets.*') ? 'active' : '' }}" data-label="Quản lý tài sản">
+            <a href="{{ route('accounting.assets.index') }}" class="{{ request()->routeIs('accounting.assets.*') && ! request()->routeIs('accounting.assets.report') ? 'active' : '' }}" data-label="Quản lý tài sản">
                 <i class="bi bi-box-seam"></i> Quản lý tài sản
+            </a>
+            <a href="{{ route('accounting.assets.report') }}" class="{{ request()->routeIs('accounting.assets.report') ? 'active' : '' }}" data-label="Báo cáo tài sản">
+                <i class="bi bi-bar-chart-line"></i> Báo cáo tài sản
             </a>
             <a href="{{ route('accounting.order-adjustments') }}" class="{{ request()->routeIs('accounting.order-adjustments') ? 'active' : '' }}" data-label="Duyệt điều chỉnh đơn">
                 <i class="bi bi-clipboard-check-fill"></i> Duyệt điều chỉnh đơn

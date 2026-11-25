@@ -20,9 +20,12 @@
                 <h2 class="h5 mb-1">{{ $tabs[$tab] }}</h2>
                 <p class="small text-muted mb-0">{{ $rows->total() }} kết quả</p>
             </div>
-            <a href="{{ $tab === 'partners' ? accounting_route('assets.create', ['kind' => 'partners']) : accounting_route('assets.new') }}" class="btn btn-primary">
-                {{ $tab === 'partners' ? 'Thêm đối tác' : 'Tạo tài sản / HĐ' }}
-            </a>
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn btn-outline-primary" href="{{ accounting_route('assets.ai.index') }}">Bản nháp ChatGPT</a>
+                <a href="{{ $tab === 'partners' ? accounting_route('assets.create', ['kind' => 'partners']) : accounting_route('assets.new') }}" class="btn btn-primary">
+                    {{ $tab === 'partners' ? 'Thêm đối tác' : 'Tạo tài sản / HĐ' }}
+                </a>
+            </div>
         </div>
         <nav class="nav nav-tabs" aria-label="Danh mục quản lý tài sản">
             @foreach($tabs as $key => $label)

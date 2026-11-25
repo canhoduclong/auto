@@ -1,7 +1,17 @@
 <?php
 
 use App\Http\Controllers\CompanyAssetController;
+use App\Http\Controllers\CompanyAssetReportController;
 use Illuminate\Support\Facades\Route;
+
+Route::get('assets/report', [CompanyAssetReportController::class, 'index'])->name('assets.report');
+
+Route::prefix('assets/assistant')->name('assets.ai.')->controller(\App\Http\Controllers\CompanyAssetAssistantController::class)->group(function () {
+    Route::get('/', 'index')->name('index');
+    Route::get('/drafts/{draft}', 'show')->whereNumber('draft')->name('show');
+    Route::post('/keys', 'createKey')->name('keys.create');
+    Route::delete('/keys/{key}', 'revokeKey')->whereNumber('key')->name('keys.revoke');
+});
 
 Route::prefix('assets')->name('assets.')->controller(CompanyAssetController::class)->group(function () {
     Route::get('/', 'index')->name('index');
