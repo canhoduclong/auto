@@ -29,6 +29,20 @@ class CustomerDebtSheetServiceTest extends TestCase
         self::assertSame(1000000, array_values($groups)[0]['balance']);
     }
 
+    public function test_pasted_sales_row_is_skipped_only_when_adjacent_journal_row_matches(): void
+    {
+        $service = new CustomerDebtSheetService;
+        $header = ['Ngày tháng', 'Mã KH', 'Khách hàng', 'Sản phẩm', 'SL', 'Tổng tiền', 'Thanh toán', 'Tặng', 'Kiểm tra'];
+        $pasted = ['16/02/2026', '6338', 'Khách A', 'Con', '20', '3.976.000'];
+        $original = [...$pasted, '', '', 'TRUE'];
+
+        $sales = $service->parse([$header, $pasted, $original], 'sale');
+        self::assertSame([3], array_column($sales, 'row'));
+        self::assertSame(3976000, array_sum(array_column($sales, 'amount')));
+        self::assertCount(2, $service->parse([$header, $original, $original], 'sale'));
+        self::assertCount(2, $service->parse([$header, $pasted, array_replace($original, [4 => '21'])], 'sale'));
+    }
+
     public function test_bank_tab_uses_code_as_receipt_category_not_customer_code(): void
     {
         $issues = [];

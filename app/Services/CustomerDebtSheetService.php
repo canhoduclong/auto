@@ -384,6 +384,25 @@ class CustomerDebtSheetService
             if (! $headers || ! array_filter($cells, fn ($v) => trim((string) $v) !== '')) {
                 continue;
             }
+            if ($type === 'sale' && isset($headers['gift'], $headers['inline_payment'], $headers['code'])
+                && count($cells) === $headers['amount'] + 1
+                && trim((string) ($cells[$headers['date']] ?? '')) !== ''
+                && trim((string) ($cells[$headers['code']] ?? '')) !== ''
+                && trim((string) ($cells[$headers['name']] ?? '')) !== '') {
+                // Keep the original journal row when an adjacent paste contains
+                // the same business cells but lacks the journal's formula columns.
+                $businessWidth = max($headers) + 1;
+                $trimCells = fn (array $row) => array_map(fn ($cell) => trim((string) $cell), $row);
+                $businessCells = $trimCells(array_pad($cells, $businessWidth, ''));
+                foreach ([$values[$index - 1] ?? [], $values[$index + 1] ?? []] as $neighbour) {
+                    $formulaCells = array_map('strtoupper', $trimCells(array_slice($neighbour, $businessWidth)));
+                    if (in_array('TRUE', $formulaCells, true)
+                        && $trimCells(array_slice($neighbour, 0, $businessWidth)) === $businessCells) {
+                        continue 2;
+                    }
+                }
+            }
+
             $row = [];
             foreach ($headers as $field => $column) {
                 $row[$field] = trim((string) ($cells[$column] ?? ''));
