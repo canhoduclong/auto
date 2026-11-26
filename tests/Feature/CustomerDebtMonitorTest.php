@@ -1768,6 +1768,30 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame('2026-11-13', $data['period']['to']);
     }
 
+    public function test_negative_purchase_reduces_debt_on_the_report_and_customer_detail(): void
+    {
+        $sale = array_replace($this->entry('CRM01', 'Chị Bình'), ['amount' => 3035250]);
+        $credit = array_replace($sale, ['row' => 2, 'amount' => -404700]);
+        $service = $this->service([$sale, $credit]);
+        $key = array_key_first($service->summarize([$sale, $credit]));
+
+        $detail = (new CustomerDebtMonitorController)->index(
+            $this->request(['customer' => $key, 'window' => 'all'], 'admin'), $service
+        )->getData();
+        $line = $detail['purchases']->getCollection()->firstWhere('row', 2);
+        self::assertSame(-404700, $line['allocation']['remaining']);
+        self::assertSame(0, $line['allocation']['paid']);
+        self::assertSame(2630550, $detail['detailSales']);
+        self::assertSame(2630550, $detail['closing']);
+
+        $report = (new \App\Http\Controllers\CustomerDebtReportController)->index(
+            $this->request(['scope' => 'all', 'from' => $sale['date'], 'to' => $sale['date']], 'admin'),
+            $service, new \App\Services\CustomerDebtReportService, new \App\Services\DebtCollectionService
+        )->getData();
+        self::assertSame(2630550, $report['period']['sales']);
+        self::assertSame(2630550, $report['rows']->first()['balance']);
+    }
+
     public function test_report_period_payment_dates_are_inclusive_and_independent_of_purchase_scope(): void
     {
         $this->collectionClock('2026-11-13 12:00:00');

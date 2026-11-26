@@ -29,7 +29,7 @@ class CustomerDebtPaymentAllocation
         foreach ($sales as $sale) {
             $key = $this->key($sale);
             $code = trim($sale['order_code'] ?? '') ?: ($systemCodes[$sale['date']] ?? '');
-            $amount = max(0, $sale['amount'] - ($sale['gift'] ?? 0));
+            $amount = $sale['amount'] - ($sale['gift'] ?? 0);
             $lines[$key] = $previous['lines'][$key] ?? [
                 'date' => $sale['date'], 'row' => $sale['row'], 'code' => $code,
                 'amount' => $amount, 'paid' => 0, 'remaining' => $amount,
@@ -294,6 +294,9 @@ class CustomerDebtPaymentAllocation
         foreach ($targets as $key) {
             if ($amount === 0) {
                 break;
+            }
+            if ($lines[$key]['remaining'] <= 0) {
+                continue;
             }
             $paid = min($amount, $lines[$key]['remaining']);
             if ($applied !== null && $paid > 0) {
