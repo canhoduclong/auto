@@ -253,7 +253,17 @@ class CustomerDebtSheetService
         return $this->fetchTabs(array_merge(['nhatkybanhang'], array_map('strtolower', self::PAYMENT_TABS)));
     }
 
+    public function fetchAccountingTabs(): array
+    {
+        return $this->fetchNamedTabs([...self::SETTLEMENT_TABS, 'nhatkymuahang'], allowMissing: true);
+    }
+
     private function fetchTabs(array $names): array
+    {
+        return array_values($this->fetchNamedTabs($names));
+    }
+
+    private function fetchNamedTabs(array $names, bool $allowMissing = false): array
     {
         $path = trim((string) config('services.google_sheets.credentials'));
         if (! $path) {
@@ -270,15 +280,28 @@ class CustomerDebtSheetService
             $title = $sheet->getProperties()->getTitle();
             $titles[str_replace(' ', '', $this->normalize($title))] = $title;
         }
-        $result = [];
+        $ranges = [];
         foreach ($names as $name) {
-            if (! isset($titles[$name])) {
+            $title = $titles[strtolower($name)] ?? null;
+            if ($title === null) {
+                if ($allowMissing) {
+                    continue;
+                }
                 throw new RuntimeException('Không tìm thấy tab '.$name.'.');
             }
-            $result[] = $sheets->spreadsheets_values->get($id, "'".str_replace("'", "''", $titles[$name])."'!A:AZ", ['valueRenderOption' => 'FORMATTED_VALUE'])->getValues() ?? [];
+            $ranges[$name] = "'".str_replace("'", "''", $title)."'!A:AZ";
+        }
+        if (!$ranges) {
+            return [];
+        }
+        $values = $sheets->spreadsheets_values->batchGet($id, [
+            'ranges' => array_values($ranges), 'valueRenderOption' => 'FORMATTED_VALUE',
+        ])->getValueRanges();
+        if (count($values ?? []) !== count($ranges)) {
+            throw new RuntimeException('Google Sheet trả về thiếu vùng dữ liệu.');
         }
 
-        return $result;
+        return array_combine(array_keys($ranges), array_map(fn ($range) => $range->getValues() ?? [], $values));
     }
 
     public function workbook(string $path): array

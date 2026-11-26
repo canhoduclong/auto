@@ -306,6 +306,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
         Route::put('/sales-ledger/{entry}', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'update'])->name('sales-ledger.update');
         Route::delete('/sales-ledger/{entry}', [\App\Http\Controllers\AccountingSalesLedgerController::class, 'destroy'])->name('sales-ledger.destroy');
         Route::get('/', [AccountingDashboardController::class, 'index'])->name('dashboard');
+        Route::post('/google-sheet-refresh', \App\Http\Controllers\AccountingGoogleSheetRefreshController::class)->middleware('throttle:6,1')->name('google-sheet.refresh');
         Route::get('/order-adjustments', [AccountingDashboardController::class, 'orderAdjustments'])->name('order-adjustments');
         Route::get('/orders', [AccountingDashboardController::class, 'orders'])->name('orders');
         Route::get('/orders/{order}/detail', [AccountingDashboardController::class, 'orderDetail'])->name('orders.detail');

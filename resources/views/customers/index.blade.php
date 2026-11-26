@@ -74,16 +74,18 @@
 .cust-table { width: 100%; table-layout: fixed; margin: 0; }
 .cust-col-select { width: 2.5rem; }
 .cust-col-revenue { width: 9rem; }
-.cust-col-volume { width: 20%; }
+.cust-col-product { width: 17%; }
+.cust-col-unit { width: 3.5rem; }
+.cust-col-volume { width: 6rem; }
 .cust-col-date { width: 8rem; }
 .cust-col-actions { width: 9.5rem; }
 .cust-select-caption { display: none; }
-.cust-revenue { text-align: right; }
+.cust-revenue, .cust-volume { text-align: right; }
 .cust-identity, .cust-metric { overflow-wrap: anywhere; }
 .cust-row-details summary { cursor: pointer; width: fit-content; }
 .cust-row-detail-panel { margin-top: .4rem; padding: .65rem; background: #f4f7fb; border-radius: 6px; }
 .cust-actions { white-space: normal; }
-@container customer-list (max-width: 720px) {
+@container customer-list (max-width: 880px) {
     .cust-table, .cust-table thead, .cust-table tbody { display: block; }
     .cust-table thead tr { display: block; }
     .cust-table thead th:not(.cust-select), .cust-table colgroup { display: none; }
@@ -97,7 +99,8 @@
     .cust-table tbody tr > td { padding: .35rem .4rem; border: 0; box-shadow: none; min-width: 0; }
     .cust-table tbody .cust-select { grid-column: 1; }
     .cust-identity, .cust-actions { grid-column: 2 / -1; }
-    .cust-table tbody .cust-metric:nth-of-type(3) { grid-column: 2; }
+    .cust-table tbody .cust-revenue, .cust-table tbody .cust-unit { grid-column: 2; }
+    .cust-product { grid-column: 3 / -1; }
     .cust-metric { text-align: left; }
     .cust-metric::before { content: attr(data-label); display: block; color: #64748b; font-size: .72rem; font-weight: 600; }
     .cust-empty-cell { grid-column: 1 / -1; }
@@ -445,6 +448,8 @@
                     <col class="cust-col-select">
                     <col>
                     <col class="cust-col-revenue">
+                    <col class="cust-col-product">
+                    <col class="cust-col-unit">
                     <col class="cust-col-volume">
                     <col class="cust-col-date">
                     <col class="cust-col-actions">
@@ -454,7 +459,9 @@
                         <th scope="col" class="cust-select"><label class="d-inline-flex gap-2 align-items-center"><input type="checkbox" id="checkAll" class="row-check" aria-label="Chọn tất cả khách trên trang này"><span class="cust-select-caption">Chọn cả trang</span></label></th>
                         <th scope="col">Khách hàng</th>
                         <th scope="col" class="text-end" title="Tổng giá trị đơn đã giao hoặc hoàn tất">Doanh thu</th>
-                        <th scope="col" title="Sản phẩm có số lượng đặt cao nhất trong các đơn đã giao hoặc hoàn tất">Sản lượng</th>
+                        <th scope="col" title="Sản phẩm có số lượng đặt cao nhất trong các đơn đã giao hoặc hoàn tất">Sản phẩm</th>
+                        <th scope="col">ĐVT</th>
+                        <th scope="col" class="text-end" title="Sản lượng theo đơn">Sản lượng</th>
                         <th scope="col">Đơn gần nhất</th>
                         <th scope="col">Thao tác</th>
                     </tr>
@@ -584,12 +591,17 @@
                         </td>
 
                         <td class="cust-metric cust-revenue" data-label="Doanh thu">{{ number_format($customer->sales_revenue ?? 0, 0, ',', '.') }} đ</td>
-                        <td class="cust-metric" data-label="Sản lượng">
-                            @if($product = $topProducts->get($customer->id))
-                                <div class="fw-semibold">{{ $product->name }}</div>
-                                <div class="small text-muted">SL theo đơn {{ number_format($product->ordered_quantity, 0, ',', '.') }}</div>
+                        @php
+                            $product = $topProducts->get($customer->id);
+                            $unit = $product ? \App\Enums\ProductUnit::tryFrom((string) $product->unit) : null;
+                        @endphp
+                        <td class="cust-metric cust-product fw-semibold" data-label="Sản phẩm">{{ $product?->name ?? '—' }}</td>
+                        <td class="cust-metric cust-unit" data-label="ĐVT">{{ $unit?->label() ?? ($product?->unit ?: '—') }}</td>
+                        <td class="cust-metric cust-volume" data-label="Sản lượng">
+                            @if($product)
+                                {{ rtrim(rtrim(number_format($product->ordered_volume, 3, ',', '.'), '0'), ',') }}
                             @else
-                                <span class="text-muted">—</span>
+                                —
                             @endif
                         </td>
                         <td class="cust-metric" data-label="Đơn gần nhất">{{ $customer->latestValidCustomerOrder?->created_at?->format('d/m/Y') ?? '—' }}</td>
@@ -617,7 +629,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td class="cust-empty-cell" colspan="6">
+                        <td class="cust-empty-cell" colspan="8">
                             <div class="cust-empty">
                                 <div><i class="ph ph-users"></i></div>
                                 <div style="font-weight:600;">{{ __('customers.index.empty') }}</div>

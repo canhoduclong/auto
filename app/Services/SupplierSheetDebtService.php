@@ -21,27 +21,36 @@ class SupplierSheetDebtService
 
     public function refresh(CustomerDebtSheetService $sheets): array
     {
-        return Cache::lock('supplier-sheet-debt-refresh', 90)->block(5, function () use ($sheets) {
-            $rows = $this->parse($sheets->fetchPurchases(), $sheets);
-            $snapshot = ['loaded_at' => now()->toIso8601String(), 'rows' => $rows];
-            $disk = Storage::disk('local');
-            if (! is_dir($disk->path('supplier-debt'))) {
-                $disk->makeDirectory('supplier-debt');
-                chmod($disk->path('supplier-debt'), 02770);
-            }
-            $temporary = 'supplier-debt/'.Str::uuid().'.tmp';
-            try {
-                if (! $disk->put($temporary, json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR))
-                    || ! chmod($disk->path($temporary), 0660)
-                    || ! rename($disk->path($temporary), $disk->path(self::SNAPSHOT))) {
-                    throw new RuntimeException('Không lưu được dữ liệu nhà cung cấp.');
-                }
-            } finally {
-                $disk->delete($temporary);
-            }
+        return Cache::lock('supplier-sheet-debt-refresh', 90)->block(5, fn () =>
+            $this->saveRows($sheets->fetchPurchases(), $sheets));
+    }
 
-            return $snapshot;
-        });
+    public function refreshFromRows(array $values, CustomerDebtSheetService $sheets): array
+    {
+        return Cache::lock('supplier-sheet-debt-refresh', 90)->block(5, fn () => $this->saveRows($values, $sheets));
+    }
+
+    private function saveRows(array $values, CustomerDebtSheetService $sheets): array
+    {
+        $rows = $this->parse($values, $sheets);
+        $snapshot = ['loaded_at' => now()->toIso8601String(), 'rows' => $rows];
+        $disk = Storage::disk('local');
+        if (! is_dir($disk->path('supplier-debt'))) {
+            $disk->makeDirectory('supplier-debt');
+            chmod($disk->path('supplier-debt'), 02770);
+        }
+        $temporary = 'supplier-debt/'.Str::uuid().'.tmp';
+        try {
+            if (! $disk->put($temporary, json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR))
+                || ! chmod($disk->path($temporary), 0660)
+                || ! rename($disk->path($temporary), $disk->path(self::SNAPSHOT))) {
+                throw new RuntimeException('Không lưu được dữ liệu nhà cung cấp.');
+            }
+        } finally {
+            $disk->delete($temporary);
+        }
+
+        return $snapshot;
     }
 
     public function pinnedSuppliers(): array

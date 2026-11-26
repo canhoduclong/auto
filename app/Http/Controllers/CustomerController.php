@@ -380,9 +380,12 @@ class CustomerController extends Controller
             ->whereNull('orders.trash_at')
             ->whereIn('orders.status', $salesStatuses)
             ->where('items.quantity', '>', 0)
-            ->select('orders.customer_id', 'products.id', 'products.name')
+            ->select('orders.customer_id', 'products.id', 'products.name', 'products.unit')
             ->selectRaw('SUM(items.quantity) as ordered_quantity')
-            ->groupBy('orders.customer_id', 'products.id', 'products.name')
+            ->selectRaw('SUM(CASE WHEN products.unit = ?
+                THEN COALESCE(NULLIF(items.total_weight, 0), NULLIF(items.unit_weight, 0) * items.quantity, items.quantity)
+                ELSE items.quantity END) as ordered_volume', [\App\Enums\ProductUnit::KG->value])
+            ->groupBy('orders.customer_id', 'products.id', 'products.name', 'products.unit')
             ->orderByDesc('ordered_quantity')->orderBy('products.id')
             ->get()->unique('customer_id')->keyBy('customer_id');
 

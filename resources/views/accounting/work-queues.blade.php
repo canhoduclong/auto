@@ -9,9 +9,45 @@
 @endphp
 <section class="acc-workspace mb-4" aria-labelledby="acc-work-title">
     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-        <div><h2 id="acc-work-title" class="h5 mb-1">Công việc cần xử lý</h2><div class="small text-muted">Bao gồm việc tồn từ các ngày trước · Cập nhật khi tải lại trang</div></div>
-        <a class="btn btn-outline-primary btn-sm" href="{{ url()->full() }}"><i class="bi bi-arrow-clockwise me-1"></i>Làm mới</a>
+        <div><h2 id="acc-work-title" class="h5 mb-1">Công việc cần xử lý</h2><div class="small text-muted">Bao gồm việc tồn từ các ngày trước</div></div>
+        @if(auth()->user()->canManageCustomerDebt())
+            <form method="POST" action="{{ route('accounting.google-sheet.refresh') }}"
+                onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').textContent = 'Đang cập nhật Google Sheet…';">
+                @csrf
+                <button class="btn btn-outline-primary btn-sm" type="submit">
+                    <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Cập nhật từ Google Sheet
+                </button>
+            </form>
+        @endif
     </div>
+    @if($sheetResults = session('google_sheet_refresh_results'))
+        @php
+            $sourceLabels = [
+                'connection' => 'Google Sheet',
+                'payments' => 'Công nợ, thanh toán và sổ dòng tiền',
+                'customers' => 'Danh mục khách Google Sheet',
+                'suppliers' => 'Công nợ nhà cung cấp',
+            ];
+        @endphp
+        <section class="border rounded bg-white p-3 mb-3" aria-label="Kết quả cập nhật Google Sheet">
+            <h3 class="h6 mb-2">Kết quả cập nhật Google Sheet</h3>
+            <ul class="list-unstyled mb-0 small">
+                @foreach($sheetResults as $source => $result)
+                    <li class="py-1">
+                        <strong>{{ $sourceLabels[$source] }}</strong>
+                        <span class="{{ $result['ok'] ? 'text-success' : 'text-danger' }}">{{ $result['message'] }}</span>
+                        @if(isset($result['url']))
+                            · <a href="{{ $result['url'] }}">Xem kết quả</a>
+                        @elseif($source === 'customers' && $result['ok'])
+                            @can('import', \App\Models\Customer::class)
+                                · <a href="{{ route('customers.sheet-import.index', ['status' => 'pending_link']) }}">Xem khách chờ ghép</a>
+                            @endcan
+                        @endif
+                    </li>
+                @endforeach
+            </ul>
+        </section>
+    @endif
     <div class="acc-work-grid">
     @foreach($queueCards as $key => $queueCard)
         @php

@@ -9,7 +9,7 @@
     @if($errors->any())<div class="alert alert-danger">{{ $errors->first() }}</div>@endif
     <div class="card mb-3"><div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
         <div><a href="{{ \App\Services\GoogleSheetOrderImportService::URL }}" target="_blank" rel="noopener">Mở Google Sheet gốc</a>
-            @if($snapshot)<div class="text-muted small mt-1">Đã đọc lúc {{ \Carbon\Carbon::parse($snapshot['loaded_at'])->timezone(config('app.timezone'))->format('d/m/Y H:i') }} · Bản xem trước lưu trong 2 giờ.</div>@endif
+            @if($snapshot)<div class="text-muted small mt-1">Danh mục khách nguồn đã được lưu để mở lại và tiếp tục ghép.</div>@endif
             <div class="small text-muted mt-1">Chế độ import chỉ ghép nguồn / tạo khách mới. Chế độ đồng bộ cho xem thay đổi và cập nhật thông tin khách hiện có.</div>
             <details class="small mt-2"><summary>Tài khoản kết nối & cách ghép</summary><div class="pt-2"><div>Tài khoản: <strong style="overflow-wrap:anywhere">{{ $connectionEmail ?: 'Chưa xác định được tài khoản dịch vụ' }}</strong> · cần quyền Người xem.</div><div>Ưu tiên ghép đã lưu, sau đó đối chiếu mã và tên. Trường hợp mã / tên trỏ đến nhiều khách cần chọn thủ công. Sale không xác định sẽ để khách ở trạng thái chưa phân công.</div></div></details>
         </div>
@@ -17,11 +17,34 @@
         <form method="POST" action="{{ route('customers.sheet-import.load') }}" data-sheet-import-loading>
             @csrf<input type="hidden" name="mode" value="sync">
             <details class="small mb-2"><summary>Trường đồng bộ</summary><div class="d-flex flex-column gap-1 pt-2">@foreach(\App\Services\GoogleSheetCustomerImportService::SYNC_FIELDS as $field=>$label)<label><input type="checkbox" name="sync_fields[]" value="{{ $field }}" @checked(in_array($field, $snapshot['sync_fields'] ?? ['name','phone','address','delivery_time'])) @disabled($field === 'sale_id' && !$canReassign)> {{ $label }}</label>@endforeach</div></details>
-            <button class="btn btn-primary">Đồng bộ thay đổi từ Google Sheet</button>
+            <button class="btn btn-primary">Xem thay đổi để đồng bộ hồ sơ</button>
         </form>
-        <form method="POST" action="{{ route('customers.sheet-import.load') }}" data-sheet-import-loading>@csrf<input type="hidden" name="mode" value="import">@if($pendingOnly)<input type="hidden" name="status" value="pending_link">@endif<button class="btn btn-outline-primary">Chỉ import / ghép khách</button></form>
+        <form method="POST" action="{{ route('customers.sheet-import.load') }}" data-sheet-import-loading>@csrf<input type="hidden" name="mode" value="import">@if($pendingOnly)<input type="hidden" name="status" value="pending_link">@endif<button class="btn btn-outline-primary">Cập nhật danh mục từ Google Sheet</button></form>
         </div>
     </div></div>
+    @if($importHistory)
+        <details class="card mb-3">
+            <summary class="card-body py-2">
+                <strong>Lịch sử nạp khách Google Sheet</strong>
+                <span class="text-muted small ms-2">Lần gần nhất {{ \Carbon\Carbon::parse($importHistory[0]['at'])->timezone(config('app.timezone'))->format('d/m/Y H:i') }}</span>
+            </summary>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Mã lần nạp</th><th>Thời gian</th><th>Người nạp</th><th>Khách mới</th><th>Đã đổi thông tin</th><th>Không đổi</th></tr></thead>
+                    <tbody>
+                        @foreach($importHistory as $batch)
+                            <tr>
+                                <td title="{{ $batch['id'] }}">{{ substr($batch['id'], 0, 8) }}</td>
+                                <td>{{ \Carbon\Carbon::parse($batch['at'])->timezone(config('app.timezone'))->format('d/m/Y H:i') }}</td>
+                                <td>{{ $batch['actor'] ?: '—' }}</td>
+                                <td>{{ $batch['added'] }}</td><td>{{ $batch['updated'] }}</td><td>{{ $batch['unchanged'] }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    @endif
     @if($snapshot)
     @if($syncMode)<div class="alert alert-info py-2 small">Chế độ đồng bộ · Chỉ cập nhật trường đã chọn và có giá trị trên Sheet; ô trống giữ nguyên dữ liệu hiện tại. Xem thay đổi cũ → mới bên dưới trước khi áp dụng.</div>@endif
     <div class="sheet-customer-stats mb-3">
@@ -36,7 +59,14 @@
         @unless($pendingOnly)<div class="small text-muted px-3 pb-3">Nút import xử lý toàn bộ khách đã sẵn sàng trong bản xem trước, gồm cả các trang khác. Các dòng “Cần xử lý” và “Bỏ qua” được giữ lại. @if(!$canCreate)Tài khoản chưa có quyền tạo khách mới; chỉ thực hiện ghép khách hiện có. @endif</div>@endunless
         <div class="table-responsive sheet-customer-scroll"><table class="table table-hover mb-0"><thead><tr><th>Khách trong Sheet</th><th>NVKD nguồn</th><th>Khách hệ thống / Khách mới</th><th>Trạng thái</th><th></th></tr></thead><tbody>
         @forelse($rows as $row)
-        <tr><td><strong>{{ $row['name'] }}</strong><div class="small text-muted">{{ $row['code'] ?: 'Chưa có mã KH' }}</div><div class="small mt-2">Điện thoại: {{ $row['phone'] ?: 'Chưa có' }}<br>Địa chỉ: {{ $row['address'] ?: 'Chưa có' }}<br>Giờ giao: {{ $row['delivery_time'] ?: 'Chưa có' }}</div></td><td>{{ $row['sale_name'] ?: 'Chưa xác định' }}</td><td>
+        <tr><td><strong>{{ $row['name'] }}</strong><div class="small text-muted">{{ $row['code'] ?: 'Chưa có mã KH' }}</div><div class="small mt-2">Điện thoại: {{ $row['phone'] ?: 'Chưa có' }}<br>Địa chỉ: {{ $row['address'] ?: 'Chưa có' }}<br>Giờ giao: {{ $row['delivery_time'] ?: 'Chưa có' }}</div>
+            @if(isset($row['last_import_id']))
+                <div class="small text-muted mt-1" title="{{ $row['last_import_id'] }}">
+                    {{ $row['source_change'] === 'added' ? 'Thêm ở lần nạp' : 'Cập nhật ở lần nạp' }}
+                    {{ substr($row['last_import_id'], 0, 8) }} · {{ \Carbon\Carbon::parse($row['last_import_at'])->timezone(config('app.timezone'))->format('d/m/Y H:i') }}
+                </div>
+            @endif
+        </td><td>{{ $row['sale_name'] ?: 'Chưa xác định' }}</td><td>
             @if($row['target'])<strong>{{ $row['target']->name }}</strong><div class="small text-muted">#{{ $row['target']->id }} · {{ $row['target']->customer_code ?: 'Chưa có mã' }}</div><div class="small mt-2">Điện thoại: {{ $row['target']->phone ?: 'Chưa có' }}<br>Địa chỉ: {{ $row['target']->address ?: 'Chưa có' }}<br>Giờ giao: {{ $row['target']->delivery_time ?: 'Chưa có' }}</div>
             @elseif($row['status'] === 'create')<strong>{{ $row['new_name'] }}</strong><div class="small text-muted">{{ $row['new_code'] ?: 'Chưa có mã' }} · {{ $sales->firstWhere('id',$row['sale_id'])?->short_name ?: ($sales->firstWhere('id',$row['sale_id'])?->name ?? 'Chưa phân công sale') }}</div>
             @else<span class="text-muted">Chưa chọn khách</span>@endif
@@ -67,7 +97,7 @@
         <div class="alert alert-danger py-2" role="alert" data-choice-error hidden></div><div class="text-end mt-3"><button class="btn btn-primary" type="submit">Lưu lựa chọn</button></div>
     </form></dialog>
     @else
-        <div class="card"><div class="card-body py-4 text-muted">{{ $pendingOnly ? 'Chưa có bản xem trước còn hiệu lực. Bấm “Chỉ import / ghép khách” để tải danh sách chờ ghép.' : 'Bấm “Đồng bộ thay đổi từ Google Sheet” để xem khách mới và thông tin cần cập nhật. Hệ thống chưa tạo hoặc sửa khách hàng ở bước đọc dữ liệu.' }}</div></div>
+        <div class="card"><div class="card-body py-4 text-muted">{{ $pendingOnly ? 'Chưa có danh mục khách nguồn. Bấm “Cập nhật danh mục từ Google Sheet” để nạp lần đầu.' : 'Bấm “Cập nhật danh mục từ Google Sheet” để nạp khách nguồn lần đầu. Hệ thống chưa tạo hoặc sửa khách hàng ở bước đọc dữ liệu.' }}</div></div>
     @endif
 </div>
 @endsection

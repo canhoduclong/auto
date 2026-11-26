@@ -522,6 +522,70 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame([], (new CustomerDebtSheetService)->mappings());
     }
 
+    public function test_accounting_google_sheet_refresh_reads_once_and_keeps_other_sources_working_when_a_tab_is_missing(): void
+    {
+        $actor = $this->user('accountant');
+        $tabs = array_fill_keys(CustomerDebtSheetService::SETTLEMENT_TABS, []);
+        $tabs['nhatkybanhang'] = [['sales']];
+        $tabs['nhatkymuahang'] = [['purchases']];
+        $missingBank = array_diff_key($tabs, ['TKCTVCB' => true]);
+        $sheets = $this->createMock(CustomerDebtSheetService::class);
+        $sheets->expects(self::exactly(2))->method('fetchAccountingTabs')->willReturnOnConsecutiveCalls($tabs, $missingBank);
+        $sheets->expects(self::once())->method('saveTabs')->with(
+            array_map(fn ($name) => $tabs[$name], CustomerDebtSheetService::SETTLEMENT_TABS), $actor->id, 'google'
+        )->willReturn(['id' => 'payments-batch', 'new_count' => 2, 'updated_count' => 1, 'removed_count' => 0]);
+        $customers = $this->createMock(\App\Services\GoogleSheetCustomerImportService::class);
+        $customers->expects(self::exactly(2))->method('refreshCatalog')->with($tabs['nhatkybanhang'])
+            ->willReturn(['batch' => ['added' => 1, 'updated' => 0, 'unchanged' => 3]]);
+        $suppliers = $this->createMock(\App\Services\SupplierSheetDebtService::class);
+        $suppliers->expects(self::exactly(2))->method('refreshFromRows')->with($tabs['nhatkymuahang'], $sheets)
+            ->willReturn(['rows' => [1, 2]]);
+
+        $controller = new \App\Http\Controllers\AccountingGoogleSheetRefreshController;
+        $request = $this->request([], 'accountant');
+        $response = $controller($request, $sheets, $customers, $suppliers);
+        $results = $response->getSession()->get('google_sheet_refresh_results');
+        self::assertTrue($results['payments']['ok']);
+        self::assertTrue($results['customers']['ok']);
+        self::assertTrue($results['suppliers']['ok']);
+
+        $response = $controller($request, $sheets, $customers, $suppliers);
+        $results = $response->getSession()->get('google_sheet_refresh_results');
+        self::assertFalse($results['payments']['ok']);
+        self::assertStringContainsString('TKCTVCB', $results['payments']['message']);
+        self::assertTrue($results['customers']['ok']);
+        self::assertTrue($results['suppliers']['ok']);
+    }
+
+    public function test_google_customer_catalog_survives_preview_expiration_and_records_only_source_changes(): void
+    {
+        $first = $this->sheetCustomerImporter($this->customerSheetValues([
+            ['SOURCE-A', 'Khách nguồn A', '', '1000'], ['SOURCE-B', 'Khách nguồn B', '', '1000'],
+        ]));
+        $actor = $this->user('admin');
+        $first->load($actor);
+
+        $second = $this->sheetCustomerImporter($this->customerSheetValues([
+            ['SOURCE-A', 'Khách nguồn A đổi tên', '', '1000'], ['SOURCE-B', 'Khách nguồn B', '', '8000'],
+            ['SOURCE-C', 'Khách nguồn C', '', '1000'],
+        ]));
+        $token = $second->load($actor);
+        $batch = $second->importHistory()[0];
+        self::assertSame([1, 1, 1], [$batch['added'], $batch['updated'], $batch['unchanged']]);
+        $groups = collect($second->snapshot($token, $actor)['groups'])->keyBy('code');
+        self::assertSame($batch['id'], $groups['SOURCE-A']['last_import_id']);
+        self::assertNotSame($batch['id'], $groups['SOURCE-B']['last_import_id']);
+
+        \Illuminate\Support\Facades\Cache::forget('customer-sheet-import:'.$token);
+        self::assertNull($second->latestPreview($actor));
+        $offline = $this->sheetCustomerImporter([]);
+        $saved = $offline->openSaved($actor);
+        self::assertNotNull($saved);
+        self::assertCount(3, $offline->snapshot($saved, $actor)['groups']);
+        self::assertCount(2, $offline->importHistory());
+        self::assertSame(2, DB::table('customers')->count());
+    }
+
     public function test_google_customer_pending_link_reopens_latest_preview_and_hides_linked_customers(): void
     {
         $importer = $this->sheetCustomerImporter($this->customerSheetValues([

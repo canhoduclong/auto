@@ -21,8 +21,11 @@ class GoogleSheetCustomerImportController extends Controller
         $this->authorizeImport($request);
         $data = $request->validate(['preview' => 'nullable|uuid', 'search' => 'nullable|string|max:150', 'status' => 'nullable|in:all,pending_link,link,create,update,unchanged,conflict,imported,skip,error', 'page' => 'nullable|integer|min:1']);
         $pendingOnly = ($data['status'] ?? null) === 'pending_link';
-        if ($pendingOnly && empty($data['preview']) && ($latest = $service->latestPreview($request->user()))) {
-            return redirect()->route('customers.sheet-import.index', array_replace($data, ['preview' => $latest]));
+        if (empty($data['preview'])) {
+            $latest = $service->latestPreview($request->user()) ?? $service->openSaved($request->user());
+            if ($latest) {
+                return redirect()->route('customers.sheet-import.index', array_replace($data, ['preview' => $latest]));
+            }
         }
         $snapshot = ! empty($data['preview']) ? $service->snapshot($data['preview'], $request->user()) : null;
         if ($snapshot) {
@@ -52,7 +55,7 @@ class GoogleSheetCustomerImportController extends Controller
         $page = (int) ($data['page'] ?? 1);
         $rows = new \Illuminate\Pagination\LengthAwarePaginator($visible->forPage($page, 40)->values(), $visible->count(), 40, $page, ['path' => $request->url(), 'query' => $request->except('page')]);
 
-        return view('customers.google-sheet-import', ['snapshot' => $snapshot, 'rows' => $rows, 'counts' => $counts, 'total' => $counts->sum(), 'sales' => $service->sales(), 'canCreate' => Gate::forUser($request->user())->allows('create', Customer::class), 'connectionEmail' => $sheets->connectionEmail(), 'readyCount' => $readyCount, 'pendingCount' => $pendingCount, 'pendingOnly' => $pendingOnly, 'syncMode' => ($snapshot['mode'] ?? 'import') === 'sync', 'canReassign' => $request->user()->isAdmin() || $request->user()->hasPermission('customers.assign-sale')]);
+        return view('customers.google-sheet-import', ['snapshot' => $snapshot, 'rows' => $rows, 'counts' => $counts, 'total' => $counts->sum(), 'sales' => $service->sales(), 'canCreate' => Gate::forUser($request->user())->allows('create', Customer::class), 'connectionEmail' => $sheets->connectionEmail(), 'readyCount' => $readyCount, 'pendingCount' => $pendingCount, 'pendingOnly' => $pendingOnly, 'importHistory' => $service->importHistory(), 'syncMode' => ($snapshot['mode'] ?? 'import') === 'sync', 'canReassign' => $request->user()->isAdmin() || $request->user()->hasPermission('customers.assign-sale')]);
     }
 
     public function load(Request $request, GoogleSheetCustomerImportService $service)

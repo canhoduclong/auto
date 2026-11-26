@@ -23,7 +23,15 @@ class GoogleSheetCustomerImportService
 
     public function load(User $actor, string $mode = 'import', array $fields = ['name', 'phone', 'address', 'delivery_time']): string
     {
-        $entries = $this->sheets->parse($this->sheets->fetchSales(), 'sale');
+        return Cache::lock('customer-sheet-source-load', 180)->block(5, function () use ($actor, $mode, $fields) {
+            $catalog = $this->refreshCatalog($this->sheets->fetchSales(), $actor);
+            return $this->startPreview($actor, $catalog['groups'], $mode, $fields);
+        });
+    }
+
+    public function refreshCatalog(array $values, User $actor): array
+    {
+        $entries = $this->sheets->parse($values, 'sale');
         $groups = $this->sheets->summarize($entries);
         foreach ($groups as &$group) {
             $latest = collect($group['entries'])->sortByDesc(fn ($entry) => $entry['date'].'|'.str_pad((string) $entry['row'], 10, '0', STR_PAD_LEFT));
@@ -39,6 +47,65 @@ class GoogleSheetCustomerImportService
         if (! $groups) {
             throw new \RuntimeException('Không có khách hàng trong tab nhatkybanhang.');
         }
+        return Cache::lock('customer-debt-load', 120)->block(5, fn () =>
+            DB::transaction(fn () => $this->saveSourceGroups($groups, $actor)));
+    }
+
+    private function sourcePrefix(): string
+    {
+        return 'customer-sheet-source:'.hash('sha256', GoogleSheetOrderImportService::SPREADSHEET).':';
+    }
+
+    private function savedSourceGroups(): array
+    {
+        return Setting::query()->where('key', 'like', $this->sourcePrefix().'row:%')->get(['value'])
+            ->map(fn ($row) => json_decode($row->value, true, flags: JSON_THROW_ON_ERROR))->keyBy('key')->all();
+    }
+
+    public function importHistory(): array
+    {
+        return Setting::query()->where('key', 'like', $this->sourcePrefix().'batch:%')->latest('id')->limit(10)->get(['value'])
+            ->map(fn ($row) => json_decode($row->value, true, flags: JSON_THROW_ON_ERROR))->all();
+    }
+
+    private function saveSourceGroups(array $incoming, User $actor): array
+    {
+        $saved = $this->savedSourceGroups();
+        $batch = ['id' => (string) Str::uuid(), 'at' => now()->toIso8601String(), 'actor_id' => $actor->id,
+            'actor' => $actor->short_name ?: $actor->name, 'added' => 0, 'updated' => 0, 'unchanged' => 0];
+        foreach ($incoming as $key => $group) {
+            $profile = array_intersect_key($group, array_flip([
+                'key', 'legacy_key', 'name', 'code', 'phone', 'address', 'delivery_time', 'sale_name', 'ambiguous', 'phone_conflict',
+            ]));
+            $previous = $saved[$key] ?? null;
+            if ($previous && array_intersect_key($previous, $profile) === $profile) {
+                $batch['unchanged']++;
+                continue;
+            }
+            $state = $previous ? 'updated' : 'added';
+            $batch[$state]++;
+            $saved[$key] = $profile + [
+                'first_import_id' => $previous['first_import_id'] ?? $batch['id'],
+                'first_import_at' => $previous['first_import_at'] ?? $batch['at'],
+                'last_import_id' => $batch['id'], 'last_import_at' => $batch['at'],
+                'source_change' => $state,
+            ];
+            Setting::set($this->sourcePrefix().'row:'.$key, json_encode($saved[$key], JSON_THROW_ON_ERROR));
+        }
+        Setting::set($this->sourcePrefix().'batch:'.$batch['id'], json_encode($batch, JSON_THROW_ON_ERROR));
+
+        return ['groups' => $saved, 'batch' => $batch];
+    }
+
+    public function openSaved(User $actor): ?string
+    {
+        $groups = $this->savedSourceGroups();
+
+        return $groups === [] ? null : $this->startPreview($actor, $groups, 'import', []);
+    }
+
+    private function startPreview(User $actor, array $groups, string $mode, array $fields): string
+    {
         $token = (string) Str::uuid();
         $snapshot = ['actor_id' => $actor->id, 'spreadsheet_id' => GoogleSheetOrderImportService::SPREADSHEET, 'loaded_at' => now()->toIso8601String(), 'groups' => $groups, 'decisions' => [], 'results' => [], 'mode' => $mode, 'sync_fields' => array_values(array_intersect(array_keys(self::SYNC_FIELDS), $fields)), 'baseline' => []];
         if ($mode === 'sync') {
@@ -64,13 +131,21 @@ class GoogleSheetCustomerImportService
         $token = Cache::get('customer-sheet-import:latest:'.$actor->id);
         $snapshot = is_string($token) ? Cache::get('customer-sheet-import:'.$token) : null;
 
-        return $snapshot && (int) $snapshot['actor_id'] === (int) $actor->id ? $token : null;
+        if (!$snapshot || (int) $snapshot['actor_id'] !== (int) $actor->id) {
+            return null;
+        }
+        $saved = $this->savedSourceGroups();
+        if ($saved && array_column($saved, 'last_import_id', 'key') != array_column($snapshot['groups'], 'last_import_id', 'key')) {
+            return null;
+        }
+
+        return $token;
     }
 
     public function snapshot(string $token, User $actor): array
     {
         $data = Cache::get('customer-sheet-import:'.$token);
-        abort_unless($data && (int) $data['actor_id'] === (int) $actor->id, 419, 'Bản xem trước đã hết hạn hoặc không thuộc tài khoản này. Vui lòng tải lại Sheet.');
+        abort_unless($data && (int) $data['actor_id'] === (int) $actor->id, 419, 'Bản xem trước đã hết hạn hoặc không thuộc tài khoản này. Vui lòng mở lại danh mục khách Google Sheet.');
 
         return $data;
     }
@@ -128,7 +203,7 @@ class GoogleSheetCustomerImportService
                     $status = 'conflict';
                     $reason = 'Khách đã ghép bị xóa, cần chọn lại.';
                 } else {
-                    $status = 'link';
+                    $status = ($snapshot['mode'] ?? 'import') === 'sync' ? 'link' : 'unchanged';
                     $reason = 'Đã ghép nguồn';
                 }
             } else {
@@ -284,6 +359,7 @@ class GoogleSheetCustomerImportService
                     $counts['updated'] = 0;
                 }
                 $rows = $this->plan($snapshot);
+                $saved = $this->savedSourceGroups();
                 if ($sourceKey !== null) {
                     abort_unless(isset($rows[$sourceKey]), 422, 'Khách không có trong bản xem trước.');
                     $rows = [$sourceKey => $rows[$sourceKey]];
@@ -306,6 +382,9 @@ class GoogleSheetCustomerImportService
                         continue;
                     }
                     try {
+                        if (isset($row['last_import_id']) && ($saved[$key]['last_import_id'] ?? null) !== $row['last_import_id']) {
+                            throw ValidationException::withMessages(['source' => 'Dữ liệu nguồn đã thay đổi. Mở lại danh mục để xem thông tin mới.']);
+                        }
                         $customerId = DB::transaction(function () use ($row, $actor, $snapshot) {
                             $customer = $row['target'];
                             if ($row['status'] === 'create') {
