@@ -359,9 +359,14 @@ class Customer extends Model
         return $this->hasOne(CustomerOwnershipHistory::class)->ofMany(['ended_at' => 'max', 'id' => 'max'], fn ($q) => $q->whereNotNull('ended_at'));
     }
 
+    public function validCustomerOrders()
+    {
+        return $this->orders()->validForCustomerHistory();
+    }
+
     public function latestValidCustomerOrder()
     {
-        return $this->hasOne(Order::class)->ofMany(['created_at' => 'max', 'id' => 'max'], fn ($q) => $q->whereNull('trash_at')->whereNotIn('status', ['cancelled', 'canceled', 'rejected', 'draft']));
+        return $this->hasOne(Order::class)->ofMany(['created_at' => 'max', 'id' => 'max'], fn ($query) => $query->validForCustomerHistory());
     }
 
     public function latestCustomerFeedback()

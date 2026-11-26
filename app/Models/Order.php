@@ -364,6 +364,11 @@ class Order extends Model
     const STATUS_PENDING_MANAGER_APPROVAL = 'pending_manager_approval';
     const STATUS_APPROVED = 'approved'; 
     const STATUS_SHIPPING = 'shipping'; 
+    public function scopeValidForCustomerHistory($query)
+    {
+        return $query->whereNull('orders.trash_at')->whereNotIn('orders.status', [self::STATUS_CANCELLED, 'canceled', self::STATUS_REJECTED, 'draft']);
+    }
+
     const STATUS_REJECTED = 'rejected';
 
 

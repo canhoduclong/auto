@@ -288,10 +288,22 @@ class CustomerController extends Controller
     private function filteredCustomerList(Request $request): \Illuminate\Database\Eloquent\Builder
     {
         $query = $this->visibleCustomerList($request);
-        if ($request->input('order_status') === 'has_orders') {
-            $query->has('latestValidCustomerOrder');
-        } elseif ($request->input('order_status') === 'no_orders') {
-            $query->doesntHave('latestValidCustomerOrder');
+        $dates = $request->validate([
+            'order_from' => ['nullable', 'date_format:Y-m-d'],
+            'order_to' => ['nullable', 'date_format:Y-m-d', Rule::when($request->filled('order_from'), 'after_or_equal:order_from')],
+        ], [
+            'order_to.after_or_equal' => 'Đến ngày đơn phải từ Từ ngày đơn trở đi.',
+        ]);
+        $from = $dates['order_from'] ?? null;
+        $to = $dates['order_to'] ?? null;
+        $ordersInRange = fn ($orders) => $orders
+            ->when($from, fn ($orders) => $orders->where('orders.created_at', '>=', $from))
+            ->when($to, fn ($orders) => $orders->where('orders.created_at', '<', Carbon::parse($to)->addDay()->toDateString()));
+
+        if ($request->input('order_status') === 'no_orders') {
+            $query->whereDoesntHave('validCustomerOrders', $ordersInRange);
+        } elseif ($request->input('order_status') === 'has_orders' || $from || $to) {
+            $query->whereHas('validCustomerOrders', $ordersInRange);
         }
         $isAdmin = $request->user()->isAdmin();
 
@@ -1235,6 +1247,8 @@ class CustomerController extends Controller
             'per_page' => $request->input('per_page'),
             'ownership_status' => $request->input('ownership_status'),
             'order_status' => $request->input('order_status'),
+            'order_from' => $request->input('order_from'),
+            'order_to' => $request->input('order_to'),
             'is_employee' => $request->input('is_employee'),
             'page' => $request->input('page'),
         ])
@@ -1272,6 +1286,8 @@ class CustomerController extends Controller
             'user_id',
             'ownership_status',
             'order_status',
+            'order_from',
+            'order_to',
             'per_page',
             'is_employee',
             'page',
@@ -1306,6 +1322,8 @@ class CustomerController extends Controller
             'user_id',
             'ownership_status',
             'order_status',
+            'order_from',
+            'order_to',
             'per_page',
             'is_employee',
             'page',

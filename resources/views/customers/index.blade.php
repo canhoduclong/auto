@@ -37,17 +37,72 @@
     box-shadow: 0 4px 18px rgba(15,23,42,.06);
     margin-bottom: 18px;
 }
-.cust-filter-bar { padding: 18px 20px; border-bottom: 1px solid #eef2f7; }
+.cust-filter-bar { padding: 10px 16px; border-bottom: 1px solid #eef2f7; }
 .cust-filter-bar .form-control,
 .cust-filter-bar .form-select {
-    height: 38px;
+    height: 34px;
     border-radius: 7px;
     border-color: #d8deea;
     font-size: .875rem;
 }
-.cust-filter-bar .btn { height: 38px; border-radius: 7px; font-size: .875rem; }
-.cust-actions-bar { padding: 14px 20px; border-bottom: 1px solid #eef2f7; background: #f8fafc; border-radius: 9px 9px 0 0; }
-.cust-table { margin: 0; }
+.cust-filter-bar .btn { min-height: 34px; border-radius: 7px; font-size: .875rem; }
+.cust-actions-bar { padding: 10px 16px; border-bottom: 1px solid #eef2f7; background: #f8fafc; border-radius: 9px 9px 0 0; }
+.cust-action-group { position: relative; }
+.cust-action-group > summary { list-style: none; }
+.cust-action-group > summary::-webkit-details-marker { display: none; }
+.cust-action-group > summary::after { content: '▾'; margin-left: .35rem; }
+.cust-action-group[open] > summary::after { content: '▴'; }
+.cust-action-menu {
+    position: absolute;
+    z-index: 5;
+    inset-inline-start: 0;
+    top: calc(100% + .4rem);
+    width: max-content;
+    max-width: min(32rem, calc(100vw - 2rem));
+    padding: .75rem;
+    background: white;
+    border: 1px solid #d8deea;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(15,23,42,.12);
+}
+@media (max-width: 991.98px) {
+    .cust-actions-bar { position: relative; }
+    .cust-action-group { position: static; }
+    .cust-action-menu { inset-inline-start: .5rem; top: calc(100% + .25rem); }
+}
+.cust-list { min-width: 0; max-width: 100%; container: customer-list / inline-size; }
+.cust-table { width: 100%; table-layout: fixed; margin: 0; }
+.cust-col-select { width: 2.5rem; }
+.cust-col-revenue { width: 9rem; }
+.cust-col-volume { width: 20%; }
+.cust-col-date { width: 8rem; }
+.cust-col-actions { width: 9.5rem; }
+.cust-select-caption { display: none; }
+.cust-revenue { text-align: right; }
+.cust-identity, .cust-metric { overflow-wrap: anywhere; }
+.cust-row-details summary { cursor: pointer; width: fit-content; }
+.cust-row-detail-panel { margin-top: .4rem; padding: .65rem; background: #f4f7fb; border-radius: 6px; }
+.cust-actions { white-space: normal; }
+@container customer-list (max-width: 720px) {
+    .cust-table, .cust-table thead, .cust-table tbody { display: block; }
+    .cust-table thead tr { display: block; }
+    .cust-table thead th:not(.cust-select), .cust-table colgroup { display: none; }
+    .cust-table thead .cust-select, .cust-select-caption { display: block; }
+    .cust-table tbody tr {
+        display: grid;
+        grid-template-columns: auto repeat(3, minmax(0, 1fr));
+        border-bottom: 1px solid #e2e8f0;
+        padding: .55rem;
+    }
+    .cust-table tbody tr > td { padding: .35rem .4rem; border: 0; box-shadow: none; min-width: 0; }
+    .cust-table tbody .cust-select { grid-column: 1; }
+    .cust-identity, .cust-actions { grid-column: 2 / -1; }
+    .cust-table tbody .cust-metric:nth-of-type(3) { grid-column: 2; }
+    .cust-metric { text-align: left; }
+    .cust-metric::before { content: attr(data-label); display: block; color: #64748b; font-size: .72rem; font-weight: 600; }
+    .cust-empty-cell { grid-column: 1 / -1; }
+}
+
 .cust-table thead th {
     background: #f1f5fb;
     font-size: .75rem;
@@ -56,21 +111,17 @@
     letter-spacing: .06em;
     color: #64748b;
     border-bottom: 2px solid #e2e8f0;
-    padding: 11px 14px;
-    white-space: nowrap;
+    padding: 9px 10px;
 }
-.cust-table tbody td { padding: 12px 14px; vertical-align: middle; font-size: .875rem; border-color: #eef2f7; }
+.cust-table tbody td { padding: 9px 10px; vertical-align: middle; font-size: .875rem; border-color: #eef2f7; }
 .cust-table tbody tr:hover { background: #f8faff; }
 .cust-name { font-weight: 600; color: #1e293b; }
 .cust-dob { font-size: .75rem; color: #94a3b8; margin-top: 2px; }
 .cust-phone { font-weight: 500; color: #334155; }
 .cust-email { color: #475569; font-size: .8rem; }
-.cust-contact { min-width: 210px; }
 .cust-meta-title { font-size: .78rem; font-weight: 700; color: #0f172a; }
 .cust-meta-sub { font-size: .73rem; color: #64748b; }
-.cust-manage { min-width: 260px; }
 .badge-free { background: #fff3cd; color: #92400e; border: 1px solid #fcd34d; font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 5px; }
-.badge-managed { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 5px; }
 .badge-employee { background: #e0f2fe; color: #0c4a6e; border: 1px solid #7dd3fc; font-size: .72rem; font-weight: 700; padding: 3px 8px; border-radius: 5px; }
 .sale-name { font-weight: 600; color: #1e40af; }
 .sale-prev { font-size: .72rem; color: #94a3b8; }
@@ -148,73 +199,142 @@
 
     <div class="cust-panel">
 
-        {{-- Actions bar --}}
         <div class="cust-actions-bar d-flex flex-wrap gap-2 align-items-center">
-            <form id="bulkDeleteForm" action="{{ route('customers.bulkDelete') }}" method="POST" class="d-inline-flex">
-                @csrf
-                <input type="hidden" name="ids" id="bulkDeleteIds">
-                <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('{{ __('customers.index.bulk_delete_confirm') }}')">
-                    <i class="ph ph-trash me-1"></i>{{ __('customers.index.bulk_delete') }}
-                </button>
-            </form>
+            <details class="cust-action-group" name="customer-actions">
+                <summary class="btn btn-sm btn-outline-primary">
+                    <i class="ph ph-upload-simple me-1" aria-hidden="true"></i>Nhập dữ liệu
+                </summary>
+                <div class="cust-action-menu d-flex flex-column align-items-start gap-2">
+                    @can('import', \App\Models\Customer::class)<a href="{{ route('customers.sheet-import.index') }}" class="btn btn-sm btn-primary text-nowrap">Import / Đồng bộ Google Sheet</a>@endcan
+                    <a href="{{ route('customers.import.form') }}" class="btn btn-sm btn-outline-primary text-nowrap">
+                        <i class="ph ph-table me-1"></i>Import văn bản
+                    </a>
 
-            @if($isAdmin)
-            <form id="bulkMarkEmployeeForm" action="{{ route('customers.bulkMarkEmployee') }}" method="POST" class="d-inline-flex">
-                @csrf
-                <input type="hidden" name="ids" id="bulkMarkEmployeeIds">
-                <input type="hidden" name="q" value="{{ request('q') }}">
-                <input type="hidden" name="type_id" value="{{ request('type_id') }}">
-                <input type="hidden" name="assigned_to" value="{{ request('assigned_to') }}">
-                <input type="hidden" name="user_id" value="{{ request('user_id') }}">
-                <input type="hidden" name="ownership_status" value="{{ request('ownership_status') }}">
-                <input type="hidden" name="order_status" value="{{ request('order_status') }}">
-                <input type="hidden" name="per_page" value="{{ request('per_page', 15) }}">
-                <input type="hidden" name="is_employee" value="{{ request('is_employee') }}">
-                <input type="hidden" name="page" value="{{ request('page', 1) }}">
-                <button type="submit" class="btn btn-sm btn-outline-primary" onclick="return confirm('{{ __('customers.index.bulk_mark_employee_confirm') }}')">
-                    <i class="ph ph-identification-card me-1"></i>{{ __('customers.index.bulk_mark_employee') }}
-                </button>
-            </form>
+                    <form action="{{ route('customers.import') }}" method="POST" enctype="multipart/form-data" class="d-flex flex-wrap align-items-center gap-2">
+                        @csrf
+                        <input type="file" name="file" accept=".xlsx,.xls" class="form-control form-control-sm" style="max-width:210px;" required>
+                        <button class="btn btn-sm btn-outline-warning text-nowrap">
+                            <i class="ph ph-upload me-1"></i>{{ __('customers.index.import_excel') }}
+                        </button>
+                    </form>
+                </div>
+            </details>
 
-            @if(request()->boolean('is_employee'))
-            <form id="bulkUnmarkEmployeeForm" action="{{ route('customers.bulkUnmarkEmployee') }}" method="POST" class="d-inline-flex">
-                @csrf
-                <input type="hidden" name="ids" id="bulkUnmarkEmployeeIds">
-                <input type="hidden" name="q" value="{{ request('q') }}">
-                <input type="hidden" name="type_id" value="{{ request('type_id') }}">
-                <input type="hidden" name="assigned_to" value="{{ request('assigned_to') }}">
-                <input type="hidden" name="user_id" value="{{ request('user_id') }}">
-                <input type="hidden" name="ownership_status" value="{{ request('ownership_status') }}">
-                <input type="hidden" name="order_status" value="{{ request('order_status') }}">
-                <input type="hidden" name="per_page" value="{{ request('per_page', 15) }}">
-                <input type="hidden" name="is_employee" value="1">
-                <input type="hidden" name="page" value="{{ request('page', 1) }}">
-                <button type="submit" class="btn btn-sm btn-outline-secondary" onclick="return confirm('{{ __('customers.index.bulk_unmark_employee_confirm') }}')">
-                    <i class="ph ph-identification-card-slash me-1"></i>{{ __('customers.index.bulk_unmark_employee') }}
-                </button>
-            </form>
-            @endif
-            @endif
+            <details class="cust-action-group" name="customer-actions">
+                <summary class="btn btn-sm btn-outline-secondary">
+                    <i class="ph ph-list-checks me-1" aria-hidden="true"></i>Thao tác hàng loạt
+                </summary>
+                <div class="cust-action-menu d-grid gap-3">
+                    <div class="d-flex flex-wrap gap-2">
+                        <form id="bulkDeleteForm" action="{{ route('customers.bulkDelete') }}" method="POST" class="d-inline-flex">
+                            @csrf
+                            <input type="hidden" name="ids" id="bulkDeleteIds">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('{{ __('customers.index.bulk_delete_confirm') }}')">
+                                <i class="ph ph-trash me-1"></i>{{ __('customers.index.bulk_delete') }}
+                            </button>
+                        </form>
 
-            <div class="vr d-none d-sm-block" style="height:24px;"></div>
+                        @if($isAdmin)
+                        <form id="bulkMarkEmployeeForm" action="{{ route('customers.bulkMarkEmployee') }}" method="POST" class="d-inline-flex">
+                            @csrf
+                            <input type="hidden" name="ids" id="bulkMarkEmployeeIds">
+                            <input type="hidden" name="q" value="{{ request('q') }}">
+                            <input type="hidden" name="type_id" value="{{ request('type_id') }}">
+                            <input type="hidden" name="assigned_to" value="{{ request('assigned_to') }}">
+                            <input type="hidden" name="user_id" value="{{ request('user_id') }}">
+                            <input type="hidden" name="ownership_status" value="{{ request('ownership_status') }}">
+                            <input type="hidden" name="order_status" value="{{ request('order_status') }}">
+                            <input type="hidden" name="order_from" value="{{ request('order_from') }}">
+                            <input type="hidden" name="order_to" value="{{ request('order_to') }}">
+                            <input type="hidden" name="per_page" value="{{ request('per_page', 15) }}">
+                            <input type="hidden" name="is_employee" value="{{ request('is_employee') }}">
+                            <input type="hidden" name="page" value="{{ request('page', 1) }}">
+                            <button type="submit" class="btn btn-sm btn-outline-primary" onclick="return confirm('{{ __('customers.index.bulk_mark_employee_confirm') }}')">
+                                <i class="ph ph-identification-card me-1"></i>{{ __('customers.index.bulk_mark_employee') }}
+                            </button>
+                        </form>
 
-            @can('import', \App\Models\Customer::class)<a href="{{ route('customers.sheet-import.index') }}" class="btn btn-sm btn-primary text-nowrap">Import / Đồng bộ Google Sheet</a>@endcan
-            <a href="{{ route('customers.import.form') }}" class="btn btn-sm btn-outline-primary text-nowrap">
-                <i class="ph ph-table me-1"></i>Import văn bản
-            </a>
+                        @if(request()->boolean('is_employee'))
+                        <form id="bulkUnmarkEmployeeForm" action="{{ route('customers.bulkUnmarkEmployee') }}" method="POST" class="d-inline-flex">
+                            @csrf
+                            <input type="hidden" name="ids" id="bulkUnmarkEmployeeIds">
+                            <input type="hidden" name="q" value="{{ request('q') }}">
+                            <input type="hidden" name="type_id" value="{{ request('type_id') }}">
+                            <input type="hidden" name="assigned_to" value="{{ request('assigned_to') }}">
+                            <input type="hidden" name="user_id" value="{{ request('user_id') }}">
+                            <input type="hidden" name="ownership_status" value="{{ request('ownership_status') }}">
+                            <input type="hidden" name="order_status" value="{{ request('order_status') }}">
+                            <input type="hidden" name="order_from" value="{{ request('order_from') }}">
+                            <input type="hidden" name="order_to" value="{{ request('order_to') }}">
+                            <input type="hidden" name="per_page" value="{{ request('per_page', 15) }}">
+                            <input type="hidden" name="is_employee" value="1">
+                            <input type="hidden" name="page" value="{{ request('page', 1) }}">
+                            <button type="submit" class="btn btn-sm btn-outline-secondary" onclick="return confirm('{{ __('customers.index.bulk_unmark_employee_confirm') }}')">
+                                <i class="ph ph-identification-card-slash me-1"></i>{{ __('customers.index.bulk_unmark_employee') }}
+                            </button>
+                        </form>
+                        @endif
+                        @endif
+                    </div>
+                    @if($isAdmin)
+                    <form id="bulkAssignSaleForm" action="{{ route('customers.bulkAssignSale') }}" method="POST" class="d-flex flex-wrap align-items-center gap-2">
+                        @csrf
+                        <input type="hidden" name="ids" id="bulkAssignSaleIds">
+                        <select name="assigned_to" class="form-select form-select-sm" style="max-width:220px;" required>
+                            <option value="">-- Chọn sale để gán --</option>
+                            @foreach($users as $u)
+                                <option value="{{ $u->id }}">{{ $u->name }}</option>
+                            @endforeach
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-primary">Gán sale cho khách đã chọn</button>
+                    </form>
 
-            <form action="{{ route('customers.import') }}" method="POST" enctype="multipart/form-data" class="d-inline-flex align-items-center gap-2">
-                @csrf
-                <input type="file" name="file" accept=".xlsx,.xls" class="form-control form-control-sm" style="max-width:210px;" required>
-                <button class="btn btn-sm btn-outline-warning text-nowrap">
-                    <i class="ph ph-upload me-1"></i>{{ __('customers.index.import_excel') }}
-                </button>
-            </form>
+                    <form id="bulkCommissionForm" action="{{ route('customers.bulkUpdateCommission') }}" method="POST" class="d-flex flex-wrap align-items-center gap-2">
+                        @csrf
+                        <input type="hidden" name="ids" id="bulkCommissionIds">
+                        <div class="input-group input-group-sm" style="max-width:210px;">
+                            <span class="input-group-text"><i class="ph ph-percent"></i></span>
+                            <input type="number" name="commission_percent" class="form-control" min="0" max="100" step="0.01" placeholder="% hoa hồng sale" required>
+                            <span class="input-group-text">%</span>
+                        </div>
+                        <div class="form-check mb-0">
+                            <input type="hidden" name="recalculate_existing" value="0">
+                            <input class="form-check-input" type="checkbox" name="recalculate_existing" value="1" id="bulkCommissionRecalculate">
+                            <label class="form-check-label small" for="bulkCommissionRecalculate">Tính lại đơn đã có hoa hồng</label>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-success">
+                            <i class="ph ph-coins me-1"></i>Gán % hoa hồng cho khách đã chọn
+                        </button>
+                    </form>
+                    @endif
+                </div>
+            </details>
 
             @if($isAdmin || auth()->user()->hasPermission('customers.export'))
-                <a href="#customer-export-selection" class="btn btn-sm btn-outline-info text-nowrap">
-                    <i class="ph ph-download me-1"></i>Danh sách xuất Excel
-                </a>
+                <details class="cust-action-group" name="customer-actions">
+                    <summary class="btn btn-sm btn-outline-info">
+                        <i class="ph ph-download-simple me-1" aria-hidden="true"></i>Xuất Excel
+                    </summary>
+                    <section id="customer-export-selection" class="cust-action-menu"
+                        data-export-key="customer-export-{{ auth()->id() }}"
+                        data-export-choices="{{ route('customers.export', request()->only(['q', 'type_id', 'assigned_to', 'user_id', 'ownership_status', 'order_status', 'order_from', 'order_to', 'is_employee']) + ['export_choices' => 1]) }}">
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-export-add>Thêm khách đã chọn</button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-export-all>Chọn tất cả theo bộ lọc</button>
+                            <details>
+                                <summary class="small" data-export-count aria-live="polite">0 khách trong danh sách xuất</summary>
+                                <ul class="list-group mt-2 overflow-auto" style="max-height:15rem" data-export-list></ul>
+                            </details>
+                            <form method="POST" action="{{ route('customers.export') }}" data-export-form>
+                                @csrf
+                                <input type="hidden" name="selection">
+                                <button type="submit" class="btn btn-sm btn-outline-info" disabled>Xuất Excel</button>
+                            </form>
+                            <button type="button" class="btn btn-sm btn-link" data-export-clear disabled>Bỏ chọn tất cả</button>
+                        </div>
+                        <div class="small text-muted mt-2" data-export-status role="status">Tích khách trong bảng rồi bấm Thêm khách đã chọn.</div>
+                    </section>
+                </details>
             @endif
 
             <a href="{{ route('customers.create') }}" class="btn btn-sm btn-success ms-auto text-nowrap">
@@ -279,6 +399,16 @@
                         <option value="no_orders" @selected(request('order_status') === 'no_orders')>Chưa có đơn</option>
                     </select>
                 </div>
+                <div class="col-auto d-flex flex-wrap gap-2">
+                    <label class="d-flex align-items-center gap-1 small">
+                        <span class="text-nowrap">Từ ngày đơn</span>
+                        <input type="date" name="order_from" value="{{ old('order_from', request('order_from')) }}" class="form-control">
+                    </label>
+                    <label class="d-flex align-items-center gap-1 small">
+                        <span class="text-nowrap">Đến ngày đơn</span>
+                        <input type="date" name="order_to" value="{{ old('order_to', request('order_to')) }}" class="form-control">
+                    </label>
+                </div>
                 <div class="col-auto">
                     <select name="per_page" class="form-select" onchange="this.form.submit()">
                         @foreach([10,15,25,50,100] as $pp)
@@ -303,107 +433,32 @@
             </form>
         </div>
 
-        {{-- Table --}}
-        @if($isAdmin)
-        <form id="bulkAssignSaleForm" action="{{ route('customers.bulkAssignSale') }}" method="POST" class="mb-3 d-flex align-items-center gap-2">
-            @csrf
-            <input type="hidden" name="ids" id="bulkAssignSaleIds">
-            <select name="assigned_to" class="form-select form-select-sm" style="max-width:220px;" required>
-                <option value="">-- Chọn sale để gán --</option>
-                @foreach($users as $u)
-                    <option value="{{ $u->id }}">{{ $u->name }}</option>
-                @endforeach
-            </select>
-            <button type="submit" class="btn btn-sm btn-primary">Gán sale cho khách đã chọn</button>
-        </form>
-
-        <form id="bulkCommissionForm" action="{{ route('customers.bulkUpdateCommission') }}" method="POST" class="mb-3 d-flex align-items-center flex-wrap gap-2">
-            @csrf
-            <input type="hidden" name="ids" id="bulkCommissionIds">
-            <div class="input-group input-group-sm" style="max-width:210px;">
-                <span class="input-group-text"><i class="ph ph-percent"></i></span>
-                <input type="number" name="commission_percent" class="form-control" min="0" max="100" step="0.01" placeholder="% hoa hồng sale" required>
-                <span class="input-group-text">%</span>
-            </div>
-            <div class="form-check mb-0">
-                <input type="hidden" name="recalculate_existing" value="0">
-                <input class="form-check-input" type="checkbox" name="recalculate_existing" value="1" id="bulkCommissionRecalculate">
-                <label class="form-check-label small" for="bulkCommissionRecalculate">Tính lại đơn đã có hoa hồng</label>
-            </div>
-            <button type="submit" class="btn btn-sm btn-success">
-                <i class="ph ph-coins me-1"></i>Gán % hoa hồng cho khách đã chọn
-            </button>
-        </form>
-        @endif
-
-        @if($isAdmin || auth()->user()->hasPermission('customers.export'))
-            <section id="customer-export-selection" class="border rounded p-3 mx-3 my-3"
-                data-export-key="customer-export-{{ auth()->id() }}"
-                data-export-choices="{{ route('customers.export', request()->only(['q', 'type_id', 'assigned_to', 'user_id', 'ownership_status', 'order_status', 'is_employee']) + ['export_choices' => 1]) }}">
-                <div class="d-flex flex-wrap align-items-center gap-2">
-                    <button type="button" class="btn btn-sm btn-outline-primary" data-export-add>Thêm khách đã chọn</button>
-                    <button type="button" class="btn btn-sm btn-outline-primary" data-export-all>Chọn tất cả theo bộ lọc</button>
-                    <details>
-                        <summary class="small" data-export-count aria-live="polite">0 khách trong danh sách xuất</summary>
-                        <ul class="list-group mt-2 overflow-auto" style="max-height:15rem" data-export-list></ul>
-                    </details>
-                    <form method="POST" action="{{ route('customers.export') }}" data-export-form>
-                        @csrf
-                        <input type="hidden" name="selection">
-                        <button type="submit" class="btn btn-sm btn-outline-info" disabled>Xuất Excel</button>
-                    </form>
-                    <button type="button" class="btn btn-sm btn-link" data-export-clear disabled>Bỏ chọn tất cả</button>
-                </div>
-                <div class="small text-muted mt-2" data-export-status role="status">Tích khách trong bảng rồi bấm Thêm khách đã chọn.</div>
-            </section>
-        @endif
-
-        <div class="table-responsive">
-            <table class="table cust-table mb-0">
-                <thead>
-                    <tr>
-                        <th style="width:36px;"><input type="checkbox" id="checkAll" class="row-check" aria-label="Chọn tất cả khách trên trang này"></th>
-                        <th style="width:48px;">#</th>
-                        <th style="width:120px;">Ưu tiên</th>
-                        <th style="min-width:360px;">Khách hàng</th>
-                        <th class="text-end text-nowrap" title="Tổng giá trị đơn đã giao hoặc hoàn tất">Doanh thu</th>
-                        <th style="min-width:160px;" title="Sản phẩm có số lượng đặt cao nhất trong các đơn đã giao hoặc hoàn tất">Sản lượng</th>
-                        <th class="text-nowrap">Đơn gần nhất</th>
-                        <th>Mã Code cũ</th>
-                        <th class="cust-manage">Phụ trách &amp; hạn giữ</th>
-                        @if($isAdmin)
-                        <th class="text-center" style="min-width:130px;">Hoa hồng sale</th>
-                        <th style="min-width:230px;">Gán sale</th>
-                        @endif
-                        <th style="width:200px;">Thao tác</th>
+        <div class="cust-list">
+            <table class="table cust-table mb-0" role="table">
+                <colgroup>
+                    <col class="cust-col-select">
+                    <col>
+                    <col class="cust-col-revenue">
+                    <col class="cust-col-volume">
+                    <col class="cust-col-date">
+                    <col class="cust-col-actions">
+                </colgroup>
+                <thead role="rowgroup">
+                    <tr role="row">
+                        <th scope="col" class="cust-select"><label class="d-inline-flex gap-2 align-items-center"><input type="checkbox" id="checkAll" class="row-check" aria-label="Chọn tất cả khách trên trang này"><span class="cust-select-caption">Chọn cả trang</span></label></th>
+                        <th scope="col">Khách hàng</th>
+                        <th scope="col" class="text-end" title="Tổng giá trị đơn đã giao hoặc hoàn tất">Doanh thu</th>
+                        <th scope="col" title="Sản phẩm có số lượng đặt cao nhất trong các đơn đã giao hoặc hoàn tất">Sản lượng</th>
+                        <th scope="col">Đơn gần nhất</th>
+                        <th scope="col">Thao tác</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody role="rowgroup">
                     @forelse($customers as $customer)
-                    <tr>
-                        <td><input type="checkbox" class="row-check" value="{{ $customer->id }}" data-customer-name="{{ $customer->name }}" aria-label="Chọn {{ $customer->name }}"></td>
-                        <td class="text-muted" style="font-size:.78rem;">{{ $customer->id }}</td>
-                        <td>
-                            <div class="d-flex align-items-center gap-2">
-                                <button type="button"
-                                    class="btn btn-sm btn-outline-warning cust-pin-btn js-customer-pin {{ $customer->is_pinned ? 'is-pinned' : '' }}"
-                                    data-url="{{ route('customers.sort-settings', $customer) }}"
-                                    data-pinned="{{ $customer->is_pinned ? '1' : '0' }}"
-                                    title="{{ $customer->is_pinned ? 'Bỏ ghim khách hàng' : 'Ghim khách hàng' }}">
-                                    <i class="ph {{ $customer->is_pinned ? 'ph-star-fill' : 'ph-star' }}"></i>
-                                </button>
-                                <input type="number"
-                                    class="form-control form-control-sm cust-sort-input js-customer-sort-order"
-                                    data-url="{{ route('customers.sort-settings', $customer) }}"
-                                    min="0"
-                                    max="999999"
-                                    value="{{ (int) ($customer->sort_order ?? 0) }}"
-                                    title="Thứ tự nhỏ hơn sẽ lên trước">
-                            </div>
-                        </td>
-
-                        <td>
-                            <div class="cust-name">{{ $customer->name }}</div>
+                    <tr role="row">
+                        <td class="cust-select"><input type="checkbox" class="row-check" value="{{ $customer->id }}" data-customer-name="{{ $customer->name }}" aria-label="Chọn {{ $customer->name }}"></td>
+                        <td class="cust-identity">
+                            <div class="cust-name">{{ $customer->name }} <span class="text-muted fw-normal small">#{{ $customer->id }}</span></div>
                             @if($customer->is_employee)
                                 <div class="mt-1"><span class="badge-employee">{{ __('customers.index.employee_badge') }}</span></div>
                             @endif
@@ -419,12 +474,111 @@
                             <div class="cust-dob mt-1" style="font-size:.78rem;color:#64748b;">
                                 {{ $defaultAddr?->note ?: 'Chưa có địa chỉ mặc định' }}
                             </div>
-                            <div class="cust-phone text-nowrap mt-1">{{ $customer->phone ?: '—' }}</div>
-                            <div class="cust-email text-truncate" style="max-width:220px;">{{ $customer->email ?: '—' }}</div>
+                            @if($customer->phone)<div class="cust-phone mt-1">{{ $customer->phone }}</div>@endif
+                            @if($customer->email)<div class="cust-email">{{ $customer->email }}</div>@endif
+                            <details class="cust-row-details mt-1">
+                                <summary class="small text-primary">Hồ sơ &amp; phân công</summary>
+                                <div class="cust-row-detail-panel d-grid gap-2">
+                                    <div class="small text-muted">Ưu tiên</div>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <button type="button"
+                                            class="btn btn-sm btn-outline-warning cust-pin-btn js-customer-pin {{ $customer->is_pinned ? 'is-pinned' : '' }}"
+                                            data-url="{{ route('customers.sort-settings', $customer) }}"
+                                            data-pinned="{{ $customer->is_pinned ? '1' : '0' }}"
+                                            title="{{ $customer->is_pinned ? 'Bỏ ghim khách hàng' : 'Ghim khách hàng' }}">
+                                            <i class="ph {{ $customer->is_pinned ? 'ph-star-fill' : 'ph-star' }}"></i>
+                                        </button>
+                                        <input type="number"
+                                            class="form-control form-control-sm cust-sort-input js-customer-sort-order"
+                                            data-url="{{ route('customers.sort-settings', $customer) }}"
+                                            min="0"
+                                            max="999999"
+                                            value="{{ (int) ($customer->sort_order ?? 0) }}"
+                                            title="Thứ tự nhỏ hơn sẽ lên trước">
+                                    </div>
+                                    <div>
+                                        <div class="cust-meta-sub">Mã cũ
+                                        @if($customer->legacy_code)
+                                            <span class="badge rounded-pill" style="background:#f0fdf4;color:#166534;font-size:.72rem;font-weight:600;">
+                                                {{ $customer->legacy_code }}
+                                            </span>
+                                        @else
+                                            <span class="text-muted" style="font-size:.78rem;">—</span>
+                                        @endif
+                                        </div>
+                                        <div class="cust-meta-sub mt-1">Người tạo: {{ optional($customer->user)->name ?? '—' }}</div>
+                                        <div class="cust-meta-sub">Ngày tạo: {{ optional($customer->created_at)?->format('d/m/Y H:i') ?? '—' }}</div>
+                                    </div>
+
+                                    <div>
+                                        <div class="cust-meta-title">
+                                            @if($customer->is_employee)
+                                                Không áp dụng cho khách Nhân viên
+                                            @elseif($customer->isFree())
+                                                <span class="text-muted fst-italic" style="font-size:.8rem;">Khách tự do</span>
+                                            @else
+                                                Sale: <span class="sale-name">{{ optional($customer->assignedTo)->name ?? '—' }}</span>
+                                            @endif
+                                        </div>
+                                        <div class="mt-1">
+                                            @if($customer->is_employee)
+                                                <span class="text-muted" style="font-size:.78rem;">Không áp dụng hạn giữ</span>
+                                            @elseif($customer->isFree())
+                                                <span class="badge-free" style="font-size:.7rem;">Có thể gán</span>
+                                                @if($customer->assignedTo)
+                                                    <div class="sale-prev">Sale gần nhất: {{ $customer->assignedTo->name }}</div>
+                                                @endif
+                                            @elseif(($expiresAt = $customer->assignmentExpiresAt()))
+                                                <div class="expires-date">Hạn: {{ $expiresAt->format('d/m/Y H:i') }}</div>
+                                                <div class="expires-note">Chu kỳ {{ $customerFreeDays }} ngày</div>
+                                            @else
+                                                <span class="text-muted" style="font-size:.78rem;">Không giới hạn</span>
+                                            @endif
+                                        </div>
+                                    </div>
+
+                                    @if($isAdmin)
+                                    <div class="small">Hoa hồng Sale
+                                        <span class="badge {{ (float)$customer->commission_percent > 0 ? 'bg-success' : 'bg-secondary' }}">
+                                            {{ number_format((float)$customer->commission_percent, 2, ',', '.') }}%
+                                        </span>
+                                    </div>
+                                    <div>
+                                        @if($customer->is_employee)
+                                            <span class="text-muted" style="font-size:.78rem;">Không áp dụng</span>
+                                        @elseif($customer->isFree())
+                                            <form action="{{ route('customers.assign-sale', $customer) }}" method="POST" class="assign-form d-flex flex-wrap gap-2 align-items-center">
+                                                @csrf
+                                                <input type="hidden" name="q"               value="{{ request('q') }}">
+                                                <input type="hidden" name="type_id"         value="{{ request('type_id') }}">
+                                                <input type="hidden" name="assigned_to"     value="{{ request('assigned_to') }}">
+                                                <input type="hidden" name="user_id"         value="{{ request('user_id') }}">
+                                                <input type="hidden" name="ownership_status" value="{{ request('ownership_status') }}">
+                                                <input type="hidden" name="order_status" value="{{ request('order_status') }}">
+                                                <input type="hidden" name="order_from" value="{{ request('order_from') }}">
+                                                <input type="hidden" name="order_to" value="{{ request('order_to') }}">
+                                                <input type="hidden" name="per_page"        value="{{ request('per_page', 15) }}">
+                                                <input type="hidden" name="is_employee"     value="{{ request('is_employee') }}">
+                                                <input type="hidden" name="page"            value="{{ request('page', 1) }}">
+                                                <select name="assigned_to" class="form-select form-select-sm">
+                                                    <option value="">— Tự do —</option>
+                                                    @foreach($users as $u)
+                                                        <option value="{{ $u->id }}">{{ $u->name }}</option>
+                                                    @endforeach
+                                                </select>
+                                                <button type="submit" class="btn btn-sm btn-primary btn-assign">Lưu</button>
+                                            </form>
+                                        @else
+                                            <span class="text-muted" style="font-size:.78rem;">Chưa tới hạn tự do</span>
+                                        @endif
+                                    </div>
+                                    @endif
+                                </div>
+                            </details>
                         </td>
 
-                        <td class="text-end text-nowrap">{{ number_format($customer->sales_revenue ?? 0, 0, ',', '.') }} đ</td>
-                        <td>
+                        <td class="cust-metric cust-revenue" data-label="Doanh thu">{{ number_format($customer->sales_revenue ?? 0, 0, ',', '.') }} đ</td>
+                        <td class="cust-metric" data-label="Sản lượng">
                             @if($product = $topProducts->get($customer->id))
                                 <div class="fw-semibold">{{ $product->name }}</div>
                                 <div class="small text-muted">SL theo đơn {{ number_format($product->ordered_quantity, 0, ',', '.') }}</div>
@@ -432,104 +586,32 @@
                                 <span class="text-muted">—</span>
                             @endif
                         </td>
-                        <td class="text-nowrap">{{ $customer->latestValidCustomerOrder?->created_at?->format('d/m/Y') ?? '—' }}</td>
+                        <td class="cust-metric" data-label="Đơn gần nhất">{{ $customer->latestValidCustomerOrder?->created_at?->format('d/m/Y') ?? '—' }}</td>
 
-                        <td>
-                            @if($customer->legacy_code)
-                                <span class="badge rounded-pill" style="background:#f0fdf4;color:#166534;font-size:.72rem;font-weight:600;">
-                                    {{ $customer->legacy_code }}
-                                </span>
-                            @else
-                                <span class="text-muted" style="font-size:.78rem;">—</span>
-                            @endif
-                            <div class="cust-meta-sub mt-1">Người tạo: {{ optional($customer->user)->name ?? '—' }}</div>
-                            <div class="cust-meta-sub">Ngày tạo: {{ optional($customer->created_at)?->format('d/m/Y H:i') ?? '—' }}</div>
-                        </td>
-
-                        <td>
-                            <div class="cust-meta-title">
-                                @if($customer->is_employee)
-                                    Không áp dụng cho khách Nhân viên
-                                @elseif($customer->isFree())
-                                    <span class="text-muted fst-italic" style="font-size:.8rem;">Khách tự do</span>
-                                @else
-                                    Sale: <span class="sale-name">{{ optional($customer->assignedTo)->name ?? '—' }}</span>
-                                @endif
-                            </div>
-                            <div class="mt-1">
-                                @if($customer->is_employee)
-                                    <span class="text-muted" style="font-size:.78rem;">Không áp dụng hạn giữ</span>
-                                @elseif($customer->isFree())
-                                    <span class="badge-free" style="font-size:.7rem;">Có thể gán</span>
-                                    @if($customer->assignedTo)
-                                        <div class="sale-prev">Sale gần nhất: {{ $customer->assignedTo->name }}</div>
-                                    @endif
-                                @elseif(($expiresAt = $customer->assignmentExpiresAt()))
-                                    <div class="expires-date">Hạn: {{ $expiresAt->format('d/m/Y H:i') }}</div>
-                                    <div class="expires-note">Chu kỳ {{ $customerFreeDays }} ngày</div>
-                                @else
-                                    <span class="text-muted" style="font-size:.78rem;">Không giới hạn</span>
-                                @endif
-                            </div>
-                        </td>
-
-                        @if($isAdmin)
-                        <td class="text-center">
-                            <span class="badge {{ (float)$customer->commission_percent > 0 ? 'bg-success' : 'bg-secondary' }}">
-                                {{ number_format((float)$customer->commission_percent, 2, ',', '.') }}%
-                            </span>
-                        </td>
-                        <td>
-                            @if($customer->is_employee)
-                                <span class="text-muted" style="font-size:.78rem;">Không áp dụng</span>
-                            @elseif($customer->isFree())
-                                <form action="{{ route('customers.assign-sale', $customer) }}" method="POST" class="assign-form d-flex gap-2 align-items-center">
-                                    @csrf
-                                    <input type="hidden" name="q"               value="{{ request('q') }}">
-                                    <input type="hidden" name="type_id"         value="{{ request('type_id') }}">
-                                    <input type="hidden" name="assigned_to"     value="{{ request('assigned_to') }}">
-                                    <input type="hidden" name="user_id"         value="{{ request('user_id') }}">
-                                    <input type="hidden" name="ownership_status" value="{{ request('ownership_status') }}">
-                                    <input type="hidden" name="order_status" value="{{ request('order_status') }}">
-                                    <input type="hidden" name="per_page"        value="{{ request('per_page', 15) }}">
-                                    <input type="hidden" name="is_employee"     value="{{ request('is_employee') }}">
-                                    <input type="hidden" name="page"            value="{{ request('page', 1) }}">
-                                    <select name="assigned_to" class="form-select form-select-sm">
-                                        <option value="">— Tự do —</option>
-                                        @foreach($users as $u)
-                                            <option value="{{ $u->id }}">{{ $u->name }}</option>
-                                        @endforeach
-                                    </select>
-                                    <button type="submit" class="btn btn-sm btn-primary btn-assign">Lưu</button>
+                        <td class="cust-actions">
+                            <div class="d-flex flex-wrap gap-1">
+                                <a href="{{ route('customers.edit', $customer) }}" class="btn btn-sm btn-outline-warning" title="Sửa" aria-label="Sửa {{ $customer->name }}">
+                                    <i class="ph ph-pencil"></i>
+                                </a>
+                                <a href="{{ route('customers.addresses.index', $customer->id) }}" class="btn btn-sm btn-outline-info" title="Địa chỉ" aria-label="Địa chỉ của {{ $customer->name }}">
+                                    <i class="ph ph-map-pin"></i>
+                                </a>
+                                <a href="{{ route('customers.show', $customer) }}" class="btn btn-sm btn-outline-primary" title="Báo cáo" aria-label="Báo cáo của {{ $customer->name }}">
+                                    <i class="ph ph-chart-bar"></i>
+                                </a>
+                                <form action="{{ route('customers.destroy', $customer) }}" method="POST" class="d-inline"
+                                    onsubmit="return confirm('{{ __('customers.index.delete_confirm') }}')">
+                                    @csrf @method('DELETE')
+                                    <button class="btn btn-sm btn-outline-danger" title="Xóa" aria-label="Xóa {{ $customer->name }}">
+                                        <i class="ph ph-trash"></i>
+                                    </button>
                                 </form>
-                            @else
-                                <span class="text-muted" style="font-size:.78rem;">Chưa tới hạn tự do</span>
-                            @endif
-                        </td>
-                        @endif
-
-                        <td class="cust-actions text-nowrap">
-                            <a href="{{ route('customers.edit', $customer) }}" class="btn btn-sm btn-outline-warning" title="Sửa">
-                                <i class="ph ph-pencil"></i>
-                            </a>
-                            <a href="{{ route('customers.addresses.index', $customer->id) }}" class="btn btn-sm btn-outline-info" title="Địa chỉ">
-                                <i class="ph ph-map-pin"></i>
-                            </a>
-                            <a href="{{ route('customers.show', $customer) }}" class="btn btn-sm btn-outline-primary" title="Báo cáo">
-                                <i class="ph ph-chart-bar"></i>
-                            </a>
-                            <form action="{{ route('customers.destroy', $customer) }}" method="POST" class="d-inline"
-                                onsubmit="return confirm('{{ __('customers.index.delete_confirm') }}')">
-                                @csrf @method('DELETE')
-                                <button class="btn btn-sm btn-outline-danger" title="Xóa">
-                                    <i class="ph ph-trash"></i>
-                                </button>
-                            </form>
+                            </div>
                         </td>
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="{{ $isAdmin ? 12 : 10 }}">
+                        <td class="cust-empty-cell" colspan="6">
                             <div class="cust-empty">
                                 <div><i class="ph ph-users"></i></div>
                                 <div style="font-weight:600;">{{ __('customers.index.empty') }}</div>
@@ -557,6 +639,21 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+    const actionBar = document.querySelector('.cust-actions-bar');
+    document.addEventListener('click', event => {
+        if (!actionBar.contains(event.target)) {
+            actionBar.querySelectorAll('.cust-action-group[open]').forEach(group => { group.open = false; });
+        }
+    });
+    actionBar.addEventListener('keydown', event => {
+        if (event.key !== 'Escape') return;
+        const group = actionBar.querySelector('.cust-action-group[open]');
+        if (group) {
+            group.open = false;
+            group.querySelector('summary').focus();
+        }
+    });
+
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '{{ csrf_token() }}';
     const checkAll  = document.getElementById('checkAll');
     const rowChecks = document.querySelectorAll('.row-check:not(#checkAll)');
