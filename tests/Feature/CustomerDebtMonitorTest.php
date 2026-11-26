@@ -3329,6 +3329,16 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(1, $data['orders']->total());
     }
 
+    public function test_customer_code_matches_when_source_customer_name_is_outdated(): void
+    {
+        $service = $this->service([$this->entry('CRM01', 'Tên khách cũ')]);
+        $context = (new CustomerDebtMonitorController)->debtContext($this->request([], 'admin'), $service);
+        $group = array_values($context['groups'])[0];
+
+        self::assertSame(1, $group['customer_id']);
+        self::assertSame('code', $group['matched_by']);
+    }
+
     public function test_sales_cannot_open_another_customers_debt_by_key(): void
     {
         $service = $this->service([$this->entry('KH02', 'Anh Hải')]);
@@ -3447,13 +3457,13 @@ class CustomerDebtMonitorTest extends TestCase
 
     public function test_unlinking_an_automatic_match_requires_an_explicit_remap(): void
     {
-        $service = $this->service([$this->entry('WRONG01', 'Anh Hải')]);
+        $service = $this->service([$this->entry('KH02', 'Anh Hải')]);
         $key = array_key_first($service->summarize($service->snapshot()['entries']));
         $controller = new CustomerDebtMonitorController;
         $before = $controller->index($this->request(['customer' => $key], 'admin'), $service)->getData();
         self::assertSame(2, $before['selected']['customer_id']);
         self::assertSame('KH02', $before['selected']['code']);
-        self::assertSame('WRONG01', $before['groups'][$key]['code']);
+        self::assertSame('KH02', $before['groups'][$key]['code']);
 
         $redirect = $controller->unmap($this->request(['source_key' => $key, 'customer_id' => 2], 'admin'), $service);
         self::assertStringEndsWith('#debt-detail', $redirect->getTargetUrl());
@@ -3594,7 +3604,7 @@ class CustomerDebtMonitorTest extends TestCase
 
     public function test_blank_quick_edit_values_remove_limits_instead_of_setting_zero(): void
     {
-        $service = $this->service([$this->entry('OLD01', 'Chị Bình')]);
+        $service = $this->service([$this->entry('CRM01', 'Chị Bình')]);
         $key = array_key_first($service->summarize($service->snapshot()['entries']));
         $controller = new CustomerDebtMonitorController;
         $controller->updatePolicy($this->request(['source_key' => $key, 'allowed_orders' => 1, 'credit_limit' => 100000, 'due_days' => 7], 'admin'), $service);
@@ -3672,7 +3682,7 @@ class CustomerDebtMonitorTest extends TestCase
     public function test_sale_column_prefers_current_customer_owner_and_uses_short_name(): void
     {
         DB::table('customers')->where('id', 1)->update(['current_owner_sale_id' => 8]);
-        $entry = $this->entry('OLD01', 'Chị Bình') + ['sale_name' => 'Huy'];
+        $entry = $this->entry('CRM01', 'Chị Bình') + ['sale_name' => 'Huy'];
         $data = (new CustomerDebtMonitorController)->index($this->request(['tab' => 'all'], 'admin'), $this->service([$entry]))->getData();
         self::assertSame('Hà', $data['debts']->first()['sale_label']);
         self::assertSame('user:8', $data['debts']->first()['sale_key']);

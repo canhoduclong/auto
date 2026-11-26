@@ -507,7 +507,7 @@ class CustomerDebtSheetService
         return str_starts_with($phone, '84') && strlen($phone) === 11 ? '0'.substr($phone, 2) : $phone;
     }
 
-    /** Match names and corroborate with codes and phones where identity is ambiguous. */
+    /** Prefer customer codes; use names only when the source has no code. */
     public function matchingCustomers(array $source, \Illuminate\Support\Collection $customers): \Illuminate\Support\Collection
     {
         if (! empty($source['ambiguous'])) {
@@ -516,16 +516,40 @@ class CustomerDebtSheetService
         $name = $this->customerName($source['name'] ?? '');
         $code = mb_strtoupper(trim($source['code'] ?? ''));
         $phone = $this->customerPhone($source['phone'] ?? '');
-        return $customers->filter(function ($customer) use ($source, $name, $code, $phone) {
+        $byCode = $code === '' ? collect() : $customers->filter(
+            fn ($customer) => $code === mb_strtoupper(trim((string) $customer->customer_code))
+        );
+
+        if ($code !== '') {
+            if ($byCode->count() > 1 || ! empty($source['code_conflict'])) {
+                $byCode = $byCode->filter(function ($customer) use ($name, $phone) {
+                    $names = [$this->customerName($customer->name), $this->customerName((string) $customer->company_name)];
+                    $targetPhone = $this->customerPhone((string) $customer->phone);
+
+                    return ($name !== '' && in_array($name, $names, true))
+                        || ($phone !== '' && $phone === $targetPhone);
+                });
+            }
+            if ($byCode->count() !== 1) {
+                return collect();
+            }
+
+            $customer = $byCode->first();
+            $targetPhone = $this->customerPhone((string) $customer->phone);
+
+            return $phone !== '' && $targetPhone !== '' && $phone !== $targetPhone ? collect() : $byCode;
+        }
+
+        if ($name === '' || ! empty($source['name_conflict'])) {
+            return collect();
+        }
+
+        return $customers->filter(function ($customer) use ($source, $name, $phone) {
             $names = [$this->customerName($customer->name), $this->customerName((string) $customer->company_name)];
             if ($name === '' || ! in_array($name, $names, true)) {
                 return false;
             }
-            $targetCode = mb_strtoupper(trim((string) $customer->customer_code));
             $targetPhone = $this->customerPhone((string) $customer->phone);
-            if (! empty($source['name_conflict']) && ($code === '' || $targetCode !== $code)) {
-                return false;
-            }
             if ($phone !== '' && $targetPhone !== '' && $phone !== $targetPhone) {
                 return false;
             }

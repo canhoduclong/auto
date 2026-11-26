@@ -115,11 +115,21 @@ class CustomerDebtReportController extends Controller
         $sort = $data['sort'] ?? 'balance';
         $direction = ($data['direction'] ?? 'desc') === 'asc' ? 1 : -1;
         $visible = $visible->sort(fn ($a, $b) => ($b['reminded_today'] <=> $a['reminded_today']) ?: ($b['priority']['stars'] <=> $a['priority']['stars']) ?: ($a[$sort] === null || $b[$sort] === null ? (($a[$sort] === null ? 1 : 0) <=> ($b[$sort] === null ? 1 : 0)) : ($a[$sort] <=> $b[$sort]) * $direction) ?: strcmp($a['name'], $b['name']));
+        $remindedCopyRows = $visible
+            ->filter(fn ($row) => $row['data_available'] && $row['balance'] > 0 && $row['collection']['latest'])
+            ->map(fn ($row) => [
+                'key' => $row['key'], 'name' => $row['name'],
+                'saleKey' => $row['sale_key'], 'saleLabel' => $row['sale_label'], 'balance' => $row['balance'],
+                'periodIncrease' => $row['period_increase'] ?? '',
+                'purchase' => $row['last_purchase_date'] ? Carbon::parse($row['last_purchase_date'])->format('j/n') : '',
+                'purchaseDays' => $row['days_without_purchase'] ?? '',
+                'paymentDays' => $row['days_without_payment'] ?? '',
+            ])->values();
         $perPage = (int) ($data['per_page'] ?? 30);
         $page = (int) ($data['page'] ?? 1);
         $rows = new \Illuminate\Pagination\LengthAwarePaginator($visible->forPage($page, $perPage)->values(), $visible->count(), $perPage, $page, ['path' => $request->url(), 'query' => $request->except('page')]);
 
-        return view('customer-debt.report', ['rows' => $rows, 'sales' => $sales, 'summary' => $summary, 'period' => $period, 'hasPeriodFilter' => $hasPeriodFilter, 'snapshot' => $snapshot, 'canAdjust' => $reportSource === 'sheet', 'reportSource' => $reportSource]);
+        return view('customer-debt.report', ['rows' => $rows, 'sales' => $sales, 'summary' => $summary, 'period' => $period, 'hasPeriodFilter' => $hasPeriodFilter, 'snapshot' => $snapshot, 'canAdjust' => $reportSource === 'sheet', 'reportSource' => $reportSource, 'remindedCopyRows' => $remindedCopyRows]);
     }
 
     public function updatePriority(Request $request, CustomerDebtSheetService $sheets, \App\Services\CustomerDebtPriorityService $priorities)

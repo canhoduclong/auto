@@ -64,6 +64,9 @@
             <span data-selection-count>Đã chọn 0 khách</span>
             <button type="button" class="btn btn-primary btn-sm" data-bulk-remind disabled>Nhắc nhở</button>
             <button type="button" class="btn btn-light btn-sm" data-bulk-copy disabled>Chép nội dung</button>
+            <button type="button" class="btn btn-outline-primary btn-sm" data-copy-reminded
+                title="Chép khách còn nợ đã được nhắc ở tất cả các trang theo bộ lọc" disabled>Chép khách đã nhắc</button>
+            <script type="application/json" data-reminded-copy-rows>@json($remindedCopyRows)</script>
             <span role="status" data-bulk-status></span>
         </div>
         @endif

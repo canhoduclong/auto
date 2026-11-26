@@ -1090,8 +1090,11 @@ class CustomerDebtMonitorController extends Controller
             }
         }
         $sourceNames = collect($groups)->countBy(fn ($g) => $service->customerName($g['name']));
+        $sourceCodes = collect($groups)->filter(fn ($g) => trim((string) $g['code']) !== '')
+            ->countBy(fn ($g) => mb_strtoupper(trim((string) $g['code'])));
         foreach ($groups as $key => &$group) {
             $group['name_conflict'] = ($sourceNames[$service->customerName($group['name'])] ?? 0) > 1;
+            $group['code_conflict'] = ($sourceCodes[mb_strtoupper(trim((string) $group['code']))] ?? 0) > 1;
             $matches = $service->matchingCustomers($group, $customers);
             if (! $canLoad && $matches->count() === 1) {
                 $candidate = $matches->first();

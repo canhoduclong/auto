@@ -34,12 +34,15 @@
     if(bulk){
         const boxes=[...document.querySelectorAll('[data-collection-select]:not(:disabled)')];
         const all=document.querySelector('[data-collection-select-all]'),copy=bulk.querySelector('[data-bulk-copy]'),remindSelected=bulk.querySelector('[data-bulk-remind]'),status=bulk.querySelector('[data-bulk-status]');
+        const copyReminded=bulk.querySelector('[data-copy-reminded]');
+        const reminded=new Map(JSON.parse(bulk.querySelector('[data-reminded-copy-rows]')?.textContent||'[]').map(row=>[row.key,row]));
         let busy=false;
         const selected=()=>boxes.filter(box=>box.checked);
         const update=()=>{
             const count=selected().length;
             bulk.querySelector('[data-selection-count]').textContent=`Đã chọn ${count} khách`;
             copy.disabled=busy||!count;remindSelected.disabled=busy||!count;
+            if(copyReminded)copyReminded.disabled=busy||!reminded.size;
             all.checked=boxes.length>0&&count===boxes.length;all.indeterminate=count>0&&count<boxes.length;all.disabled=busy||!boxes.length;
             boxes.forEach(box=>box.disabled=busy);
         };
@@ -47,40 +50,39 @@
         const lastPaymentDaysLabel=value=>value===''?'Chưa thanh toán':`${value} ngày`;
         boxes.forEach(box=>box.addEventListener('change',update));
         all.addEventListener('change',()=>{boxes.forEach(box=>box.checked=all.checked);update();});
-        copy.addEventListener('click',async()=>{
-            const targets=selected();
+        const copyContent=async(targets,alreadyReminded=false)=>{
+            if(!targets.length)return;
             const saleGroups=new Map();
-            targets.forEach(box=>{
-                const key=box.dataset.saleKey||'unassigned';
-                if(!saleGroups.has(key))saleGroups.set(key,{label:box.dataset.saleLabel||'Chưa phân công',boxes:[]});
-                saleGroups.get(key).boxes.push(box);
+            targets.forEach(row=>{
+                const key=row.saleKey||'unassigned';
+                if(!saleGroups.has(key))saleGroups.set(key,{label:row.saleLabel||'Chưa phân công',rows:[]});
+                saleGroups.get(key).rows.push(row);
             });
             const range=bulk.dataset.from&&bulk.dataset.to?`${bulk.dataset.from} – ${bulk.dataset.to}`:'';
-            const title=`NHẮC CÔNG NỢ | ${range||bulk.dataset.date}`;
+            const title=`${alreadyReminded?'ĐÃ NHẮC CÔNG NỢ':'NHẮC CÔNG NỢ'} | ${range||bulk.dataset.date}`;
             const escape=value=>String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
             const buildContent=rich=>{
                 const text=value=>rich?escape(value):String(value);
                 const bold=value=>rich?`<strong>${escape(value)}</strong>`:String(value);
-                const total=targets.reduce((sum,box)=>sum+Number(box.dataset.balance),0);
+                const total=targets.reduce((sum,row)=>sum+Number(row.balance),0);
                 const lines=[`💰💰💰 ${bold(title)} 💰💰💰`, '',
-                    `📌 ${bold('Danh sách khách hàng cần theo dõi và thu hồi công nợ:')}`, ''];
+                    `📌 ${bold(alreadyReminded?'Danh sách khách hàng đã được nhắc công nợ:':'Danh sách khách hàng cần theo dõi và thu hồi công nợ:')}`, ''];
                 let index=0;
                 saleGroups.forEach(group=>{
                     if(index>0)lines.push('');
                     lines.push(bold(`-----   ${group.label}   -----`));
-                    group.boxes.forEach(box=>{
-                        const d=box.dataset;
+                    group.rows.forEach(d=>{
                         const purchase=d.purchase?`${d.purchase} (${daysLabel(d.purchaseDays)})`:'Chưa có ngày mua';
                         lines.push(`${++index}. ${bold(d.name)}: ${bold(money(Number(d.balance))+'đ')} --- TTGN: ${bold(lastPaymentDaysLabel(d.paymentDays))} --- Đơn mới: ${text(purchase)}`);
                     });
                 });
                 lines.push('',`💰 TỔNG CÔNG NỢ: ${bold(money(total)+'đ')}`);
                 if(range){
-                    const available=targets.filter(box=>box.dataset.periodIncrease!=='');
-                    const increase=available.reduce((sum,box)=>sum+Number(box.dataset.periodIncrease),0);
+                    const available=targets.filter(row=>row.periodIncrease!=='');
+                    const increase=available.reduce((sum,row)=>sum+Number(row.periodIncrease),0);
                     lines.push(`💰 CÔNG NỢ PHÁT SINH (${text(range)}): ${bold(available.length?money(increase)+'đ':'Chưa có dữ liệu')}`);
-                    const top=available.filter(box=>Number(box.dataset.periodIncrease)>0).sort((a,b)=>Number(b.dataset.periodIncrease)-Number(a.dataset.periodIncrease)).slice(0,3);
-                    if(top.length)lines.push('    • Khách phát sinh nhiều:',...top.map(box=>`    🔥 ${bold(box.dataset.name)}: ${bold(money(Number(box.dataset.periodIncrease))+' đ')}`));
+                    const top=available.filter(row=>Number(row.periodIncrease)>0).sort((a,b)=>Number(b.periodIncrease)-Number(a.periodIncrease)).slice(0,3);
+                    if(top.length)lines.push('    • Khách phát sinh nhiều:',...top.map(row=>`    🔥 ${bold(row.name)}: ${bold(money(Number(row.periodIncrease))+' đ')}`));
                 }
                 lines.push('','🎯 ANH EM CẬP NHẬT CÔNG NỢ GIÚP  🦆💸');
                 lines.push('', 'Ghi chú: TTGN - Thanh toán Gần Nhất');
@@ -100,9 +102,13 @@
                     const area=document.createElement('textarea');area.value=content;area.style.position='fixed';area.style.opacity='0';document.body.appendChild(area);area.select();
                     const copied=document.execCommand('copy');area.remove();if(!copied)throw new Error();
                 }
-                status.textContent='Đã chép nội dung của các khách đã chọn.';
+                status.textContent=alreadyReminded
+                    ? `Đã chép ${targets.length} khách đã nhắc theo bộ lọc.`
+                    : 'Đã chép nội dung của các khách đã chọn.';
             }catch(_){status.textContent='Không chép được. Vui lòng cho phép trình duyệt truy cập bộ nhớ tạm và thử lại.';}
-        });
+        };
+        copy.addEventListener('click',()=>copyContent(selected().map(box=>box.dataset)));
+        copyReminded?.addEventListener('click',()=>copyContent([...reminded.values()],true));
         remindSelected.addEventListener('click',async()=>{
             const targets=selected();if(busy||!targets.length)return;
             busy=true;update();let success=0;const failures=[];
@@ -115,6 +121,7 @@
                 data.set('note', box.dataset.reminderNote);
                 try{
                     await send(bulk.dataset.url,data);success++;
+                    reminded.set(box.dataset.key,box.dataset);
                     box.closest('tr').classList.add('collection-reminded-today');
                     const cell=box.closest('tr').querySelector('.collection-status');
                     let badge=cell.querySelector('[data-bulk-reminded-date]');
