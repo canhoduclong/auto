@@ -2,7 +2,7 @@
 @section('title', 'Import & đồng bộ khách hàng từ Google Sheet')
 @section('content')
 <div class="sheet-customer-page">
-    <header class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><div><h3 class="mb-1">Import & đồng bộ khách hàng từ Google Sheet</h3><div class="text-muted small">Nguồn gốc dùng chung với Import Đơn · nhatkybanhang</div></div><a class="btn btn-light" href="{{ route('customers.index') }}">Danh sách khách hàng</a></header>
+    <header class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><div><h3 class="mb-1">{{ $pendingOnly ? 'Khách Google Sheet chờ ghép' : 'Import & đồng bộ khách hàng từ Google Sheet' }}</h3><div class="text-muted small">Nguồn gốc dùng chung với Import Đơn · nhatkybanhang</div></div><a class="btn btn-light" href="{{ route('customers.index') }}">Danh sách khách hàng</a></header>
     @foreach(['success'=>'success','error'=>'danger'] as $key=>$color)
         @if(session($key))<div class="alert alert-{{ $color }}">{{ session($key) }}</div>@endif
     @endforeach
@@ -19,21 +19,21 @@
             <details class="small mb-2"><summary>Trường đồng bộ</summary><div class="d-flex flex-column gap-1 pt-2">@foreach(\App\Services\GoogleSheetCustomerImportService::SYNC_FIELDS as $field=>$label)<label><input type="checkbox" name="sync_fields[]" value="{{ $field }}" @checked(in_array($field, $snapshot['sync_fields'] ?? ['name','phone','address','delivery_time'])) @disabled($field === 'sale_id' && !$canReassign)> {{ $label }}</label>@endforeach</div></details>
             <button class="btn btn-primary">Đồng bộ thay đổi từ Google Sheet</button>
         </form>
-        <form method="POST" action="{{ route('customers.sheet-import.load') }}" data-sheet-import-loading>@csrf<input type="hidden" name="mode" value="import"><button class="btn btn-outline-primary">Chỉ import / ghép khách</button></form>
+        <form method="POST" action="{{ route('customers.sheet-import.load') }}" data-sheet-import-loading>@csrf<input type="hidden" name="mode" value="import">@if($pendingOnly)<input type="hidden" name="status" value="pending_link">@endif<button class="btn btn-outline-primary">Chỉ import / ghép khách</button></form>
         </div>
     </div></div>
     @if($snapshot)
     @if($syncMode)<div class="alert alert-info py-2 small">Chế độ đồng bộ · Chỉ cập nhật trường đã chọn và có giá trị trên Sheet; ô trống giữ nguyên dữ liệu hiện tại. Xem thay đổi cũ → mới bên dưới trước khi áp dụng.</div>@endif
     <div class="sheet-customer-stats mb-3">
-        @foreach(['all'=>['Tổng khách nguồn',$total],'link'=>['Ghép khách hiện có',$counts['link'] ?? 0],'create'=>['Khách mới',$counts['create'] ?? 0],'update'=>['Có thay đổi',$counts['update'] ?? 0],'unchanged'=>['Không thay đổi',$counts['unchanged'] ?? 0],'conflict'=>['Cần xử lý',$counts['conflict'] ?? 0],'imported'=>['Đã import',$counts['imported'] ?? 0],'skip'=>['Bỏ qua',$counts['skip'] ?? 0]] as $state=>$stat)
+        @foreach(['all'=>['Tổng khách nguồn',$total],'pending_link'=>['Chờ ghép',$pendingCount],'link'=>['Ghép khách hiện có',$counts['link'] ?? 0],'create'=>['Khách mới',$counts['create'] ?? 0],'update'=>['Có thay đổi',$counts['update'] ?? 0],'unchanged'=>['Không thay đổi',$counts['unchanged'] ?? 0],'conflict'=>['Cần xử lý',$counts['conflict'] ?? 0],'imported'=>['Đã import',$counts['imported'] ?? 0],'skip'=>['Bỏ qua',$counts['skip'] ?? 0]] as $state=>$stat)
         <a href="{{ request()->fullUrlWithQuery(['status'=>$state,'page'=>1]) }}" class="sheet-customer-stat {{ request('status','all') === $state ? 'active' : '' }}"><strong>{{ number_format($stat[1],0,',','.') }}</strong><span>{{ $stat[0] }}</span></a>
         @endforeach
     </div>
     <div class="card"><div class="card-body d-flex flex-wrap justify-content-between gap-3 align-items-end">
-        <form method="GET" class="d-flex flex-wrap gap-2 align-items-end"><input type="hidden" name="preview" value="{{ request('preview') }}"><div><label class="form-label" for="sheet-import-search">Tên / mã khách</label><input id="sheet-import-search" name="search" value="{{ request('search') }}" maxlength="150" class="form-control"></div><div><label class="form-label" for="sheet-import-status">Phân loại</label><select id="sheet-import-status" name="status" class="form-select">@foreach(['all'=>'Tất cả','link'=>'Ghép khách hiện có','create'=>'Khách mới','update'=>'Có thay đổi','unchanged'=>'Không thay đổi','conflict'=>'Cần xử lý','imported'=>'Đã import','skip'=>'Bỏ qua','error'=>'Import lỗi'] as $value=>$label)<option value="{{ $value }}" @selected(request('status','all') === $value)>{{ $label }}</option>@endforeach</select></div><button class="btn btn-primary">Lọc</button></form>
-        <form method="POST" action="{{ route('customers.sheet-import.commit') }}" data-sheet-import-commit>@csrf<input type="hidden" name="preview" value="{{ request('preview') }}"><button class="btn btn-primary" @disabled($readyCount === 0)>{{ $syncMode ? 'Áp dụng đồng bộ' : 'Import' }} {{ $readyCount }} khách đã sẵn sàng</button></form>
+        <form method="GET" class="d-flex flex-wrap gap-2 align-items-end"><input type="hidden" name="preview" value="{{ request('preview') }}"><div><label class="form-label" for="sheet-import-search">Tên / mã khách</label><input id="sheet-import-search" name="search" value="{{ request('search') }}" maxlength="150" class="form-control"></div><div><label class="form-label" for="sheet-import-status">Phân loại</label><select id="sheet-import-status" name="status" class="form-select">@foreach(['all'=>'Tất cả','pending_link'=>'Chờ ghép','link'=>'Ghép khách hiện có','create'=>'Khách mới','update'=>'Có thay đổi','unchanged'=>'Không thay đổi','conflict'=>'Cần xử lý','imported'=>'Đã import','skip'=>'Bỏ qua','error'=>'Import lỗi'] as $value=>$label)<option value="{{ $value }}" @selected(request('status','all') === $value)>{{ $label }}</option>@endforeach</select></div><button class="btn btn-primary">Lọc</button></form>
+        @unless($pendingOnly)<form method="POST" action="{{ route('customers.sheet-import.commit') }}" data-sheet-import-commit>@csrf<input type="hidden" name="preview" value="{{ request('preview') }}"><button class="btn btn-primary" @disabled($readyCount === 0)>{{ $syncMode ? 'Áp dụng đồng bộ' : 'Import' }} {{ $readyCount }} khách đã sẵn sàng</button></form>@endunless
     </div>
-        <div class="small text-muted px-3 pb-3">Nút import xử lý toàn bộ khách đã sẵn sàng trong bản xem trước, gồm cả các trang khác. Các dòng “Cần xử lý” và “Bỏ qua” được giữ lại. @if(!$canCreate)Tài khoản chưa có quyền tạo khách mới; chỉ thực hiện ghép khách hiện có. @endif</div>
+        @unless($pendingOnly)<div class="small text-muted px-3 pb-3">Nút import xử lý toàn bộ khách đã sẵn sàng trong bản xem trước, gồm cả các trang khác. Các dòng “Cần xử lý” và “Bỏ qua” được giữ lại. @if(!$canCreate)Tài khoản chưa có quyền tạo khách mới; chỉ thực hiện ghép khách hiện có. @endif</div>@endunless
         <div class="table-responsive sheet-customer-scroll"><table class="table table-hover mb-0"><thead><tr><th>Khách trong Sheet</th><th>NVKD nguồn</th><th>Khách hệ thống / Khách mới</th><th>Trạng thái</th><th></th></tr></thead><tbody>
         @forelse($rows as $row)
         <tr><td><strong>{{ $row['name'] }}</strong><div class="small text-muted">{{ $row['code'] ?: 'Chưa có mã KH' }}</div><div class="small mt-2">Điện thoại: {{ $row['phone'] ?: 'Chưa có' }}<br>Địa chỉ: {{ $row['address'] ?: 'Chưa có' }}<br>Giờ giao: {{ $row['delivery_time'] ?: 'Chưa có' }}</div></td><td>{{ $row['sale_name'] ?: 'Chưa xác định' }}</td><td>
@@ -53,7 +53,7 @@
         </form>
         @endif
         @if($row['status'] !== 'imported')<button type="button" class="btn btn-sm btn-outline-primary sheet-customer-choice" data-key="{{ $row['key'] }}" data-source-name="{{ $row['name'] }}" data-name="{{ $row['new_name'] }}" data-code="{{ $row['new_code'] }}" data-sale="{{ $row['sale_id'] }}" data-customer="{{ $row['target']?->id }}" data-target="{{ $row['target']?->name }}" data-status="{{ $row['status'] }}" data-phone="{{ $row['phone'] }}" data-address="{{ $row['address'] }}" data-delivery-time="{{ $row['delivery_time'] }}" data-revision="{{ $row['target_revision'] }}" data-sync-fields="{{ json_encode($row['sync_preferences']) }}" data-can-update="{{ $row['can_update'] ? '1' : '0' }}">Chọn ghép / tạo</button>@endif</td></tr>
-        @empty<tr><td colspan="5" class="text-center text-muted py-4">Không có khách phù hợp.</td></tr>@endforelse
+        @empty<tr><td colspan="5" class="text-center text-muted py-4">{{ $pendingOnly ? 'Không có khách đang chờ ghép trong bản xem trước.' : 'Không có khách phù hợp.' }}</td></tr>@endforelse
         </tbody></table></div><div class="card-body">{{ $rows->links() }}</div>
     </div>
     <dialog id="sheet-customer-dialog" aria-labelledby="sheet-customer-dialog-title"><form action="{{ route('customers.sheet-import.decide') }}" method="POST">@csrf<input type="hidden" name="preview" value="{{ request('preview') }}"><input type="hidden" name="source_key"><input type="hidden" name="customer_id"><input type="hidden" name="customer_revision">
@@ -67,7 +67,7 @@
         <div class="alert alert-danger py-2" role="alert" data-choice-error hidden></div><div class="text-end mt-3"><button class="btn btn-primary" type="submit">Lưu lựa chọn</button></div>
     </form></dialog>
     @else
-        <div class="card"><div class="card-body py-4 text-muted">Bấm “Đồng bộ thay đổi từ Google Sheet” để xem khách mới và thông tin cần cập nhật. Hệ thống chưa tạo hoặc sửa khách hàng ở bước đọc dữ liệu.</div></div>
+        <div class="card"><div class="card-body py-4 text-muted">{{ $pendingOnly ? 'Chưa có bản xem trước còn hiệu lực. Bấm “Chỉ import / ghép khách” để tải danh sách chờ ghép.' : 'Bấm “Đồng bộ thay đổi từ Google Sheet” để xem khách mới và thông tin cần cập nhật. Hệ thống chưa tạo hoặc sửa khách hàng ở bước đọc dữ liệu.' }}</div></div>
     @endif
 </div>
 @endsection

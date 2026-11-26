@@ -522,6 +522,26 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame([], (new CustomerDebtSheetService)->mappings());
     }
 
+    public function test_google_customer_pending_link_reopens_latest_preview_and_hides_linked_customers(): void
+    {
+        $importer = $this->sheetCustomerImporter($this->customerSheetValues([
+            ['CRM01', 'Alias khác tên', '', '1000'], ['NEW01', 'Khách mới', '', '1000'],
+        ]));
+        $actor = $this->user('admin');
+        $token = $importer->load($actor);
+        $linked = collect($importer->plan($importer->snapshot($token, $actor)))->firstWhere('code', 'CRM01');
+        self::assertSame(1, $importer->commit($token, $actor, true, 1, $linked['key'])['linked']);
+        $token = $importer->load($actor);
+
+        $controller = new \App\Http\Controllers\GoogleSheetCustomerImportController;
+        $filter = ['status' => 'pending_link'];
+        $response = $controller->index($this->request($filter, 'admin'), $importer, new CustomerDebtSheetService);
+        self::assertStringContainsString($token, $response->getTargetUrl());
+        $data = $controller->index($this->request($filter + ['preview' => $token], 'admin'), $importer, new CustomerDebtSheetService)->getData();
+        self::assertSame(1, $data['pendingCount']);
+        self::assertSame(['NEW01'], $data['rows']->pluck('code')->all());
+    }
+
     public function test_google_customer_import_links_and_creates_once_without_overwriting_existing_data(): void
     {
         \Illuminate\Support\Facades\Event::fake(['eloquent.created: App\Models\Customer']);

@@ -19,16 +19,30 @@ class GoogleSheetCustomerImportController extends Controller
     public function index(Request $request, GoogleSheetCustomerImportService $service, CustomerDebtSheetService $sheets)
     {
         $this->authorizeImport($request);
-        $data = $request->validate(['preview' => 'nullable|uuid', 'search' => 'nullable|string|max:150', 'status' => 'nullable|in:all,link,create,update,unchanged,conflict,imported,skip,error', 'page' => 'nullable|integer|min:1']);
+        $data = $request->validate(['preview' => 'nullable|uuid', 'search' => 'nullable|string|max:150', 'status' => 'nullable|in:all,pending_link,link,create,update,unchanged,conflict,imported,skip,error', 'page' => 'nullable|integer|min:1']);
+        $pendingOnly = ($data['status'] ?? null) === 'pending_link';
+        if ($pendingOnly && empty($data['preview']) && ($latest = $service->latestPreview($request->user()))) {
+            return redirect()->route('customers.sheet-import.index', array_replace($data, ['preview' => $latest]));
+        }
         $snapshot = ! empty($data['preview']) ? $service->snapshot($data['preview'], $request->user()) : null;
+        if ($snapshot) {
+            $service->rememberPreview($data['preview'], $request->user());
+        }
         $rows = collect($snapshot ? $service->plan($snapshot) : []);
         $rows = $rows->map(fn ($row) => $row + ['can_update' => $row['target'] && Gate::forUser($request->user())->allows('update', $row['target'])]);
         $counts = $rows->countBy('status');
+        $pendingCount = $rows->where('pending_link', true)->count();
         $canCreate = Gate::forUser($request->user())->allows('create', Customer::class);
         $readyCount = $rows->filter(fn ($row) => $row['status'] === 'link' || ($canCreate && $row['status'] === 'create') || ($row['status'] === 'update' && $row['can_update']))->count();
         $visible = $rows->filter(function ($row) use ($data) {
             $status = $data['status'] ?? 'all';
-            if ($status === 'error' ? empty($row['result']) || ($row['result']['ok'] ?? true) : ($status !== 'all' && $row['status'] !== $status)) {
+            $matchesStatus = match ($status) {
+                'all' => true,
+                'pending_link' => $row['pending_link'],
+                'error' => isset($row['result']) && ! ($row['result']['ok'] ?? true),
+                default => $row['status'] === $status,
+            };
+            if (!$matchesStatus) {
                 return false;
             }
             $search = Customer::normalizeName($data['search'] ?? '');
@@ -38,13 +52,13 @@ class GoogleSheetCustomerImportController extends Controller
         $page = (int) ($data['page'] ?? 1);
         $rows = new \Illuminate\Pagination\LengthAwarePaginator($visible->forPage($page, 40)->values(), $visible->count(), 40, $page, ['path' => $request->url(), 'query' => $request->except('page')]);
 
-        return view('customers.google-sheet-import', ['snapshot' => $snapshot, 'rows' => $rows, 'counts' => $counts, 'total' => $counts->sum(), 'sales' => $service->sales(), 'canCreate' => Gate::forUser($request->user())->allows('create', Customer::class), 'connectionEmail' => $sheets->connectionEmail(), 'readyCount' => $readyCount, 'syncMode' => ($snapshot['mode'] ?? 'import') === 'sync', 'canReassign' => $request->user()->isAdmin() || $request->user()->hasPermission('customers.assign-sale')]);
+        return view('customers.google-sheet-import', ['snapshot' => $snapshot, 'rows' => $rows, 'counts' => $counts, 'total' => $counts->sum(), 'sales' => $service->sales(), 'canCreate' => Gate::forUser($request->user())->allows('create', Customer::class), 'connectionEmail' => $sheets->connectionEmail(), 'readyCount' => $readyCount, 'pendingCount' => $pendingCount, 'pendingOnly' => $pendingOnly, 'syncMode' => ($snapshot['mode'] ?? 'import') === 'sync', 'canReassign' => $request->user()->isAdmin() || $request->user()->hasPermission('customers.assign-sale')]);
     }
 
     public function load(Request $request, GoogleSheetCustomerImportService $service)
     {
         $this->authorizeImport($request);
-        $data = $request->validate(['mode' => 'nullable|in:import,sync', 'sync_fields' => 'nullable|required_if:mode,sync|array|min:1', 'sync_fields.*' => [Rule::in(array_keys(GoogleSheetCustomerImportService::SYNC_FIELDS))]]);
+        $data = $request->validate(['mode' => 'nullable|in:import,sync', 'status' => 'nullable|in:pending_link', 'sync_fields' => 'nullable|required_if:mode,sync|array|min:1', 'sync_fields.*' => [Rule::in(array_keys(GoogleSheetCustomerImportService::SYNC_FIELDS))]]);
         $fields = $data['sync_fields'] ?? ['name', 'phone', 'address', 'delivery_time'];
         abort_if(in_array('sale_id', $fields, true) && ! $request->user()->isAdmin() && ! $request->user()->hasPermission('customers.assign-sale'), 403);
         try {
@@ -55,7 +69,7 @@ class GoogleSheetCustomerImportController extends Controller
             return back()->with('error', 'Không tải được khách hàng từ Google Sheet gốc. Kiểm tra quyền Người xem của tài khoản kết nối và tab nhatkybanhang.');
         }
 
-        return redirect()->route('customers.sheet-import.index', ['preview' => $token]);
+        return redirect()->route('customers.sheet-import.index', ['preview' => $token, 'status' => $data['status'] ?? null]);
     }
 
     public function customers(Request $request)
@@ -98,7 +112,7 @@ class GoogleSheetCustomerImportController extends Controller
     public function commit(Request $request, GoogleSheetCustomerImportService $service)
     {
         $this->authorizeImport($request);
-        $data = $request->validate(['preview' => 'required|uuid', 'source_key' => 'nullable|string|size:64|regex:/^[a-f0-9]{64}$/', 'page' => 'nullable|integer|min:1', 'search' => 'nullable|string|max:150', 'status' => 'nullable|in:all,link,create,update,unchanged,conflict,imported,skip,error']);
+        $data = $request->validate(['preview' => 'required|uuid', 'source_key' => 'nullable|string|size:64|regex:/^[a-f0-9]{64}$/', 'page' => 'nullable|integer|min:1', 'search' => 'nullable|string|max:150', 'status' => 'nullable|in:all,pending_link,link,create,update,unchanged,conflict,imported,skip,error']);
         $canCreate = Gate::forUser($request->user())->allows('create', Customer::class);
         $counts = $service->commit($data['preview'], $request->user(), $canCreate, 25, $data['source_key'] ?? null);
         $rows = collect($service->plan($service->snapshot($data['preview'], $request->user())));

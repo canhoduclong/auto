@@ -49,8 +49,22 @@ class GoogleSheetCustomerImportService
             }
         }
         $this->put($token, $snapshot);
+        $this->rememberPreview($token, $actor);
 
         return $token;
+    }
+
+    public function rememberPreview(string $token, User $actor): void
+    {
+        Cache::put('customer-sheet-import:latest:'.$actor->id, $token, now()->addHours(2));
+    }
+
+    public function latestPreview(User $actor): ?string
+    {
+        $token = Cache::get('customer-sheet-import:latest:'.$actor->id);
+        $snapshot = is_string($token) ? Cache::get('customer-sheet-import:'.$token) : null;
+
+        return $snapshot && (int) $snapshot['actor_id'] === (int) $actor->id ? $token : null;
     }
 
     public function snapshot(string $token, User $actor): array
@@ -206,7 +220,10 @@ class GoogleSheetCustomerImportService
                 $target = $byId[$result['customer_id']] ?? null;
                 $reason = $result['action'] === 'update' ? 'Đã cập nhật thông tin từ Sheet' : ($result['action'] === 'create' ? 'Đã tạo khách mới và ghép' : 'Đã ghép khách hệ thống');
             }
-            $rows[$key] = array_replace($group, ['status' => $status, 'reason' => $reason, 'target' => $target, 'new_name' => $name, 'new_code' => $code, 'sale_id' => $saleId, 'phone' => $decision['phone'] ?? ($group['phone'] ?? ''), 'address' => $decision['address'] ?? ($group['address'] ?? ''), 'delivery_time' => $deliveryTime, 'result' => $result, 'sync_mode' => $sync, 'sync_explicit' => in_array($action, ['link', 'update'], true), 'sync_preferences' => $syncFields, 'desired' => $desired, 'changes' => $changes, 'target_revision' => $targetRevision]);
+            $linkedCustomer = empty($mappings[$key]['unlinked']) ? $byId->get($mappings[$key]['customer_id'] ?? 0) : null;
+            $pendingLink = ! in_array($status, ['imported', 'unchanged', 'skip'], true)
+                && (! $linkedCustomer || $linkedCustomer->trashed());
+            $rows[$key] = array_replace($group, ['pending_link' => $pendingLink, 'status' => $status, 'reason' => $reason, 'target' => $target, 'new_name' => $name, 'new_code' => $code, 'sale_id' => $saleId, 'phone' => $decision['phone'] ?? ($group['phone'] ?? ''), 'address' => $decision['address'] ?? ($group['address'] ?? ''), 'delivery_time' => $deliveryTime, 'result' => $result, 'sync_mode' => $sync, 'sync_explicit' => in_array($action, ['link', 'update'], true), 'sync_preferences' => $syncFields, 'desired' => $desired, 'changes' => $changes, 'target_revision' => $targetRevision]);
         }
 
         if (($snapshot['mode'] ?? 'import') === 'sync') {

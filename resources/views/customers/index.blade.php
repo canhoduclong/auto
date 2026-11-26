@@ -337,6 +337,12 @@
                 </details>
             @endif
 
+            @can('import', \App\Models\Customer::class)
+                <a href="{{ route('customers.sheet-import.index', ['status' => 'pending_link']) }}" class="btn btn-sm btn-outline-primary">
+                    <i class="ph ph-link me-1" aria-hidden="true"></i>Khách Google Sheet chờ ghép
+                </a>
+            @endcan
+
             <a href="{{ route('customers.create') }}" class="btn btn-sm btn-success ms-auto text-nowrap">
                 <i class="ph ph-plus me-1"></i>{{ __('customers.index.add') }}
             </a>
