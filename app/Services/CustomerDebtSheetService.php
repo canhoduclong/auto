@@ -559,6 +559,31 @@ class CustomerDebtSheetService
 
     public function summarize(array $entries): array
     {
+        // In the sales journal, an immediately following packaging line can
+        // contain "co" in the customer code column instead of the bill's code.
+        $salesByRow = [];
+        foreach ($entries as $entry) {
+            if ($entry['type'] === 'sale' && ($entry['source_sheet'] ?? '') === 'nhatkybanhang') {
+                $salesByRow[$entry['row']] = $entry;
+            }
+        }
+        foreach ($entries as &$entry) {
+            if ($entry['type'] !== 'sale' || ($entry['source_sheet'] ?? '') !== 'nhatkybanhang'
+                || strtolower(trim($entry['code'])) !== 'co'
+                || $this->normalize($entry['note'] ?? '') !== 'thung xop') {
+                continue;
+            }
+            $previous = $salesByRow[$entry['row'] - 1] ?? null;
+            $salesperson = $this->normalize($entry['sale_name'] ?? '');
+            if ($previous && preg_match('/^\d+$/', trim($previous['code']))
+                && $entry['date'] === $previous['date']
+                && $this->customerName($entry['name']) === $this->customerName($previous['name'])
+                && $salesperson !== '' && $salesperson === $this->normalize($previous['sale_name'] ?? '')) {
+                $entry['code'] = $previous['code'];
+            }
+        }
+        unset($entry);
+
         $groups = [];
         // A reused code is not an identity: retain company name and phone evidence.
         $codes = [];

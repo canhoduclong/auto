@@ -11,6 +11,13 @@
             <h2 id="debt-report-title">{{ $selected['name'] }}</h2>
         </div>
         <div class="debt-detail-header-actions">
+            @if(!isset($debtDetailAction) && ($canLoad ?? false))
+                <form method="POST" action="{{ route('customer-debt.load') }}" data-sheet-refresh>
+                    @csrf
+                    <input type="hidden" name="source" value="google">
+                    <button class="btn btn-outline-primary btn-sm" type="submit">Cập nhật thanh toán và công nợ</button>
+                </form>
+            @endif
             @if(!isset($debtDetailAction) && $singleSheetSource)
                 @include('customer-debt.mapping-actions', ['source' => $singleSheetSource, 'mappingToolbar' => true])
             @endif

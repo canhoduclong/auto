@@ -108,6 +108,24 @@ class CustomerDebtSheetServiceTest extends TestCase
         self::assertSame(-50, array_values($groups)[0]['balance']);
     }
 
+    public function test_adjacent_packaging_line_uses_bill_customer_code_for_cashflow_matching(): void
+    {
+        $service = new CustomerDebtSheetService;
+        $sale = ['date' => '2026-04-22', 'name' => 'Khách A', 'type' => 'sale', 'sale_name' => 'Thương', 'source_sheet' => 'nhatkybanhang'];
+        $entries = [
+            $sale + ['code' => '2565', 'amount' => 5942000, 'row' => 20, 'note' => 'con'],
+            $sale + ['code' => 'co', 'amount' => 85000, 'row' => 21, 'note' => 'thùng xốp'],
+            ['date' => '2026-04-30', 'name' => 'Khách A', 'code' => '', 'type' => 'payment', 'amount' => 6027000, 'row' => 20, 'source_sheet' => 'Dongtienhoatdong'],
+        ];
+
+        $groups = $service->summarize($entries);
+        self::assertCount(1, $groups);
+        self::assertSame(0, reset($groups)['balance']);
+
+        $entries[1]['row']++;
+        self::assertCount(3, $service->summarize($entries));
+    }
+
     public function test_reused_code_keeps_company_names_and_their_nameless_code_receipts_separate(): void
     {
         $s = new CustomerDebtSheetService;
