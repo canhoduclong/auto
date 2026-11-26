@@ -44,7 +44,7 @@
             boxes.forEach(box=>box.disabled=busy);
         };
         const daysLabel=value=>value===''?'Chưa rõ':Number(value)===0?'Hôm nay':Number(value)===1?'Hôm qua':`${value} ngày`;
-        const debtDaysLabel=value=>value===''?'Chưa thanh toán':`${value} ngày`;
+        const lastPaymentDaysLabel=value=>value===''?'Chưa thanh toán':`${value} ngày`;
         boxes.forEach(box=>box.addEventListener('change',update));
         all.addEventListener('change',()=>{boxes.forEach(box=>box.checked=all.checked);update();});
         copy.addEventListener('click',async()=>{
@@ -71,7 +71,7 @@
                     group.boxes.forEach(box=>{
                         const d=box.dataset;
                         const purchase=d.purchase?`${d.purchase} (${daysLabel(d.purchaseDays)})`:'Chưa có ngày mua';
-                        lines.push(`${++index}. ${bold(d.name)}: ${bold(money(Number(d.balance))+'đ')} --- Nợ: ${bold(debtDaysLabel(d.paymentDays))} --- Đơn mới: ${text(purchase)}`);
+                        lines.push(`${++index}. ${bold(d.name)}: ${bold(money(Number(d.balance))+'đ')} --- TTGN: ${bold(lastPaymentDaysLabel(d.paymentDays))} --- Đơn mới: ${text(purchase)}`);
                     });
                 });
                 lines.push('',`💰 TỔNG CÔNG NỢ: ${bold(money(total)+'đ')}`);
@@ -83,6 +83,7 @@
                     if(top.length)lines.push('    • Khách phát sinh nhiều:',...top.map(box=>`    🔥 ${bold(box.dataset.name)}: ${bold(money(Number(box.dataset.periodIncrease))+' đ')}`));
                 }
                 lines.push('','🎯 ANH EM CẬP NHẬT CÔNG NỢ GIÚP  🦆💸');
+                lines.push('', 'Ghi chú: TTGN - Thanh toán Gần Nhất');
                 return lines.join(rich?'<br>':'\n');
             };
             const content=buildContent(false);

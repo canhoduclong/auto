@@ -1,10 +1,10 @@
 {
-  "version": "1.1.37",
-  "version_code": 80,
-  "apk_url": "https://hoanglongtnt.com/app-update/app-release-1.1.37.apk",
+  "version": "1.1.38",
+  "version_code": 81,
+  "apk_url": "https://hoanglongtnt.com/app-update/app-release-1.1.38.apk",
   "ios_url": "",
   "force_update": false,
-  "message": "Bản 1.1.37: Hiển thị ngày tạo đơn và ngày giao trên thẻ đơn chờ shipper nhận.",
+  "message": "Bản 1.1.38: Thu gọn thẻ đơn chờ shipper nhận. Bấm Chi tiết để xem sản phẩm, phí và tiền COD.",
   "requires_reinstall": false,
-  "sha256": "0f95cb0594a8935f4e21dc7a4ba8facf4f35bae6db40497fa753d2b215992dd8"
+  "sha256": "37045e95ea8c2802e0b9ed2fdc35d4995580dfc3d595e3222f7825f888627e54"
 }

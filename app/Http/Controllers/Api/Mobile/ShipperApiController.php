@@ -61,12 +61,13 @@ class ShipperApiController extends BaseApiController
         $selectedDate = $this->scheduleDate($request);
 
         $orders = app(ShipperPickupStatus::class)->withDetails(Order::query())
-            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
+            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id', 'warehouse:id,name'])
             ->tap(fn ($query) => app(ShipperDashboardController::class)->constrainAvailableReadyOrder($query, $userId))
             ->forWorkflowDate($selectedDate)
             ->latest('updated_at')
             ->paginate(20);
 
+        $this->attachPickupWarehouse($orders->getCollection());
         $this->attachDeliveryScheduleMetadata($orders->getCollection());
         $this->attachPickupStatus($orders->getCollection());
 
@@ -585,15 +586,40 @@ class ShipperApiController extends BaseApiController
 
         $pickup = app(ShipperPickupStatus::class);
         $orders = $pickup->withDetails(Order::query())
-            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id'])
+            ->with(['customer:id,name,phone,address', 'items.product:id,name,unit', 'items.variant:id,name,sku,size,product_id', 'warehouse:id,name'])
             ->where('shipper_id', $userId)
             ->whereIn('status', [...ShipperPickupStatus::WAITING_STATUSES, Order::STATUS_DELIVERING, 'delivered', Order::STATUS_RETURNING, 'completed'])
             ->latest('updated_at')
             ->paginate(20);
 
         $this->attachPickupStatus($orders->getCollection());
+        $this->attachPickupWarehouse($orders->getCollection()->filter(fn (Order $order) => $order->can_accept_pickup));
 
         return $this->paginated($orders);
+    }
+
+    private function attachPickupWarehouse(\Illuminate\Support\Collection $orders): void
+    {
+        if ($orders->isEmpty()) {
+            return;
+        }
+        $transfers = WarehouseTransfer::query()->with('targetWarehouse:id,name')
+            ->whereIn('order_id', $orders->pluck('id')->all())
+            ->where('status', WarehouseTransfer::STATUS_RECEIVED_COMPLETED)->latest('id')->get()
+            ->unique('order_id')->keyBy('order_id');
+        $missingWarehouseIds = $orders->filter(fn (Order $order) => !$order->warehouse
+            && !$transfers->get($order->id)?->targetWarehouse)->pluck('id');
+        $packingHistory = $missingWarehouseIds->isEmpty() ? collect() : OrderHistory::query()
+            ->with('user:id,warehouse_id', 'user.warehouse:id,name')
+            ->whereIn('order_id', $missingWarehouseIds)
+            ->whereIn('action', ['complete_packing', 'warehouse_complete_packing'])
+            ->latest('id')->get()->unique('order_id')->keyBy('order_id');
+        $orders->each(function (Order $order) use ($transfers, $packingHistory) {
+            $warehouse = $transfers->get($order->id)?->targetWarehouse
+                ?? $order->warehouse
+                ?? $packingHistory->get($order->id)?->user?->warehouse;
+            $order->setAttribute('resolved_pickup_warehouse_name', $warehouse?->name);
+        });
     }
 
     private function attachPickupStatus(\Illuminate\Support\Collection $orders): void
