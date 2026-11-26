@@ -80,7 +80,7 @@ class CeoDashboardController extends Controller
 
     public function __construct()
     {
-        $this->middleware(['auth', 'role:ceo,admin']);
+        $this->middleware(['auth', 'role:ceo,admin'])->except('customersList');
     }
 
     public function dashboard(Request $request)
@@ -467,6 +467,10 @@ class CeoDashboardController extends Controller
 
     public function customersList(Request $request)
     {
+        abort_unless($request->routeIs('accounting.customers-list')
+            ? $request->user()?->canManageCustomerDebt()
+            : $request->user()?->hasRole(['ceo', 'admin']), 403);
+
         $query = Customer::with(['type', 'addresses', 'assignedTo', 'user', 'lastOrder']);
 
         if ($request->filled('type_id')) {

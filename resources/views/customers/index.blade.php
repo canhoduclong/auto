@@ -167,6 +167,7 @@
                 <input type="hidden" name="assigned_to" value="{{ request('assigned_to') }}">
                 <input type="hidden" name="user_id" value="{{ request('user_id') }}">
                 <input type="hidden" name="ownership_status" value="{{ request('ownership_status') }}">
+                <input type="hidden" name="order_status" value="{{ request('order_status') }}">
                 <input type="hidden" name="per_page" value="{{ request('per_page', 15) }}">
                 <input type="hidden" name="is_employee" value="{{ request('is_employee') }}">
                 <input type="hidden" name="page" value="{{ request('page', 1) }}">
@@ -184,6 +185,7 @@
                 <input type="hidden" name="assigned_to" value="{{ request('assigned_to') }}">
                 <input type="hidden" name="user_id" value="{{ request('user_id') }}">
                 <input type="hidden" name="ownership_status" value="{{ request('ownership_status') }}">
+                <input type="hidden" name="order_status" value="{{ request('order_status') }}">
                 <input type="hidden" name="per_page" value="{{ request('per_page', 15) }}">
                 <input type="hidden" name="is_employee" value="1">
                 <input type="hidden" name="page" value="{{ request('page', 1) }}">
@@ -209,9 +211,11 @@
                 </button>
             </form>
 
-            <a href="{{ route('customers.export') }}" class="btn btn-sm btn-outline-info text-nowrap">
-                <i class="ph ph-download me-1"></i>{{ __('customers.index.export_excel') }}
-            </a>
+            @if($isAdmin || auth()->user()->hasPermission('customers.export'))
+                <a href="#customer-export-selection" class="btn btn-sm btn-outline-info text-nowrap">
+                    <i class="ph ph-download me-1"></i>Danh sách xuất Excel
+                </a>
+            @endif
 
             <a href="{{ route('customers.create') }}" class="btn btn-sm btn-success ms-auto text-nowrap">
                 <i class="ph ph-plus me-1"></i>{{ __('customers.index.add') }}
@@ -269,6 +273,13 @@
                 </div>
                 @endif
                 <div class="col-auto">
+                    <select name="order_status" class="form-select" aria-label="Lọc theo đơn hàng">
+                        <option value="">Tất cả khách theo đơn</option>
+                        <option value="has_orders" @selected(request('order_status') === 'has_orders')>Có đơn</option>
+                        <option value="no_orders" @selected(request('order_status') === 'no_orders')>Chưa có đơn</option>
+                    </select>
+                </div>
+                <div class="col-auto">
                     <select name="per_page" class="form-select" onchange="this.form.submit()">
                         @foreach([10,15,25,50,100] as $pp)
                             <option value="{{ $pp }}" {{ request('per_page',15)==$pp ? 'selected' : '' }}>
@@ -325,14 +336,39 @@
         </form>
         @endif
 
+        @if($isAdmin || auth()->user()->hasPermission('customers.export'))
+            <section id="customer-export-selection" class="border rounded p-3 mx-3 my-3"
+                data-export-key="customer-export-{{ auth()->id() }}"
+                data-export-choices="{{ route('customers.export', request()->only(['q', 'type_id', 'assigned_to', 'user_id', 'ownership_status', 'order_status', 'is_employee']) + ['export_choices' => 1]) }}">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-export-add>Thêm khách đã chọn</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-export-all>Chọn tất cả theo bộ lọc</button>
+                    <details>
+                        <summary class="small" data-export-count aria-live="polite">0 khách trong danh sách xuất</summary>
+                        <ul class="list-group mt-2 overflow-auto" style="max-height:15rem" data-export-list></ul>
+                    </details>
+                    <form method="POST" action="{{ route('customers.export') }}" data-export-form>
+                        @csrf
+                        <input type="hidden" name="selection">
+                        <button type="submit" class="btn btn-sm btn-outline-info" disabled>Xuất Excel</button>
+                    </form>
+                    <button type="button" class="btn btn-sm btn-link" data-export-clear disabled>Bỏ chọn tất cả</button>
+                </div>
+                <div class="small text-muted mt-2" data-export-status role="status">Tích khách trong bảng rồi bấm Thêm khách đã chọn.</div>
+            </section>
+        @endif
+
         <div class="table-responsive">
             <table class="table cust-table mb-0">
                 <thead>
                     <tr>
-                        <th style="width:36px;"><input type="checkbox" id="checkAll" class="row-check"></th>
+                        <th style="width:36px;"><input type="checkbox" id="checkAll" class="row-check" aria-label="Chọn tất cả khách trên trang này"></th>
                         <th style="width:48px;">#</th>
                         <th style="width:120px;">Ưu tiên</th>
                         <th style="min-width:360px;">Khách hàng</th>
+                        <th class="text-end text-nowrap" title="Tổng giá trị đơn đã giao hoặc hoàn tất">Doanh thu</th>
+                        <th style="min-width:160px;" title="Sản phẩm có số lượng đặt cao nhất trong các đơn đã giao hoặc hoàn tất">Sản lượng</th>
+                        <th class="text-nowrap">Đơn gần nhất</th>
                         <th>Mã Code cũ</th>
                         <th class="cust-manage">Phụ trách &amp; hạn giữ</th>
                         @if($isAdmin)
@@ -345,7 +381,7 @@
                 <tbody>
                     @forelse($customers as $customer)
                     <tr>
-                        <td><input type="checkbox" class="row-check" value="{{ $customer->id }}"></td>
+                        <td><input type="checkbox" class="row-check" value="{{ $customer->id }}" data-customer-name="{{ $customer->name }}" aria-label="Chọn {{ $customer->name }}"></td>
                         <td class="text-muted" style="font-size:.78rem;">{{ $customer->id }}</td>
                         <td>
                             <div class="d-flex align-items-center gap-2">
@@ -386,6 +422,17 @@
                             <div class="cust-phone text-nowrap mt-1">{{ $customer->phone ?: '—' }}</div>
                             <div class="cust-email text-truncate" style="max-width:220px;">{{ $customer->email ?: '—' }}</div>
                         </td>
+
+                        <td class="text-end text-nowrap">{{ number_format($customer->sales_revenue ?? 0, 0, ',', '.') }} đ</td>
+                        <td>
+                            @if($product = $topProducts->get($customer->id))
+                                <div class="fw-semibold">{{ $product->name }}</div>
+                                <div class="small text-muted">SL theo đơn {{ number_format($product->ordered_quantity, 0, ',', '.') }}</div>
+                            @else
+                                <span class="text-muted">—</span>
+                            @endif
+                        </td>
+                        <td class="text-nowrap">{{ $customer->latestValidCustomerOrder?->created_at?->format('d/m/Y') ?? '—' }}</td>
 
                         <td>
                             @if($customer->legacy_code)
@@ -443,6 +490,7 @@
                                     <input type="hidden" name="assigned_to"     value="{{ request('assigned_to') }}">
                                     <input type="hidden" name="user_id"         value="{{ request('user_id') }}">
                                     <input type="hidden" name="ownership_status" value="{{ request('ownership_status') }}">
+                                    <input type="hidden" name="order_status" value="{{ request('order_status') }}">
                                     <input type="hidden" name="per_page"        value="{{ request('per_page', 15) }}">
                                     <input type="hidden" name="is_employee"     value="{{ request('is_employee') }}">
                                     <input type="hidden" name="page"            value="{{ request('page', 1) }}">
@@ -481,7 +529,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="{{ $isAdmin ? 9 : 8 }}">
+                        <td colspan="{{ $isAdmin ? 12 : 10 }}">
                             <div class="cust-empty">
                                 <div><i class="ph ph-users"></i></div>
                                 <div style="font-weight:600;">{{ __('customers.index.empty') }}</div>
@@ -643,3 +691,7 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 @endsection
+
+@push('scripts')
+    <script src="{{ asset('js/customer-export-selection.js') }}?v={{ filemtime(public_path('js/customer-export-selection.js')) }}" defer></script>
+@endpush

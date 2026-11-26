@@ -176,9 +176,28 @@ class CustomerController extends Controller
     }
 
     // Export excel
-    public function export()
+    public function export(Request $request)
     {
-        return Excel::download(new CustomerExport, 'customers.xlsx');
+        if ($request->boolean('export_choices') && $request->isMethod('get')) {
+            return response()->json($this->filteredCustomerList($request)->orderBy('name')->get(['id', 'name']))
+                ->header('Cache-Control', 'private, no-store');
+        }
+
+        if ($request->isMethod('post')) {
+            $payload = $request->validate(['selection' => 'required|string|json'])['selection'];
+            $ids = validator(['ids' => json_decode($payload, true)], [
+                'ids' => 'required|array|list|min:1',
+                'ids.*' => 'required|integer|min:1|distinct',
+            ])->validate()['ids'];
+            $customers = $this->visibleCustomerList($request)->whereIntegerInRaw('customers.id', $ids);
+            if (!$customers->exists()) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['selection' => 'Danh sách xuất không có khách hàng bạn được phép xem.']);
+            }
+        } else {
+            $customers = $this->visibleCustomerList($request);
+        }
+
+        return Excel::download(new CustomerExport($customers), 'customers.xlsx');
     }
 
     // Hiển thị form import và kết quả
@@ -261,11 +280,20 @@ class CustomerController extends Controller
     }
     // List + filter + search + paginate
     use AuthorizesRequests;
-    public function index(Request $request)
-    { 
-        $this->authorize('viewAny', Customer::class);
-        $query = Customer::with(['type', 'addresses', 'assignedTo', 'user', 'lastOrder']);
-        $isAdmin = (bool) Auth::user()?->isAdmin();
+    private function visibleCustomerList(Request $request): \Illuminate\Database\Eloquent\Builder
+    {
+        return Customer::query()->when(! $request->user()->isAdmin(), fn ($query) => $query->visibleTo($request->user()));
+    }
+
+    private function filteredCustomerList(Request $request): \Illuminate\Database\Eloquent\Builder
+    {
+        $query = $this->visibleCustomerList($request);
+        if ($request->input('order_status') === 'has_orders') {
+            $query->has('latestValidCustomerOrder');
+        } elseif ($request->input('order_status') === 'no_orders') {
+            $query->doesntHave('latestValidCustomerOrder');
+        }
+        $isAdmin = $request->user()->isAdmin();
 
         // Lọc theo loại
         if ($request->filled('type_id')) {
@@ -300,11 +328,6 @@ class CustomerController extends Controller
             }
         }
 
-        // Sale chỉ xem khách hàng còn thuộc quyền quản lý của mình
-        if (!$isAdmin) {
-            $query->visibleTo(Auth::user());
-            }
-
         // Tìm theo tên / phone / email
         if ($search = $request->input('q')) {
             $query->where(function ($q) use ($search) {
@@ -314,17 +337,42 @@ class CustomerController extends Controller
             });
         }
 
-    $perPage = $request->input('per_page', 15);
-    if (Schema::hasColumn('customers', 'is_pinned')) {
-        $query->orderByDesc('is_pinned');
+        return $query;
     }
-    if (Schema::hasColumn('customers', 'sort_order')) {
-        $query->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
-            ->orderBy('sort_order');
-    }
-    $customers = $query->orderBy('name')
-               ->paginate($perPage)
-               ->appends($request->query()); // giữ query string khi phân trang
+
+    public function index(Request $request)
+    {
+        $this->authorize('viewAny', Customer::class);
+        $salesStatuses = [Order::STATUS_DELIVERED, Order::STATUS_COMPLETED];
+        $query = $this->filteredCustomerList($request)->with(['type', 'addresses', 'assignedTo', 'user', 'lastOrder', 'latestValidCustomerOrder'])
+            ->withSum(['orders as sales_revenue' => fn ($orders) => $orders->whereNull('trash_at')
+                ->whereIn('status', $salesStatuses)], 'total');
+        $isAdmin = $request->user()->isAdmin();
+        $perPage = $request->input('per_page', 15);
+        if (Schema::hasColumn('customers', 'is_pinned')) {
+            $query->orderByDesc('is_pinned');
+        }
+        if (Schema::hasColumn('customers', 'sort_order')) {
+            $query->orderByRaw('CASE WHEN sort_order IS NULL OR sort_order = 0 THEN 1 ELSE 0 END')
+                ->orderBy('sort_order');
+        }
+        $customers = $query->orderBy('name')
+                   ->paginate($perPage)
+                   ->appends($request->query()); // giữ query string khi phân trang
+
+        $topProducts = DB::table('order_items as items')
+            ->join('orders', 'orders.id', '=', 'items.order_id')
+            ->leftJoin('product_variants as variants', 'variants.id', '=', 'items.product_variant_id')
+            ->join('products', fn ($join) => $join->on('products.id', '=', DB::raw('COALESCE(items.product_id, variants.product_id)')))
+            ->whereIn('orders.customer_id', $customers->getCollection()->modelKeys())
+            ->whereNull('orders.trash_at')
+            ->whereIn('orders.status', $salesStatuses)
+            ->where('items.quantity', '>', 0)
+            ->select('orders.customer_id', 'products.id', 'products.name')
+            ->selectRaw('SUM(items.quantity) as ordered_quantity')
+            ->groupBy('orders.customer_id', 'products.id', 'products.name')
+            ->orderByDesc('ordered_quantity')->orderBy('products.id')
+            ->get()->unique('customer_id')->keyBy('customer_id');
 
         // Dùng để hiển thị dropdown lọc
         $types = CustomerType::orderByDesc('priority_level')
@@ -344,7 +392,7 @@ class CustomerController extends Controller
 
         $customerFreeDays = Customer::freeCustomerDays();
 
-        return view('customers.index', compact('customers', 'types', 'users', 'creatorUsers', 'customerFreeDays'));
+        return view('customers.index', compact('customers', 'types', 'users', 'creatorUsers', 'customerFreeDays', 'topProducts'));
     }
 
     public function updateSortSettings(Request $request, Customer $customer)
@@ -968,6 +1016,59 @@ class CustomerController extends Controller
         return redirect()->route('customers.index')->with('success', __('customers.messages.created'));
     }
 
+    public function editAccountingProfile(Request $request, Customer $customer)
+    {
+        abort_unless($request->user()->canManageCustomerDebt(), 403);
+        $address = $customer->addresses()->where('is_default', true)->first();
+        $provinces = Province::query()->orderBy('name')->get(['id', 'name']);
+        $provinceId = $request->old('province_id', $address?->province_id);
+        $wards = Ward::query()->whereNotNull('province_id')->orderBy('name')->get(['id', 'name', 'province_id'])->groupBy('province_id');
+
+        return view('accounting.customer-profile-edit', compact('customer', 'address', 'provinces', 'wards', 'provinceId'));
+    }
+
+    public function updateAccountingProfile(Request $request, Customer $customer)
+    {
+        abort_unless($request->user()->canManageCustomerDebt(), 403);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:30', Rule::unique('customers')->ignore($customer)],
+            'email' => ['nullable', 'email', 'max:255', Rule::unique('customers')->ignore($customer)],
+            'address' => ['present', 'nullable', 'string', 'max:1000'],
+            'province_id' => ['nullable', 'integer', 'exists:provinces,id', 'required_with:ward_id'],
+            'ward_id' => ['nullable', 'integer', Rule::exists('wards', 'id')->where('province_id', $request->input('province_id'))],
+            'company_name' => ['nullable', 'string', 'max:255'],
+            'tax_code' => ['nullable', 'string', 'max:50'],
+            'company_address' => ['nullable', 'string', 'max:255'],
+            'company_email' => ['nullable', 'email', 'max:255'],
+        ]);
+        if (Customer::query()->where('name_normalized', Customer::normalizeName($data['name']))->whereKeyNot($customer->id)->exists()) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['name' => 'Tên khách hàng đã tồn tại.']);
+        }
+        $province = Province::find($data['province_id'] ?? null);
+        $ward = Ward::find($data['ward_id'] ?? null);
+        unset($data['province_id'], $data['ward_id']);
+
+        DB::transaction(function () use ($customer, $data, $province, $ward) {
+            $customer = Customer::query()->lockForUpdate()->findOrFail($customer->id);
+            $customer->update($data);
+            $address = $customer->addresses()->where('is_default', true)->first();
+            if ($data['address'] || $province || $address) {
+                $locationChanged = (int) $address?->province_id !== (int) $province?->id
+                    || (int) $address?->ward_id !== (int) $ward?->id;
+                $location = $locationChanged ? [
+                    'city' => $province?->name,
+                    'ward' => $ward?->name,
+                    'province_id' => $province?->id,
+                    'ward_id' => $ward?->id,
+                ] : [];
+                $customer->addresses()->updateOrCreate(['is_default' => true], ['note' => $data['address']] + $location);
+            }
+        });
+
+        return redirect()->route('accounting.customers-list')->with('success', 'Đã cập nhật thông tin khách hàng.');
+    }
+
     // Form edit
     public function edit(Customer $customer)
     {
@@ -1133,6 +1234,7 @@ class CustomerController extends Controller
             'user_id' => $request->input('user_id'),
             'per_page' => $request->input('per_page'),
             'ownership_status' => $request->input('ownership_status'),
+            'order_status' => $request->input('order_status'),
             'is_employee' => $request->input('is_employee'),
             'page' => $request->input('page'),
         ])
@@ -1169,6 +1271,7 @@ class CustomerController extends Controller
             'assigned_to',
             'user_id',
             'ownership_status',
+            'order_status',
             'per_page',
             'is_employee',
             'page',
@@ -1202,6 +1305,7 @@ class CustomerController extends Controller
             'assigned_to',
             'user_id',
             'ownership_status',
+            'order_status',
             'per_page',
             'is_employee',
             'page',

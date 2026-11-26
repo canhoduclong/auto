@@ -1,20 +1,22 @@
 <?php
 namespace App\Exports;
 
-use App\Models\Customer;
+use Illuminate\Database\Eloquent\Builder;
 use Maatwebsite\Excel\Concerns\FromCollection;
 use Maatwebsite\Excel\Concerns\WithHeadings;
 
 class CustomerExport implements FromCollection, WithHeadings
 {
+    public function __construct(private Builder $customers) {}
+
     public function collection()
     {
-        return Customer::leftjoin('customer_addresses', function($join) {
-            $join->on('customers.id', '=', 'customer_addresses.customer_id')
-                 ->where('customer_addresses.is_default', '=', 1);
-        })
-        ->select('customers.id','customers.name','customers.phone','customers.email','customers.website','customers.gender','customers.dob','customers.customer_type_id','customers.note','customers.size','customers.production', 'customer_addresses.note as address')
-        ->get();
+        return (clone $this->customers)
+            ->select('customers.id', 'customers.name', 'customers.phone', 'customers.email', 'customers.website',
+                'customers.gender', 'customers.dob', 'customers.customer_type_id', 'customers.note', 'customers.size', 'customers.production')
+            ->addSelect(['address' => \Illuminate\Support\Facades\DB::table('customer_addresses')
+                ->select('note')->whereColumn('customer_id', 'customers.id')->where('is_default', true)->orderBy('id')->limit(1)])
+            ->orderBy('customers.name')->orderBy('customers.id')->get();
     }
     public function headings(): array
     {

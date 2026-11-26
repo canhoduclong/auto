@@ -1,4 +1,6 @@
-@extends('layouts.ceo')
+@extends(request()->routeIs('accounting.customers-list') ? 'layouts.accounting' : 'layouts.ceo')
+
+@php($listRoute = request()->routeIs('accounting.customers-list', 'director.customers-list') ? request()->route()->getName() : 'ceo.customers-list')
 
 @section('title', 'Danh sách khách hàng')
 @section('subtitle', 'Danh sách khách hàng theo phong cách quản trị')
@@ -116,7 +118,7 @@
 
     <div class="cust-panel">
         <div class="cust-filter-bar">
-            <form class="row g-2 align-items-center" method="GET" action="{{ route('ceo.customers-list') }}">
+            <form class="row g-2 align-items-center" method="GET" action="{{ route($listRoute) }}">
                 @if(request()->filled('area'))<input type="hidden" name="area" value="{{ request('area') }}">@endif
                 @if(request()->filled('ward'))<input type="hidden" name="ward" value="{{ request('ward') }}">@endif
                 <div class="col-auto">
@@ -185,8 +187,8 @@
                 </div>
                 <div class="col-auto d-flex gap-2">
                     <button class="btn btn-primary">Lọc</button>
-                    <a href="{{ route('ceo.customers-list') }}" class="btn btn-outline-secondary">Reset</a>
-                    <a href="{{ route('ceo.customers-list', array_merge(request()->except(['page', 'is_employee']), ['is_employee' => 1])) }}" class="btn {{ request()->boolean('is_employee') ? 'btn-info' : 'btn-outline-info' }}">Khách nhân viên</a>
+                    <a href="{{ route($listRoute) }}" class="btn btn-outline-secondary">Reset</a>
+                    <a href="{{ route($listRoute, array_merge(request()->except(['page', 'is_employee']), ['is_employee' => 1])) }}" class="btn {{ request()->boolean('is_employee') ? 'btn-info' : 'btn-outline-info' }}">Khách nhân viên</a>
                 </div>
             </form>
         </div>
@@ -255,9 +257,21 @@
                                     <div class="small text-muted">Ngày tạo: {{ optional($customer->created_at)?->format('d/m/Y H:i') ?? '-' }}</div>
                                 </td>
                                 <td>
-                                    <a href="{{ route('ceo.customer-revenue-report', ['customer' => $customer->id]) }}" class="btn btn-sm btn-outline-primary">
-                                        <i class="bi bi-bar-chart"></i> Báo cáo
-                                    </a>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        @if($listRoute === 'accounting.customers-list')
+                                            <a href="{{ route('accounting.customer-debts.show', $customer) }}" class="btn btn-sm btn-outline-primary">Công nợ</a>
+                                        @else
+                                            <a href="{{ route('ceo.customer-revenue-report', ['customer' => $customer->id]) }}" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-bar-chart"></i> Báo cáo
+                                            </a>
+                                        @endif
+                                        @if(auth()->user()->canManageCustomerDebt())
+                                            <a href="{{ route('accounting.customers.edit-profile', $customer) }}" class="btn btn-sm btn-outline-secondary"
+                                                title="Sửa thông tin khách hàng" aria-label="Sửa thông tin {{ $customer->name }}">
+                                                <i class="bi bi-pencil-square" aria-hidden="true"></i>
+                                            </a>
+                                        @endif
+                                    </div>
                                 </td>
                             </tr>
                             @empty

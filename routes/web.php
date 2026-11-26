@@ -274,6 +274,9 @@ Route::middleware(['auth', 'assigned'])->group(function () {
 });
 
     Route::prefix('accounting')->name('accounting.')->middleware('role:account,accountant,accounting,admin')->group(function () {
+        Route::get('/customers-list', [CeoDashboardController::class, 'customersList'])->name('customers-list');
+        Route::get('/customers/{customer}/edit-profile', [CustomerController::class, 'editAccountingProfile'])->name('customers.edit-profile');
+        Route::patch('/customers/{customer}/profile', [CustomerController::class, 'updateAccountingProfile'])->name('customers.update-profile');
         require __DIR__.'/company-assets.php';
         Route::get('/tax-settings/products', [\App\Http\Controllers\ProductTaxSettingController::class, 'index'])->name('tax-settings.products');
         Route::patch('/tax-settings/products/{product}', [\App\Http\Controllers\ProductTaxSettingController::class, 'update'])->name('tax-settings.products.update');
@@ -1069,7 +1072,7 @@ Route::middleware(['auth', 'assigned'])->group(function () {
     Route::resource('teams', TeamController::class)->middleware('permission');
 
     // Ví dụ: khi sau này bạn thêm Customer
-    Route::get('customers/export', [CustomerController::class, 'export'])->name('customers.export')->middleware('permission');
+    Route::match(['GET', 'POST'], 'customers/export', [CustomerController::class, 'export'])->name('customers.export')->middleware('permission');
     Route::get('customers/import-google-sheet', [\App\Http\Controllers\GoogleSheetCustomerImportController::class, 'index'])->name('customers.sheet-import.index');
     Route::post('customers/import-google-sheet/load', [\App\Http\Controllers\GoogleSheetCustomerImportController::class, 'load'])->middleware('throttle:6,1')->name('customers.sheet-import.load');
     Route::get('customers/import-google-sheet/customers', [\App\Http\Controllers\GoogleSheetCustomerImportController::class, 'customers'])->name('customers.sheet-import.customers');
