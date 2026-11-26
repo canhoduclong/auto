@@ -1056,6 +1056,8 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame(0, $list(['q' => 'Khách khác'])->total());
         $print = $controller->printVoucher($this->request(['system_customer' => 1], 'warehouse'), $newest['id'], $sheets, $vouchers);
         self::assertSame('DN-03', $print->original->getData()['row']['number']);
+        self::assertStringContainsString('Tổng tiền', $print->getContent());
+        self::assertStringNotContainsString('Còn phải thu', $print->getContent());
         $receiptRequest = $this->request(['system_customer' => 1], 'warehouse');
         $receiptRequest->setRouteResolver(fn () => app('router')->getRoutes()->getByName('customer-debt.vouchers.print-receipt'));
         $receipt = $controller->printVoucher($receiptRequest, $newest['id'], $sheets, $vouchers);
@@ -3337,6 +3339,27 @@ class CustomerDebtMonitorTest extends TestCase
 
         self::assertSame(1, $group['customer_id']);
         self::assertSame('code', $group['matched_by']);
+    }
+
+    public function test_payment_without_code_uses_name_inferred_code_despite_conflicting_source_phones(): void
+    {
+        DB::table('customers')->insert([
+            'id' => 3,
+            'name' => 'A Hùng Sóc trăng',
+            'customer_code' => '2565',
+            'phone' => '0901234567',
+        ]);
+        $name = 'A Hùng Sóc trăng';
+        $sale = array_replace($this->entry('2565', $name), ['amount' => 5942000, 'phone' => '0901234567']);
+        $otherPhoneSale = array_replace($this->entry('2565', $name, 2), ['amount' => 0, 'phone' => '0907654321']);
+        $payment = array_replace($this->entry('', $name, 3), ['type' => 'payment', 'amount' => 6027000]);
+        $context = (new CustomerDebtMonitorController)->debtContext(
+            $this->request([], 'admin'),
+            $this->service([$sale, $otherPhoneSale, $payment])
+        );
+
+        self::assertSame(6027000, $context['customerDebts'][3]['payments']);
+        self::assertSame(-85000, $context['customerDebts'][3]['balance']);
     }
 
     public function test_sales_cannot_open_another_customers_debt_by_key(): void

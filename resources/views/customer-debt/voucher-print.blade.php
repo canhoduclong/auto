@@ -16,11 +16,11 @@
     $printedAmount = $receipt && !$collectionReceipt ? $row['paid'] : $row['remaining'];
     $visibleAmount = fn ($amount) => (float) $amount !== 0.0;
     $summaryLabels = [
-        'total' => $collectionReceipt ? 'Tổng cộng' : 'Tổng phải thu',
+        'total' => $collectionReceipt ? 'Tổng cộng' : ($receipt ? 'Tổng phải thu' : 'Tổng tiền'),
         'paid' => 'Đã thu theo phiếu',
     ];
-    if (!$collectionReceipt) {
-        $summaryLabels['remaining'] = $receipt ? 'Số tiền Thu' : 'Còn phải thu';
+    if (!$collectionReceipt && $receipt) {
+        $summaryLabels['remaining'] = 'Số tiền Thu';
     }
     $summaryLabels = array_filter($summaryLabels, fn ($key) => $visibleAmount($row[$key]), ARRAY_FILTER_USE_KEY);
 @endphp

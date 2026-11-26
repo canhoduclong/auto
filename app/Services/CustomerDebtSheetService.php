@@ -510,12 +510,12 @@ class CustomerDebtSheetService
     /** Prefer customer codes; use names only when the source has no code. */
     public function matchingCustomers(array $source, \Illuminate\Support\Collection $customers): \Illuminate\Support\Collection
     {
-        if (! empty($source['ambiguous'])) {
-            return collect();
-        }
         $name = $this->customerName($source['name'] ?? '');
         $code = mb_strtoupper(trim($source['code'] ?? ''));
         $phone = $this->customerPhone($source['phone'] ?? '');
+        if (! empty($source['ambiguous']) && $code === '') {
+            return collect();
+        }
         $byCode = $code === '' ? collect() : $customers->filter(
             fn ($customer) => $code === mb_strtoupper(trim((string) $customer->customer_code))
         );
