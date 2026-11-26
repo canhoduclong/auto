@@ -1,7 +1,5 @@
 @extends(request()->routeIs('accounting.customers-list') ? 'layouts.accounting' : 'layouts.ceo')
 
-@php($listRoute = request()->routeIs('accounting.customers-list', 'director.customers-list') ? request()->route()->getName() : 'ceo.customers-list')
-
 @section('title', 'Danh sách khách hàng')
 @section('subtitle', 'Danh sách khách hàng theo phong cách quản trị')
 
@@ -92,6 +90,9 @@
 
 @section('content')
 @php
+    $listRoute = request()->routeIs('accounting.customers-list', 'director.customers-list')
+        ? request()->route()->getName()
+        : 'ceo.customers-list';
     $totalCount = $customers->total();
     $freeCount  = $customers->getCollection()->filter(fn($c) => $c->isFree())->count();
 @endphp
@@ -101,7 +102,6 @@
         <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
             <div>
                 <h4 class="fw-bold mb-1" style="letter-spacing:-.01em;">Danh sách khách hàng</h4>
-                <div style="font-size:.85rem;color:rgba(255,255,255,.7);">Copy layout quản trị khách hàng từ Admin cho khu vực CEO</div>
             </div>
             <div class="d-flex gap-3 flex-wrap">
                 <div class="cust-stat">
