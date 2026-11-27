@@ -1768,6 +1768,49 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame('2026-11-13', $data['period']['to']);
     }
 
+    public function test_sheet_opening_ledger_reuses_saved_data_and_splits_revenue_at_cutoff(): void
+    {
+        $disk = \Illuminate\Support\Facades\Storage::fake('local');
+        $sheets = new class extends CustomerDebtSheetService
+        {
+            public function fetch(): array
+            {
+                $bank = [['Ngày', 'Khách hàng', 'Tiền thu']];
+                return [
+                    [['Ngày', 'Mã KH', 'Khách hàng', 'Tổng tiền'],
+                        ['14/09/2026', 'CRM01', 'Chị Bình', '1.000'],
+                        ['15/09/2026', 'CRM01', 'Chị Bình', '9.000']],
+                    [['Ngày', 'Mã KH', 'Khách hàng', 'Tiền thu'], ['16/09/2026', 'CRM01', 'Chị Bình', '300']],
+                    $bank, $bank, $bank, $bank,
+                ];
+            }
+        };
+        $ledger = new \App\Services\CustomerSheetOpeningLedger($sheets);
+        self::assertFalse($ledger->refresh(1)['unchanged']);
+        self::assertTrue($ledger->refresh(1)['unchanged']);
+        $disk->assertMissing('customer-debt/snapshot.json');
+        $key = array_key_first($ledger->groups($ledger->snapshot()));
+        $ledger->link($key, 1);
+
+        $system = new class extends \App\Services\SystemCustomerDebtReportService
+        {
+            public function confirmedOrders(array $customerIds): \Illuminate\Support\Collection
+            {
+                $order = ['id' => 5, 'customer_id' => 1, 'code' => 'BILL-5', 'recognized_revenue' => 500];
+                return collect([(object) ($order + ['delivery_date' => '2026-09-15']),
+                    (object) ($order + ['delivery_date' => '2026-09-14'])]);
+            }
+        };
+        $controller = new \App\Http\Controllers\CustomerSheetOpeningController;
+        $view = $controller->index($this->request(['tab' => 'customers'], 'admin'), $ledger, $system)->getData();
+        self::assertSame([1 => 1000], $view['opening']);
+        self::assertSame([1 => 500], $view['systemSales']);
+        self::assertSame([1 => 300], $view['paid']);
+        self::assertSame(0, $view['pending']->total());
+        $view = $controller->index($this->request(['tab' => 'purchases'], 'admin'), $ledger, $system)->getData();
+        self::assertSame([500, 1000], $view['rows']->getCollection()->pluck('amount')->all());
+    }
+
     public function test_purchase_review_counts_only_accepted_rows_in_customer_debt(): void
     {
         $disk = \Illuminate\Support\Facades\Storage::fake('local');

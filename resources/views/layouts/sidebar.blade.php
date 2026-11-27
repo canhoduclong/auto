@@ -139,6 +139,7 @@
                                 @if(auth()->user()->hasRole(['admin','account','accountant','accounting','director','ceo']))
                                     <li class="nav-item"><a href="{{ route('customer-debt.suppliers.index') }}" class="nav-link{{ request()->routeIs('customer-debt.suppliers.*') ? ' active' : '' }}">Nhà cung cấp</a></li>
                                 @endif
+                                @if(auth()->user()->canManageCustomerDebt())<li class="nav-item"><a href="{{ route('customer-debt.sheet-opening.index') }}" class="nav-link{{ request()->routeIs('customer-debt.sheet-opening.*') ? ' active' : '' }}">Đồng bộ Google Sheet</a></li>@endif
                                 @if(auth()->user()->hasRole(['admin','account','accountant','accounting','director','ceo']))<li class="nav-item"><a href="{{ route('customer-debt.payments') }}" class="nav-link{{ request()->routeIs('customer-debt.payments*') ? ' active' : '' }}">Thanh toán</a></li>@endif
                             </ul>
                         </li>

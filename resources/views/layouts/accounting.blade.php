@@ -464,6 +464,7 @@ body.acc-sidebar-collapsed .acc-task-group>summary{justify-content:center;paddin
             <a href="{{ route('customer-debt.index', ['tab' => 'all']) }}" class="{{ request()->routeIs('customer-debt.index') ? 'active' : '' }}"><i class="bi bi-wallet2"></i> Đối chiếu công nợ</a>
             <a href="{{ route('customer-debt.report') }}" class="{{ request()->routeIs('customer-debt.report') ? 'active' : '' }}"><i class="bi bi-bar-chart"></i> Báo cáo công nợ</a>
             <a href="{{ route('customer-debt.negotiation') }}" class="{{ request()->routeIs('customer-debt.negotiation') ? 'active' : '' }}"><i class="bi bi-sliders"></i> Đàm phán công nợ</a>
+            <a href="{{ route('customer-debt.sheet-opening.index') }}" class="{{ request()->routeIs('customer-debt.sheet-opening.*') ? 'active' : '' }}"><i class="bi bi-arrow-repeat"></i> Đồng bộ Google Sheet</a>
             <a href="{{ route('customer-debt.payments') }}" class="{{ request()->routeIs('customer-debt.payments*') ? 'active' : '' }}"><i class="bi bi-cash-coin"></i> Thanh toán</a>
             <a href="{{ route('accounting.customers-list') }}" class="{{ request()->routeIs('accounting.customers-list', 'accounting.customers.edit-profile') ? 'active' : '' }}"><i class="bi bi-person-lines-fill"></i> Danh sách khách hàng</a>
             <a href="{{ route('accounting.customer-debts') }}" class="{{ request()->routeIs('accounting.customer-debts*') ? 'active' : '' }}">

@@ -87,29 +87,7 @@ class CustomerDebtSheetService
 
     public function save(array $sales, array $payments, ?int $userId, string $source, ?array $bankPayments = null, array $additionalPayments = [], ?array $cashflowLedgers = null): array
     {
-        // Validate every supplied tab before atomically replacing the complete snapshot.
-        $issues = [];
-        $saleEntries = $this->parse($sales, 'sale', $issues);
-        $entries = $saleEntries;
-        foreach ($saleEntries as $sale) {
-            if (($sale['inline_payment'] ?? 0) != 0) {
-                $entries[] = array_replace($sale, ['type' => 'payment', 'amount' => $sale['inline_payment'], 'gift' => 0, 'gift_note' => '', 'note' => 'Thanh toán tại bán hàng'.($sale['note'] !== '' ? ' · '.$sale['note'] : '')]);
-            }
-        }
-        $entries = array_merge($entries, $this->parse($payments, 'payment', $issues, 'Dongtienhoatdong'));
-        $paymentTabs = ['nhatkybanhang', 'Dongtienhoatdong'];
-        $bankTabs = $bankPayments === null ? [] : ['TKCNMBBDUE' => $bankPayments];
-        foreach ($additionalPayments as $tab => $values) {
-            if (! in_array($tab, array_slice(self::PAYMENT_TABS, 2), true) || ! is_array($values)) {
-                throw new RuntimeException('Tab thanh toán không hợp lệ: '.$tab);
-            }
-            $bankTabs[$tab] = $values;
-        }
-        foreach ($bankTabs as $tab => $values) {
-            $entries = array_merge($entries, $this->parse($values, 'payment', $issues, $tab));
-            $paymentTabs[] = $tab;
-        }
-        $data = ['entries' => $entries, 'gift_note_count' => count(array_filter($entries, fn ($entry) => ($entry['gift_note'] ?? '') !== '')), 'issues' => $issues, 'spreadsheet_id' => config('services.google_sheets.debt_spreadsheet_id'), 'loaded_at' => now()->toIso8601String(), 'loaded_by' => $userId, 'source' => $source, 'payment_tabs' => $paymentTabs];
+        $data = $this->parseSnapshot($sales, $payments, $userId, $source, $bankPayments, $additionalPayments);
 
         return Cache::lock('customer-debt-load', 60)->block(5, function () use ($data, $cashflowLedgers) {
             $disk = Storage::disk('local');
@@ -164,6 +142,33 @@ class CustomerDebtSheetService
 
             return $tracked['batch']['summary'];
         });
+    }
+
+    public function parseSnapshot(array $sales, array $payments, ?int $userId, string $source, ?array $bankPayments = null, array $additionalPayments = []): array
+    {
+        // Validate every supplied tab before atomically replacing the complete snapshot.
+        $issues = [];
+        $saleEntries = $this->parse($sales, 'sale', $issues);
+        $entries = $saleEntries;
+        foreach ($saleEntries as $sale) {
+            if (($sale['inline_payment'] ?? 0) != 0) {
+                $entries[] = array_replace($sale, ['type' => 'payment', 'amount' => $sale['inline_payment'], 'gift' => 0, 'gift_note' => '', 'note' => 'Thanh toán tại bán hàng'.($sale['note'] !== '' ? ' · '.$sale['note'] : '')]);
+            }
+        }
+        $entries = array_merge($entries, $this->parse($payments, 'payment', $issues, 'Dongtienhoatdong'));
+        $paymentTabs = ['nhatkybanhang', 'Dongtienhoatdong'];
+        $bankTabs = $bankPayments === null ? [] : ['TKCNMBBDUE' => $bankPayments];
+        foreach ($additionalPayments as $tab => $values) {
+            if (! in_array($tab, array_slice(self::PAYMENT_TABS, 2), true) || ! is_array($values)) {
+                throw new RuntimeException('Tab thanh toán không hợp lệ: '.$tab);
+            }
+            $bankTabs[$tab] = $values;
+        }
+        foreach ($bankTabs as $tab => $values) {
+            $entries = array_merge($entries, $this->parse($values, 'payment', $issues, $tab));
+            $paymentTabs[] = $tab;
+        }
+        return ['entries' => $entries, 'gift_note_count' => count(array_filter($entries, fn ($entry) => ($entry['gift_note'] ?? '') !== '')), 'issues' => $issues, 'spreadsheet_id' => config('services.google_sheets.debt_spreadsheet_id'), 'loaded_at' => now()->toIso8601String(), 'loaded_by' => $userId, 'source' => $source, 'payment_tabs' => $paymentTabs];
     }
 
     /** Positional tabs from fetch/workbook: sales, then PAYMENT_TABS in order. */

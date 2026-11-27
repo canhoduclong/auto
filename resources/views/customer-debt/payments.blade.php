@@ -25,6 +25,21 @@
         <div class="debt-filter-field"><label class="form-label" for="payment-recent">Ngày thanh toán</label><select id="payment-recent" name="recent" class="form-select"><option value="all">Tất cả ngày</option><option value="today" @selected(request('recent')==='today')>Mới thanh toán hôm nay</option></select></div>
         <div class="debt-filter-actions"><button class="btn btn-primary">Lọc</button><a class="btn btn-light" href="{{ route('customer-debt.payments',$batch?['batch'=>$batch['summary']['id']]:[]) }}">Xóa lọc</a></div>
     </form>
+    <nav class="d-flex flex-wrap align-items-center gap-2 mb-2" aria-label="Lọc nhanh theo ngày thanh toán">
+        @php($today = now()->startOfDay())
+        @foreach(range(0, 4) as $daysAgo)
+            @php
+                $day = $today->copy()->subDays($daysAgo);
+                $date = $day->toDateString();
+                $activeDay = request('from') === $date && request('to') === $date && request('recent', 'all') !== 'today';
+            @endphp
+            <a class="btn btn-sm {{ $activeDay ? 'btn-primary' : 'btn-outline-primary' }}"
+                href="{{ request()->fullUrlWithQuery(['from' => $date, 'to' => $date, 'recent' => null, 'page' => null]) }}"
+                @if($activeDay) aria-current="true" @endif>
+                {{ $daysAgo === 0 ? 'Hôm nay' : $day->format('d/m/Y') }}
+            </a>
+        @endforeach
+    </nav>
     @if($customerFilter)<div class="small mb-2">Đang lọc khách: <strong>{{ $customerFilter }}</strong> <a href="{{ request()->fullUrlWithQuery(['customer_id'=>null,'customer_source_key'=>null,'page'=>1]) }}">Bỏ lọc khách</a></div>@endif
     @if(request('unidentified')==='1')<div class="small mb-2">Chỉ các khoản chưa xác định được khách hàng. <a href="{{ request()->fullUrlWithQuery(['unidentified'=>null,'page'=>1]) }}">Bỏ lọc</a></div>@endif
     <div class="payment-summary"><span><strong>{{ number_format($summary['count'],0,',','.') }}</strong> khoản</span><span>{{ $batch?'Tiền thu còn hiệu lực trong danh sách':'Tổng tiền thu' }} <strong>{{ number_format($summary['amount'],0,',','.') }} đ</strong></span><span>Tặng / giảm trừ <strong>{{ number_format($summary['gifts'],0,',','.') }} đ</strong></span><span>Thu hôm nay <strong>{{ number_format($summary['today'],0,',','.') }} đ</strong></span>@if($summary['unidentified_count']>0)<a class="text-warning" href="{{ request()->fullUrlWithQuery(['unidentified'=>'1','page'=>1]) }}">Chưa xác định khách: {{ number_format($summary['unidentified'],0,',','.') }} đ</a>@endif</div>

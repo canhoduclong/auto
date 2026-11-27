@@ -1456,6 +1456,11 @@ Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,mana
         Route::get('/{supplier}', [\App\Http\Controllers\SupplierSheetDebtController::class, 'show'])->where('supplier', '[a-f0-9]{64}')->name('show');
     });
     Route::get('/customer-debt/negotiation', [\App\Http\Controllers\CustomerDebtNegotiationController::class, 'index'])->name('customer-debt.negotiation');
+    Route::middleware('role:admin,account,accountant,accounting')->prefix('customer-debt/google-sheet')->name('customer-debt.sheet-opening.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\CustomerSheetOpeningController::class, 'index'])->name('index');
+        Route::post('/refresh', [\App\Http\Controllers\CustomerSheetOpeningController::class, 'refresh'])->middleware('throttle:6,1')->name('refresh');
+        Route::post('/link', [\App\Http\Controllers\CustomerSheetOpeningController::class, 'link'])->name('link');
+    });
     Route::get('/customer-debt/payments', [\App\Http\Controllers\CustomerPaymentController::class, 'index'])->name('customer-debt.payments');
     Route::post('/customer-debt/payments/refresh', [\App\Http\Controllers\CustomerPaymentController::class, 'refresh'])->middleware('throttle:6,1')->name('customer-debt.payments.refresh');
     Route::get('/customer-debt/payments/updates', [\App\Http\Controllers\CustomerPaymentController::class, 'updates'])->name('customer-debt.payments.updates');

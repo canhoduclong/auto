@@ -9,6 +9,13 @@ use Illuminate\Support\Facades\DB;
 
 class SystemCustomerDebtReportService
 {
+    public function confirmedOrders(array $customerIds): Collection
+    {
+        // Only confirmed reconciliation creates a system receivable, matching the accounting workflow.
+        return DB::table('orders as o')->join('accounting_reconciliations as r', 'r.order_id', '=', 'o.id')->where('r.status', 'confirmed')->whereNotIn('o.status', ['draft', 'cancelled', 'rejected'])->whereIn('o.customer_id', $customerIds)->orderBy('r.id')
+            ->get(['o.id', 'o.customer_id', 'o.code', 'o.created_at', 'o.delivery_date', 'o.amount_paid', 'o.collected_amount', 'r.recognized_revenue', 'r.paid_amount', 'r.confirmed_at'])->keyBy('id');
+    }
+
     public function rows(): Collection
     {
         $customers = Customer::query()->with(['currentOwner:id,name,short_name', 'assignedTo:id,name,short_name'])->get();
@@ -25,9 +32,7 @@ class SystemCustomerDebtReportService
             $row['policy'] = $policyService->effective($row, $policies);
             $rows[$customer->id] = $row;
         }
-        // Only confirmed reconciliation creates a system receivable, matching the accounting workflow.
-        $orders = DB::table('orders as o')->join('accounting_reconciliations as r', 'r.order_id', '=', 'o.id')->where('r.status', 'confirmed')->whereNotIn('o.status', ['draft', 'cancelled', 'rejected'])->whereIn('o.customer_id', array_keys($rows))->orderBy('r.id')
-            ->get(['o.id', 'o.customer_id', 'o.code', 'o.created_at', 'o.delivery_date', 'o.amount_paid', 'o.collected_amount', 'r.recognized_revenue', 'r.paid_amount', 'r.confirmed_at'])->keyBy('id');
+        $orders = $this->confirmedOrders(array_keys($rows));
         $transactions = DB::table('transactions as t')->leftJoin('orders as o', 'o.id', '=', 't.order_id')
             ->where(fn ($q) => $q->where('t.status', 'approved')->orWhereNull('t.status'))
             ->whereIn('t.type', ['payment', 'refund', 'customer_opening_debt', 'customer_debt_adjustment'])
