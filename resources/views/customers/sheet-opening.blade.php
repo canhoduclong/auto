@@ -80,20 +80,19 @@
                                     <tr>
                                         <td>{{ $source['name'] }} @if($source['code'])<small class="text-muted d-block">{{ $source['code'] }}</small>@endif</td>
                                         <td>
-                                            <form method="POST" action="{{ route('customer-debt.sheet-opening.link') }}" class="d-flex flex-wrap gap-1">
-                                                @csrf
-                                                <input type="hidden" name="source_key" value="{{ $source['key'] }}">
-                                                <select name="customer_id" class="form-select form-select-sm" aria-label="Khách hệ thống để ghép với {{ $source['name'] }}" required>
-                                                    <option value="">Chọn khách hệ thống</option>
-                                                    @foreach($customers as $target)
-                                                        <option value="{{ $target->id }}">{{ $target->name }} · {{ $target->customer_code ?: ($target->phone ?: '#'.$target->id) }}</option>
-                                                    @endforeach
-                                                </select>
-                                                <button class="btn btn-sm btn-outline-primary" name="action" value="link">Ghép khách</button>
+                                            <div class="d-flex flex-wrap gap-1">
+                                                <button type="button" class="btn btn-sm btn-outline-primary" data-open-customer-match
+                                                    data-source-key="{{ $source['key'] }}" data-source-name="{{ $source['name'] }}">
+                                                    Ghép khách
+                                                </button>
                                                 @can('create', \App\Models\Customer::class)
-                                                    <button class="btn btn-sm btn-outline-secondary" name="action" value="create" formnovalidate>Tạo khách mới</button>
+                                                    <form method="POST" action="{{ route('customer-debt.sheet-opening.link') }}">
+                                                        @csrf
+                                                        <input type="hidden" name="source_key" value="{{ $source['key'] }}">
+                                                        <button class="btn btn-sm btn-outline-secondary" name="action" value="create">Tạo khách mới</button>
+                                                    </form>
                                                 @endcan
-                                            </form>
+                                            </div>
                                         </td>
                                     </tr>
                                 @empty
@@ -106,6 +105,40 @@
                 </div>
             </section>
         </div>
+        <dialog id="sheet-customer-match" class="border rounded-3 p-3 shadow" style="width: min(42rem, 92vw)" aria-labelledby="sheet-customer-match-title">
+            <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
+                <h2 id="sheet-customer-match-title" class="h5 mb-0">Ghép khách <span data-match-source></span></h2>
+                <form method="dialog"><button class="btn btn-sm btn-light">Đóng</button></form>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <input type="search" class="form-control flex-fill w-auto" data-match-search placeholder="Tên / mã khách / số điện thoại" aria-label="Tìm khách hệ thống" autofocus>
+                <select class="form-select w-auto" data-match-filter aria-label="Lọc theo mã khách">
+                    <option value="all">Tất cả khách chưa ghép</option>
+                    <option value="coded">Có mã khách</option>
+                    <option value="uncoded">Chưa có mã khách</option>
+                </select>
+            </div>
+            <form method="POST" action="{{ route('customer-debt.sheet-opening.link') }}">
+                @csrf
+                <input type="hidden" name="source_key" data-match-key>
+                <input type="hidden" name="action" value="link">
+                <p class="small text-muted" data-match-count aria-live="polite"></p>
+                <ul class="list-group overflow-auto" style="max-height: 50vh">
+                    @foreach($availableCustomers as $target)
+                        <li class="list-group-item d-flex align-items-center justify-content-between gap-2"
+                            data-match-customer data-coded="{{ $target->customer_code ? 'coded' : 'uncoded' }}"
+                            data-search="{{ $target->name }} {{ $target->customer_code }} {{ $target->phone }}">
+                            <div>
+                                <strong>{{ $target->name }}</strong>
+                                <small class="d-block text-muted">{{ implode(' · ', array_filter([$target->customer_code, $target->phone])) }}</small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-primary flex-shrink-0" name="customer_id" value="{{ $target->id }}"
+                                aria-label="Ghép với {{ $target->name }}">Ghép</button>
+                        </li>
+                    @endforeach
+                </ul>
+            </form>
+        </dialog>
     @else
         <div class="card p-3">
             <div class="table-responsive">
@@ -131,3 +164,10 @@
     @endif
 </div>
 @endsection
+
+
+@if($tab === 'customers')
+@push('scripts')
+<script src="{{ asset('js/customer-sheet-match.js') }}?v={{ filemtime(public_path('js/customer-sheet-match.js')) }}"></script>
+@endpush
+@endif

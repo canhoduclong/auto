@@ -29,7 +29,8 @@ class CustomerSheetOpeningController extends Controller
         $snapshot = $ledger->snapshot();
         $groups = $ledger->groups($snapshot);
         $customers = Customer::query()->orderBy('name')->get(['id', 'name', 'customer_code', 'phone'])->keyBy('id');
-        $links = collect($ledger->links($groups))->filter(fn ($link) => $customers->has($link['customer_id'] ?? null));
+        $allLinks = collect($ledger->allLinks())->filter(fn ($link) => $customers->has($link['customer_id'] ?? null));
+        $links = $allLinks->only(array_keys($groups));
         $opening = $gifts = $paid = $systemSales = [];
         $purchases = collect();
         $payments = collect();
@@ -100,7 +101,8 @@ class CustomerSheetOpeningController extends Controller
         return view('customers.sheet-opening', [
             'tab' => $tab, 'snapshot' => $snapshot, 'rows' => $this->paginate($request, $rows, 'page'),
             'pending' => $this->paginate($request, $pending->sortBy('name'), 'source_page'),
-            'customers' => $customers, 'opening' => $opening, 'gifts' => $gifts, 'paid' => $paid,
+            'availableCustomers' => $tab === 'customers' ? $customers->except($allLinks->pluck('customer_id')->all())->values() : collect(),
+            'opening' => $opening, 'gifts' => $gifts, 'paid' => $paid,
             'systemSales' => $systemSales, 'cutoff' => $cutoff,
         ]);
     }
@@ -139,12 +141,16 @@ class CustomerSheetOpeningController extends Controller
                 $groups = $ledger->groups($ledger->snapshot());
                 $key = $data['source_key'];
                 abort_unless(isset($groups[$key]), 404);
-                $mapped = $ledger->links($groups)[$key]['customer_id'] ?? null;
+                $links = collect($ledger->allLinks());
+                $mapped = $links->get($key)['customer_id'] ?? null;
                 if ($mapped && Customer::query()->whereKey($mapped)->exists()) {
                     return;
                 }
                 if ($data['action'] === 'link') {
                     $customer = Customer::query()->findOrFail($data['customer_id']);
+                    if ($links->pluck('customer_id')->contains($customer->id)) {
+                        throw ValidationException::withMessages(['customer_id' => 'Khách này đã được ghép. Vui lòng chọn khách khác.']);
+                    }
                 } else {
                     Gate::forUser($request->user())->authorize('create', Customer::class);
                     $group = $groups[$key];

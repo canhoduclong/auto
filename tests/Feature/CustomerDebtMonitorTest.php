@@ -1807,6 +1807,7 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame([1 => 500], $view['systemSales']);
         self::assertSame([1 => 300], $view['paid']);
         self::assertSame(0, $view['pending']->total());
+        self::assertFalse($view['availableCustomers']->contains('id', 1));
         $view = $controller->index($this->request(['tab' => 'purchases'], 'admin'), $ledger, $system)->getData();
         self::assertSame([500, 1000], $view['rows']->getCollection()->pluck('amount')->all());
     }

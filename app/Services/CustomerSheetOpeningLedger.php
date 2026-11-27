@@ -58,7 +58,7 @@ class CustomerSheetOpeningLedger
         return $this->sheets->summarize($snapshot['entries'] ?? []);
     }
 
-    public function links(array $groups): array
+    public function allLinks(): array
     {
         $links = $this->sheets->mappings();
         $prefix = $this->linkPrefix();
@@ -66,7 +66,7 @@ class CustomerSheetOpeningLedger
             $links[substr($key, strlen($prefix))] = ['customer_id' => (int) $value];
         }
 
-        return array_intersect_key($links, $groups);
+        return $links;
     }
 
     public function link(string $key, int $customerId): void
