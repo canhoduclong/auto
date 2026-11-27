@@ -1773,6 +1773,11 @@ class CustomerDebtMonitorTest extends TestCase
         $disk = \Illuminate\Support\Facades\Storage::fake('local');
         $sheets = new class extends CustomerDebtSheetService
         {
+            public function fetchCustomerContacts(): array
+            {
+                return [['Mã KH', 'Khách Hàng', 'NVKD', 'SĐT'], ['CRM01', 'Chị Bình', '', '901234567']];
+            }
+
             public function fetch(): array
             {
                 $bank = [['Ngày', 'Khách hàng', 'Tiền thu']];
@@ -1790,6 +1795,7 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertTrue($ledger->refresh(1)['unchanged']);
         $disk->assertMissing('customer-debt/snapshot.json');
         $key = array_key_first($ledger->groups($ledger->snapshot()));
+        self::assertSame('0901234567', $ledger->groups($ledger->snapshot())[$key]['phone']);
         $ledger->link($key, 1);
 
         $system = new class extends \App\Services\SystemCustomerDebtReportService

@@ -330,15 +330,7 @@ class CustomerDebtSheetService
 
     private function fetchNamedTabs(array $names, bool $allowMissing = false): array
     {
-        $path = trim((string) config('services.google_sheets.credentials'));
-        if (! $path) {
-            throw new RuntimeException('Chưa cấu hình tài khoản dịch vụ Google Sheets.');
-        }
-        $client = new Client;
-        $client->setAuthConfig(str_starts_with($path, '/') ? $path : base_path($path));
-        $client->setScopes([Sheets::SPREADSHEETS_READONLY]);
-        $client->setHttpClient(new \GuzzleHttp\Client(['timeout' => 30, 'connect_timeout' => 8]));
-        $sheets = new Sheets($client);
+        $sheets = $this->googleSheets();
         $id = config('services.google_sheets.debt_spreadsheet_id');
         $titles = [];
         foreach ($sheets->spreadsheets->get($id, ['fields' => 'sheets.properties.title'])->getSheets() as $sheet) {
@@ -367,6 +359,28 @@ class CustomerDebtSheetService
         }
 
         return array_combine(array_keys($ranges), array_map(fn ($range) => $range->getValues() ?? [], $values));
+    }
+
+    public function fetchCustomerContacts(): array
+    {
+        return $this->googleSheets()->spreadsheets_values->get(
+            config('services.google_sheets.customer_contacts_spreadsheet_id'),
+            'TongHop!B:E',
+            ['valueRenderOption' => 'FORMATTED_VALUE']
+        )->getValues() ?? [];
+    }
+
+    private function googleSheets(): Sheets
+    {
+        $path = trim((string) config('services.google_sheets.credentials'));
+        if (! $path) {
+            throw new RuntimeException('Chưa cấu hình tài khoản dịch vụ Google Sheets.');
+        }
+        $client = new Client;
+        $client->setAuthConfig(str_starts_with($path, '/') ? $path : base_path($path));
+        $client->setScopes([Sheets::SPREADSHEETS_READONLY]);
+        $client->setHttpClient(new \GuzzleHttp\Client(['timeout' => 30, 'connect_timeout' => 8]));
+        return new Sheets($client);
     }
 
     public function workbook(string $path): array

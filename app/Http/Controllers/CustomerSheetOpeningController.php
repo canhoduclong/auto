@@ -142,7 +142,12 @@ class CustomerSheetOpeningController extends Controller
             return back()->with('error', 'Không cập nhật được Google Sheet. Dữ liệu đã lưu vẫn có thể xem.');
         }
 
-        return back()->with('success', $run['unchanged'] ? 'Dữ liệu Google Sheet không thay đổi.' : 'Đã cập nhật dữ liệu Google Sheet.');
+        $response = back()->with('success', $run['unchanged'] ? 'Dữ liệu Google Sheet không thay đổi.' : 'Đã cập nhật dữ liệu Google Sheet.');
+        if ($run['contacts_unavailable']) {
+            $response->with('error', 'Chưa đọc được danh bạ TongHop. Kiểm tra quyền Người xem của tài khoản kết nối Google Sheet.');
+        }
+
+        return $response;
     }
 
     public function link(Request $request, CustomerSheetOpeningLedger $ledger, CustomerPriorityService $priorities)

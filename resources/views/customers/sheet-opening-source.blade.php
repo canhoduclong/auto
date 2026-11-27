@@ -16,15 +16,23 @@
     <p class="small text-danger" data-sheet-error role="alert" hidden></p>
     <div class="table-responsive">
         <table class="table table-sm align-middle">
-            <thead><tr><th>Khách Google Sheet</th><th>Ghép hoặc tạo khách</th></tr></thead>
+            <thead>
+                <tr>
+                    <th>Khách Google Sheet</th>
+                    <th class="text-nowrap">Số điện thoại</th>
+                    <th class="text-end text-nowrap" title="Tiền hàng trừ thanh toán và giảm trừ theo Google Sheet">Công nợ Sheet</th>
+                    <th>Ghép hoặc tạo khách</th>
+                </tr>
+            </thead>
             <tbody>
                 @forelse($pending as $source)
                     <tr>
                         <td class="text-nowrap">
                             {{ $source['name'] }}
                             @if($source['code']) <small class="text-muted">· {{ $source['code'] }}</small>@endif
-                            @if(!empty($source['phone'])) <small class="text-muted">· {{ $source['phone'] }}</small>@endif
                         </td>
+                        <td class="text-nowrap">{{ $source['phone'] ?: '—' }}</td>
+                        <td class="text-end text-nowrap">{{ number_format($source['balance'], 0, ',', '.') }} đ</td>
                         <td>
                             <div class="d-flex gap-1 text-nowrap">
                                 <button type="button" class="btn btn-sm btn-outline-primary" data-open-customer-match
@@ -42,7 +50,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="2">Không có khách nguồn chờ ghép trong bộ lọc.</td></tr>
+                    <tr><td colspan="4">Không có khách nguồn chờ ghép trong bộ lọc.</td></tr>
                 @endforelse
             </tbody>
         </table>

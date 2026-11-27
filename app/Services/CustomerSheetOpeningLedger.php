@@ -31,9 +31,25 @@ class CustomerSheetOpeningLedger
                 'TKCTVCB' => $vcb, 'TKCTBIDV' => $bidv, 'TKCTVPB' => $vpb,
             ]);
             $previous = $this->snapshot();
-            $unchanged = ($previous['entries'] ?? null) === $snapshot['entries'] && ($previous['issues'] ?? null) === $snapshot['issues'];
+            $snapshot['contacts'] = $previous['contacts'] ?? [];
+            $contactsUnavailable = false;
+            try {
+                $contacts = $this->sheets->fetchCustomerContacts();
+                $header = array_map(fn ($value) => $this->sheets->normalize((string) $value), $contacts[0] ?? []);
+                if (($header[0] ?? '') !== 'ma kh' || ($header[1] ?? '') !== 'khach hang' || ($header[3] ?? '') !== 'sdt') {
+                    throw new RuntimeException('Không nhận diện được tiêu đề danh bạ TongHop.');
+                }
+                $snapshot['contacts'] = array_values(array_slice($contacts, 1));
+            } catch (\Throwable $e) {
+                report($e);
+                $contactsUnavailable = true;
+            }
+            $unchanged = ($previous['entries'] ?? null) === $snapshot['entries']
+                && ($previous['issues'] ?? null) === $snapshot['issues']
+                && ($previous['contacts'] ?? []) === $snapshot['contacts'];
             $snapshot['runs'] = array_slice(array_merge([[
                 'at' => $snapshot['loaded_at'], 'user_id' => $userId, 'unchanged' => $unchanged,
+                'contacts_unavailable' => $contactsUnavailable,
                 'sales' => count(array_filter($snapshot['entries'], fn ($row) => $row['type'] === 'sale')),
                 'payments' => count(array_filter($snapshot['entries'], fn ($row) => $row['type'] === 'payment')),
             ]], $previous['runs'] ?? []), 0, 50);
@@ -55,7 +71,42 @@ class CustomerSheetOpeningLedger
 
     public function groups(array $snapshot): array
     {
-        return $this->sheets->summarize($snapshot['entries'] ?? []);
+        $groups = $this->sheets->summarize($snapshot['entries'] ?? []);
+        $byName = [];
+        foreach ($snapshot['contacts'] ?? [] as $contact) {
+            $name = $this->sheets->customerName((string) ($contact[1] ?? ''));
+            $code = strtoupper(trim((string) ($contact[0] ?? '')));
+            $rawPhone = trim((string) ($contact[3] ?? ''));
+            if ($name === '' || !preg_match('/^\+?[\d .()-]+$/', $rawPhone)) {
+                continue;
+            }
+            $phone = $this->sheets->customerPhone($rawPhone);
+            // Numeric cells in TongHop can omit the leading zero of a mobile number.
+            if (preg_match('/^[35789]\d{8}$/', $phone)) {
+                $phone = '0'.$phone;
+            }
+            if (preg_match('/^0\d{9,10}$/', $phone)) {
+                $byName[$name][$code][$phone] = true;
+            }
+        }
+        foreach ($groups as &$group) {
+            if ($group['phone'] || !empty($group['phone_conflict']) || !empty($group['ambiguous'])) {
+                continue;
+            }
+            $byCode = $byName[$this->sheets->customerName($group['name'])] ?? [];
+            $phones = $byCode[$group['code']] ?? [];
+            if ($group['code'] === '') {
+                foreach ($byCode as $phonesForCode) {
+                    $phones += $phonesForCode;
+                }
+            }
+            if (count($phones) === 1) {
+                $group['phone'] = (string) array_key_first($phones);
+            }
+        }
+        unset($group);
+
+        return $groups;
     }
 
     public function allLinks(): array
