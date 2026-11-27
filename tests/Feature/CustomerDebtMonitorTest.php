@@ -1810,6 +1810,19 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertFalse($view['availableCustomers']->contains('id', 1));
         $view = $controller->index($this->request(['tab' => 'purchases'], 'admin'), $ledger, $system)->getData();
         self::assertSame([500, 1000], $view['rows']->getCollection()->pluck('amount')->all());
+
+        $request = $this->request(['tab' => 'customers', 'panel' => 'system', 'system_search' => 'CRM01', 'source_search' => 'không khớp'], 'admin');
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
+        $partial = $controller->index($request, $ledger, $system);
+        self::assertSame('customers.sheet-opening-system', $partial->name());
+        self::assertSame([1], $partial->getData()['rows']->getCollection()->pluck('id')->all());
+
+        $request = $this->request(['tab' => 'customers', 'panel' => 'source', 'source_page' => 2], 'admin');
+        $request->headers->set('X-Requested-With', 'XMLHttpRequest');
+        $partial = $controller->index($request, $ledger, $system);
+        self::assertSame('customers.sheet-opening-source', $partial->name());
+        self::assertSame(2, $partial->getData()['pending']->currentPage());
+        self::assertStringNotContainsString('panel=', $partial->getData()['pending']->url(1));
     }
 
     public function test_purchase_review_counts_only_accepted_rows_in_customer_debt(): void

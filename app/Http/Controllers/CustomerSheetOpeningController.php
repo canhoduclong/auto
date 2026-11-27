@@ -22,8 +22,13 @@ class CustomerSheetOpeningController extends Controller
         $filters = $request->validate([
             'tab' => 'nullable|in:purchases,payments,customers', 'search' => 'nullable|string|max:150',
             'page' => 'nullable|integer|min:1', 'source_page' => 'nullable|integer|min:1',
+            'system_search' => 'nullable|string|max:150', 'source_search' => 'nullable|string|max:150',
+            'panel' => 'nullable|in:system,source',
         ]);
         $tab = $filters['tab'] ?? 'purchases';
+        $panel = $tab === 'customers' && $request->ajax() ? ($filters['panel'] ?? null) : null;
+        $systemSearch = Customer::normalizeName($filters['system_search'] ?? '');
+        $sourceSearch = Customer::normalizeName($filters['source_search'] ?? '');
         $search = Customer::normalizeName($filters['search'] ?? '');
         $matches = fn (string $text) => str_contains(Customer::normalizeName($text), $search);
         $snapshot = $ledger->snapshot();
@@ -40,10 +45,13 @@ class CustomerSheetOpeningController extends Controller
         foreach ($groups as $key => $group) {
             $id = $links[$key]['customer_id'] ?? null;
             $label = $customers[$id]->name ?? $group['name'];
-            if (! $id && $matches($group['name'].' '.$group['code'])) {
+            if (! $id && str_contains(Customer::normalizeName($group['name'].' '.$group['code'].' '.$group['phone']), $sourceSearch)) {
                 $pending->push($group);
             }
-            $visible = $matches($label.' '.$group['name'].' '.$group['code']);
+            if ($panel === 'source') {
+                continue;
+            }
+            $visible = $tab !== 'customers' && $matches($label.' '.$group['name'].' '.$group['code']);
             foreach ($group['entries'] as $entry) {
                 if ($entry['date'] > $today) {
                     continue;
@@ -69,7 +77,7 @@ class CustomerSheetOpeningController extends Controller
                 }
             }
         }
-        if ($tab !== 'payments') {
+        if ($tab !== 'payments' && $panel !== 'source') {
             foreach ($system->confirmedOrders($customers->keys()->all()) as $order) {
                 $date = CarbonImmutable::parse($order->delivery_date ?: $order->created_at)->toDateString();
                 if ($date < $cutoff || $date > $today) {
@@ -91,14 +99,16 @@ class CustomerSheetOpeningController extends Controller
                 }
             }
         }
-        $customerRows = $customers->filter(fn ($customer) => $matches($customer->name.' '.$customer->customer_code.' '.$customer->phone))->values();
+        $customerRows = $customers->filter(fn ($customer) => str_contains(Customer::normalizeName($customer->name.' '.$customer->customer_code.' '.$customer->phone), $systemSearch))->values();
         $rows = match ($tab) {
             'customers' => $customerRows,
             'payments' => $payments->sortByDesc('date'),
             default => $purchases->sortByDesc('date'),
         };
 
-        return view('customers.sheet-opening', [
+        $view = $panel ? 'customers.sheet-opening-'.$panel : 'customers.sheet-opening';
+
+        return view($view, [
             'tab' => $tab, 'snapshot' => $snapshot, 'rows' => $this->paginate($request, $rows, 'page'),
             'pending' => $this->paginate($request, $pending->sortBy('name'), 'source_page'),
             'availableCustomers' => $tab === 'customers' ? $customers->except($allLinks->pluck('customer_id')->all())->values() : collect(),
@@ -112,7 +122,7 @@ class CustomerSheetOpeningController extends Controller
         $page = max(1, (int) $request->input($name, 1));
 
         return new LengthAwarePaginator($rows->forPage($page, 30)->values(), $rows->count(), 30, $page, [
-            'path' => $request->url(), 'query' => $request->except($name), 'pageName' => $name,
+            'path' => $request->url(), 'query' => $request->except([$name, 'panel']), 'pageName' => $name,
         ]);
     }
 
