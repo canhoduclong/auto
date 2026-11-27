@@ -39,10 +39,10 @@
     <div class="card mb-3 border-0 shadow-sm">
         <div class="card-body py-2">
             <form method="GET" action="{{ route('users.index') }}" class="row g-2 align-items-end">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <input type="text" name="q" class="form-control form-control-sm" value="{{ request('q') }}" placeholder="Tìm tên, tên ngắn, chức danh, email...">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <select name="team_id" class="form-select form-select-sm">
                         <option value="">Tất cả team</option>
                         @foreach($teams as $team)
@@ -50,7 +50,7 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <select name="role_id" class="form-select form-select-sm">
                         <option value="">Tất cả role</option>
                         @foreach($roles as $role)
@@ -58,7 +58,14 @@
                         @endforeach
                     </select>
                 </div>
-                <div class="col-md-2 d-flex gap-1">
+                <div class="col-md-2">
+                    <select name="per_page" class="form-select form-select-sm" aria-label="Số người dùng mỗi trang">
+                        @foreach($pageSizes as $pageSize)
+                            <option value="{{ $pageSize }}" @selected($users->perPage() === $pageSize)>{{ $pageSize }} / trang</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex gap-1">
                     <button class="btn btn-primary btn-sm flex-fill">Lọc</button>
                     <a href="{{ route('users.index') }}" class="btn btn-outline-secondary btn-sm">Reset</a>
                 </div>
@@ -98,7 +105,7 @@
                                                 {{ $user->short_name ?: '—' }}@if($user->job_title) · {{ $user->job_title }}@endif
                                             </div>
                                         @endif
-                                        <div class="small text-muted text-truncate">{{ $user->email }}</div>
+                                        <div class="small text-muted" style="overflow-wrap:anywhere;">{{ $user->email }}</div>
                                     @if($user->team)
                                         <div class="small text-muted" style="font-size:.75rem;">
                                             <i class="ph ph-users me-1"></i>{{ $user->team->name }}
@@ -268,7 +275,7 @@
                                         @if($user->short_name || $user->job_title)
                                             <div class="small text-muted text-truncate" style="max-width:160px;">{{ $user->short_name ?: '—' }}@if($user->job_title) · {{ $user->job_title }}@endif</div>
                                         @endif
-                                        <div class="small text-muted text-truncate" style="max-width:160px;">{{ $user->email }}</div>
+                                        <div class="small text-muted" style="overflow-wrap:anywhere;">{{ $user->email }}</div>
                                         @if($user->zalo_name)<div class="small text-primary text-truncate" style="max-width:160px;">Zalo: {{ $user->zalo_name }}</div>@endif
                                     </div>
                                 </div>

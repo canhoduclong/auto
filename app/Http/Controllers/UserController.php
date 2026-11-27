@@ -47,7 +47,10 @@ class UserController extends Controller
             });
         }
 
-        $users = $query->orderBy('name')->paginate(15)->appends($request->query());
+        $pageSizes = [20, 40, 60, 100];
+        $pageSize = $request->query('per_page');
+        $perPage = in_array($pageSize, array_map('strval', $pageSizes), true) ? (int) $pageSize : 40;
+        $users = $query->orderBy('name')->orderBy('id')->paginate($perPage)->withQueryString();
         $teams = Team::orderBy('name')->get(['id', 'name']);
         $roles = Role::orderBy('name')->get(['id', 'name']);
         $canCreateUsers = Setting::enabled('user_registration_enabled', true);
@@ -67,7 +70,7 @@ class UserController extends Controller
             }
         }
 
-        return view('users.index', compact('users', 'teams', 'roles', 'canCreateUsers', 'selectedUser', 'activities'));
+        return view('users.index', compact('users', 'teams', 'roles', 'canCreateUsers', 'selectedUser', 'activities', 'pageSizes'));
     }
 
     public function bulkAssignTeamForm(Request $request)
