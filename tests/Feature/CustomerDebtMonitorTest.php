@@ -2020,7 +2020,12 @@ class CustomerDebtMonitorTest extends TestCase
     public function test_report_sorts_todays_reminders_above_starred_customers(): void
     {
         $this->collectionClock('2026-11-17 14:00:00');
-        $sheets = $this->service([$this->entry('CRM01', 'Chị Bình', 1), $this->entry('KH02', 'Anh Hải', 2)]);
+        $sheets = $this->service([
+            array_replace($this->entry('CRM01', 'Chị Bình', 1), ['date' => '2026-11-15']),
+            $this->entry('KH02', 'Anh Hải', 2),
+            array_replace($this->entry('CRM01', 'Chị Bình', 3), ['date' => '2026-11-17', 'type' => 'payment', 'amount' => 100]),
+            array_replace($this->entry('KH02', 'Anh Hải', 4), ['date' => '2026-11-16', 'type' => 'payment', 'amount' => 100]),
+        ]);
         $controller = new \App\Http\Controllers\CustomerDebtReportController;
         $collections = new \App\Services\DebtCollectionService;
         $priorities = new \App\Services\CustomerDebtPriorityService;
@@ -2034,6 +2039,14 @@ class CustomerDebtMonitorTest extends TestCase
         $rows = $report();
         self::assertSame([2, 1], $rows->pluck('customer_id')->all());
         self::assertSame([true, false], $rows->pluck('reminded_today')->all());
+
+        foreach (['days_without_purchase' => [1, 2], 'days_without_payment' => [2, 1]] as $sort => $descending) {
+            foreach (['desc' => $descending, 'asc' => array_reverse($descending)] as $direction => $expected) {
+                $request = $this->request(['sort' => $sort, 'direction' => $direction], 'admin');
+                $view = $controller->index($request, $sheets, new \App\Services\CustomerDebtReportService, $collections)->getData();
+                self::assertSame($expected, $view['rows']->pluck('customer_id')->all());
+            }
+        }
 
         $this->collectionClock('2026-11-19 14:00:00');
         self::assertSame([1, 2], $report()->pluck('customer_id')->all());

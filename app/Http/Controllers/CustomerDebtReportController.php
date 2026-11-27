@@ -114,7 +114,16 @@ class CustomerDebtReportController extends Controller
         $summary = ['customers' => $visible->count(), 'sales' => $visible->where('data_available', true)->sum('sales'), 'balance' => $visible->where('balance', '>', 0)->sum('balance'), 'gifts' => $visible->where('data_available', true)->sum('gifts'), 'payments' => $visible->where('data_available', true)->sum('payments'), 'received' => $visible->sum(fn ($r) => $r['collection']['received_total'])];
         $sort = $data['sort'] ?? 'balance';
         $direction = ($data['direction'] ?? 'desc') === 'asc' ? 1 : -1;
-        $visible = $visible->sort(fn ($a, $b) => ($b['reminded_today'] <=> $a['reminded_today']) ?: ($b['priority']['stars'] <=> $a['priority']['stars']) ?: ($a[$sort] === null || $b[$sort] === null ? (($a[$sort] === null ? 1 : 0) <=> ($b[$sort] === null ? 1 : 0)) : ($a[$sort] <=> $b[$sort]) * $direction) ?: strcmp($a['name'], $b['name']));
+        $sortByDays = in_array($sort, ['days_without_purchase', 'days_without_payment'], true);
+        $visible = $visible->sort(function ($a, $b) use ($sort, $direction, $sortByDays) {
+            $priority = ($b['reminded_today'] <=> $a['reminded_today']) ?: ($b['priority']['stars'] <=> $a['priority']['stars']);
+            $valueOrder = ($a[$sort] === null || $b[$sort] === null)
+                ? (($a[$sort] === null) <=> ($b[$sort] === null))
+                : ($a[$sort] <=> $b[$sort]) * $direction;
+
+            return ($sortByDays ? ($valueOrder ?: $priority) : ($priority ?: $valueOrder))
+                ?: strcmp($a['name'], $b['name']);
+        });
         $remindedCopyRows = $visible
             ->filter(fn ($row) => $row['data_available'] && $row['balance'] > 0 && $row['collection']['latest'])
             ->map(fn ($row) => [
