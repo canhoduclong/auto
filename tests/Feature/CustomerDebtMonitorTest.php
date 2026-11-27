@@ -1768,6 +1768,31 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame('2026-11-13', $data['period']['to']);
     }
 
+    public function test_purchase_review_keeps_source_rows_and_changes_debt_only_when_excluded(): void
+    {
+        $disk = \Illuminate\Support\Facades\Storage::fake('local');
+        $service = new CustomerDebtSheetService;
+        $original = array_replace($this->entry('CRM01', 'Chị Bình'), ['amount' => 3976000, 'source_sheet' => 'nhatkybanhang']);
+        $copy = array_replace($original, ['row' => 8]);
+        $other = array_replace($original, ['row' => 9, 'sale_details' => ['quantity' => '21']]);
+        $disk->put('customer-debt/snapshot.json', json_encode(['entries' => [$original, $copy, $other]]));
+        $snapshot = $service->snapshot();
+        $group = array_values($service->summarize($snapshot['entries']))[0];
+        self::assertCount(2, $group['purchase_reviews']);
+        self::assertSame(11928000, $group['balance']);
+
+        $id = $snapshot['entries'][1]['purchase_review']['id'];
+        $service->reviewPurchase($id, 'excluded', 1);
+        $snapshot = $service->snapshot();
+        $group = array_values($service->summarize($snapshot['entries']))[0];
+        self::assertCount(3, $snapshot['entries']);
+        self::assertSame(7952000, $group['balance']);
+        self::assertSame('excluded', $group['purchase_reviews'][1]['purchase_review']['status']);
+
+        $service->reviewPurchase($id, 'accepted', 1);
+        self::assertSame(11928000, array_values($service->summarize($service->snapshot()['entries']))[0]['balance']);
+    }
+
     public function test_negative_purchase_reduces_debt_on_the_report_and_customer_detail(): void
     {
         $sale = array_replace($this->entry('CRM01', 'Chị Bình'), ['amount' => 3035250]);

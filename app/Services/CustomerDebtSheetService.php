@@ -25,7 +25,64 @@ class CustomerDebtSheetService
     {
         $disk = Storage::disk('local');
 
-        return $disk->exists(self::FILE) ? json_decode($disk->get(self::FILE), true, 512, JSON_THROW_ON_ERROR) : null;
+        if (! $disk->exists(self::FILE)) {
+            return null;
+        }
+
+        $snapshot = json_decode($disk->get(self::FILE), true, 512, JSON_THROW_ON_ERROR);
+        $decisions = $this->purchaseReviewDecisions();
+        $buckets = [];
+        foreach ($snapshot['entries'] as $index => $entry) {
+            if ($entry['type'] === 'sale' && ($entry['source_sheet'] ?? '') === 'nhatkybanhang') {
+                $signature = hash('sha256', json_encode([
+                    $entry['date'], $this->normalize($entry['code']), $this->customerName($entry['name']),
+                    $this->normalize($entry['note'] ?? ''), $entry['amount'], $entry['gift'] ?? 0,
+                    $entry['inline_payment'] ?? 0, $entry['order_code'] ?? '', $this->normalize($entry['sale_name'] ?? ''),
+                    $entry['gift_note'] ?? '', $entry['phone'] ?? '', $entry['address'] ?? '', $entry['delivery_time'] ?? '',
+                    $entry['sale_details'] ?? [],
+                ], JSON_THROW_ON_ERROR));
+                $buckets[$signature][$index] = $entry['row'];
+            }
+        }
+        foreach ($buckets as $signature => $rows) {
+            if (count($rows) < 2) {
+                continue;
+            }
+            foreach ($rows as $index => $row) {
+                $id = hash('sha256', ($snapshot['spreadsheet_id'] ?? '').'|'.($snapshot['source'] ?? '').'|'.$signature.'|'.$row);
+                $snapshot['entries'][$index]['purchase_review'] = ['id' => $id, 'status' => $decisions[$id]['status'] ?? 'pending'];
+            }
+        }
+
+        return $snapshot;
+    }
+
+    private function purchaseReviewDecisions(): array
+    {
+        $disk = Storage::disk('local');
+        $file = 'customer-debt/purchase-reviews.json';
+
+        return $disk->exists($file) ? json_decode($disk->get($file), true, 512, JSON_THROW_ON_ERROR) : [];
+    }
+
+    public function reviewPurchase(string $id, string $status, int $userId): void
+    {
+        Cache::lock('customer-debt-load', 60)->block(5, function () use ($id, $status, $userId) {
+            $entries = $this->snapshot()['entries'] ?? [];
+            abort_unless(collect($entries)->contains(fn ($entry) => ($entry['purchase_review']['id'] ?? null) === $id), 409, 'Dòng mua đã thay đổi. Vui lòng tải lại.');
+            $decisions = $this->purchaseReviewDecisions();
+            $decisions[$id] = ['status' => $status, 'user_id' => $userId, 'reviewed_at' => now()->toIso8601String()];
+            $disk = Storage::disk('local');
+            $temporary = 'customer-debt/'.Str::uuid().'.tmp';
+            try {
+                if (! $disk->put($temporary, json_encode($decisions, JSON_THROW_ON_ERROR))
+                    || ! rename($disk->path($temporary), $disk->path('customer-debt/purchase-reviews.json'))) {
+                    throw new RuntimeException('Không lưu được quyết định duyệt dòng mua.');
+                }
+            } finally {
+                $disk->delete($temporary);
+            }
+        });
     }
 
     public function save(array $sales, array $payments, ?int $userId, string $source, ?array $bankPayments = null, array $additionalPayments = [], ?array $cashflowLedgers = null): array
@@ -57,6 +114,9 @@ class CustomerDebtSheetService
         return Cache::lock('customer-debt-load', 60)->block(5, function () use ($data, $cashflowLedgers) {
             $disk = Storage::disk('local');
             $previous = $this->snapshot() ?? [];
+            foreach ($previous['entries'] ?? [] as $index => $entry) {
+                unset($previous['entries'][$index]['purchase_review']);
+            }
             $previous = $this->withPaymentGroupKeys($previous);
             if ($cashflowLedgers !== null) {
                 $data['cashflow_ledgers'] = $cashflowLedgers;
@@ -351,6 +411,10 @@ class CustomerDebtSheetService
             'order_code' => $type === 'sale' ? ['ma don', 'ma don hang', 'so don hang', 'order code', 'ma bill'] : [],
             'code' => ['ma kh', 'ma khach hang', 'customer code'],
             'name' => ['khach hang', 'ten khach hang', 'ten kh', 'ten kh/ncc', 'ten cong ty', 'company name', 'customer'],
+            'quantity' => $type === 'sale' ? ['sl', 'so luong'] : [],
+            'unit_weight' => $type === 'sale' ? ['kg/con'] : [],
+            'total_quantity' => $type === 'sale' ? ['tong'] : [],
+            'unit_price' => $type === 'sale' ? ['don gia'] : [],
             'sale_name' => ['nvkd', 'sale', 'nhan vien kinh doanh'],
             'phone' => ['sdt', 'so dien thoai', 'dien thoai', 'phone'],
             'address' => ['dia chi', 'address'],
@@ -384,25 +448,6 @@ class CustomerDebtSheetService
             if (! $headers || ! array_filter($cells, fn ($v) => trim((string) $v) !== '')) {
                 continue;
             }
-            if ($type === 'sale' && isset($headers['gift'], $headers['inline_payment'], $headers['code'])
-                && count($cells) === $headers['amount'] + 1
-                && trim((string) ($cells[$headers['date']] ?? '')) !== ''
-                && trim((string) ($cells[$headers['code']] ?? '')) !== ''
-                && trim((string) ($cells[$headers['name']] ?? '')) !== '') {
-                // Keep the original journal row when an adjacent paste contains
-                // the same business cells but lacks the journal's formula columns.
-                $businessWidth = max($headers) + 1;
-                $trimCells = fn (array $row) => array_map(fn ($cell) => trim((string) $cell), $row);
-                $businessCells = $trimCells(array_pad($cells, $businessWidth, ''));
-                foreach ([$values[$index - 1] ?? [], $values[$index + 1] ?? []] as $neighbour) {
-                    $formulaCells = array_map('strtoupper', $trimCells(array_slice($neighbour, $businessWidth)));
-                    if (in_array('TRUE', $formulaCells, true)
-                        && $trimCells(array_slice($neighbour, 0, $businessWidth)) === $businessCells) {
-                        continue 2;
-                    }
-                }
-            }
-
             $row = [];
             foreach ($headers as $field => $column) {
                 $row[$field] = trim((string) ($cells[$column] ?? ''));
@@ -489,7 +534,7 @@ class CustomerDebtSheetService
             if ($giftNote !== '') {
                 $note = ($note !== '' ? $note.' · ' : '').'Ghi chú cột Tặng: '.$giftNote;
             }
-            $entries[] = ['date' => $date, 'code' => $row['code'], 'name' => $row['name'], 'type' => $type, 'order_code' => $row['order_code'] ?? '', 'sale_name' => $row['sale_name'] ?? '', 'phone' => $row['phone'] ?? '', 'address' => $row['address'] ?? '', 'delivery_time' => $row['delivery_time'] ?? '', 'amount' => $this->money($amount), 'gift' => $giftAmount, 'gift_note' => $giftNote, 'inline_payment' => $type === 'sale' && ! in_array(trim($row['inline_payment'] ?? ''), ['', '-'], true) ? $this->money($row['inline_payment']) : 0, 'note' => $note, 'row' => $index + 1, 'source_sheet' => $sourceSheet ?? ($type === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong')];
+            $entries[] = ['sale_details' => array_intersect_key($row, array_flip(['quantity', 'unit_weight', 'total_quantity', 'unit_price'])), 'date' => $date, 'code' => $row['code'], 'name' => $row['name'], 'type' => $type, 'order_code' => $row['order_code'] ?? '', 'sale_name' => $row['sale_name'] ?? '', 'phone' => $row['phone'] ?? '', 'address' => $row['address'] ?? '', 'delivery_time' => $row['delivery_time'] ?? '', 'amount' => $this->money($amount), 'gift' => $giftAmount, 'gift_note' => $giftNote, 'inline_payment' => $type === 'sale' && ! in_array(trim($row['inline_payment'] ?? ''), ['', '-'], true) ? $this->money($row['inline_payment']) : 0, 'note' => $note, 'row' => $index + 1, 'source_sheet' => $sourceSheet ?? ($type === 'sale' ? 'nhatkybanhang' : 'Dongtienhoatdong')];
         }
         if (! $headers) {
             throw new RuntimeException('Không nhận diện tiêu đề tab '.($type === 'sale' ? 'nhatkybanhang (Ngày, Mã KH, Khách hàng, Tổng tiền).' : 'Dongtienhoatdong (Ngày, Mã KH, Khách hàng, Tiền thu hoặc Số tiền và Thu/Chi).'));
@@ -655,6 +700,13 @@ class CustomerDebtSheetService
             $ambiguous = ($code === '' && count($codes[$name] ?? []) > 1) || ($phone === '' && $phoneConflict);
             $legacyKey = count($identities[$bucket]) > 1 && array_key_first($identities[$bucket]) === $signature ? hash('sha256', $bucket) : null;
             $groups[$key] ??= ['legacy_key' => $legacyKey, 'key' => $key, 'code' => $code, 'name' => $entry['name'], 'phone' => $phone, 'phone_conflict' => $phoneConflict, 'sales' => 0, 'gifts' => 0, 'payments' => 0, 'balance' => 0, 'last_purchase_date' => null, 'last_payment_date' => null, 'sale_name' => '', 'sale_rank' => '', 'entries' => [], 'ambiguous' => $ambiguous];
+            if (isset($entry['purchase_review'])) {
+                $groups[$key]['purchase_reviews'][] = $entry;
+                if ($entry['purchase_review']['status'] === 'excluded') {
+                    continue;
+                }
+                unset($entry['purchase_review']);
+            }
             $groups[$key][$entry['type'] === 'sale' ? 'sales' : 'payments'] += $entry['amount'];
             if ($entry['type'] === 'sale') {
                 $groups[$key]['gifts'] += $entry['gift'] ?? 0;

@@ -29,7 +29,7 @@ class CustomerDebtSheetServiceTest extends TestCase
         self::assertSame(1000000, array_values($groups)[0]['balance']);
     }
 
-    public function test_pasted_sales_row_is_skipped_only_when_adjacent_journal_row_matches(): void
+    public function test_pasted_and_formula_sales_rows_are_both_preserved(): void
     {
         $service = new CustomerDebtSheetService;
         $header = ['Ngày tháng', 'Mã KH', 'Khách hàng', 'Sản phẩm', 'SL', 'Tổng tiền', 'Thanh toán', 'Tặng', 'Kiểm tra'];
@@ -37,8 +37,8 @@ class CustomerDebtSheetServiceTest extends TestCase
         $original = [...$pasted, '', '', 'TRUE'];
 
         $sales = $service->parse([$header, $pasted, $original], 'sale');
-        self::assertSame([3], array_column($sales, 'row'));
-        self::assertSame(3976000, array_sum(array_column($sales, 'amount')));
+        self::assertSame([2, 3], array_column($sales, 'row'));
+        self::assertSame(7952000, array_sum(array_column($sales, 'amount')));
         self::assertCount(2, $service->parse([$header, $original, $original], 'sale'));
         self::assertCount(2, $service->parse([$header, $pasted, array_replace($original, [4 => '21'])], 'sale'));
     }

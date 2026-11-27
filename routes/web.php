@@ -1500,6 +1500,8 @@ Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,mana
     Route::get('/customer-debt/customers', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'customers'])->name('customer-debt.customers');
     Route::post('/customer-debt/mapping', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'map'])->name('customer-debt.mapping');
     Route::delete('/customer-debt/mapping', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'unmap'])->name('customer-debt.mapping.destroy');
+    Route::post('/customer-debt/purchase-review', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'reviewPurchase'])
+        ->middleware('role:admin,account,accountant,accounting')->name('customer-debt.purchase-review');
     Route::post('/customer-debt/load', [\App\Http\Controllers\CustomerDebtMonitorController::class, 'load'])->middleware('throttle:6,1')->name('customer-debt.load');
 });
 

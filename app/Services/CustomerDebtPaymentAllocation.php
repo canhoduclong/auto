@@ -284,6 +284,7 @@ class CustomerDebtPaymentAllocation
 
     public function signature(array $entry): string
     {
+        unset($entry['sale_details']);
         ksort($entry);
 
         return hash('sha256', json_encode($entry, JSON_THROW_ON_ERROR));

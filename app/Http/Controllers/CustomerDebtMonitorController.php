@@ -54,6 +54,7 @@ class CustomerDebtMonitorController extends Controller
         if ($selected && $selected['customer_id']) {
             $selected = $customerDebts[$selected['customer_id']];
         }
+        $purchaseReviews = collect($selected['purchase_reviews'] ?? [])->sortByDesc('date')->values();
         $history = $selected['entries'] ?? [];
         usort($history, fn ($a, $b) => [$a['date'], $a['type'], $a['row']] <=> [$b['date'], $b['type'], $b['row']]);
         $today = now()->toDateString();
@@ -377,7 +378,7 @@ class CustomerDebtMonitorController extends Controller
             ? (string) Setting::get($this->noteKey($selected), '')
             : null;
 
-        return view('customer-debt.index', compact('orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'purchasePageSizes', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'detailSettlementTotal', 'detailSalesPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail', 'canCreateQuickCustomer', 'quickCustomerSales', 'settlementMethod', 'allocation', 'changeDate', 'currentSettlementMethod', 'settlementChanges', 'nextSettlementMethod', 'latestChangeDate', 'paymentPeriods', 'billPeriods', 'billGroups', 'settlementReturnDate', 'canManageAllocation', 'canManageVouchers', 'voucherRegister', 'allocationRevision', 'settlementPreview', 'allocationForm', 'missingAllocationKeys', 'detailPolicyAction', 'detailPolicyKey', 'reminderHistory', 'debtNote', 'cycleHistory', 'cycleDocuments', 'cycleArchives', 'cyclePreview', 'cycleDraft', 'cycleError'));
+        return view('customer-debt.index', compact('purchaseReviews', 'orders', 'groups', 'debts', 'snapshot', 'canLoad', 'from', 'to', 'tab', 'selected', 'opening', 'reportFrom', 'reportTo', 'reportMode', 'reportAlerts', 'reportLastPurchase', 'reportLastPayment', 'purchases', 'purchasePageSizes', 'payments', 'detailSales', 'detailGifts', 'detailPayments', 'detailSettlementTotal', 'detailSalesPayments', 'closing', 'issueRows', 'issueTotal', 'customerDebts', 'saleOptions', 'canAdjust', 'balanceAdjustments', 'detailAdjustments', 'connectionEmail', 'canCreateQuickCustomer', 'quickCustomerSales', 'settlementMethod', 'allocation', 'changeDate', 'currentSettlementMethod', 'settlementChanges', 'nextSettlementMethod', 'latestChangeDate', 'paymentPeriods', 'billPeriods', 'billGroups', 'settlementReturnDate', 'canManageAllocation', 'canManageVouchers', 'voucherRegister', 'allocationRevision', 'settlementPreview', 'allocationForm', 'missingAllocationKeys', 'detailPolicyAction', 'detailPolicyKey', 'reminderHistory', 'debtNote', 'cycleHistory', 'cycleDocuments', 'cycleArchives', 'cyclePreview', 'cycleDraft', 'cycleError'));
     }
 
     public function changeSettlementMethod(Request $request, CustomerDebtSheetService $sheets, CustomerDebtManualAllocationService $manual)
@@ -1041,6 +1042,7 @@ class CustomerDebtMonitorController extends Controller
                 $customerDebts[$id][$field] = max($customerDebts[$id][$field] ?? '', $group[$field] ?? '') ?: null;
             }
             $customerDebts[$id]['source_keys'][] = $group['key'];
+            $customerDebts[$id]['purchase_reviews'] = array_merge($customerDebts[$id]['purchase_reviews'] ?? [], $group['purchase_reviews'] ?? []);
             $customerDebts[$id]['entries'] = array_merge($customerDebts[$id]['entries'], $group['entries']);
         }
         $recoveryService = app(\App\Services\CustomerDebtRecoveryService::class);
@@ -1270,6 +1272,18 @@ class CustomerDebtMonitorController extends Controller
         return redirect()->route('customer-debt.index', ['tab' => 'all', 'customer' => $key, 'window' => 'all', 'recovery' => 'all'], 303)
             ->withFragment('debt-detail')
             ->with('success', 'Đã gỡ ghép khách. Nguồn này chờ được ghép lại thủ công.');
+    }
+
+    public function reviewPurchase(Request $request, CustomerDebtSheetService $service)
+    {
+        abort_unless($request->user()->canManageCustomerDebt(), 403);
+        $data = $request->validate([
+            'id' => ['required', 'regex:/^[a-f0-9]{64}$/'],
+            'status' => 'required|in:accepted,excluded',
+        ]);
+        $service->reviewPurchase($data['id'], $data['status'], $request->user()->id);
+
+        return back()->with('success', 'Đã lưu quyết định duyệt dòng mua hàng.');
     }
 
     public function load(Request $request, CustomerDebtSheetService $service)

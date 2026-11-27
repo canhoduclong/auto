@@ -206,6 +206,37 @@
     @if($canManageAllocation ?? false)
         @include('customer-debt.payment-allocation-tools')
     @endif
+    @if(!isset($debtDetailAction) && auth()->user()?->canManageCustomerDebt() && !empty($purchaseReviews) && $purchaseReviews->isNotEmpty())
+        <details class="card p-3 mb-3" open>
+            <summary class="fw-semibold">Dòng mua hàng nghi trùng · {{ $purchaseReviews->count() }} dòng</summary>
+            <p class="small text-muted my-2">Dòng chờ duyệt vẫn được tính vào công nợ. Chọn Không chấp nhận để loại dòng mua khỏi bảng và số phải thu.</p>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Ngày mua</th><th>Dòng Sheet</th><th>Nội dung</th><th class="text-end">Tiền hàng</th><th>Trạng thái</th><th>Quyết định</th></tr></thead>
+                    <tbody>
+                    @foreach($purchaseReviews as $line)
+                        @php($status = $line['purchase_review']['status'])
+                        <tr>
+                            <td>{{ \Carbon\Carbon::parse($line['date'])->format('d/m/Y') }}</td>
+                            <td>{{ $line['row'] }}</td>
+                            <td>{{ $line['note'] ?: 'Mua hàng' }}</td>
+                            <td class="text-end">{{ number_format($line['amount'], 0, ',', '.') }} đ</td>
+                            <td>{{ ['pending' => 'Chờ duyệt', 'accepted' => 'Đã chấp nhận', 'excluded' => 'Không chấp nhận'][$status] }}</td>
+                            <td>
+                                <form method="POST" action="{{ route('customer-debt.purchase-review') }}" class="d-flex flex-wrap gap-2">
+                                    @csrf
+                                    <input type="hidden" name="id" value="{{ $line['purchase_review']['id'] }}">
+                                    @if($status !== 'accepted')<button class="btn btn-sm btn-outline-primary" name="status" value="accepted">Chấp nhận</button>@endif
+                                    @if($status !== 'excluded')<button class="btn btn-sm btn-outline-danger" name="status" value="excluded">Không chấp nhận</button>@endif
+                                </form>
+                            </td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    @endif
     <div class="debt-report-columns{{ !isset($debtDetailAction) && ($reminderHistory ?? null) ? ' debt-report-columns-with-history' : '' }}">
         <article class="debt-report-ledger">
             <header>
