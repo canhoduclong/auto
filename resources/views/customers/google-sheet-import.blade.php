@@ -108,7 +108,7 @@
 .sheet-customer-stats {display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;}
 .sheet-customer-stat {background:#fff;border:1px solid #dbe3ee;border-radius:8px;padding:12px;color:#19324d;display:flex;flex-direction:column;gap:4px;font-size:12px;}
 .sheet-customer-stat strong {font-size:23px;}.sheet-customer-stat.active {border-color:#1688ff;background:#f0f7ff;}
-.sheet-customer-scroll {max-height:65vh;}.sheet-customer-scroll th {position:sticky;top:0;background:#f4f7fb;z-index:1;font-size:12px;}.sheet-customer-scroll td {vertical-align:top;min-width:125px;font-size:13px;}
+.sheet-customer-scroll th {background:#f4f7fb;font-size:12px;}.sheet-customer-scroll td {vertical-align:top;min-width:125px;font-size:13px;}
 #sheet-customer-dialog {margin:auto;width:min(640px,95vw);max-height:90vh;overflow:auto;border:1px solid #dbe3ee;border-radius:12px;padding:24px;color:#19324d;}
 #sheet-customer-dialog::backdrop {background:rgba(15,23,42,.45);}
 .sheet-customer-result {display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #e2e8f0;}
