@@ -20,7 +20,11 @@
             <tbody>
                 @forelse($pending as $source)
                     <tr>
-                        <td class="text-nowrap">{{ $source['name'] }}@if($source['code']) <small class="text-muted">· {{ $source['code'] }}</small>@endif</td>
+                        <td class="text-nowrap">
+                            {{ $source['name'] }}
+                            @if($source['code']) <small class="text-muted">· {{ $source['code'] }}</small>@endif
+                            @if(!empty($source['phone'])) <small class="text-muted">· {{ $source['phone'] }}</small>@endif
+                        </td>
                         <td>
                             <div class="d-flex gap-1 text-nowrap">
                                 <button type="button" class="btn btn-sm btn-outline-primary" data-open-customer-match
