@@ -16,9 +16,9 @@
             <tbody>
                 @forelse($pending as $source)
                     <tr>
-                        <td>{{ $source['name'] }} @if($source['code'])<small class="text-muted d-block">{{ $source['code'] }}</small>@endif</td>
+                        <td class="text-nowrap">{{ $source['name'] }}@if($source['code']) <small class="text-muted">· {{ $source['code'] }}</small>@endif</td>
                         <td>
-                            <div class="d-flex flex-wrap gap-1">
+                            <div class="d-flex gap-1 text-nowrap">
                                 <button type="button" class="btn btn-sm btn-outline-primary" data-open-customer-match
                                     data-source-key="{{ $source['key'] }}" data-source-name="{{ $source['name'] }}">
                                     Ghép khách
