@@ -209,7 +209,7 @@
     @if(!isset($debtDetailAction) && auth()->user()?->canManageCustomerDebt() && !empty($purchaseReviews) && $purchaseReviews->isNotEmpty())
         <details class="card p-3 mb-3" open>
             <summary class="fw-semibold">Dòng mua hàng nghi trùng · {{ $purchaseReviews->count() }} dòng</summary>
-            <p class="small text-muted my-2">Dòng chờ duyệt vẫn được tính vào công nợ. Chọn Không chấp nhận để loại dòng mua khỏi bảng và số phải thu.</p>
+            <p class="small text-muted my-2">Chỉ dòng đã chấp nhận mới xuất hiện trong Mua hàng và được tính vào công nợ.</p>
             <div class="table-responsive">
                 <table class="table table-sm align-middle mb-0">
                     <thead><tr><th>Ngày mua</th><th>Dòng Sheet</th><th>Nội dung</th><th class="text-end">Tiền hàng</th><th>Trạng thái</th><th>Quyết định</th></tr></thead>

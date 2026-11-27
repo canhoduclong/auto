@@ -702,7 +702,7 @@ class CustomerDebtSheetService
             $groups[$key] ??= ['legacy_key' => $legacyKey, 'key' => $key, 'code' => $code, 'name' => $entry['name'], 'phone' => $phone, 'phone_conflict' => $phoneConflict, 'sales' => 0, 'gifts' => 0, 'payments' => 0, 'balance' => 0, 'last_purchase_date' => null, 'last_payment_date' => null, 'sale_name' => '', 'sale_rank' => '', 'entries' => [], 'ambiguous' => $ambiguous];
             if (isset($entry['purchase_review'])) {
                 $groups[$key]['purchase_reviews'][] = $entry;
-                if ($entry['purchase_review']['status'] === 'excluded') {
+                if ($entry['purchase_review']['status'] !== 'accepted') {
                     continue;
                 }
                 unset($entry['purchase_review']);
