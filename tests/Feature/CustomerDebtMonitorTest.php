@@ -1823,6 +1823,16 @@ class CustomerDebtMonitorTest extends TestCase
         self::assertSame('customers.sheet-opening-source', $partial->name());
         self::assertSame(2, $partial->getData()['pending']->currentPage());
         self::assertStringNotContainsString('panel=', $partial->getData()['pending']->url(1));
+
+        $sheets->mapSourceGroupWithinLock($ledger->groups($ledger->snapshot())[$key], 1, 1);
+        $controller->unlink($this->request(['source_key' => $key, 'customer_id' => 1], 'admin'), $ledger);
+        self::assertSame(1, $sheets->mappings()[$key]['customer_id']);
+        $view = $controller->index($this->request(['tab' => 'customers'], 'admin'), $ledger, $system)->getData();
+        self::assertSame([], $view['opening']);
+        self::assertSame(0, $view['pending']->total());
+        $view = $controller->index($this->request(['tab' => 'customers', 'show_same_name' => '1'], 'admin'), $ledger, $system)->getData();
+        self::assertSame($key, $view['pending']->getCollection()->first()['key']);
+        self::assertTrue($view['availableCustomers']->contains('id', 1));
     }
 
     public function test_purchase_review_counts_only_accepted_rows_in_customer_debt(): void

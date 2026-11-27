@@ -1460,6 +1460,7 @@ Route::middleware(['auth', 'role:admin,sale,leader,leader_sale,sale_manager,mana
         Route::get('/', [\App\Http\Controllers\CustomerSheetOpeningController::class, 'index'])->name('index');
         Route::post('/refresh', [\App\Http\Controllers\CustomerSheetOpeningController::class, 'refresh'])->middleware('throttle:6,1')->name('refresh');
         Route::post('/link', [\App\Http\Controllers\CustomerSheetOpeningController::class, 'link'])->name('link');
+        Route::delete('/link', [\App\Http\Controllers\CustomerSheetOpeningController::class, 'unlink'])->name('unlink');
     });
     Route::get('/customer-debt/payments', [\App\Http\Controllers\CustomerPaymentController::class, 'index'])->name('customer-debt.payments');
     Route::post('/customer-debt/payments/refresh', [\App\Http\Controllers\CustomerPaymentController::class, 'refresh'])->middleware('throttle:6,1')->name('customer-debt.payments.refresh');

@@ -23,6 +23,7 @@ class CustomerSheetOpeningController extends Controller
             'tab' => 'nullable|in:purchases,payments,customers', 'search' => 'nullable|string|max:150',
             'page' => 'nullable|integer|min:1', 'source_page' => 'nullable|integer|min:1',
             'system_search' => 'nullable|string|max:150', 'source_search' => 'nullable|string|max:150',
+            'show_same_name' => 'nullable|in:1',
             'panel' => 'nullable|in:system,source',
         ]);
         $tab = $filters['tab'] ?? 'purchases';
@@ -34,6 +35,7 @@ class CustomerSheetOpeningController extends Controller
         $snapshot = $ledger->snapshot();
         $groups = $ledger->groups($snapshot);
         $customers = Customer::query()->orderBy('name')->get(['id', 'name', 'customer_code', 'phone'])->keyBy('id');
+        $systemNames = $customers->pluck('name')->map(fn ($name) => Customer::normalizeName($name))->filter()->flip();
         $allLinks = collect($ledger->allLinks())->filter(fn ($link) => $customers->has($link['customer_id'] ?? null));
         $links = $allLinks->only(array_keys($groups));
         $opening = $gifts = $paid = $systemSales = [];
@@ -45,7 +47,9 @@ class CustomerSheetOpeningController extends Controller
         foreach ($groups as $key => $group) {
             $id = $links[$key]['customer_id'] ?? null;
             $label = $customers[$id]->name ?? $group['name'];
-            if (! $id && str_contains(Customer::normalizeName($group['name'].' '.$group['code'].' '.$group['phone']), $sourceSearch)) {
+            if (! $id
+                && (! empty($filters['show_same_name']) || ! $systemNames->has(Customer::normalizeName($group['name'])))
+                && str_contains(Customer::normalizeName($group['name'].' '.$group['code'].' '.$group['phone']), $sourceSearch)) {
                 $pending->push($group);
             }
             if ($panel === 'source') {
@@ -112,6 +116,8 @@ class CustomerSheetOpeningController extends Controller
             'tab' => $tab, 'snapshot' => $snapshot, 'rows' => $this->paginate($request, $rows, 'page'),
             'pending' => $this->paginate($request, $pending->sortBy('name'), 'source_page'),
             'availableCustomers' => $tab === 'customers' ? $customers->except($allLinks->pluck('customer_id')->all())->values() : collect(),
+            'linkedSources' => $links->groupBy('customer_id', preserveKeys: true),
+            'sourceGroups' => $groups,
             'opening' => $opening, 'gifts' => $gifts, 'paid' => $paid,
             'systemSales' => $systemSales, 'cutoff' => $cutoff,
         ]);
@@ -182,5 +188,23 @@ class CustomerSheetOpeningController extends Controller
         });
 
         return back()->with('success', 'Đã ghép khách cho báo cáo đồng bộ.');
+    }
+
+    public function unlink(Request $request, CustomerSheetOpeningLedger $ledger)
+    {
+        $data = $request->validate([
+            'source_key' => ['required', 'regex:/^[a-f0-9]{64}$/'],
+            'customer_id' => 'required|integer|min:1',
+        ]);
+        Cache::lock('customer-debt-load', 60)->block(5, function () use ($ledger, $data) {
+            $key = $data['source_key'];
+            $current = (int) ($ledger->allLinks()[$key]['customer_id'] ?? 0);
+            if ($current !== (int) $data['customer_id']) {
+                throw ValidationException::withMessages(['source_key' => 'Liên kết đã thay đổi. Vui lòng kiểm tra lại danh sách.']);
+            }
+            $ledger->unlink($key);
+        });
+
+        return back()->with('success', 'Đã gỡ ghép. Khách Google Sheet đã trở lại danh sách chờ ghép.');
     }
 }

@@ -51,7 +51,7 @@
             const controller = new AbortController();
             pending = controller;
             const url = new URL(window.location.href);
-            const keys = [searchKey, pageKey];
+            const keys = side === 'source' ? [searchKey, pageKey, 'show_same_name'] : [searchKey, pageKey];
             for (const key of keys) {
                 const value = parameters.get(key);
                 if (value) url.searchParams.set(key, value);
@@ -107,3 +107,10 @@
         });
     }
 })();
+
+document.addEventListener('submit', event => {
+    if (event.target.matches('[data-unlink-sheet-customer]')
+        && !window.confirm('Gỡ khách Google Sheet khỏi báo cáo của khách hệ thống này?')) {
+        event.preventDefault();
+    }
+});

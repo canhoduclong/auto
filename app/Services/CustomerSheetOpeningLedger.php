@@ -63,7 +63,12 @@ class CustomerSheetOpeningLedger
         $links = $this->sheets->mappings();
         $prefix = $this->linkPrefix();
         foreach (Setting::query()->where('key', 'like', $prefix.'%')->pluck('value', 'key') as $key => $value) {
-            $links[substr($key, strlen($prefix))] = ['customer_id' => (int) $value];
+            $sourceKey = substr($key, strlen($prefix));
+            if ((int) $value === 0) {
+                unset($links[$sourceKey]);
+            } else {
+                $links[$sourceKey] = ['customer_id' => (int) $value];
+            }
         }
 
         return $links;
@@ -72,6 +77,12 @@ class CustomerSheetOpeningLedger
     public function link(string $key, int $customerId): void
     {
         Setting::set($this->linkPrefix().$key, (string) $customerId);
+    }
+
+    public function unlink(string $key): void
+    {
+        // An explicit override also suppresses links inherited from the operational ledger.
+        Setting::set($this->linkPrefix().$key, '0');
     }
 
     private function linkPrefix(): string

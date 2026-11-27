@@ -8,6 +8,10 @@
         <input type="search" name="source_search" class="form-control w-auto flex-grow-1" maxlength="150"
             aria-label="Tìm khách Google Sheet" placeholder="Tên, mã khách hoặc số điện thoại" value="{{ request('source_search') }}">
         <button class="btn btn-outline-primary">Tìm kiếm</button>
+        <div class="form-check w-100">
+            <input class="form-check-input" type="checkbox" name="show_same_name" id="sheet-show-same-name" value="1" @checked(request('show_same_name') === '1')>
+            <label class="form-check-label small" for="sheet-show-same-name">Hiện khách trùng tên để đối chiếu</label>
+        </div>
     </form>
     <p class="small text-danger" data-sheet-error role="alert" hidden></p>
     <div class="table-responsive">
